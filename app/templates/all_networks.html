@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="margin-top:0">Усі р/м</h2>
+
+<div class="card">
+  <form method="post" action="/all_networks">
+    <div class="row" style="align-items:flex-end;">
+      <div class="field" style="max-width:420px;">
+        <label>Статус</label>
+        <select name="status_ids" multiple size="6">
+          <option value="0" {% if not selected_statuses or 0 in selected_statuses %}selected{% endif %}>Усі</option>
+          {% for s in statuses %}
+            <option value="{{ s[0] }}" {% if s[0] in selected_statuses %}selected{% endif %}>{{ s[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field" style="max-width:320px;">
+        <label>Чат</label>
+        <select name="chat_ids" multiple size="6">
+          <option value="0" {% if not selected_chats or 0 in selected_chats %}selected{% endif %}>Усі</option>
+          {% for c in chats %}
+            <option value="{{ c[0] }}" {% if c[0] in selected_chats %}selected{% endif %}>{{ c[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field" style="max-width:420px;">
+        <label>Група</label>
+        <select name="group_ids" multiple size="6">
+          <option value="0" {% if not selected_groups or 0 in selected_groups %}selected{% endif %}>Усі</option>
+          {% for g in groups %}
+            <option value="{{ g[0] }}" {% if g[0] in selected_groups %}selected{% endif %}>{{ g[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field" style="min-width:160px; flex:0">
+        <label>&nbsp;</label>
+        <button type="submit">Показати</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="small" style="margin-bottom:10px; opacity:.85;">Знайдено: {{ rows|length }}</div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="width:44px">#</th>
+        <th style="width:120px">Частота</th>
+        <th style="width:140px">Маска</th>
+        <th>Назва р/м</th>
+        <th style="width:220px">Чат</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+        <tr style="{% if r['bg_color'] %}background: {{ r['bg_color'] }}; border-left: 4px solid {{ r['border_color'] }};{% endif %}">
+          <td>{{ loop.index }}</td>
+          <td>{{ r['frequency'] }}</td>
+          <td>{{ r['mask'] }}</td>
+          <td>УКХ р/м {{ r['unit'] }}, н.п. {{ r['zone'] }}</td>
+          <td>{{ r['chat_name'] }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="margin-top:0">Еталонки</h2>
+
+{% if msg %}
+  <div class="notice" style="margin-bottom:12px">{{ msg }}</div>
+{% endif %}
+
+<div class="card">
+  <div style="font-weight:800; margin-bottom:6px">Поточна радіомережа: {{ net.frequency }}</div>
+  <div class="small">Вкладка запам’ятовує останню відкриту р/м.</div>
+</div>
+
+<div class="card">
+  <div style="font-weight:800; margin-bottom:10px">Згенеровані поля (не зберігаються)</div>
+  <div class="row">
+    <div class="field">
+      <label>Назва</label>
+      <input value="{{ gen.name }}" readonly/>
+    </div>
+    <div class="field">
+      <label>Район</label>
+      <input value="{{ gen.area }}" readonly/>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div class="field">
+      <label>Частота</label>
+      <input value="{{ gen.frequency }}" readonly/>
+    </div>
+    <div class="field">
+      <label>Вид передачі</label>
+      <input value="{{ gen.modulation }}" readonly/>
+    </div>
+    <div class="field">
+      <label>Період функціонування</label>
+      <input value="{{ gen.period }}" readonly/>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="font-weight:800; margin-bottom:10px">Поля еталонки (зберігаються)</div>
+
+  <form method="post" action="/etalons/save">
+    <div class="row">
+      <div class="field">
+        <label>Дата початку (якщо порожньо — “невідомо”)</label>
+        <input type="date" name="start_date_str" value="{{ et.start_date if et.start_date else '' }}"/>
+      </div>
+      <div class="field">
+        <label>Позивні (підтягуються пізніше)</label>
+        <textarea readonly placeholder="Підтягнеться автоматично з іншої таблиці.">{{ et.callsigns if et.callsigns else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="field">
+        <label>Призначення</label>
+        <textarea name="purpose" placeholder="{{ defaults.purpose }}">{{ et.purpose if et.purpose else '' }}</textarea>
+      </div>
+      <div class="field">
+        <label>Склад кореспондентів</label>
+        <textarea name="correspondents" placeholder="Вкажи склад кореспондентів...">{{ et.correspondents if et.correspondents else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="field">
+        <label>Режим роботи</label>
+        <textarea name="operation_mode" placeholder="{{ defaults.operation_mode }}">{{ et.operation_mode if et.operation_mode else '' }}</textarea>
+      </div>
+      <div class="field">
+        <label>Характер радіообміну</label>
+        <textarea name="traffic_type" placeholder="{{ defaults.traffic_type }}">{{ et.traffic_type if et.traffic_type else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="btnrow" style="margin-top:12px">
+      <button type="submit">Зберегти</button>
+      <a href="/networks" style="align-self:center; margin-left:8px">Назад до радіомереж</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

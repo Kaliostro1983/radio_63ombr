@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="pel-title">Пеленгація</h2>
+
+<link rel="stylesheet" href="/static/peleng.css"/>
+<script src="/static/peleng.js" defer></script>
+
+<div class="pel-wrap">
+  <div class="row row1">
+    <label class="lbl">Дата</label>
+    <input class="in in-date" type="date" id="event_date">
+
+    <label class="lbl lbl-time">Час</label>
+    <input class="in in-time" type="time" id="event_time">
+
+    <button class="btn btn-small" type="button" id="btn_now">C</button>
+  </div>
+
+  <div class="row row2">
+    <label class="lbl">Частота/Маска</label>
+    <input class="in in-freq" type="text" id="frequency" placeholder="145.5000 або 300.3250">
+    <button class="btn" type="button" id="btn_accept">Прийняти</button>
+  </div>
+
+  <div class="row row3">
+    <label class="lbl">Підрозділ</label>
+    <input class="in in-unit" type="text" id="unit" value="НВ підрозділу">
+
+    <label class="lbl lbl-loc">Location</label>
+    <input class="in in-loc" type="text" id="location" value="ТОРСЬКЕ">
+  </div>
+
+  <label class="section-title">MGRS coordinates (кожен рядок окремо)</label>
+  <textarea class="ta ta-mgrs" id="mgrs_text" rows="5"></textarea>
+
+  <label class="section-title">Коментар / банер</label>
+  <textarea class="ta ta-comment" id="comment" rows="2">-------  🦁 63 ОМБр 🦁 -------</textarea>
+
+  <label class="section-title">Згенероване повідомлення</label>
+  <textarea class="ta ta-out" id="output" readonly rows="8"></textarea>
+
+  <div class="row row-bottom">
+    <div class="left-btns">
+      <button class="btn" type="button" id="btn_generate">Згенерувати</button>
+      <button class="btn" type="button" id="btn_copy">Копіювати</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
+</div>
+{% endblock %}

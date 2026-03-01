@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1>Позивні</h1>
+    <div class="small">Редагування — тільки через модальне вікно.</div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap">
+      <button id="csTabFreq" type="button" class="tab-btn active">Позивні р/м</button>
+      <button id="csTabSearch" type="button" class="tab-btn">Пошук/правка</button>
+      <div class="small" style="margin-left:auto; opacity:.7">Вкладка: <span id="csTabLabel">Позивні р/м</span></div>
+    </div>
+  </div>
+
+  <!-- TAB: by frequency -->
+  <div id="csPaneFreq">
+
+  <div class="card" style="margin-top:12px">
+    <div class="row" style="gap:10px; align-items:flex-end; flex-wrap:wrap">
+      <div style="min-width:220px">
+        <label class="small">Частота</label>
+        <input id="csFreq" type="text" placeholder="Напр.: 300.3250 або 300.3250"/>
+      </div>
+      <div style="width:120px">
+        <label class="small">Днів</label>
+        <input id="csDays" type="number" min="1" max="365" value="7"/>
+      </div>
+      <div>
+        <button id="csShow" type="button">Показати</button>
+      </div>
+      <div id="csInfo" class="small" style="margin-left:auto; opacity:.8"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div style="overflow:auto">
+      <table class="table" id="csTable">
+        <thead>
+          <tr>
+            <th style="width:60px">№</th>
+            <th style="min-width:180px">Позивний</th>
+            <th style="min-width:220px">Статус</th>
+            <th>Коментар</th>
+          </tr>
+        </thead>
+        <tbody id="csTbody">
+          <tr><td colspan="4" class="small" style="opacity:.8">Введіть частоту та натисніть “Показати”.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  </div>
+
+  <!-- TAB: search/edit -->
+  <div id="csPaneSearch" class="hidden">
+    <div class="card" style="margin-top:12px">
+      <div class="row" style="gap:10px; align-items:flex-end; flex-wrap:wrap">
+        <div style="min-width:260px">
+          <label class="small">Позивний</label>
+          <input id="csQuery" type="text" placeholder="Напр.: БАНКИР"/>
+        </div>
+        <div>
+          <button id="csSearch" type="button">Пошук</button>
+          <button id="csAdd" type="button" class="secondary">+ Додати</button>
+        </div>
+        <div id="csSearchInfo" class="small" style="margin-left:auto; opacity:.8"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div style="overflow:auto">
+        <table class="table" id="csSearchTable">
+          <thead>
+            <tr>
+              <th style="width:60px">№</th>
+              <th style="min-width:180px">Позивний</th>
+              <th style="min-width:220px">Статус</th>
+              <th style="min-width:140px">Частота</th>
+              <th style="min-width:220px">Підрозділ</th>
+            </tr>
+          </thead>
+          <tbody id="csSearchTbody">
+            <tr><td colspan="5" class="small" style="opacity:.8">Введіть позивний та натисніть “Пошук”.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="csModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card cs-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Позивний</div>
+        <div id="csModalTitle" style="font-weight:700">—</div>
+      </div>
+      <button class="secondary" type="button" data-close="1">Закрити</button>
+    </div>
+
+    <div class="modal-body">
+      <input id="csModalId" type="hidden" />
+
+      <div class="row" style="gap:10px; flex-wrap:wrap">
+        <div style="flex: 1; min-width:220px">
+          <label class="small">Позивний</label>
+          <input id="csModalName" type="text" />
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <label class="small">Мережа (частота/маска або підрозділ)</label>
+        <input id="csModalNetworkQuery" type="text" placeholder="Пошук: 146.025 або ШТЗ..." />
+        <select id="csModalNetwork" style="width:100%; margin-top:6px">
+          <option value="">Невідомо</option>
+        </select>
+      </div>
+
+      <div style="margin-top:10px">
+        <label class="small">Статус</label>
+        <select id="csModalStatus" style="width:100%"></select>
+      </div>
+
+      <div style="margin-top:10px">
+        <label class="small">Коментар</label>
+        <textarea id="csModalComment" rows="10" style="width:100%; min-height:220px"></textarea>
+      </div>
+
+      <div id="csModalErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+    </div>
+
+    <div class="modal-foot">
+      <button id="csSave" type="button">Зберегти</button>
+      <button class="secondary" type="button" data-close="1">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add status mini-modal -->
+<div id="csStatusModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close-status="1"></div>
+  <div class="modal-card cs-status-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Новий статус</div>
+        <div style="font-weight:700">Додати статус</div>
+      </div>
+      <button class="secondary" type="button" data-close-status="1">Закрити</button>
+    </div>
+    <div class="modal-body">
+      <label class="small">Назва</label>
+      <input id="csNewStatusName" type="text" />
+      <div id="csNewStatusErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="csCreateStatus" type="button">Створити</button>
+      <button class="secondary" type="button" data-close-status="1">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/callsigns.js" defer></script>
+{% endblock %}

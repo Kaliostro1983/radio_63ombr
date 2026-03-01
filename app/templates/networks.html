@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 style="margin-top:0">Радіомережі</h2>
+
+{% if message %}
+  <div class="notice" style="margin-bottom:12px">{{ message }}</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="/networks/search">
+    <div class="row">
+      <div class="field">
+        <label>Частота</label>
+        <input name="frequency" value="{{ q_freq }}" placeholder="050.6250"/>
+      </div>
+      <div class="field">
+        <label>Маска</label>
+        <input name="mask" value="{{ q_mask }}" placeholder="123.4567"/>
+      </div>
+      <div class="field" style="min-width:160px; flex:0">
+        <label>&nbsp;</label>
+        <button type="submit">Пошук</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if matches and matches|length > 1 %}
+<div class="card">
+  <div style="font-weight:700; margin-bottom:8px">Знайдено кілька збігів — обери:</div>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Частота</th>
+        <th>Підрозділ</th>
+        <th>Зона</th>
+        <th>Статус</th>
+        <th>Чат</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for n in matches %}
+      <tr>
+        <td>{{ n.frequency }}</td>
+        <td>{{ n.unit }}</td>
+        <td>{{ n.zone }}</td>
+        <td>{{ status_map.get(n.status_id, "") }}</td>
+        <td>{{ chat_map.get(n.chat_id, "") }}</td>
+        <td><a href="/networks?pick={{ n.id }}">Відкрити</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="row" style="align-items:center; justify-content:space-between">
+    <div>
+      <div style="font-weight:800">Картка радіомережі</div>
+      <div class="small">Знайшов — відредагував — зберіг. Якщо не знайдено — заповни і тисни “Зберегти”.</div>
+    </div>
+    <div>
+      {% if current %}
+        {% set st = status_map.get(current.status_id, "") %}
+        {% set ch = chat_map.get(current.chat_id, "") %}
+        {% set cls = "gray" %}
+        {% if st == "Спостерігається" and ch == "Очерет" %}{% set cls = "green" %}
+        {% elif st == "Спостерігається" and ch != "Очерет" %}{% set cls = "yellow" %}
+        {% elif st == "За межами" %}{% set cls = "red" %}
+        {% elif st == "Мертва" %}{% set cls = "gray" %}
+        {% elif st == "Малоінформативна" %}{% set cls = "purple" %}
+        {% endif %}
+        <span class="badge {{ cls }}">{{ st }} • {{ ch }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" action="/networks/save" style="margin-top:14px">
+    <input type="hidden" name="action" id="save_action" value="save"/>
+
+    <div class="row">
+      <div class="field">
+        <label>Частота</label>
+        <input name="frequency" value="{{ current.frequency if current else q_freq }}" required/>
+      </div>
+      <div class="field">
+        <label>Маска</label>
+        <input name="mask" value="{{ current.mask if current else q_mask }}"/>
+      </div>
+      <div class="field">
+        <label>Дата початку</label>
+        <input type="date" name="start_date_str" value="{{ start_date.isoformat() if start_date else '' }}"/>
+        <div class="small">Зберігається в еталонці. Якщо порожньо — “невідомо”.</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="field">
+        <label>Підрозділ</label>
+        <input name="unit" value="{{ current.unit if current else '' }}" required/>
+      </div>
+      <div class="field">
+        <label>Зона функціонування</label>
+        <input name="zone" value="{{ current.zone if current else '' }}" required/>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="field">
+        <label>Статус</label>
+        <select name="status_id" required>
+          {% for s in statuses %}
+            <option value="{{ s.id }}" {% if current and current.status_id==s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Чат (джерело)</label>
+        <select name="chat_id" required>
+          {% for c in chats %}
+            <option value="{{ c.id }}" {% if current and current.chat_id==c.id %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Хто (група)</label>
+        <select name="group_id" required>
+          {% for g in groups %}
+            <option value="{{ g.id }}" {% if current and current.group_id==g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="field">
+        <label>Теги (мультивибір)</label>
+        <select name="tag_ids" multiple size="4">
+          {% for t in tags %}
+            <option value="{{ t.id }}" {% if t.id in selected_tag_ids %}selected{% endif %}>{{ t.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="small">Утримуй Ctrl для мультивибору.</div>
+      </div>
+
+      <div class="field">
+        <label>Коментар</label>
+        <textarea name="comment" placeholder="Пояснення/особливості...">{{ current.comment if current and current.comment else '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="btnrow" style="margin-top:12px">
+      <button type="submit" onclick="document.getElementById('save_action').value='save'">Зберегти</button>
+      <button type="submit" class="secondary" onclick="document.getElementById('save_action').value='save_new'">Зберегти як нову р/м</button>
+
+      {% if current %}
+        {% if etalon_exists %}
+          <a href="/etalons" style="align-self:center; margin-left:6px">Еталонний опис</a>
+        {% else %}
+          <a href="/etalons" style="align-self:center; margin-left:6px">Додати опис</a>
+        {% endif %}
+      {% endif %}
+    </div>
+  </form>
+
+  <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px">
+    <form method="post" action="/tags/add" class="row" style="align-items:end">
+      <div class="field">
+        <label>Додати тег</label>
+        <input name="name" placeholder="Наприклад: Зв'язок штабу"/>
+      </div>
+      <div style="min-width:160px">
+        <button type="submit">+</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,179 @@
+:root{
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted:#666666;
+  --card:#f5f6f7;
+  --border:#d9dde1;
+  --link:#0b57d0;
+  --btn:#111111;
+  --btnfg:#ffffff;
+  --inputbg:#ffffff;
+  --inputfg:#111111;
+  --danger:#b3261e;
+}
+
+[data-theme="dark"]{
+  --bg:#0f1115;
+  --fg:#e8eaed;
+  --muted:#a0a6ad;
+  --card:#171a21;
+  --border:#2a2f3a;
+  --link:#8ab4f8;
+  --btn:#e8eaed;
+  --btnfg:#111111;
+  --inputbg:#0f1115;
+  --inputfg:#e8eaed;
+  --danger:#f2b8b5;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background:var(--bg);
+  color:var(--fg);
+}
+a{color:var(--link); text-decoration:none}
+a:hover{text-decoration:underline}
+
+.layout{display:flex; min-height:100vh}
+.sidebar{
+  width:240px;
+  padding:16px;
+  border-right:1px solid var(--border);
+  background:var(--card);
+}
+.brand{font-weight:700; margin-bottom:12px}
+.nav a{
+  display:block;
+  padding:10px 10px;
+  border-radius:10px;
+  margin:6px 0;
+  color:var(--fg);
+}
+.nav a.active{background:var(--bg); border:1px solid var(--border)}
+.small{color:var(--muted); font-size:12px}
+.main{flex:1; padding:20px}
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px;
+  margin-bottom:16px;
+}
+.row{display:flex; gap:12px; flex-wrap:wrap}
+.field{display:flex; flex-direction:column; gap:6px; min-width:180px; flex:1}
+.field label{font-size:12px; color:var(--muted)}
+input, select, textarea{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--inputbg);
+  color:var(--inputfg);
+}
+textarea{min-height:88px; resize:vertical}
+.btnrow{display:flex; gap:10px; flex-wrap:wrap}
+button{
+  border:0;
+  padding:10px 14px;
+  border-radius:12px;
+  cursor:pointer;
+  background:var(--btn);
+  color:var(--btnfg);
+  font-weight:600;
+}
+button.secondary{
+  background:transparent;
+  border:1px solid var(--border);
+  color:var(--fg);
+}
+.notice{
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--bg);
+}
+.table{
+  width:100%;
+  border-collapse:collapse;
+}
+.table th,.table td{
+  border-bottom:1px solid var(--border);
+  padding:10px 8px;
+  text-align:left;
+  font-size:14px;
+}
+.badge{
+  display:inline-block;
+  padding:5px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+  border:1px solid var(--border);
+}
+
+.filters-row{
+  display:flex;
+  gap:14px;
+  align-items:flex-end;
+  flex-wrap:wrap;
+}
+
+.filter-field{
+  display:flex;
+  flex-direction:column;
+  min-width:260px;
+}
+
+.filter-field select{
+  width:260px;
+}
+
+.badge.green{background:#1e8e3e20; border-color:#1e8e3e60}
+.badge.yellow{background:#fbbc0420; border-color:#fbbc0460}
+.badge.red{background:#ea433520; border-color:#ea433560}
+.badge.gray{background:#9aa0a620; border-color:#9aa0a660}
+.badge.purple{background:#a142f420; border-color:#a142f460}
+
+/* Modal */
+.modal.hidden{ display:none; }
+
+/* generic */
+.hidden{ display:none !important; }
+
+/* tabs */
+.tab-btn{
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+.tab-btn.active{
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.18);
+}
+.modal{ position:fixed; inset:0; z-index:50; }
+.modal-backdrop{ position:absolute; inset:0; background: rgba(0,0,0,.45); }
+.modal-card{ position:relative; max-width:820px; margin:60px auto; background: var(--card); border:1px solid var(--border); border-radius:16px; box-shadow: 0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
+
+/* Callsigns: make the edit modal narrower */
+.cs-modal-card{ max-width:420px; }
+
+/* Callsigns: small modal for creating a new status */
+.cs-status-modal-card{ max-width:420px; }
+.modal-head, .modal-foot{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 14px; }
+.modal-head{ border-bottom:1px solid var(--border); }
+.modal-foot{ border-top:1px solid var(--border); justify-content:flex-end; }
+.modal-body{ padding:14px; }
+
+/* Chips */
+.chips{ display:flex; gap:8px; flex-wrap:wrap; }
+.chip{ display:inline-flex; align-items:center; gap:8px; border:1px solid var(--border); background: rgba(127,127,127,.08); border-radius:999px; padding:6px 10px; font-size:13px; }
+.chip .x{ cursor:pointer; font-weight:800; opacity:.7; }
+.chip .x:hover{ opacity:1; }
+
+@media (max-width: 880px){
+  .modal-card{ margin:18px 10px; }
+}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css"/>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">{{ app_name }}</div>
+    <div class="nav">
+      <a href="/networks" class="{% if request.url.path.startswith('/networks') %}active{% endif %}">Радіомережі</a>
+      <a href="/all_networks" class="{% if request.url.path.startswith('/all_networks') %}active{% endif %}">Усі р/м</a>
+      <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
+      <a href="/etalons" class="{% if request.url.path.startswith('/etalons') %}active{% endif %}">Еталонки</a>
+      <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
+      <a href="#" class="small" style="pointer-events:none; opacity:.6;">Звіти (пізніше)</a>
+    </div>
+
+    <div style="margin-top:16px" class="card">
+      <div class="small" style="margin-bottom:8px">Дизайн</div>
+      <button type="button" class="secondary" onclick="toggleTheme()">День / Ніч</button>
+      <div class="small" style="margin-top:10px">Доступ лише через TailScale (serve).</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>
