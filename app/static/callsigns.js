@@ -29,6 +29,7 @@
   const modalComment = $("csModalComment");
   const modalNetworkQuery = $("csModalNetworkQuery");
   const modalNetwork = $("csModalNetwork");
+  const modalPhoto = $("csModalPhoto");
   const modalErr = $("csModalErr");
   const btnSave = $("csSave");
 
@@ -41,6 +42,55 @@
   let CURRENT_ROW = null; // row object
   let CURRENT_STATUS_ID = null;
   let CURRENT_NETWORK_ID = null; // single status id
+
+  function setPhotoForStatus(statusId){
+    if(!modalPhoto) return;
+    const base = "/static/photos/callsign_statuses/";
+    const defWebp = base + "_default.webp";
+    const defPng = base + "_default.png";
+
+    if(!statusId){
+      modalPhoto.src = defWebp;
+      modalPhoto.dataset.photoTry = "default";
+      return;
+    }
+
+    modalPhoto.dataset.photoTry = "webp";
+    modalPhoto.src = base + String(statusId) + ".webp";
+
+    modalPhoto.onerror = () => {
+      const t = modalPhoto.dataset.photoTry || "";
+      if(t === "webp"){
+        modalPhoto.dataset.photoTry = "png";
+        modalPhoto.src = base + String(statusId) + ".png";
+        return;
+      }
+      // fallback to default
+      modalPhoto.onerror = null;
+      modalPhoto.src = defWebp;
+      // if default.webp missing, browser will try default.png via HTML onerror? keep it simple:
+      modalPhoto.addEventListener("error", () => { modalPhoto.src = defPng; }, { once:true });
+    };
+  }
+
+  async function preselectNetworkById(networkId){
+    if(!networkId){
+      renderNetworkSelect([], null);
+      return;
+    }
+    try{
+      const resp = await fetch(`/api/networks/by-id?id=${encodeURIComponent(networkId)}`);
+      const data = await resp.json();
+      if(!data.ok) throw new Error(data.error || "by-id failed");
+      if(data.row){
+        renderNetworkSelect([data.row], networkId);
+      } else {
+        renderNetworkSelect([], null);
+      }
+    }catch(e){
+      renderNetworkSelect([], networkId);
+    }
+  }
 
   function setInfo(text){
     if(elInfo) elInfo.textContent = text || "";
@@ -64,6 +114,7 @@
     CURRENT_STATUS_ID = null;
     CURRENT_NETWORK_ID = null;
     renderStatusSelect(CURRENT_STATUS_ID);
+    setPhotoForStatus(CURRENT_STATUS_ID);
     modalNetworkQuery.value = "";
     renderNetworkSelect([], CURRENT_NETWORK_ID);
     openModal();
@@ -209,7 +260,7 @@ function renderStatusSelect(selectedId){
         <td>${escapeHtml(row.comment || "")}</td>
       `;
 
-      tr.addEventListener("click", () => openEditModal(row));
+      tr.addEventListener("click", () => openEditModalById(row.callsign_id));
       elTbody.appendChild(tr);
     });
   }
@@ -233,7 +284,7 @@ function renderStatusSelect(selectedId){
         <td>${escapeHtml(row.frequency || "Невідомо")}</td>
         <td>${escapeHtml(row.unit || "Невідомо")}</td>
       `;
-      tr.addEventListener("click", () => openEditModal(row));
+      tr.addEventListener("click", () => openEditModalById(row.callsign_id));
       elSearchTbody.appendChild(tr);
     });
   }
@@ -260,22 +311,43 @@ function renderStatusSelect(selectedId){
     updateRowInSearchTable(updated);
   }
 
-  function openEditModal(row){
-    CURRENT_ROW = row;
-    modalId.value = row.callsign_id || "";
-    modalTitle.textContent = row.name;
-    modalName.value = row.name;
-    modalComment.value = row.comment || "";
-    CURRENT_STATUS_ID = row.status_id || null;
-    CURRENT_NETWORK_ID = row.network_id || null;
-    // network UI
-    modalNetworkQuery.value = "";
-    renderNetworkSelect([], CURRENT_NETWORK_ID);
+  
+function fillEditModal(row){
+  CURRENT_ROW = row;
+  modalId.value = row.callsign_id || "";
+  modalTitle.textContent = row.name;
+  modalName.value = row.name;
+  modalComment.value = row.comment || "";
+  CURRENT_STATUS_ID = row.status_id || null;
+  CURRENT_NETWORK_ID = row.network_id || null;
+  // network UI
+  modalNetworkQuery.value = "";
+  renderNetworkSelect([], CURRENT_NETWORK_ID);
+  preselectNetworkById(CURRENT_NETWORK_ID);
 
-    renderStatusSelect(CURRENT_STATUS_ID);
-    openModal();
-    setTimeout(() => modalName.focus(), 0);
+  setPhotoForStatus(CURRENT_STATUS_ID);
+
+  renderStatusSelect(CURRENT_STATUS_ID);
+  openModal();
+  setTimeout(() => modalName.focus(), 0);
+}
+
+async function openEditModalById(callsignId){
+  const cid = callsignId || "";
+  if(!cid) return;
+  try{
+    const resp = await fetch(`/api/callsigns/by-id?id=${encodeURIComponent(cid)}`);
+    const data = await resp.json();
+    if(!data.ok) throw new Error(data.error || "by-id failed");
+    if(!data.row) return;
+    fillEditModal(data.row);
+  }catch(e){
+    // last resort: try the cached row if we have one
+    if(CURRENT_ROW){
+      fillEditModal(CURRENT_ROW);
+    }
   }
+}
 
   async function runQuery(){
     const frequency = (elFreq.value || "").trim();
@@ -298,6 +370,11 @@ function renderStatusSelect(selectedId){
         return;
       }
       const rows = data.rows || [];
+      if(rows.length === 0 && data.message){
+        setInfo(data.message);
+        elTbody.innerHTML = `<tr><td colspan="4" class="small" style="opacity:.85">${escapeHtml(data.message)}</td></tr>`;
+        return;
+      }
       setInfo(`Знайдено: ${rows.length}`);
       renderTable(rows);
     } catch(e){
@@ -424,6 +501,7 @@ function renderStatusSelect(selectedId){
         } else {
           const v = parseInt(modalStatus.value, 10);
           CURRENT_STATUS_ID = Number.isFinite(v) ? v : null;
+          setPhotoForStatus(CURRENT_STATUS_ID);
         }
       });
     }
@@ -452,6 +530,7 @@ function renderStatusSelect(selectedId){
     if(modalNetwork){ modalNetwork.addEventListener('change', () => { CURRENT_NETWORK_ID = modalNetwork.value ? parseInt(modalNetwork.value,10) : null; }); }
           CURRENT_STATUS_ID = data.id;
           renderStatusSelect(CURRENT_STATUS_ID);
+          setPhotoForStatus(CURRENT_STATUS_ID);
           closeStatusModal();
         } catch(e){
           console.error(e);

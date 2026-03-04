@@ -95,19 +95,82 @@ def _find_network_id(conn, frequency_or_mask: str) -> Optional[int]:
 
 @router.get("/api/callsigns/by-frequency")
 def api_callsigns_by_frequency(frequency: str, days: int = 7):
+    """Return callsigns for a network found by frequency/mask.
+
+    - If network not found: ok=True, network_id=None, rows=[], message=...
+    - If no callsigns in window: ok=True, network_id=<id>, rows=[], message includes total_all
+    """
+    q_raw = (frequency or "").strip()
     days = max(1, min(_as_int(days, 7), 365))
     start_dt = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
 
-    with get_conn() as conn:
-        network_id = _find_network_id(conn, frequency)
-        if not network_id:
-            return {"ok": True, "rows": [], "network_id": None}
+    # Support inputs:
+    #   "144.35"
+    #   "144.35/300.3210"
+    #   "144.35 / 300.321"
+    freq_part = q_raw
+    mask_part: Optional[str] = None
+    if "/" in q_raw:
+        parts = [p.strip() for p in q_raw.split("/", 1)]
+        freq_part = parts[0] or ""
+        mask_part = parts[1] or None
 
-        # Pull callsigns that were seen in the requested window.
-        # We use last_seen_dt (maintained by ingest) for speed.
+    # Normalize textual formatting (e.g., 146.025 -> 146.0250) to match DB style
+    freq_norm = (normalize_freq(freq_part) or freq_part).strip()
+    mask_norm = (normalize_freq(mask_part) or mask_part).strip() if mask_part else None
+
+    if not freq_norm and not mask_norm:
+        return {"ok": True, "rows": [], "network_id": None, "message": "Вкажіть частоту."}
+
+    with get_conn() as conn:
+        # Find network
+        if mask_norm:
+            nrow = conn.execute(
+                """
+                SELECT id, frequency, mask, unit
+                FROM networks
+                WHERE (frequency = ? OR CAST(frequency AS REAL) = CAST(? AS REAL))
+                  AND (mask = ? OR CAST(mask AS REAL) = CAST(? AS REAL))
+                LIMIT 1
+                """,
+                (freq_norm, freq_norm, mask_norm, mask_norm),
+            ).fetchone()
+        else:
+            # Match by frequency OR by mask (single value)
+            nrow = conn.execute(
+                """
+                SELECT id, frequency, mask, unit
+                FROM networks
+                WHERE frequency = ?
+                   OR mask = ?
+                   OR CAST(frequency AS REAL) = CAST(? AS REAL)
+                   OR CAST(mask AS REAL) = CAST(? AS REAL)
+                LIMIT 1
+                """,
+                (freq_norm, freq_norm, freq_norm, freq_norm),
+            ).fetchone()
+
+        if not nrow:
+            return {
+                "ok": True,
+                "rows": [],
+                "network_id": None,
+                "message": "Радіомережу з такою частотою/маскою не знайдено.",
+            }
+
+        network_id = int(nrow["id"])
+
+        # Total callsigns in this network (all time)
+        total_all = conn.execute(
+            "SELECT COUNT(1) AS cnt FROM callsigns WHERE network_id = ?",
+            (network_id,),
+        ).fetchone()
+        total_all_cnt = int(total_all["cnt"]) if total_all else 0
+
+        # Callsigns seen in requested window (use last_seen_dt)
         rows = conn.execute(
             """
-            SELECT id, name, comment, callsign_status_id
+            SELECT id, network_id, name, comment, callsign_status_id, last_seen_dt
             FROM callsigns
             WHERE network_id = ?
               AND (last_seen_dt IS NOT NULL AND last_seen_dt >= ?)
@@ -116,7 +179,7 @@ def api_callsigns_by_frequency(frequency: str, days: int = 7):
             (network_id, start_dt),
         ).fetchall()
 
-        # Single status per callsign (lookup)
+        # Lookup status labels
         status_lookup: Dict[int, str] = {}
         status_ids = sorted({int(r["callsign_status_id"]) for r in rows if r["callsign_status_id"]})
         if status_ids:
@@ -136,15 +199,38 @@ def api_callsigns_by_frequency(frequency: str, days: int = 7):
             {
                 "n": idx,
                 "callsign_id": cid,
-                "network_id": int(r["network_id"]) if r["network_id"] else None,
                 "name": r["name"],
                 "comment": r["comment"] or "",
                 "status_id": sid,
                 "status_label": sname or "",
+                "last_seen_dt": r["last_seen_dt"],
             }
         )
 
-    return {"ok": True, "network_id": int(network_id), "rows": out_rows}
+    message = ""
+    if not out_rows:
+        if total_all_cnt > 0:
+            message = (
+                f"За останні {days} днів у цій р/м позивних не зафіксовано. "
+                f"Загалом за весь час: {total_all_cnt}."
+            )
+        else:
+            message = f"У цій р/м поки що немає позивних у базі."
+
+    return {
+        "ok": True,
+        "network_id": network_id,
+        "network": {
+            "id": network_id,
+            "frequency": nrow["frequency"],
+            "mask": nrow["mask"],
+            "unit": nrow["unit"],
+        },
+        "days": days,
+        "total_all": total_all_cnt,
+        "rows": out_rows,
+        "message": message,
+    }
 
 
 @router.get("/api/callsigns/search")
@@ -205,6 +291,51 @@ def api_callsigns_search(q: str):
     return {"ok": True, "rows": out_rows}
 
 
+
+@router.get("/api/callsigns/by-id")
+def api_callsign_by_id(id: int):
+    """Return a single callsign card by id (fresh from DB)."""
+    cid = _as_int(id, 0)
+    if not cid:
+        return JSONResponse({"ok": False, "error": "id is required"}, status_code=400)
+
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                c.id AS callsign_id,
+                c.name AS name,
+                c.comment AS comment,
+                c.network_id AS network_id,
+                c.callsign_status_id AS status_id,
+                s.name AS status_label,
+                n.frequency AS frequency,
+                n.unit AS unit
+            FROM callsigns c
+            LEFT JOIN callsign_statuses s ON s.id = c.callsign_status_id
+            LEFT JOIN networks n ON n.id = c.network_id
+            WHERE c.id = ?
+            LIMIT 1
+            """,
+            (cid,),
+        ).fetchone()
+
+    if not row:
+        return JSONResponse({"ok": True, "row": None})
+
+    return {
+        "ok": True,
+        "row": {
+            "callsign_id": int(row["callsign_id"]),
+            "name": row["name"] or "",
+            "comment": row["comment"] or "",
+            "network_id": int(row["network_id"]) if row["network_id"] else None,
+            "status_id": int(row["status_id"]) if row["status_id"] else None,
+            "status_label": row["status_label"] or "",
+            "frequency": row["frequency"] or "Невідомо",
+            "unit": row["unit"] or "Невідомо",
+        },
+    }
 
 @router.post("/api/callsigns/save")
 async def api_callsign_save(request: Request):

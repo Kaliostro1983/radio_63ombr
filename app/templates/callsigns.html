@@ -98,7 +98,7 @@
   <div class="modal-card cs-modal-card" role="dialog" aria-modal="true">
     <div class="modal-head">
       <div>
-        <div class="small" style="opacity:.75">Позивний</div>
+        <div class="small" style="opacity:.75">Особова справа</div>
         <div id="csModalTitle" style="font-weight:700">—</div>
       </div>
       <button class="secondary" type="button" data-close="1">Закрити</button>
@@ -107,10 +107,21 @@
     <div class="modal-body">
       <input id="csModalId" type="hidden" />
 
-      <div class="row" style="gap:10px; flex-wrap:wrap">
-        <div style="flex: 1; min-width:220px">
-          <label class="small">Позивний</label>
-          <input id="csModalName" type="text" />
+      <div class="cs-profile-top">
+        <div class="cs-photo-wrap">
+          <img id="csModalPhoto" class="cs-photo" src="/static/photos/callsign_statuses/_default.webp" alt="Фото" />
+        </div>
+
+        <div class="cs-profile-fields">
+          <div>
+            <label class="small">Позивний</label>
+            <input id="csModalName" type="text" />
+          </div>
+
+          <div style="margin-top:10px">
+            <label class="small">Статус</label>
+            <select id="csModalStatus" style="width:100%"></select>
+          </div>
         </div>
       </div>
 
@@ -120,11 +131,6 @@
         <select id="csModalNetwork" style="width:100%; margin-top:6px">
           <option value="">Невідомо</option>
         </select>
-      </div>
-
-      <div style="margin-top:10px">
-        <label class="small">Статус</label>
-        <select id="csModalStatus" style="width:100%"></select>
       </div>
 
       <div style="margin-top:10px">

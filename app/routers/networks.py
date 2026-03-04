@@ -53,6 +53,34 @@ def api_networks_lookup(q: str):
     return {"ok": True, "rows": out}
 
 
+@router.get("/api/networks/by-id")
+def api_network_by_id(id: int):
+    """Return a minimal network row for preselecting a network in UI."""
+    try:
+        network_id = int(id)
+    except Exception:
+        return {"ok": False, "error": "invalid id"}
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, frequency, mask, unit FROM networks WHERE id=? LIMIT 1",
+            (network_id,),
+        ).fetchone()
+
+        if not row:
+            return {"ok": True, "row": None}
+
+        return {
+            "ok": True,
+            "row": {
+                "id": int(row["id"]),
+                "frequency": row["frequency"] or "",
+                "mask": row["mask"] or "",
+                "unit": row["unit"] or "",
+            },
+        }
+
+
 
 def _fetchall(conn, sql: str, params=()):
     cur = conn.execute(sql, params)
