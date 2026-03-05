@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+    <h2 style="margin:0;">Перехоплення #{{ m.id }}</h2>
+    <a href="/intercepts" style="text-decoration:none;">← назад до пошуку</a>
+  </div>
+
+  <div class="intercept-card" style="margin-top:12px;">
+    <div class="intercept-header">
+      {{ m.created_at }} &nbsp;&nbsp; {{ m.frequency }}
+    </div>
+
+    {% if m.net_description %}
+      <div class="intercept-meta">{{ m.net_description }}</div>
+    {% endif %}
+
+    <hr style="border:none; border-top:1px solid #eee; margin:10px 0;">
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+      <div>
+        <div><b>Отримано:</b> {{ m.received_at }}</div>
+        <div><b>Unit:</b> {{ m.unit }}</div>
+        <div><b>Zone:</b> {{ m.zone }}</div>
+        <div><b>Mask:</b> {{ m.mask }}</div>
+      </div>
+      <div>
+        <div><b>Valid:</b> {{ m.is_valid }}</div>
+        <div><b>Confidence:</b> {{ m.parse_confidence }}</div>
+        {% if m.author %}<div><b>Author:</b> {{ m.author }}</div>{% endif %}
+        {% if m.source_chat_name %}<div><b>Chat:</b> {{ m.source_chat_name }}</div>{% endif %}
+      </div>
+    </div>
+
+    {% if m.comment %}
+      <div style="margin-top:12px;">
+        <b>Коментар:</b>
+        <div class="intercept-body">{{ m.comment }}</div>
+      </div>
+    {% endif %}
+
+    <div style="margin-top:12px;">
+      <b>Текст перехоплення:</b>
+      <div class="intercept-body" style="margin-top:6px;">{{ m.body_text }}</div>
+    </div>
+
+    {% if m.raw_text %}
+      <div style="margin-top:12px;">
+        <b>Raw (як прийшло):</b>
+        <div class="intercept-body" style="margin-top:6px; opacity:.9;">{{ m.raw_text }}</div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

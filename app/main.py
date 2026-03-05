@@ -14,6 +14,8 @@ from app.routers import peleng
 from app.routers.callsigns import router as callsigns_router
 from fastapi.templating import Jinja2Templates
 
+from app.routers.intercepts import router as intercepts_router
+
 from app.routers.ingest import router as ingest_router
 
 def create_app() -> FastAPI:
@@ -34,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(peleng.router)
     app.include_router(ingest_router)
     app.include_router(callsigns_router)
+    app.include_router(intercepts_router)
 
     @app.on_event("startup")
     def _startup():
