@@ -49,4 +49,69 @@
 
   <div class="toast" id="toast" aria-live="polite"></div>
 </div>
+
+<hr class="pel-sep">
+
+<div class="pel-wrap pel-report-wrap">
+  <h3 class="section-title">Формування звіту</h3>
+
+  <label class="section-title">
+    Текст для звіту (якщо заповнено — звіт формується з цього тексту, БД ігнорується)
+  </label>
+  <textarea class="ta ta-report" id="report_source_text" rows="8"
+            placeholder="Встав сюди текст для звіту..."></textarea>
+
+  <div class="report-mode-note" id="report_mode_note">
+    Режим: вибірка з БД
+  </div>
+
+  <div class="report-toolbar">
+    <div class="report-field report-field-dt">
+      <label class="lbl" for="report_to_dt">Кінцевий дата/час</label>
+      <input class="in" type="datetime-local" id="report_to_dt">
+    </div>
+
+    <div class="report-field report-field-hours">
+      <label class="lbl" for="report_hours">Період, год</label>
+      <input class="in in-hours" type="number" id="report_hours" min="1" step="1" value="9">
+    </div>
+
+    <div class="report-field report-field-dt">
+      <label class="lbl" for="report_from_dt">Початковий дата/час</label>
+      <input class="in" type="datetime-local" id="report_from_dt">
+    </div>
+
+    <div class="report-actions">
+      <div class="report-preview" id="report_preview">Знайдено: —</div>
+      <button class="btn" type="button" id="btn_report_generate">Сформувати звіт</button>
+    </div>
+  </div>
+
+  <details class="posts-panel" id="posts_panel">
+    <summary class="posts-summary">Налаштування постів</summary>
+
+    <div class="posts-toolbar">
+      <button class="btn" type="button" id="btn_posts_add">Додати пост</button>
+      <button class="btn" type="button" id="btn_posts_save">Зберегти пости</button>
+    </div>
+
+    <div class="posts-table-wrap">
+      <table class="posts-table">
+        <thead>
+          <tr>
+            <th>Active</th>
+            <th>ID</th>
+            <th>Назва</th>
+            <th>№ БП</th>
+            <th>Підрозділ</th>
+            <th>Техніка</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="posts_tbody"></tbody>
+      </table>
+    </div>
+  </details>
+</div>
+
 {% endblock %}
