@@ -97,15 +97,26 @@ CREATE TABLE IF NOT EXISTS peleng_points (
 CREATE TABLE IF NOT EXISTS ingest_messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   platform TEXT NOT NULL,
-  source_chat_id TEXT NOT NULL,
+
+  source_chat_id TEXT,
   source_chat_name TEXT,
+
   source_message_id TEXT NOT NULL,
+
+  source_file_name TEXT,
+  source_row_number INTEGER,
+
   raw_text TEXT NOT NULL,
+  normalized_text TEXT,
+
   published_at_text TEXT,
-  published_at_platform TEXT,
   received_at TEXT NOT NULL,
+
+  message_format TEXT,
+
   parse_status TEXT NOT NULL,
   parse_error TEXT,
+
   UNIQUE(platform, source_message_id)
 );
 
@@ -119,6 +130,7 @@ CREATE TABLE IF NOT EXISTS messages (
   comment TEXT,
   parse_confidence REAL,
   is_valid INTEGER NOT NULL DEFAULT 1,
+  delay_sec INTEGER,
   FOREIGN KEY(ingest_id) REFERENCES ingest_messages(id) ON DELETE CASCADE,
   FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
 );

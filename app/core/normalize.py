@@ -31,3 +31,23 @@ def normalize_freq(value: str | None) -> str | None:
         return None
     left = digits[-3:].rjust(3, "0")
     return f"{left}.0000"
+
+
+def normalize_nonstandard_type_1(text: str) -> str:
+    """
+    Convert nonstandard intercept to template structure.
+    Minimal version for now.
+    """
+
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+    if len(lines) < 2:
+        return text
+
+    # приклад грубої нормалізації
+    dt = lines[0]
+    freq = lines[1]
+
+    body = "\n".join(lines[2:])
+
+    return f"{dt}\n{freq}\nукх р/м\n\n\n{body}"

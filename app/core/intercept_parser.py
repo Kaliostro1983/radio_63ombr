@@ -131,6 +131,7 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
         "mask": None,  # якщо потім додаси маску в парсер — тут заповниш
         "unit": unit,
         "zone": zone,
+        "net_line": net_line,
         "caller": _norm_s(caller),
         "callees": [_norm_s(callee)] if _norm_s(callee) else [],
         "body": body,

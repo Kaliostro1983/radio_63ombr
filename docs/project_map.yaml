@@ -1,0 +1,124 @@
+project:
+  name: peleng-online
+  description: >
+    Web-сервіс для роботи з пеленгацією, генерації текстів повідомлень,
+    збереження batch/points у SQLite та формування DOCX-звітів.
+  stack:
+    backend:
+      - FastAPI
+      - SQLite
+      - Jinja2
+    frontend:
+      - HTML
+      - CSS
+      - Vanilla JavaScript
+    reporting:
+      - python-docx
+      - custom parser
+      - custom docx builder
+
+architecture:
+  principle: "ядро -> сервіси -> край"
+  layers:
+    domain:
+      description: >
+        Чиста логіка без FastAPI, SQLite і HTTP.
+        Приклади: нормалізація, трансформація records, правила форматування.
+      preferred_dirs:
+        - app/domain
+        - app/core
+    repositories:
+      description: >
+        Доступ до SQLite, SQL-запити, транзакції, читання/запис конфігів.
+      preferred_dirs:
+        - app/repositories
+    services:
+      description: >
+        Координація сценаріїв: отримати дані, підготувати records, згенерувати звіт.
+      preferred_dirs:
+        - app/services
+    routers:
+      description: >
+        HTTP-шар. Приймає запит, валідовує параметри, викликає сервіс, повертає відповідь.
+      preferred_dirs:
+        - app/routers
+    templates:
+      description: "HTML-шаблони Jinja2."
+      preferred_dirs:
+        - app/templates
+    static:
+      description: "CSS та JS для інтерфейсу."
+      preferred_dirs:
+        - app/static
+    report_module:
+      description: >
+        Перевикористаний модуль desktop-версії для парсингу тексту
+        та побудови DOCX-звітів.
+      preferred_dirs:
+        - app/peleng_report
+
+routing_rules:
+  new_router: app/routers
+  new_service: app/services
+  new_repository: app/repositories
+  new_domain_logic:
+    primary: app/domain
+    fallback: app/core
+  new_template: app/templates
+  new_javascript: app/static
+  new_css: app/static
+  report_related_logic: app/peleng_report
+
+project_structure:
+  app/core:
+    purpose: "Базова інфраструктура: db, config, helpers, shared utilities"
+    examples:
+      - db.py
+      - config.py
+  app/routers:
+    purpose: "FastAPI роутери"
+    examples:
+      - peleng.py
+  app/templates:
+    purpose: "Jinja2 шаблони"
+    examples:
+      - peleng.html
+  app/static:
+    purpose: "Клієнтські CSS/JS"
+    examples:
+      - peleng.css
+      - peleng.js
+  app/peleng_report:
+    purpose: "Логіка імпорту тексту та генерації DOCX"
+    examples:
+      - parser.py
+      - report.py
+      - runner.py
+      - mgrs.py
+
+rules:
+  - "Не додавати бізнес-логіку в роутери."
+  - "Не змішувати SQL і HTML/JS."
+  - "Нові файли класти в існуючу структуру app/*, а не створювати паралельні src/* без потреби."
+  - "Для нових великих сценаріїв спочатку оцінювати: domain / repository / service / router."
+  - "Якщо функція перевикористовується між desktop і web, виносити її в окремий модуль."
+  - "Runtime-конфіги, що змінюються через UI, не тримати в git без потреби."
+  - "Після кожного завершеного етапу оновлювати docs/CHANGELOG.md."
+
+runtime_files:
+  tracked:
+    - VERSION
+    - docs/project_map.yaml
+    - docs/CHANGELOG.md
+  ignored:
+    - posts.json
+
+ui_versioning:
+  version_source: VERSION
+  changelog_source: docs/CHANGELOG.md
+  version_endpoint: /version
+  changelog_endpoint: /changelog
+
+notes:
+  - "Якщо буде перенесення posts з JSON у SQLite, оновити цей файл."
+  - "Якщо з’являться app/services та app/repositories, зафіксувати це тут як основні шари."

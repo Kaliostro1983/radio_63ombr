@@ -6,6 +6,9 @@
   <title>{{ app_name }}</title>
   <link rel="stylesheet" href="/static/app.css"/>
   <script src="/static/app.js" defer></script>
+  <div class="app-version-bar">
+  
+</div>
 </head>
 <body>
 <div class="layout">
@@ -25,6 +28,9 @@
       <div class="small" style="margin-bottom:8px">Дизайн</div>
       <button type="button" class="secondary" onclick="toggleTheme()">День / Ніч</button>
       <div class="small" style="margin-top:10px">Доступ лише через TailScale (serve).</div>
+      <a href="/changelog" target="_blank" class="app-version-link">
+        v{{ app_version }}
+      </a>
     </div>
   </aside>
 

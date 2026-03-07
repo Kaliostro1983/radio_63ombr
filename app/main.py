@@ -18,6 +18,11 @@ from app.routers.intercepts import router as intercepts_router
 
 from app.routers.ingest import router as ingest_router
 
+from fastapi.templating import Jinja2Templates
+
+templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["app_version"] = peleng.read_version()
+
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name)
 

@@ -8,7 +8,9 @@ from fastapi.responses import JSONResponse
 
 from app.core.db import get_conn
 from app.core.logging import get_logger
-from app.core.intercept_parser import is_template_intercept, parse_template_intercept
+from app.core.intercept_parser import parse_template_intercept
+from app.core.validators import detect_message_format
+from app.core.normalize import normalize_nonstandard_type_1
 
 router = APIRouter(prefix="/api", tags=["ingest"])
 log = get_logger("ingest")
@@ -28,7 +30,6 @@ def _table_exists(cur, table_name: str) -> bool:
 
 def _get_table_columns(cur, table_name: str) -> List[str]:
     rows = cur.execute(f"PRAGMA table_info({table_name})").fetchall()
-    # rows: (cid, name, type, notnull, dflt_value, pk)
     out: List[str] = []
     for r in rows:
         out.append(r[1] if not isinstance(r, dict) else r["name"])
@@ -74,7 +75,7 @@ def ensure_network(
     """
     If exists -> return id.
     Else -> create. Defaults only if unit/zone absent in intercept.
-    group_id=7, status_id=14 always for auto-created (as per your rule).
+    group_id=7, status_id=14 always for auto-created.
     """
     def norm_s(v: Optional[str]) -> Optional[str]:
         v = (v or "").strip()
@@ -92,7 +93,6 @@ def ensure_network(
     if row:
         return int(row[0] if not isinstance(row, dict) else row["id"])
 
-    # optional lookup by mask
     if mask:
         row = cur.execute("SELECT id FROM networks WHERE mask=? LIMIT 1", (mask,)).fetchone()
         if row:
@@ -125,7 +125,9 @@ def ensure_network(
     cur.execute(sql, tuple(insert_vals))
     new_id = int(cur.lastrowid)
 
-    log.notice(f"Created new network: frequency={frequency!r}, unit={unit!r}, zone={zone!r}, group_id=7, status_id=14")
+    log.notice(
+        f"Created new network: frequency={frequency!r}, unit={unit!r}, zone={zone!r}, group_id=7, status_id=14"
+    )
     return new_id
 
 
@@ -153,6 +155,46 @@ def upsert_callsign_edge(cur, network_id: int, a_id: int, b_id: int, dt: str) ->
     )
 
 
+def _to_sql_dt(dt_text: str | None) -> str | None:
+    if not dt_text:
+        return None
+    s = str(dt_text).strip()
+    try:
+        if "," in s:
+            dt = datetime.strptime(s, "%d.%m.%Y, %H:%M:%S")
+        else:
+            dt = datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
+        return dt.isoformat(timespec="seconds")
+    except Exception:
+        return None
+
+
+def _calc_delay_sec(
+    platform: str,
+    published_at_platform: Optional[str],
+    published_at_text: Optional[str],
+) -> Optional[int]:
+    if platform == "xlsx_import":
+        return 0
+
+    if not published_at_platform or not published_at_text:
+        return None
+
+    try:
+        dt_platform = datetime.fromisoformat(str(published_at_platform).strip())
+
+        published_text_raw = str(published_at_text).strip()
+        if "," in published_text_raw:
+            dt_text = datetime.strptime(published_text_raw, "%d.%m.%Y, %H:%M:%S")
+        else:
+            dt_text = datetime.strptime(published_text_raw, "%d.%m.%Y %H:%M:%S")
+
+        return int((dt_platform - dt_text).total_seconds())
+    except Exception as e:
+        log.notice(f"Failed to calculate delay_sec: {e}")
+        return None
+
+
 @router.post("/ingest/whatsapp")
 async def ingest_whatsapp(request: Request):
     payload: Dict[str, Any] = await request.json()
@@ -162,10 +204,27 @@ async def ingest_whatsapp(request: Request):
     source_chat_name = payload.get("chat_name")
     source_message_id = payload.get("message_id")
     raw_text = payload.get("text") or ""
-    published_at_platform = payload.get("published_at_platform")  # ISO from Node (optional)
+    published_at_platform = payload.get("published_at_platform")
+
+    allow_send = bool(payload.get("allow_send", False))
+    actions: List[Dict[str, Any]] = []
+
+    if allow_send and raw_text:
+        actions.append(
+            {
+                "type": "send_message",
+                "text": raw_text,
+            }
+        )
+
+    if allow_send:
+        log.notice("Forward command received (#go)")
 
     if not source_chat_id or not source_message_id or not raw_text:
-        return JSONResponse({"ok": False, "error": "chat_id, message_id, text are required"}, status_code=400)
+        return JSONResponse(
+            {"ok": False, "error": "chat_id, message_id, text are required"},
+            status_code=400,
+        )
 
     received_at = _now_sql()
 
@@ -178,9 +237,9 @@ async def ingest_whatsapp(request: Request):
                 """
                 INSERT INTO ingest_messages (
                   platform, source_chat_id, source_chat_name, source_message_id,
-                  raw_text, published_at_text, published_at_platform, received_at,
-                  parse_status, parse_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', NULL)
+                  raw_text, published_at_text, received_at,
+                  message_format, parse_status, parse_error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
                 """,
                 (
                     platform,
@@ -189,23 +248,46 @@ async def ingest_whatsapp(request: Request):
                     source_message_id,
                     raw_text,
                     None,
-                    published_at_platform,
                     received_at,
+                    None,
+                    "received",
                 ),
             )
             ingest_id = int(cur.lastrowid)
         except Exception as e:
-            # likely duplicate UNIQUE(platform, source_message_id)
-            return {"ok": True, "duplicate": True, "reason": str(e), "actions": []}
+            return {"ok": True, "duplicate": True, "reason": str(e), "actions": actions}
 
-        # 2) template routing
-        if not is_template_intercept(raw_text):
-            log.notice("Nonstandard intercept received; skipping DB write (messages/networks/callsigns).")
+        # 2) detect message format
+        message_format = detect_message_format(raw_text)
+
+        cur.execute(
+            "UPDATE ingest_messages SET message_format=? WHERE id=?",
+            (message_format, ingest_id),
+        )
+
+        if message_format == "unknown":
+            log.notice("Unknown intercept format; skipping DB write (messages/networks/callsigns).")
             cur.execute(
                 "UPDATE ingest_messages SET parse_status=?, parse_error=? WHERE id=?",
-                ("skipped_nonstandard", "nonstandard format", ingest_id),
+                ("skipped_unknown_format", "unknown format", ingest_id),
             )
-            return {"ok": True, "ingest_id": ingest_id, "skipped": True, "reason": "nonstandard", "actions": []}
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "skipped": True,
+                "reason": "unknown format",
+                "actions": actions,
+            }
+
+        if message_format == "nonstandard_type_1":
+            normalized = normalize_nonstandard_type_1(raw_text)
+
+            cur.execute(
+                "UPDATE ingest_messages SET normalized_text=?, parse_status=? WHERE id=?",
+                (normalized, "normalized_nonstandard", ingest_id),
+            )
+
+            raw_text = normalized
 
         # 3) parse template
         parsed = parse_template_intercept(raw_text)
@@ -214,23 +296,29 @@ async def ingest_whatsapp(request: Request):
             log.notice(f"Template intercept failed validation; skipping. error={err}")
             cur.execute(
                 "UPDATE ingest_messages SET parse_status=?, parse_error=? WHERE id=?",
-                ("skipped_nonstandard", str(err), ingest_id),
+                ("parse_error", str(err), ingest_id),
             )
-            return {"ok": True, "ingest_id": ingest_id, "skipped": True, "reason": err, "actions": []}
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "skipped": True,
+                "reason": err,
+                "actions": actions,
+            }
 
         published_at_text = parsed.get("published_at_text")
         frequency = parsed.get("frequency")
         mask = parsed.get("mask")
         unit = parsed.get("unit")
         zone = parsed.get("zone")
+        net_description = parsed.get("net_line")
         caller = parsed.get("caller")
         callees = parsed.get("callees") or []
         body_text = parsed.get("body") or ""
         parse_confidence = float(parsed.get("parse_confidence") or 0.9)
 
-        created_at = published_at_platform or published_at_text or received_at
+        created_at = _to_sql_dt(published_at_text) or received_at
 
-        # store published_at_text into journal (useful for audits)
         cur.execute(
             "UPDATE ingest_messages SET published_at_text=?, parse_status=? WHERE id=?",
             (published_at_text, "parsed", ingest_id),
@@ -246,21 +334,97 @@ async def ingest_whatsapp(request: Request):
             zone=zone,
         )
 
-        # 5) insert message (NEW STRUCTURE)
-        cur.execute(
+        # 5) duplicate guard on parsed intercept content
+        body_norm = (body_text or "").strip()
+
+        existing_message = cur.execute(
             """
-            INSERT INTO messages (
-              ingest_id, network_id,
-              created_at, received_at,
-              body_text,
-              comment, parse_confidence, is_valid
-            ) VALUES (?, ?, ?, ?, ?, NULL, ?, 1)
+            SELECT id
+            FROM messages
+            WHERE network_id = ?
+              AND created_at = ?
+              AND body_text = ?
+            LIMIT 1
             """,
-            (ingest_id, network_id, created_at, received_at, body_text, parse_confidence),
+            (
+                network_id,
+                created_at,
+                body_norm,
+            ),
+        ).fetchone()
+
+        if existing_message:
+            existing_message_id = int(
+                existing_message[0] if not isinstance(existing_message, dict) else existing_message["id"]
+            )
+
+            log.notice(
+                f"Duplicate parsed intercept detected; skipping message insert. "
+                f"existing_message_id={existing_message_id}, network_id={network_id}, created_at={created_at}"
+            )
+
+            cur.execute(
+                "UPDATE ingest_messages SET parse_status=?, parse_error=? WHERE id=?",
+                ("duplicate_content", f"duplicate of message_id={existing_message_id}", ingest_id),
+            )
+
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "duplicate": True,
+                "duplicate_stage": "message_content",
+                "existing_message_id": existing_message_id,
+                "actions": actions,
+            }
+
+        # 6) insert message
+        delay_sec = _calc_delay_sec(
+            platform=platform,
+            published_at_platform=published_at_platform,
+            published_at_text=published_at_text,
         )
+
+        message_cols = set(_get_table_columns(cur, "messages"))
+
+        insert_cols = [
+            "ingest_id",
+            "network_id",
+            "created_at",
+            "received_at",
+            "body_text",
+            "comment",
+            "parse_confidence",
+            "is_valid",
+        ]
+        insert_vals: List[Any] = [
+            ingest_id,
+            network_id,
+            created_at,
+            received_at,
+            body_text,
+            None,
+            parse_confidence,
+            1,
+        ]
+
+        if "net_description" in message_cols:
+            insert_cols.insert(4, "net_description")
+            insert_vals.insert(4, net_description)
+
+        if "delay_sec" in message_cols:
+            insert_cols.append("delay_sec")
+            insert_vals.append(delay_sec)
+
+        placeholders = ", ".join(["?"] * len(insert_cols))
+        sql = f"""
+            INSERT INTO messages (
+              {", ".join(insert_cols)}
+            ) VALUES ({placeholders})
+        """
+        cur.execute(sql, tuple(insert_vals))
         message_id = int(cur.lastrowid)
 
-        # 6) callsigns directory + links (normalized)
+        # 7) callsigns directory + links
         def upsert_callsign(name: Optional[str], role: str) -> Optional[int]:
             name = (name or "").strip()
             if not name:
@@ -307,19 +471,10 @@ async def ingest_whatsapp(request: Request):
             if cid is not None:
                 callee_ids.append(cid)
 
-        # 7) edges
+        # 8) edges
         if caller_id is not None:
             for callee_id in callee_ids:
                 upsert_callsign_edge(cur, int(network_id), int(caller_id), int(callee_id), created_at)
-
-    # Відповідь Node-боту (actions за бажанням)
-    actions = [
-        {
-            "type": "send_message",
-            "chat_id": source_chat_id,
-            "text": f"✅ Прийнято. message_id={message_id}",
-        }
-    ]
 
     return {
         "ok": True,

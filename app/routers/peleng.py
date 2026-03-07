@@ -5,6 +5,7 @@ import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from fastapi.responses import PlainTextResponse
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -41,6 +42,27 @@ class PostsSaveIn(BaseModel):
 # =========================================================
 # helpers
 # =========================================================
+def project_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+def version_file_path() -> Path:
+    return project_root() / "VERSION"
+
+def changelog_file_path() -> Path:
+    return project_root() / "docs" / "CHANGELOG.md"
+
+def read_version() -> str:
+    p = version_file_path()
+    if not p.exists():
+        return "0.0.0"
+    return p.read_text(encoding="utf-8").strip() or "0.0.0"
+
+def read_changelog() -> str:
+    p = changelog_file_path()
+    if not p.exists():
+        return "# Changelog\n\nФайл changelog ще не створено."
+    return p.read_text(encoding="utf-8")
+
 def posts_json_path() -> Path:
     return Path(__file__).resolve().parents[2] / "posts.json"
 
@@ -228,6 +250,16 @@ def render_docx_bytes(records: list[dict]) -> tuple[bytes, str]:
 
     return content, filename
 
+# =========================================================
+# version and changelog
+# =========================================================
+@router.get("/version")
+def app_version():
+    return {"version": read_version()}
+
+@router.get("/changelog", response_class=PlainTextResponse)
+def app_changelog():
+    return read_changelog()
 
 # =========================================================
 # page
