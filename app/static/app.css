@@ -242,3 +242,91 @@ button.secondary{
   border-color: rgba(255,159,26,.9);
   box-shadow: 0 0 0 1px rgba(255,159,26,.25);
 }
+
+
+/**************************/ 
+/* Стилі для імпорту XLSX */ 
+/**************************/
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.action-buttons > button {
+  white-space: nowrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--card-bg, #111827);
+  border: 1px solid var(--border-color, #2b3548);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.modal-header,
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #2b3548);
+}
+
+.modal-footer {
+  border-bottom: none;
+  border-top: 1px solid var(--border-color, #2b3548);
+  justify-content: flex-end;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.modal-close:hover {
+  opacity: 1;
+}
+
+.import-result {
+  display: grid;
+  gap: 10px;
+}
+
+.import-result-row {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.import-result-error {
+  color: #ffb4b4;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
