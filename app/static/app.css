@@ -262,11 +262,15 @@ button.secondary{
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 24px;
+}
+
+.modal-backdrop.is-open {
+  display: flex;
 }
 
 .modal-card {

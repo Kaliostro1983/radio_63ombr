@@ -85,30 +85,61 @@ def link_message_callsigns(
     created_at: str,
     received_at: str,
 ) -> None:
+    TECH_UNKNOWN = "НВ"
+
+    def norm_name(value: Optional[str]) -> Optional[str]:
+        s = (value or "").strip()
+        return s or None
+
+    caller_name = norm_name(caller)
+    callee_names: List[str] = []
+
+    for callee in callees:
+        name = norm_name(callee)
+        if name:
+            callee_names.append(name)
+
     caller_id = upsert_callsign(
         cur=cur,
         network_id=network_id,
         message_id=message_id,
-        name=caller,
+        name=caller_name,
         role="caller",
         created_at=created_at,
         received_at=received_at,
     )
 
-    callee_ids: List[int] = []
-    for callee in callees:
+    callee_pairs: List[tuple[str, int]] = []
+    for callee_name in callee_names:
         callee_id = upsert_callsign(
             cur=cur,
             network_id=network_id,
             message_id=message_id,
-            name=callee,
+            name=callee_name,
             role="callee",
             created_at=created_at,
             received_at=received_at,
         )
         if callee_id is not None:
-            callee_ids.append(callee_id)
+            callee_pairs.append((callee_name, callee_id))
 
-    if caller_id is not None:
-        for callee_id in callee_ids:
-            upsert_callsign_edge(cur, int(network_id), int(caller_id), int(callee_id), created_at)
+    if caller_id is None or not caller_name:
+        return
+
+    if caller_name == TECH_UNKNOWN:
+        return
+
+    for callee_name, callee_id in callee_pairs:
+        if callee_name == TECH_UNKNOWN:
+            continue
+
+        if caller_id == callee_id:
+            continue
+
+        upsert_callsign_edge(
+            cur,
+            int(network_id),
+            int(caller_id),
+            int(callee_id),
+            created_at,
+        )

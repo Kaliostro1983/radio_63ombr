@@ -13,12 +13,12 @@
 
   function openModal(html) {
     modalBody.innerHTML = html;
-    modal.hidden = false;
+    modal.classList.add("is-open");
     document.body.classList.add("modal-open");
   }
 
   function closeModal() {
-    modal.hidden = true;
+    modal.classList.remove("is-open");
     modalBody.innerHTML = "";
     document.body.classList.remove("modal-open");
   }
@@ -129,7 +129,7 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !modal.hidden) {
+    if (event.key === "Escape" && modal.classList.contains("is-open")) {
       closeModal();
     }
   });

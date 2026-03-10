@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 
 # 27.02.2026, 16:43:47  або  27.02.2026 16:00:21
@@ -49,7 +48,7 @@ def looks_like_callsign(s: str) -> bool:
         return False
     if len(s) > 40:
         return False
-    # якщо це схоже на нумерований пункт або фразу з пунктуацією — це не позивний
+    # кома тут не допускається: CSV-рядок розбираємо окремо
     if re.search(r"[.,:;]", s):
         return False
     if re.fullmatch(r"\d+", s):
@@ -80,28 +79,73 @@ def extract_unit_zone(net_line: str) -> tuple[Optional[str], Optional[str]]:
     return unit, zone
 
 
+def split_callsigns_line(line: Optional[str]) -> List[str]:
+    s = (line or "").strip()
+    if not s:
+        return []
+
+    parts = [p.strip() for p in s.split(",")]
+    out: List[str] = []
+
+    for part in parts:
+        if not part:
+            continue
+        if looks_like_callsign(part):
+            out.append(part)
+
+    return out
+
+
+def is_body_line(line: Optional[str]) -> bool:
+    s = (line or "").strip()
+    if not s:
+        return False
+
+    # типові маркери початку тексту перехоплення
+    if s.startswith("—") or s.startswith("-"):
+        return True
+
+    return False
+
+
 def parse_template_intercept(text: str) -> Dict[str, Any]:
     """
-    Expected template:
-      1) datetime
-      2) frequency
-      3) net_line (укх р/м ...)
-      4) callee (optional)
-      5) caller (optional)
-      6+) body
+    Supported template cases:
 
-    Validation rules:
-      - net_line must contain "укх" and "р/м"
-      - if callee/caller don't look like callsigns -> set to None (but do NOT shift fields)
+    A) Standard:
+       1) datetime
+       2) frequency
+       3) net_line
+       4) callee
+       5) caller
+       6+) body
+
+    B) Broken:
+       1) datetime
+       2) frequency
+       3) net_line
+       4) caller
+       5) callee1, callee2, ...
+       6+) body
+
+    C) No callsigns:
+       1) datetime
+       2) frequency
+       3) net_line
+       4+) body
+
+       => caller = "НВ", callees = ["НВ"]
     """
-    nz = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
 
-    if len(nz) < 3:
+    lines = [ln.strip() for ln in (text or "").splitlines()]
+    nonempty = [ln for ln in lines if ln]
+
+    if len(nonempty) < 3:
         return {"ok": False, "error": "too_few_lines"}
 
-    published_at_text = nz[0]
-    frequency = nz[1]
-    net_line = nz[2]
+    published_at_text = nonempty[0]
+    frequency = nonempty[1]
+    net_line = nonempty[2]
 
     if not RE_DT.match(published_at_text):
         return {"ok": False, "error": "dt_invalid"}
@@ -114,15 +158,51 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
 
     unit, zone = extract_unit_zone(net_line)
 
-    callee = nz[3] if len(nz) > 3 else None
-    caller = nz[4] if len(nz) > 4 else None
+    tail = nonempty[3:]
 
-    if callee and not looks_like_callsign(callee):
-        callee = None
-    if caller and not looks_like_callsign(caller):
-        caller = None
+    caller: Optional[str] = None
+    callees: List[str] = []
+    body_start_idx = 0
 
-    body = "\n".join(nz[5:]) if len(nz) > 5 else ""
+    # Case C: після net_line нічого немає
+    if not tail:
+        caller = "НВ"
+        callees = ["НВ"]
+        body_start_idx = 0
+
+    # Case C: після net_line одразу починається тіло
+    elif is_body_line(tail[0]):
+        caller = "НВ"
+        callees = ["НВ"]
+        body_start_idx = 0
+
+    # Case B: caller + csv-callees
+    elif len(tail) >= 2 and "," in tail[1]:
+        maybe_caller = _norm_s(tail[0])
+        maybe_callees = split_callsigns_line(tail[1])
+
+        caller = maybe_caller if maybe_caller and looks_like_callsign(maybe_caller) else "НВ"
+        callees = maybe_callees or ["НВ"]
+        body_start_idx = 2
+
+    # Case A: callee + caller
+    else:
+        maybe_callee = _norm_s(tail[0]) if len(tail) >= 1 else None
+        maybe_caller = _norm_s(tail[1]) if len(tail) >= 2 else None
+
+        parsed_callees: List[str] = []
+        if maybe_callee and looks_like_callsign(maybe_callee):
+            parsed_callees = [maybe_callee]
+
+        parsed_caller: Optional[str] = None
+        if maybe_caller and looks_like_callsign(maybe_caller):
+            parsed_caller = maybe_caller
+
+        caller = parsed_caller or "НВ"
+        callees = parsed_callees or ["НВ"]
+        body_start_idx = 2 if len(tail) >= 2 else 1
+
+    body = "\n".join(tail[body_start_idx:]).strip()
 
     return {
         "ok": True,
@@ -132,8 +212,8 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
         "unit": unit,
         "zone": zone,
         "net_line": net_line,
-        "caller": _norm_s(caller),
-        "callees": [_norm_s(callee)] if _norm_s(callee) else [],
+        "caller": _norm_s(caller) or "НВ",
+        "callees": callees if callees else ["НВ"],
         "body": body,
         "parse_confidence": 0.95,
     }
