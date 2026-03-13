@@ -10,7 +10,6 @@
   // tabs
   const tabFreq = $("csTabFreq");
   const tabSearch = $("csTabSearch");
-  const tabLabel = $("csTabLabel");
   const paneFreq = $("csPaneFreq");
   const paneSearch = $("csPaneSearch");
 
@@ -39,9 +38,9 @@
   const btnCreateStatus = $("csCreateStatus");
 
   let STATUS_LIST = []; // [{id, name}]
-  let CURRENT_ROW = null; // row object
+  let CURRENT_ROW = null;
   let CURRENT_STATUS_ID = null;
-  let CURRENT_NETWORK_ID = null; // single status id
+  let CURRENT_NETWORK_ID = null;
 
   function setPhotoForStatus(statusId){
     if(!modalPhoto) return;
@@ -65,10 +64,8 @@
         modalPhoto.src = base + String(statusId) + ".png";
         return;
       }
-      // fallback to default
       modalPhoto.onerror = null;
       modalPhoto.src = defWebp;
-      // if default.webp missing, browser will try default.png via HTML onerror? keep it simple:
       modalPhoto.addEventListener("error", () => { modalPhoto.src = defPng; }, { once:true });
     };
   }
@@ -104,7 +101,6 @@
     return (s || "").replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  
   function openCreateModal(){
     CURRENT_ROW = null;
     modalId.value = "";
@@ -120,7 +116,8 @@
     openModal();
     setTimeout(() => modalName.focus(), 0);
   }
-function openModal(){
+
+  function openModal(){
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
   }
@@ -171,12 +168,10 @@ function openModal(){
     }
   }
 
-  
   function renderNetworkSelect(networks, selectedId){
     const sel = modalNetwork;
-    const keepUnknown = sel.options.length && sel.options[0].value === "";
     sel.innerHTML = "";
-    // Unknown
+
     const opt0 = document.createElement("option");
     opt0.value = "";
     opt0.textContent = "Невідомо";
@@ -185,11 +180,11 @@ function openModal(){
     (networks || []).forEach(n => {
       const opt = document.createElement("option");
       opt.value = String(n.id);
-      opt.textContent = `${n.frequency || '—'} / ${n.mask || '—'} — ${n.unit || ''}`.trim();
+      opt.textContent = `${n.frequency || "—"} / ${n.mask || "—"} — ${n.unit || ""}`.trim();
       sel.appendChild(opt);
     });
 
-    if (selectedId){
+    if(selectedId){
       sel.value = String(selectedId);
     } else {
       sel.value = "";
@@ -197,23 +192,24 @@ function openModal(){
   }
 
   let NET_LOOKUP_TIMER = null;
+
   async function lookupNetworks(q){
     const qs = (q || "").trim();
-    if (!qs){
+    if(!qs){
       renderNetworkSelect([], CURRENT_NETWORK_ID);
       return;
     }
     try{
       const resp = await fetch(`/api/networks/lookup?q=${encodeURIComponent(qs)}`);
       const data = await resp.json();
-      if (!data.ok) throw new Error(data.error || "lookup failed");
+      if(!data.ok) throw new Error(data.error || "lookup failed");
       renderNetworkSelect(data.rows || [], CURRENT_NETWORK_ID);
     }catch(e){
-      // keep unknown only
       renderNetworkSelect([], CURRENT_NETWORK_ID);
     }
   }
-function renderStatusSelect(selectedId){
+
+  function renderStatusSelect(selectedId){
     if(!modalStatus) return;
     modalStatus.innerHTML = "";
 
@@ -246,6 +242,7 @@ function renderStatusSelect(selectedId){
       elTbody.innerHTML = '<tr><td colspan="4" class="small" style="opacity:.8">Нічого не знайдено.</td></tr>';
       return;
     }
+
     elTbody.innerHTML = "";
     rows.forEach(row => {
       const tr = document.createElement("tr");
@@ -270,6 +267,7 @@ function renderStatusSelect(selectedId){
       elSearchTbody.innerHTML = '<tr><td colspan="5" class="small" style="opacity:.8">Нічого не знайдено.</td></tr>';
       return;
     }
+
     elSearchTbody.innerHTML = "";
     rows.forEach(row => {
       const tr = document.createElement("tr");
@@ -284,6 +282,7 @@ function renderStatusSelect(selectedId){
         <td>${escapeHtml(row.frequency || "Невідомо")}</td>
         <td>${escapeHtml(row.unit || "Невідомо")}</td>
       `;
+
       tr.addEventListener("click", () => openEditModalById(row.callsign_id));
       elSearchTbody.appendChild(tr);
     });
@@ -311,70 +310,77 @@ function renderStatusSelect(selectedId){
     updateRowInSearchTable(updated);
   }
 
-  
-function fillEditModal(row){
-  CURRENT_ROW = row;
-  modalId.value = row.callsign_id || "";
-  modalTitle.textContent = row.name;
-  modalName.value = row.name;
-  modalComment.value = row.comment || "";
-  CURRENT_STATUS_ID = row.status_id || null;
-  CURRENT_NETWORK_ID = row.network_id || null;
-  // network UI
-  modalNetworkQuery.value = "";
-  renderNetworkSelect([], CURRENT_NETWORK_ID);
-  preselectNetworkById(CURRENT_NETWORK_ID);
+  function fillEditModal(row){
+    CURRENT_ROW = row;
+    modalId.value = row.callsign_id || "";
+    modalTitle.textContent = row.name;
+    modalName.value = row.name;
+    modalComment.value = row.comment || "";
+    CURRENT_STATUS_ID = row.status_id || null;
+    CURRENT_NETWORK_ID = row.network_id || null;
 
-  setPhotoForStatus(CURRENT_STATUS_ID);
+    modalNetworkQuery.value = "";
+    renderNetworkSelect([], CURRENT_NETWORK_ID);
+    preselectNetworkById(CURRENT_NETWORK_ID);
 
-  renderStatusSelect(CURRENT_STATUS_ID);
-  openModal();
-  setTimeout(() => modalName.focus(), 0);
-}
+    setPhotoForStatus(CURRENT_STATUS_ID);
+    renderStatusSelect(CURRENT_STATUS_ID);
 
-async function openEditModalById(callsignId){
-  const cid = callsignId || "";
-  if(!cid) return;
-  try{
-    const resp = await fetch(`/api/callsigns/by-id?id=${encodeURIComponent(cid)}`);
-    const data = await resp.json();
-    if(!data.ok) throw new Error(data.error || "by-id failed");
-    if(!data.row) return;
-    fillEditModal(data.row);
-  }catch(e){
-    // last resort: try the cached row if we have one
-    if(CURRENT_ROW){
-      fillEditModal(CURRENT_ROW);
+    openModal();
+    setTimeout(() => modalName.focus(), 0);
+  }
+
+  async function openEditModalById(callsignId){
+    const cid = callsignId || "";
+    if(!cid) return;
+
+    try{
+      const resp = await fetch(`/api/callsigns/by-id?id=${encodeURIComponent(cid)}`);
+      const data = await resp.json();
+      if(!data.ok) throw new Error(data.error || "by-id failed");
+      if(!data.row) return;
+      fillEditModal(data.row);
+    }catch(e){
+      if(CURRENT_ROW){
+        fillEditModal(CURRENT_ROW);
+      }
     }
   }
-}
 
   async function runQuery(){
     const frequency = (elFreq.value || "").trim();
     const days = (elDays.value || "7").trim();
+
     if(!frequency){
       setInfo("Вкажіть частоту");
       return;
     }
+
     setInfo("Завантаження...");
+
     try{
       const url = `/api/callsigns/by-frequency?frequency=${encodeURIComponent(frequency)}&days=${encodeURIComponent(days)}`;
       const r = await fetch(url);
+
       if(!r.ok){
         throw new Error("HTTP " + r.status);
       }
+
       const data = await r.json();
+
       if(!data.ok){
         setInfo("Помилка");
         elTbody.innerHTML = `<tr><td colspan="4" class="small" style="color:var(--danger)">${escapeHtml(data.error || "Помилка")}</td></tr>`;
         return;
       }
+
       const rows = data.rows || [];
       if(rows.length === 0 && data.message){
         setInfo(data.message);
         elTbody.innerHTML = `<tr><td colspan="4" class="small" style="opacity:.85">${escapeHtml(data.message)}</td></tr>`;
         return;
       }
+
       setInfo(`Знайдено: ${rows.length}`);
       renderTable(rows);
     } catch(e){
@@ -388,21 +394,28 @@ async function openEditModalById(callsignId){
     let q = (elQuery.value || "").trim();
     q = q.toUpperCase();
     elQuery.value = q;
+
     if(!q){
       setSearchInfo("Вкажіть позивний");
       return;
     }
+
     setSearchInfo("Завантаження...");
+
     try{
       const url = `/api/callsigns/search?q=${encodeURIComponent(q)}`;
       const r = await fetch(url);
+
       if(!r.ok) throw new Error("HTTP " + r.status);
+
       const data = await r.json();
+
       if(!data.ok){
         setSearchInfo("Помилка");
         elSearchTbody.innerHTML = `<tr><td colspan="5" class="small" style="color:var(--danger)">${escapeHtml(data.error || "Помилка")}</td></tr>`;
         return;
       }
+
       const rows = data.rows || [];
       setSearchInfo(`Знайдено: ${rows.length}`);
       renderSearchTable(rows);
@@ -415,10 +428,13 @@ async function openEditModalById(callsignId){
 
   async function saveModal(){
     modalErr.style.display = "none";
+
     const callsign_id = parseInt(modalId.value, 10);
     const name = (modalName.value || "").trim();
     const comment = (modalComment.value || "").trim();
-    const status_id = (modalStatus && modalStatus.value && modalStatus.value !== "__add__") ? parseInt(modalStatus.value, 10) : null;
+    const status_id = (modalStatus && modalStatus.value && modalStatus.value !== "__add__")
+      ? parseInt(modalStatus.value, 10)
+      : null;
 
     if(!name){
       showError("Позивний не може бути порожнім");
@@ -426,17 +442,27 @@ async function openEditModalById(callsignId){
     }
 
     btnSave.disabled = true;
+
     try{
       const r = await fetch("/api/callsigns/save", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({callsign_id, name, comment, status_id, network_id: (modalNetwork && modalNetwork.value) ? parseInt(modalNetwork.value, 10) : null})
+        body: JSON.stringify({
+          callsign_id,
+          name,
+          comment,
+          status_id,
+          network_id: (modalNetwork && modalNetwork.value) ? parseInt(modalNetwork.value, 10) : null
+        })
       });
+
       const data = await r.json();
+
       if(!data.ok){
         showError(data.error || "Помилка збереження");
         return;
       }
+
       updateRowInTables(data);
       closeModal();
     } finally {
@@ -446,24 +472,29 @@ async function openEditModalById(callsignId){
 
   function setTab(which){
     const isFreq = which === "freq";
-    if(tabFreq) tabFreq.classList.toggle("active", isFreq);
-    if(tabSearch) tabSearch.classList.toggle("active", !isFreq);
+
+    if(tabFreq) {
+      tabFreq.classList.toggle("active", isFreq);
+      tabFreq.setAttribute("aria-selected", isFreq ? "true" : "false");
+    }
+
+    if(tabSearch) {
+      tabSearch.classList.toggle("active", !isFreq);
+      tabSearch.setAttribute("aria-selected", isFreq ? "false" : "true");
+    }
+
     if(paneFreq) paneFreq.classList.toggle("hidden", !isFreq);
     if(paneSearch) paneSearch.classList.toggle("hidden", isFreq);
-    if(tabLabel) tabLabel.textContent = isFreq ? "Позивні р/м" : "Пошук/правка";
-    // reset small infos
+
     if(!isFreq) setInfo("");
     if(isFreq) setSearchInfo("");
   }
 
-  // wire
   document.addEventListener("DOMContentLoaded", async () => {
     if(!elShow) return;
+
     await loadStatuses();
 
-    if(modalNetwork){ modalNetwork.addEventListener('change', () => { CURRENT_NETWORK_ID = modalNetwork.value ? parseInt(modalNetwork.value,10) : null; }); }
-
-    // tabs
     if(tabFreq) tabFreq.addEventListener("click", () => setTab("freq"));
     if(tabSearch) tabSearch.addEventListener("click", () => setTab("search"));
 
@@ -472,30 +503,36 @@ async function openEditModalById(callsignId){
     elDays.addEventListener("keydown", (e) => { if(e.key === "Enter") runQuery(); });
 
     if(elSearch) elSearch.addEventListener("click", runSearch);
-  if (elAdd){ elAdd.addEventListener("click", openCreateModal); }
+    if(elAdd) elAdd.addEventListener("click", openCreateModal);
 
     if(elQuery) elQuery.addEventListener("keydown", (e) => { if(e.key === "Enter") runSearch(); });
-    if(elQuery) elQuery.addEventListener("blur", () => {
-      const v = (elQuery.value || "").trim().toUpperCase();
-      elQuery.value = v;
-    });
+    if(elQuery) {
+      elQuery.addEventListener("blur", () => {
+        const v = (elQuery.value || "").trim().toUpperCase();
+        elQuery.value = v;
+      });
+    }
 
-    btnSave.addEventListener("click", saveModal);
+    if(btnSave) btnSave.addEventListener("click", saveModal);
+
+    if(modalNetworkQuery){
+      modalNetworkQuery.addEventListener("input", () => {
+        clearTimeout(NET_LOOKUP_TIMER);
+        const q = modalNetworkQuery.value || "";
+        NET_LOOKUP_TIMER = setTimeout(() => lookupNetworks(q), 250);
+      });
+    }
+
+    if(modalNetwork){
+      modalNetwork.addEventListener("change", () => {
+        const v = modalNetwork.value;
+        CURRENT_NETWORK_ID = v ? parseInt(v, 10) : null;
+      });
+    }
 
     if(modalStatus){
-      modalNetworkQuery.addEventListener("input", ()=>{
-    clearTimeout(NET_LOOKUP_TIMER);
-    const q = modalNetworkQuery.value || "";
-    NET_LOOKUP_TIMER = setTimeout(()=> lookupNetworks(q), 250);
-  });
-  modalNetwork.addEventListener("change", ()=>{
-    const v = modalNetwork.value;
-    CURRENT_NETWORK_ID = v ? parseInt(v,10) : null;
-  });
-
-  modalStatus.addEventListener("change", () => {
+      modalStatus.addEventListener("change", () => {
         if(modalStatus.value === "__add__"){
-          // reset selection visually and open mini-modal
           modalStatus.value = CURRENT_STATUS_ID ? String(CURRENT_STATUS_ID) : "";
           openStatusModal();
         } else {
@@ -509,25 +546,29 @@ async function openEditModalById(callsignId){
     if(btnCreateStatus){
       btnCreateStatus.addEventListener("click", async () => {
         const name = (newStatusName.value || "").trim();
+
         if(!name){
           showStatusError("Вкажіть назву статусу");
           return;
         }
+
         btnCreateStatus.disabled = true;
+
         try{
           const r = await fetch("/api/callsigns/statuses", {
             method: "POST",
             headers: {"Content-Type":"application/json"},
             body: JSON.stringify({name})
           });
+
           const data = await r.json();
+
           if(!data.ok){
             showStatusError(data.error || "Не вдалося створити статус");
             return;
           }
-          await loadStatuses();
 
-    if(modalNetwork){ modalNetwork.addEventListener('change', () => { CURRENT_NETWORK_ID = modalNetwork.value ? parseInt(modalNetwork.value,10) : null; }); }
+          await loadStatuses();
           CURRENT_STATUS_ID = data.id;
           renderStatusSelect(CURRENT_STATUS_ID);
           setPhotoForStatus(CURRENT_STATUS_ID);
@@ -541,10 +582,12 @@ async function openEditModalById(callsignId){
       });
     }
 
-    modal.addEventListener("click", (e) => {
-      const t = e.target;
-      if(t && t.getAttribute && t.getAttribute("data-close") === "1") closeModal();
-    });
+    if(modal){
+      modal.addEventListener("click", (e) => {
+        const t = e.target;
+        if(t && t.getAttribute && t.getAttribute("data-close") === "1") closeModal();
+      });
+    }
 
     if(statusModal){
       statusModal.addEventListener("click", (e) => {
@@ -552,8 +595,9 @@ async function openEditModalById(callsignId){
         if(t && t.getAttribute && t.getAttribute("data-close-status") === "1") closeStatusModal();
       });
     }
+
     document.addEventListener("keydown", (e) => {
-      if(e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
+      if(e.key === "Escape" && modal && !modal.classList.contains("hidden")) closeModal();
       if(e.key === "Escape" && statusModal && !statusModal.classList.contains("hidden")) closeStatusModal();
     });
   });

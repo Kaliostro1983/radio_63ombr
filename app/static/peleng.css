@@ -1,59 +1,177 @@
-.pel-title { margin: 0 0 14px; font-size: 34px; font-weight: 700; }
-.pel-wrap { max-width: 980px; }
+.pel-page {
+  max-width: 1320px;
+}
 
-.row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
-.lbl { font-size: 16px; font-weight: 600; }
+.pel-page-header {
+  margin-bottom: 14px;
+}
 
-.in { height: 28px; padding: 2px 6px; border: 1px solid #a9a9a9; border-radius: 2px; }
-.in-date { width: 140px; }
-.in-time { width: 90px; }
-.in-freq { width: 170px; }
-.in-unit { flex: 1; min-width: 420px; }
-.in-loc { width: 260px; }
+.pel-title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+}
 
-.lbl-time { margin-left: 18px; }
-.lbl-loc { margin-left: 18px; }
+/* =========================
+   Peleng tabs
+========================= */
 
-.btn { height: 30px; padding: 0 14px; border: 1px solid #a9a9a9; background: #f3f3f3; border-radius: 3px; cursor: pointer; }
-.btn:hover { background: #ededed; }
-.btn-small { width: 38px; padding: 0; }
+.pel-tabs-shell {
+  margin-top: 10px;
+}
 
-.section-title { display: block; margin-top: 12px; margin-bottom: 6px; font-weight: 700; }
+.pel-tabs-nav{
+  position: relative;
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.pel-tabs-nav .tab-btn {
+  position: relative;
+  z-index: 21;
+  pointer-events: auto;
+}
+
+.pel-tab-panel-wrap{
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.pel-tab-panel {
+  min-width: 0;
+}
+
+/* =========================
+   Compose tab
+========================= */
+
+.pel-wrap {
+  max-width: 980px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.lbl {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.in {
+  height: 32px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  width: auto;
+}
+
+.in-date {
+  width: 140px;
+}
+
+.in-time {
+  width: 90px;
+}
+
+.in-freq {
+  width: 220px;
+}
+
+.in-unit {
+  flex: 1;
+  min-width: 320px;
+}
+
+.in-loc {
+  width: 260px;
+}
+
+.lbl-time {
+  margin-left: 18px;
+}
+
+.lbl-loc {
+  margin-left: 18px;
+}
+
+.btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 12px;
+}
+
+.btn-small {
+  width: 38px;
+  padding: 0;
+}
+
+.section-title {
+  display: block;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
 
 .ta {
   width: 100%;
-  border: 1px solid #a9a9a9;
-  border-radius: 2px;
-  padding: 4px 6px;
+  padding: 8px 10px;
   resize: vertical;
-  line-height: 1.2;
+  line-height: 1.35;
   font-size: 14px;
-}/* .ta-mgrs { height: 170px; }
-.ta-comment { height: 90px; }
-.ta-out { height: 240px; } */
+  border-radius: 12px;
+}
 
-.row-bottom { margin-top: 12px; }
-.left-btns { display: flex; gap: 10px; }
+.ta-mgrs {
+  min-height: 140px;
+}
+
+.ta-comment {
+  min-height: 72px;
+}
+
+.ta-out {
+  min-height: 220px;
+}
+
+.row-bottom {
+  margin-top: 14px;
+}
+
+.left-btns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
 .toast {
   position: relative;
-  margin-top: 6px;
-  height: 22px;
+  margin-top: 8px;
+  min-height: 22px;
   color: #0a5;
   font-weight: 600;
   opacity: 0;
   transition: opacity .15s ease;
 }
-.toast.show { opacity: 1; }
 
-.pel-sep {
-  margin: 28px 0 18px;
-  border: 0;
-  border-top: 1px solid #2f2f2f;
+.toast.show {
+  opacity: 1;
 }
+
+/* =========================
+   Report tab
+========================= */
 
 .pel-report-wrap {
   max-width: 1280px;
+}
+
+.pel-section-heading {
+  margin-top: 0;
 }
 
 .ta-report {
@@ -103,6 +221,7 @@
   align-items: end;
   gap: 12px;
   margin-left: auto;
+  flex-wrap: wrap;
 }
 
 .report-preview {
@@ -113,11 +232,15 @@
   white-space: nowrap;
 }
 
+/* =========================
+   Posts panel
+========================= */
+
 .posts-panel {
   margin-top: 18px;
-  border: 1px solid #2f2f2f;
-  border-radius: 8px;
-  padding: 10px 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px 16px;
   background: rgba(255,255,255,0.02);
 }
 
@@ -132,6 +255,7 @@
   gap: 10px;
   margin-top: 14px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .posts-table-wrap {
@@ -146,7 +270,7 @@
 
 .posts-table th,
 .posts-table td {
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--border);
   padding: 6px 8px;
   vertical-align: top;
 }
@@ -160,11 +284,8 @@
 .posts-table textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 4px 6px;
-  border: 1px solid #666;
-  border-radius: 4px;
-  background: #0f1115;
-  color: #eaeaea;
+  padding: 6px 8px;
+  border-radius: 8px;
 }
 
 .posts-table textarea {
@@ -198,4 +319,24 @@
 
 .btn-danger:hover {
   background: #3a1b1b;
+}
+
+/* =========================
+   Responsive
+========================= */
+
+@media (max-width: 980px) {
+  .report-actions {
+    margin-left: 0;
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .in-unit {
+    min-width: 240px;
+  }
+
+  .in-loc {
+    width: 220px;
+  }
 }

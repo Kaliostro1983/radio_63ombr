@@ -1,3 +1,4 @@
+// static/intercepts_import.js
 (function () {
   const importBtn = document.getElementById("importXlsxBtn");
   const fileInput = document.getElementById("xlsxFileInput");
@@ -11,16 +12,24 @@
     return;
   }
 
-  function openModal(html) {
-    modalBody.innerHTML = html;
+  function showModal() {
+    modal.hidden = false;
     modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
   }
 
-  function closeModal() {
+  function hideModal() {
+    modal.hidden = true;
     modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
     modalBody.innerHTML = "";
     document.body.classList.remove("modal-open");
+  }
+
+  function openModal(html) {
+    modalBody.innerHTML = html;
+    showModal();
   }
 
   function escapeHtml(value) {
@@ -72,10 +81,7 @@
     }
 
     if (!response.ok) {
-      const message =
-        data?.detail ||
-        data?.message ||
-        "Не вдалося обробити файл.";
+      const message = data?.detail || data?.message || "Не вдалося обробити файл.";
       throw new Error(message);
     }
 
@@ -86,7 +92,10 @@
     return data.result;
   }
 
+  hideModal();
+
   importBtn.addEventListener("click", () => {
+    hideModal();
     fileInput.value = "";
     fileInput.click();
   });
@@ -119,18 +128,18 @@
     }
   });
 
-  closeBtn?.addEventListener("click", closeModal);
-  closeBtnFooter?.addEventListener("click", closeModal);
+  closeBtn?.addEventListener("click", hideModal);
+  closeBtnFooter?.addEventListener("click", hideModal);
 
   modal.addEventListener("click", (event) => {
     if (event.target === modal) {
-      closeModal();
+      hideModal();
     }
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && modal.classList.contains("is-open")) {
-      closeModal();
+    if (event.key === "Escape" && !modal.hidden) {
+      hideModal();
     }
   });
 })();

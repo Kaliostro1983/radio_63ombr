@@ -1,60 +1,59 @@
+<!-- templates/intercepts_search.html -->
+<!-- заміни блок content повністю -->
+
 {% extends "base.html" %}
 
 {% block content %}
+<section class="intercepts-page">
+  <h2>Пошук перехоплень</h2>
 
-<h2>Пошук перехоплень</h2>
+  <form id="searchForm" class="search-form">
+    <div class="field">
+      <label for="phrase">Фраза</label>
+      <input id="phrase" name="phrase" type="text" placeholder="принял">
+    </div>
 
-<form id="searchForm" class="search-form">
-  <div class="field">
-    <label for="phrase">Фраза</label>
-    <input id="phrase" name="phrase" type="text" placeholder="принял">
-  </div>
+    <div class="field">
+      <label for="frequency">Частота/маска</label>
+      <input id="frequency" name="frequency" type="text" placeholder="149.200">
+    </div>
 
-  <div class="field">
-    <label for="frequency">Частота</label>
-    <input id="frequency" name="frequency" type="text" placeholder="149.200">
-  </div>
+    <div class="field field-days">
+      <label for="days">Днів</label>
+      <input id="days" name="days" type="number" min="1" max="365" value="70">
+    </div>
 
-  <div class="field field-days">
-    <label for="days">Днів</label>
-    <input id="days" name="days" type="number" min="1" max="365" value="70">
-  </div>
-
-  <div class="field field-btn">
-    <label>&nbsp;</label>
-    <div class="action-buttons">
-      <button type="submit">Пошук</button>
-      <button type="button" id="importXlsxBtn" class="secondary">
-        Імпорт XLSX
-      </button>
+    <div class="field field-btn">
+      <label>&nbsp;</label>
+      <div class="action-buttons">
+        <button type="submit">Пошук</button>
+        <button type="button" id="importXlsxBtn" class="secondary">Імпорт XLSX</button>
       </div>
-    <input id="xlsxFileInput" type="file" accept=".xlsx" hidden>
-  </div>
-</form>
+      <input id="xlsxFileInput" type="file" accept=".xlsx" hidden>
+    </div>
+  </form>
 
 <div id="warning" class="warning" style="display:none;"></div>
-<div id="results"></div>
+<div id="results" class="results-list"></div>
+<div id="loading" class="loading" style="display:none;">Завантаження...</div>
 
-<div id="loading" style="text-align:center; padding:20px; opacity:0.7; display:none;">
-  Завантаження...
-</div>
+  <div id="xlsxImportModal" class="modal-backdrop" hidden aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="xlsxImportModalTitle">
+      <div class="modal-header">
+        <h3 id="xlsxImportModalTitle">Результат імпорту XLSX</h3>
+        <button type="button" id="closeXlsxModalBtn" class="modal-close" aria-label="Закрити">×</button>
+      </div>
 
-<div id="xlsxImportModal" class="modal-backdrop">
-  <div class="modal-card">
-    <div class="modal-header">
-      <h3>Результат імпорту XLSX</h3>
-      <button type="button" id="closeXlsxModalBtn" class="modal-close" aria-label="Закрити">×</button>
-    </div>
+      <div id="xlsxImportModalBody" class="modal-body"></div>
 
-    <div id="xlsxImportModalBody" class="modal-body"></div>
-
-    <div class="modal-footer">
-      <button type="button" id="closeXlsxModalBtnFooter" class="secondary">Закрити</button>
+      <div class="modal-footer">
+        <button type="button" id="closeXlsxModalBtnFooter" class="secondary">Закрити</button>
+      </div>
     </div>
   </div>
-</div>
+</section>
+
 
 <script src="/static/intercepts_search.js"></script>
 <script src="/static/intercepts_import.js"></script>
-
 {% endblock %}

@@ -1,3 +1,7 @@
+/* =========================
+   01. THEME TOKENS
+========================= */
+
 :root{
   --bg: #ffffff;
   --fg: #111111;
@@ -26,24 +30,49 @@
   --danger:#f2b8b5;
 }
 
+/* =========================
+   02. RESET / BASE
+========================= */
+
 *{box-sizing:border-box}
+
 body{
   margin:0;
   font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   background:var(--bg);
   color:var(--fg);
 }
-a{color:var(--link); text-decoration:none}
-a:hover{text-decoration:underline}
 
-.layout{display:flex; min-height:100vh}
+a{
+  color:var(--link);
+  text-decoration:none;
+}
+
+a:hover{
+  text-decoration:underline;
+}
+
+/* =========================
+   03. LAYOUT
+========================= */
+
+.layout{
+  display:flex;
+  min-height:100vh;
+}
+
 .sidebar{
   width:240px;
   padding:16px;
   border-right:1px solid var(--border);
   background:var(--card);
 }
-.brand{font-weight:700; margin-bottom:12px}
+
+.brand{
+  font-weight:700;
+  margin-bottom:12px;
+}
+
 .nav a{
   display:block;
   padding:10px 10px;
@@ -51,9 +80,30 @@ a:hover{text-decoration:underline}
   margin:6px 0;
   color:var(--fg);
 }
-.nav a.active{background:var(--bg); border:1px solid var(--border)}
-.small{color:var(--muted); font-size:12px}
-.main{flex:1; padding:20px}
+
+.nav a.active{
+  background:var(--bg);
+  border:1px solid var(--border);
+}
+
+.main{
+  flex:1;
+  padding:20px;
+}
+
+/* =========================
+   04. GENERIC UI
+========================= */
+
+.small{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.hidden{
+  display:none !important;
+}
+
 .card{
   background:var(--card);
   border:1px solid var(--border);
@@ -61,10 +111,40 @@ a:hover{text-decoration:underline}
   padding:16px;
   margin-bottom:16px;
 }
-.row{display:flex; gap:12px; flex-wrap:wrap}
-.field{display:flex; flex-direction:column; gap:6px; min-width:180px; flex:1}
-.field label{font-size:12px; color:var(--muted)}
-input, select, textarea{
+
+.row{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:180px;
+  flex:1;
+}
+
+.field label{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.notice{
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--bg);
+}
+
+/* =========================
+   05. FORMS / BUTTONS
+========================= */
+
+input,
+select,
+textarea{
   width:100%;
   padding:10px 12px;
   border-radius:10px;
@@ -72,8 +152,18 @@ input, select, textarea{
   background:var(--inputbg);
   color:var(--inputfg);
 }
-textarea{min-height:88px; resize:vertical}
-.btnrow{display:flex; gap:10px; flex-wrap:wrap}
+
+textarea{
+  min-height:88px;
+  resize:vertical;
+}
+
+.btnrow{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
 button{
   border:0;
   padding:10px 14px;
@@ -83,27 +173,30 @@ button{
   color:var(--btnfg);
   font-weight:600;
 }
+
 button.secondary{
   background:transparent;
   border:1px solid var(--border);
   color:var(--fg);
 }
-.notice{
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid var(--border);
-  background:var(--bg);
-}
+
+/* =========================
+   06. TABLES / BADGES
+========================= */
+
 .table{
   width:100%;
   border-collapse:collapse;
 }
-.table th,.table td{
+
+.table th,
+.table td{
   border-bottom:1px solid var(--border);
   padding:10px 8px;
   text-align:left;
   font-size:14px;
 }
+
 .badge{
   display:inline-block;
   padding:5px 10px;
@@ -112,6 +205,16 @@ button.secondary{
   font-weight:700;
   border:1px solid var(--border);
 }
+
+.badge.green{background:#1e8e3e20; border-color:#1e8e3e60}
+.badge.yellow{background:#fbbc0420; border-color:#fbbc0460}
+.badge.red{background:#ea433520; border-color:#ea433560}
+.badge.gray{background:#9aa0a620; border-color:#9aa0a660}
+.badge.purple{background:#a142f420; border-color:#a142f460}
+
+/* =========================
+   07. FILTERS / SEARCH
+========================= */
 
 .filters-row{
   display:flex;
@@ -130,88 +233,6 @@ button.secondary{
   width:260px;
 }
 
-.badge.green{background:#1e8e3e20; border-color:#1e8e3e60}
-.badge.yellow{background:#fbbc0420; border-color:#fbbc0460}
-.badge.red{background:#ea433520; border-color:#ea433560}
-.badge.gray{background:#9aa0a620; border-color:#9aa0a660}
-.badge.purple{background:#a142f420; border-color:#a142f460}
-
-/* Modal */
-.modal.hidden{ display:none; }
-
-/* generic */
-.hidden{ display:none !important; }
-
-/* tabs */
-.tab-btn{
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-}
-.tab-btn.active{
-  background: rgba(255,255,255,.08);
-  border-color: rgba(255,255,255,.18);
-}
-.modal{ position:fixed; inset:0; z-index:50; }
-.modal-backdrop{ position:absolute; inset:0; background: rgba(0,0,0,.45); }
-.modal-card{ position:relative; max-width:820px; margin:60px auto; background: var(--card); border:1px solid var(--border); border-radius:16px; box-shadow: 0 20px 60px rgba(0,0,0,.25); overflow:hidden; }
-
-/* Callsigns: profile-style edit modal */
-.cs-modal-card{ max-width:504px; }
-
-.cs-profile-top{ display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
-.cs-photo-wrap{ width:160px; height:160px; flex:0 0 160px; border:1px solid var(--border); border-radius:14px; overflow:hidden; background: rgba(127,127,127,.06); }
-.cs-photo{ width:100%; height:100%; object-fit:cover; display:block; }
-.cs-profile-fields{ flex:1; min-width:240px; }
-
-/* Callsigns: small modal for creating a new status */
-.cs-status-modal-card{ max-width:420px; }
-.modal-head, .modal-foot{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 14px; }
-.modal-head{ border-bottom:1px solid var(--border); }
-.modal-foot{ border-top:1px solid var(--border); justify-content:flex-end; }
-.modal-body{ padding:14px; }
-
-/* Chips */
-.chips{ display:flex; gap:8px; flex-wrap:wrap; }
-.chip{ display:inline-flex; align-items:center; gap:8px; border:1px solid var(--border); background: rgba(127,127,127,.08); border-radius:999px; padding:6px 10px; font-size:13px; }
-.chip .x{ cursor:pointer; font-weight:800; opacity:.7; }
-.chip .x:hover{ opacity:1; }
-
-@media (max-width: 880px){
-  .modal-card{ margin:18px 10px; }
-}
-
-
-.intercept-card{
-    border:1px solid #ddd;
-    padding:10px;
-    margin:10px 0;
-    border-radius:8px;
-}
-
-.intercept-header{
-    font-weight:600;
-}
-
-.intercept-body{
-    margin-top:6px;
-}
-
-.intercept-meta{
-    font-size:0.9em;
-    opacity:0.7;
-}
-
-.hl{
-  background:#ff9f1a;      /* orange */
-  color:#111;              /* читабельно на оранжевому */
-  padding:0 2px;
-  border-radius:3px;
-}
-
-
 .search-form{
   display:flex;
   gap:12px;
@@ -225,112 +246,452 @@ button.secondary{
   flex-direction:column;
   gap:6px;
   min-width:220px;
-  flex: 1 1 320px;
+  flex:1 1 320px;
 }
 
 .search-form .field-days{
-  flex: 0 0 140px;
+  flex:0 0 140px;
   min-width:140px;
 }
 
 .search-form .field-btn{
-  flex: 0 0 auto;
+  flex:0 0 auto;
   min-width:auto;
 }
 
+/* =========================
+   08. TABS
+========================= */
+
+.tabs-shell{
+  margin-top:12px;
+}
+
+.tabs-nav{
+  display:flex;
+  align-items:flex-end;
+  gap:12px;
+  padding:0 18px;
+  position:relative;
+  z-index:2;
+  margin-bottom:-4px;
+}
+
+.tab-btn{
+  position:relative;
+  padding:14px 24px 13px;
+  border:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  border-radius:18px 18px 0 0;
+  background:color-mix(in srgb, var(--card) 62%, var(--bg) 38%);
+  color:var(--muted);
+  font-weight:700;
+  line-height:1.1;
+  margin:0;
+  transition:
+    background .18s ease,
+    color .18s ease,
+    border-color .18s ease;
+}
+
+.tab-btn:hover{
+  color:var(--fg);
+  background:color-mix(in srgb, var(--card) 74%, var(--bg) 26%);
+}
+
+.tab-btn.active{
+  background:var(--card);
+  color:var(--fg);
+  border-bottom-color:var(--card);
+  z-index:3;
+}
+
+.tab-btn:not(.active){
+  background:color-mix(in srgb, var(--card) 54%, var(--bg) 46%);
+  color:color-mix(in srgb, var(--muted) 80%, black);
+}
+
+.tab-panel-wrap{
+  position:relative;
+  z-index:1;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:22px 18px 16px;
+  margin-top:-1px;
+}
+
+.tab-panel{
+  display:block;
+}
+
+.tab-panel-section + .tab-panel-section{
+  margin-top:18px;
+}
+
+/* =========================
+   09. CALLSIGNS PAGE
+========================= */
+
+.callsigns-tabs-shell{
+  margin-top:12px;
+}
+
+.callsigns-tabs-nav{
+  margin-bottom:0;
+}
+
+.callsigns-tab-panel{
+  min-width:0;
+}
+
+.callsigns-form-row{
+  align-items:flex-end;
+  gap:12px;
+}
+
+.callsigns-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.callsigns-field label{
+  color:var(--fg);
+  font-weight:600;
+  font-size:13px;
+}
+
+.callsigns-field-frequency{
+  min-width:240px;
+  flex:0 1 320px;
+}
+
+.callsigns-field-days{
+  width:120px;
+  min-width:120px;
+  flex:0 0 120px;
+}
+
+.callsigns-field-query{
+  min-width:260px;
+  flex:0 1 320px;
+}
+
+.callsigns-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.callsigns-actions-search{
+  flex-wrap:nowrap;
+}
+
+.callsigns-info{
+  margin-left:auto;
+  opacity:.85;
+  align-self:center;
+}
+
+.callsigns-results{
+  min-width:0;
+}
+
+.callsigns-empty-state{
+  opacity:.8;
+}
+
+.table-wrap{
+  overflow:auto;
+}
+
+/* =========================
+   10. MODALS
+========================= */
+
+.modal{
+  position:fixed;
+  inset:0;
+  z-index:50;
+}
+
+.modal.hidden{
+  display:none;
+}
+
+.modal-backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.45);
+}
+
+.modal-card{
+  position:relative;
+  max-width:820px;
+  margin:60px auto;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  box-shadow:0 20px 60px rgba(0,0,0,.25);
+  overflow:hidden;
+}
+
+.modal-head,
+.modal-foot{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:12px 14px;
+}
+
+.modal-head{
+  border-bottom:1px solid var(--border);
+}
+
+.modal-foot{
+  border-top:1px solid var(--border);
+  justify-content:flex-end;
+}
+
+.modal-body{
+  padding:14px;
+}
+
+/* Callsigns modal */
+.cs-modal-card{
+  max-width:504px;
+}
+
+.cs-profile-top{
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+}
+
+.cs-photo-wrap{
+  width:160px;
+  height:160px;
+  flex:0 0 160px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+  background:rgba(127,127,127,.06);
+}
+
+.cs-photo{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.cs-profile-fields{
+  flex:1;
+  min-width:240px;
+}
+
+/* Callsigns status modal */
+.cs-status-modal-card{
+  max-width:420px;
+}
+
+/* =========================
+   11. CHIPS
+========================= */
+
+.chips{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  border:1px solid var(--border);
+  background:rgba(127,127,127,.08);
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:13px;
+}
+
+.chip .x{
+  cursor:pointer;
+  font-weight:800;
+  opacity:.7;
+}
+
+.chip .x:hover{
+  opacity:1;
+}
+
+/* =========================
+   12. INTERCEPTS / HIGHLIGHT
+========================= */
+
+.intercept-card{
+  border:1px solid #ddd;
+  padding:10px;
+  margin:10px 0;
+  border-radius:8px;
+}
+
 .intercept-card:hover{
-  border-color: rgba(255,159,26,.9);
-  box-shadow: 0 0 0 1px rgba(255,159,26,.25);
+  border-color:rgba(255,159,26,.9);
+  box-shadow:0 0 0 1px rgba(255,159,26,.25);
+}
+
+.intercept-header{
+  font-weight:600;
+}
+
+.intercept-body{
+  margin-top:6px;
+}
+
+.intercept-meta{
+  font-size:0.9em;
+  opacity:0.7;
+}
+
+.hl{
+  background:#ff9f1a;
+  color:#111;
+  padding:0 2px;
+  border-radius:3px;
+}
+
+/* =========================
+   13. XLSX IMPORT
+========================= */
+
+.action-buttons{
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+
+.action-buttons > button{
+  white-space:nowrap;
+}
+
+/* =========================
+   14. RESPONSIVE
+========================= */
+
+@media (max-width: 880px){
+  .modal-card{
+    margin:18px 10px;
+  }
+
+  .tabs-nav{
+    padding-left:8px;
+    flex-wrap:wrap;
+  }
+
+  .tab-panel-wrap{
+    padding:14px;
+    border-radius:0 14px 14px 14px;
+  }
+
+  .callsigns-info{
+    margin-left:0;
+    width:100%;
+    align-self:flex-start;
+  }
+
+  .callsigns-actions-search{
+    flex-wrap:wrap;
+  }
 }
 
 
-/**************************/ 
-/* Стилі для імпорту XLSX */ 
-/**************************/
 
-.action-buttons {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+/* =========================
+   15. INTERCEPTS SEARCH PAGE
+========================= */
+
+.results-list{
+  width:100%;
+  max-width:100%;
 }
 
-.action-buttons > button {
-  white-space: nowrap;
+.intercept-card{
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+  margin:10px 0;
+  padding:16px 18px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:color-mix(in srgb, var(--card) 84%, transparent);
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 24px;
+.intercept-card:hover{
+  border-color:rgba(255,159,26,.9);
+  box-shadow:0 0 0 1px rgba(255,159,26,.25);
 }
 
-.modal-backdrop.is-open {
-  display: flex;
+.intercept-header{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  margin-bottom:10px;
+  font-weight:700;
+  font-size:18px;
+  line-height:1.25;
 }
 
-.modal-card {
-  width: 100%;
-  max-width: 560px;
-  background: var(--card-bg, #111827);
-  border: 1px solid var(--border-color, #2b3548);
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
+.intercept-datetime,
+.intercept-frequency{
+  display:block;
 }
 
-.modal-header,
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #2b3548);
+.intercept-meta{
+  margin-bottom:12px;
+  font-size:15px;
+  line-height:1.35;
+  opacity:.9;
+  white-space:pre-wrap;
 }
 
-.modal-footer {
-  border-bottom: none;
-  border-top: 1px solid var(--border-color, #2b3548);
-  justify-content: flex-end;
+.intercept-text{
+  font-size:16px;
+  line-height:1.5;
+  word-break:break-word;
+  white-space:normal;
 }
 
-.modal-body {
-  padding: 20px;
+.intercept-line{
+  margin-bottom:4px;
 }
 
-.modal-close {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 28px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.8;
+.intercept-line:empty::before{
+  content:" ";
+  display:inline-block;
 }
 
-.modal-close:hover {
-  opacity: 1;
+.intercept-open-link{
+  display:inline-block;
+  margin-top:12px;
 }
 
-.import-result {
-  display: grid;
-  gap: 10px;
+.warning{
+  margin:10px 0 14px;
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--card);
+  color:var(--danger);
 }
 
-.import-result-row {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.import-result-error {
-  color: #ffb4b4;
-}
-
-body.modal-open {
-  overflow: hidden;
+.loading{
+  padding:16px 0;
+  text-align:center;
+  opacity:.8;
 }

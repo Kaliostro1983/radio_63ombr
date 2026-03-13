@@ -1,117 +1,170 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="pel-title">Пеленгація</h2>
 
-<link rel="stylesheet" href="/static/peleng.css"/>
-<script src="/static/peleng.js" defer></script>
-
-<div class="pel-wrap">
-  <div class="row row1">
-    <label class="lbl">Дата</label>
-    <input class="in in-date" type="date" id="event_date">
-
-    <label class="lbl lbl-time">Час</label>
-    <input class="in in-time" type="time" id="event_time">
-
-    <button class="btn btn-small" type="button" id="btn_now">C</button>
+<div class="pel-page">
+  <div class="pel-page-header">
+    <h2 class="pel-title">Пеленгація</h2>
   </div>
 
-  <div class="row row2">
-    <label class="lbl">Частота/Маска</label>
-    <input class="in in-freq" type="text" id="frequency" placeholder="145.5000 або 300.3250">
-    <button class="btn" type="button" id="btn_accept">Прийняти</button>
-  </div>
+  <section class="tabs-shell pel-tabs-shell">
+    <div class="tabs-nav pel-tabs-nav" role="tablist" aria-label="Режими сторінки Пеленгація">
+      <button
+        id="pelTabCompose"
+        type="button"
+        class="tab-btn active"
+        role="tab"
+        aria-selected="true"
+        aria-controls="pelPaneCompose"
+      >
+        Формлення
+      </button>
 
-  <div class="row row3">
-    <label class="lbl">Підрозділ</label>
-    <input class="in in-unit" type="text" id="unit" value="НВ підрозділу">
-
-    <label class="lbl lbl-loc">Location</label>
-    <input class="in in-loc" type="text" id="location" value="ТОРСЬКЕ">
-  </div>
-
-  <label class="section-title">MGRS coordinates (кожен рядок окремо)</label>
-  <textarea class="ta ta-mgrs" id="mgrs_text" rows="5"></textarea>
-
-  <label class="section-title">Коментар / банер</label>
-  <textarea class="ta ta-comment" id="comment" rows="2">-------  🦁 63 ОМБр 🦁 -------</textarea>
-
-  <label class="section-title">Згенероване повідомлення</label>
-  <textarea class="ta ta-out" id="output" readonly rows="8"></textarea>
-
-  <div class="row row-bottom">
-    <div class="left-btns">
-      <button class="btn" type="button" id="btn_generate">Згенерувати</button>
-      <button class="btn" type="button" id="btn_copy">Копіювати</button>
+      <button
+        id="pelTabReport"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="pelPaneReport"
+      >
+        Звіт
+      </button>
     </div>
-  </div>
 
-  <div class="toast" id="toast" aria-live="polite"></div>
+    <div class="tab-panel-wrap pel-tab-panel-wrap">
+      <section
+        id="pelPaneCompose"
+        class="tab-panel pel-tab-panel"
+        role="tabpanel"
+        aria-labelledby="pelTabCompose"
+      >
+        <div class="pel-wrap">
+          <div class="row row1">
+            <label class="lbl" for="event_date">Дата</label>
+            <input class="in in-date" type="date" id="event_date">
+
+            <label class="lbl lbl-time" for="event_time">Час</label>
+            <input class="in in-time" type="time" id="event_time">
+
+            <button class="btn btn-small" type="button" id="btn_now">C</button>
+          </div>
+
+          <div class="row row2">
+            <label class="lbl" for="frequency">Частота/Маска</label>
+            <input class="in in-freq" type="text" id="frequency" placeholder="145.5000 або 300.3250">
+            <button class="btn" type="button" id="btn_accept">Прийняти</button>
+          </div>
+
+          <div class="row row3">
+            <label class="lbl" for="unit">Підрозділ</label>
+            <input class="in in-unit" type="text" id="unit" value="НВ підрозділу">
+
+            <label class="lbl lbl-loc" for="location">Location</label>
+            <input class="in in-loc" type="text" id="location" value="ТОРСЬКЕ">
+          </div>
+
+          <label class="section-title" for="mgrs_text">MGRS coordinates (кожен рядок окремо)</label>
+          <textarea class="ta ta-mgrs" id="mgrs_text" rows="5"></textarea>
+
+          <label class="section-title" for="comment">Коментар / банер</label>
+          <textarea class="ta ta-comment" id="comment" rows="2">-------  🦁 63 ОМБр 🦁 -------</textarea>
+
+          <label class="section-title" for="output">Згенероване повідомлення</label>
+          <textarea class="ta ta-out" id="output" readonly rows="8"></textarea>
+
+          <div class="row row-bottom">
+            <div class="left-btns">
+              <button class="btn" type="button" id="btn_generate">Згенерувати</button>
+              <button class="btn" type="button" id="btn_copy">Копіювати</button>
+            </div>
+          </div>
+
+          <div class="toast" id="toast" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section
+        id="pelPaneReport"
+        class="tab-panel pel-tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="pelTabReport"
+      >
+        <div class="pel-wrap pel-report-wrap">
+          <h3 class="section-title pel-section-heading">Формування звіту</h3>
+
+          <label class="section-title" for="report_source_text">
+            Текст для звіту (якщо заповнено — звіт формується з цього тексту, БД ігнорується)
+          </label>
+          <textarea
+            class="ta ta-report"
+            id="report_source_text"
+            rows="8"
+            placeholder="Встав сюди текст для звіту..."
+          ></textarea>
+
+          <div class="report-mode-note" id="report_mode_note">
+            Режим: вибірка з БД
+          </div>
+
+          <div class="report-toolbar">
+            <div class="report-field report-field-dt">
+              <label class="lbl" for="report_to_dt">Кінцевий дата/час</label>
+              <input class="in" type="datetime-local" id="report_to_dt">
+            </div>
+
+            <div class="report-field report-field-hours">
+              <label class="lbl" for="report_hours">Період, год</label>
+              <input class="in in-hours" type="number" id="report_hours" min="1" step="1" value="9">
+            </div>
+
+            <div class="report-field report-field-dt">
+              <label class="lbl" for="report_from_dt">Початковий дата/час</label>
+              <input class="in" type="datetime-local" id="report_from_dt">
+            </div>
+
+            <div class="report-actions">
+              <div class="report-preview" id="report_preview">Знайдено: —</div>
+              <button class="btn" type="button" id="btn_report_generate">Сформувати звіт</button>
+            </div>
+          </div>
+
+          <details class="posts-panel" id="posts_panel">
+            <summary class="posts-summary">Налаштування постів</summary>
+
+            <div class="posts-toolbar">
+              <button class="btn" type="button" id="btn_posts_add">Додати пост</button>
+              <button class="btn" type="button" id="btn_posts_save">Зберегти пости</button>
+            </div>
+
+            <div class="posts-table-wrap">
+              <table class="posts-table">
+                <thead>
+                  <tr>
+                    <th>Active</th>
+                    <th>ID</th>
+                    <th>Назва</th>
+                    <th>№ БП</th>
+                    <th>Підрозділ</th>
+                    <th>Техніка</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="posts_tbody"></tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
+  </section>
 </div>
 
-<hr class="pel-sep">
+{% block extra_head %}
+<link rel="stylesheet" href="/static/peleng.css">
+{% endblock %}
 
-<div class="pel-wrap pel-report-wrap">
-  <h3 class="section-title">Формування звіту</h3>
-
-  <label class="section-title">
-    Текст для звіту (якщо заповнено — звіт формується з цього тексту, БД ігнорується)
-  </label>
-  <textarea class="ta ta-report" id="report_source_text" rows="8"
-            placeholder="Встав сюди текст для звіту..."></textarea>
-
-  <div class="report-mode-note" id="report_mode_note">
-    Режим: вибірка з БД
-  </div>
-
-  <div class="report-toolbar">
-    <div class="report-field report-field-dt">
-      <label class="lbl" for="report_to_dt">Кінцевий дата/час</label>
-      <input class="in" type="datetime-local" id="report_to_dt">
-    </div>
-
-    <div class="report-field report-field-hours">
-      <label class="lbl" for="report_hours">Період, год</label>
-      <input class="in in-hours" type="number" id="report_hours" min="1" step="1" value="9">
-    </div>
-
-    <div class="report-field report-field-dt">
-      <label class="lbl" for="report_from_dt">Початковий дата/час</label>
-      <input class="in" type="datetime-local" id="report_from_dt">
-    </div>
-
-    <div class="report-actions">
-      <div class="report-preview" id="report_preview">Знайдено: —</div>
-      <button class="btn" type="button" id="btn_report_generate">Сформувати звіт</button>
-    </div>
-  </div>
-
-  <details class="posts-panel" id="posts_panel">
-    <summary class="posts-summary">Налаштування постів</summary>
-
-    <div class="posts-toolbar">
-      <button class="btn" type="button" id="btn_posts_add">Додати пост</button>
-      <button class="btn" type="button" id="btn_posts_save">Зберегти пости</button>
-    </div>
-
-    <div class="posts-table-wrap">
-      <table class="posts-table">
-        <thead>
-          <tr>
-            <th>Active</th>
-            <th>ID</th>
-            <th>Назва</th>
-            <th>№ БП</th>
-            <th>Підрозділ</th>
-            <th>Техніка</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="posts_tbody"></tbody>
-      </table>
-    </div>
-  </details>
-</div>
-
+{% block scripts %}
+<script src="/static/peleng.js"></script>
+{% endblock %}
 {% endblock %}

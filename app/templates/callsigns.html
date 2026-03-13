@@ -7,89 +7,125 @@
     <div class="small">Редагування — тільки через модальне вікно.</div>
   </div>
 
-  <div class="card" style="margin-top:12px">
-    <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap">
-      <button id="csTabFreq" type="button" class="tab-btn active">Позивні р/м</button>
-      <button id="csTabSearch" type="button" class="tab-btn">Пошук/правка</button>
-      <div class="small" style="margin-left:auto; opacity:.7">Вкладка: <span id="csTabLabel">Позивні р/м</span></div>
+  <section class="tabs-shell callsigns-tabs-shell">
+    <div class="tabs-nav callsigns-tabs-nav" role="tablist" aria-label="Режими сторінки Позивні">
+      <button
+        id="csTabFreq"
+        type="button"
+        class="tab-btn active"
+        role="tab"
+        aria-selected="true"
+        aria-controls="csPaneFreq"
+      >
+        Позивні р/м
+      </button>
+
+      <button
+        id="csTabSearch"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="csPaneSearch"
+      >
+        Пошук/правка
+      </button>
     </div>
-  </div>
 
-  <!-- TAB: by frequency -->
-  <div id="csPaneFreq">
+    <div class="tab-panel-wrap">
+      <!-- TAB: by frequency -->
+      <section id="csPaneFreq" class="tab-panel callsigns-tab-panel" role="tabpanel" aria-labelledby="csTabFreq">
+        <div class="tab-panel-section callsigns-toolbar">
+          <div class="row callsigns-form-row">
+            <div class="callsigns-field callsigns-field-frequency">
+              <label class="small">Частота</label>
+              <input id="csFreq" type="text" placeholder="Напр.: 300.3250 або 300.3250" />
+            </div>
 
-  <div class="card" style="margin-top:12px">
-    <div class="row" style="gap:10px; align-items:flex-end; flex-wrap:wrap">
-      <div style="min-width:220px">
-        <label class="small">Частота</label>
-        <input id="csFreq" type="text" placeholder="Напр.: 300.3250 або 300.3250"/>
-      </div>
-      <div style="width:120px">
-        <label class="small">Днів</label>
-        <input id="csDays" type="number" min="1" max="365" value="7"/>
-      </div>
-      <div>
-        <button id="csShow" type="button">Показати</button>
-      </div>
-      <div id="csInfo" class="small" style="margin-left:auto; opacity:.8"></div>
-    </div>
-  </div>
+            <div class="callsigns-field callsigns-field-days">
+              <label class="small">Днів</label>
+              <input id="csDays" type="number" min="1" max="365" value="7" />
+            </div>
 
-  <div class="card" style="margin-top:12px">
-    <div style="overflow:auto">
-      <table class="table" id="csTable">
-        <thead>
-          <tr>
-            <th style="width:60px">№</th>
-            <th style="min-width:180px">Позивний</th>
-            <th style="min-width:220px">Статус</th>
-            <th>Коментар</th>
-          </tr>
-        </thead>
-        <tbody id="csTbody">
-          <tr><td colspan="4" class="small" style="opacity:.8">Введіть частоту та натисніть “Показати”.</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+            <div class="callsigns-actions">
+              <button id="csShow" type="button">Показати</button>
+            </div>
 
-  </div>
-
-  <!-- TAB: search/edit -->
-  <div id="csPaneSearch" class="hidden">
-    <div class="card" style="margin-top:12px">
-      <div class="row" style="gap:10px; align-items:flex-end; flex-wrap:wrap">
-        <div style="min-width:260px">
-          <label class="small">Позивний</label>
-          <input id="csQuery" type="text" placeholder="Напр.: БАНКИР"/>
+            <div id="csInfo" class="small callsigns-info"></div>
+          </div>
         </div>
-        <div>
-          <button id="csSearch" type="button">Пошук</button>
-          <button id="csAdd" type="button" class="secondary">+ Додати</button>
-        </div>
-        <div id="csSearchInfo" class="small" style="margin-left:auto; opacity:.8"></div>
-      </div>
-    </div>
 
-    <div class="card" style="margin-top:12px">
-      <div style="overflow:auto">
-        <table class="table" id="csSearchTable">
-          <thead>
-            <tr>
-              <th style="width:60px">№</th>
-              <th style="min-width:180px">Позивний</th>
-              <th style="min-width:220px">Статус</th>
-              <th style="min-width:140px">Частота</th>
-              <th style="min-width:220px">Підрозділ</th>
-            </tr>
-          </thead>
-          <tbody id="csSearchTbody">
-            <tr><td colspan="5" class="small" style="opacity:.8">Введіть позивний та натисніть “Пошук”.</td></tr>
-          </tbody>
-        </table>
-      </div>
+        <div class="tab-panel-section callsigns-results">
+          <div class="table-wrap">
+            <table class="table" id="csTable">
+              <thead>
+                <tr>
+                  <th style="width:60px">№</th>
+                  <th style="min-width:180px">Позивний</th>
+                  <th style="min-width:220px">Статус</th>
+                  <th>Коментар</th>
+                </tr>
+              </thead>
+              <tbody id="csTbody">
+                <tr>
+                  <td colspan="4" class="small callsigns-empty-state">
+                    Введіть частоту та натисніть “Показати”.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: search/edit -->
+      <section
+        id="csPaneSearch"
+        class="tab-panel callsigns-tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="csTabSearch"
+      >
+        <div class="tab-panel-section callsigns-toolbar">
+          <div class="row callsigns-form-row">
+            <div class="callsigns-field callsigns-field-query">
+              <label class="small">Позивний</label>
+              <input id="csQuery" type="text" placeholder="Напр.: БАНКИР" />
+            </div>
+
+            <div class="callsigns-actions callsigns-actions-search">
+              <button id="csSearch" type="button">Пошук</button>
+              <button id="csAdd" type="button" class="secondary">+ Додати</button>
+            </div>
+
+            <div id="csSearchInfo" class="small callsigns-info"></div>
+          </div>
+        </div>
+
+        <div class="tab-panel-section callsigns-results">
+          <div class="table-wrap">
+            <table class="table" id="csSearchTable">
+              <thead>
+                <tr>
+                  <th style="width:60px">№</th>
+                  <th style="min-width:180px">Позивний</th>
+                  <th style="min-width:220px">Статус</th>
+                  <th style="min-width:140px">Частота</th>
+                  <th style="min-width:220px">Підрозділ</th>
+                </tr>
+              </thead>
+              <tbody id="csSearchTbody">
+                <tr>
+                  <td colspan="5" class="small callsigns-empty-state">
+                    Введіть позивний та натисніть “Пошук”.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
-  </div>
+  </section>
 </div>
 
 <!-- Modal -->
