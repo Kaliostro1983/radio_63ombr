@@ -143,149 +143,6 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "actions": actions,
             }
 
-        structured_result = process_structured_intercept(conn, raw_text)
-        structured_diag = structured_result.get("diag") or {}
-
-        if structured_result.get("status") == "parsed":
-            set_message_format(cur, ingest_id, "structured_alias")
-
-            payload2 = structured_result["payload"]
-
-            published_at_text = payload2["published_at"]
-            frequency = payload2["frequency"]
-            unit = payload2["unit"]
-            zone = payload2["zone"]
-            caller = payload2["caller"]
-            callees = payload2["callees"]
-            body_text = payload2["body"]
-            parse_confidence = float(payload2.get("parse_confidence") or 0.9)
-            net_description = payload2.get("net_description") or payload2.get("raw_header_line_1")
-
-            created_at = to_sql_dt(published_at_text) or received_at
-            if platform == "xlsx":
-                received_at = created_at
-
-            set_published_at_text(cur, ingest_id, published_at_text)
-
-            network_id = int(payload2["network_id"])
-
-            existing_message_id = find_duplicate_message(
-                cur,
-                network_id=network_id,
-                created_at=created_at,
-                body_text=body_text,
-            )
-            if existing_message_id is not None:
-                log.notice(
-                    "Structured intercept rejected %s",
-                    _intercept_log_ctx(structured_diag),
-                    extra={
-                        "ingest_id": ingest_id,
-                        "reason": "duplicate_message",
-                        "network_id": network_id,
-                        "existing_message_id": existing_message_id,
-                        "created_at": created_at,
-                    },
-                )
-                mark_duplicate_content(cur, ingest_id, existing_message_id)
-                return {
-                    "ok": True,
-                    "ingest_id": ingest_id,
-                    "duplicate": True,
-                    "duplicate_stage": "message_content",
-                    "existing_message_id": existing_message_id,
-                    "actions": actions,
-                }
-
-            if platform == "xlsx":
-                delay_sec = 0
-            else:
-                delay_sec = calc_delay_sec(
-                    platform=platform,
-                    published_at_platform=published_at_platform,
-                    published_at_text=published_at_text,
-                )
-
-            message_id = insert_message(
-                cur,
-                ingest_id=ingest_id,
-                network_id=network_id,
-                created_at=created_at,
-                received_at=received_at,
-                body_text=body_text,
-                parse_confidence=parse_confidence,
-                delay_sec=delay_sec,
-                net_description=net_description,
-            )
-
-            log.info(
-                "Structured message inserted %s",
-                _intercept_log_ctx(structured_diag),
-                extra={
-                    "ingest_id": ingest_id,
-                    "message_id": message_id,
-                    "network_id": network_id,
-                    "frequency": frequency,
-                    "format": "structured_alias",
-                },
-            )
-
-            link_message_callsigns(
-                cur,
-                network_id=network_id,
-                message_id=message_id,
-                caller=caller,
-                callees=list(callees),
-                created_at=created_at,
-                received_at=received_at,
-            )
-
-            return {
-                "ok": True,
-                "ingest_id": ingest_id,
-                "message_row_id": message_id,
-                "parsed": {
-                    "frequency": frequency,
-                    "unit": unit,
-                    "zone": zone,
-                    "caller": caller,
-                    "callees": list(callees),
-                    "network_id": network_id,
-                },
-                "actions": actions,
-            }
-
-        structured_reason = structured_result.get("reason")
-        structured_reasons = {
-            "header_missing",
-            "alias_not_found",
-            "published_at_missing",
-            "body_missing",
-            "sender_missing",
-        }
-
-        if structured_reason in structured_reasons:
-            set_message_format(cur, ingest_id, "structured_alias")
-
-            log.notice(
-                "Structured intercept rejected %s",
-                _intercept_log_ctx(structured_diag, raw_text),
-                extra={
-                    "ingest_id": ingest_id,
-                    "reason": structured_reason,
-                    "alias_text": structured_result.get("alias_text"),
-                    "format": "structured_alias",
-                },
-            )
-            mark_parse_error(cur, ingest_id, structured_reason)
-            return {
-                "ok": True,
-                "ingest_id": ingest_id,
-                "skipped": True,
-                "reason": structured_reason,
-                "actions": actions,
-            }
-
         message_format = detect_message_format(raw_text)
         set_message_format(cur, ingest_id, message_format)
 
@@ -316,6 +173,164 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "actions": actions,
             }
 
+        if message_format == "structured_alias":
+            structured_result = process_structured_intercept(conn, raw_text)
+            structured_diag = structured_result.get("diag") or {}
+
+            if structured_result.get("status") == "parsed":
+                payload2 = structured_result["payload"]
+
+                published_at_text = payload2["published_at"]
+                frequency = payload2["frequency"]
+                unit = payload2["unit"]
+                zone = payload2["zone"]
+                caller = payload2["caller"]
+                callees = payload2["callees"]
+                body_text = payload2["body"]
+                parse_confidence = float(payload2.get("parse_confidence") or 0.9)
+                net_description = payload2.get("net_description") or payload2.get("raw_header_line_1")
+
+                created_at = to_sql_dt(published_at_text) or received_at
+                if platform == "xlsx":
+                    received_at = created_at
+
+                set_published_at_text(cur, ingest_id, published_at_text)
+
+                network_id = int(payload2["network_id"])
+
+                existing_message_id = find_duplicate_message(
+                    cur,
+                    network_id=network_id,
+                    created_at=created_at,
+                    body_text=body_text,
+                )
+                if existing_message_id is not None:
+                    log.notice(
+                        "Structured intercept rejected %s",
+                        _intercept_log_ctx(structured_diag),
+                        extra={
+                            "ingest_id": ingest_id,
+                            "reason": "duplicate_message",
+                            "network_id": network_id,
+                            "existing_message_id": existing_message_id,
+                            "created_at": created_at,
+                        },
+                    )
+                    mark_duplicate_content(cur, ingest_id, existing_message_id)
+                    return {
+                        "ok": True,
+                        "ingest_id": ingest_id,
+                        "duplicate": True,
+                        "duplicate_stage": "message_content",
+                        "existing_message_id": existing_message_id,
+                        "actions": actions,
+                    }
+
+                if platform == "xlsx":
+                    delay_sec = 0
+                else:
+                    delay_sec = calc_delay_sec(
+                        platform=platform,
+                        published_at_platform=published_at_platform,
+                        published_at_text=published_at_text,
+                    )
+
+                message_id = insert_message(
+                    cur,
+                    ingest_id=ingest_id,
+                    network_id=network_id,
+                    created_at=created_at,
+                    received_at=received_at,
+                    body_text=body_text,
+                    parse_confidence=parse_confidence,
+                    delay_sec=delay_sec,
+                    net_description=net_description,
+                )
+
+                log.info(
+                    "Structured message inserted %s",
+                    _intercept_log_ctx(structured_diag),
+                    extra={
+                        "ingest_id": ingest_id,
+                        "message_id": message_id,
+                        "network_id": network_id,
+                        "frequency": frequency,
+                        "format": "structured_alias",
+                    },
+                )
+
+                link_message_callsigns(
+                    cur,
+                    network_id=network_id,
+                    message_id=message_id,
+                    caller=caller,
+                    callees=list(callees),
+                    created_at=created_at,
+                    received_at=received_at,
+                )
+
+                return {
+                    "ok": True,
+                    "ingest_id": ingest_id,
+                    "message_row_id": message_id,
+                    "parsed": {
+                        "frequency": frequency,
+                        "unit": unit,
+                        "zone": zone,
+                        "caller": caller,
+                        "callees": list(callees),
+                        "network_id": network_id,
+                    },
+                    "actions": actions,
+                }
+
+            structured_reason = structured_result.get("reason")
+            structured_reasons = {
+                "header_missing",
+                "alias_not_found",
+                "published_at_missing",
+                "body_missing",
+                "sender_missing",
+            }
+
+            if structured_reason in structured_reasons:
+                log.notice(
+                    "Structured intercept rejected %s",
+                    _intercept_log_ctx(structured_diag, raw_text),
+                    extra={
+                        "ingest_id": ingest_id,
+                        "reason": structured_reason,
+                        "alias_text": structured_result.get("alias_text"),
+                        "format": "structured_alias",
+                    },
+                )
+                mark_parse_error(cur, ingest_id, structured_reason)
+                return {
+                    "ok": True,
+                    "ingest_id": ingest_id,
+                    "skipped": True,
+                    "reason": structured_reason,
+                    "actions": actions,
+                }
+
+            log.notice(
+                "Structured intercept rejected %s",
+                _intercept_log_ctx(structured_diag, raw_text),
+                extra={
+                    "ingest_id": ingest_id,
+                    "reason": "structured_parse_failed",
+                    "format": "structured_alias",
+                },
+            )
+            mark_parse_error(cur, ingest_id, "structured_parse_failed")
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "skipped": True,
+                "reason": "structured_parse_failed",
+                "actions": actions,
+            }
+
         if message_format == "nonstandard_type_1":
             normalized = normalize_nonstandard_type_1(raw_text)
             set_normalized_text(cur, ingest_id, normalized)
@@ -340,12 +355,23 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "actions": actions,
             }
 
-        published_at_text = parsed.get("published_at")
+        if not parsed.get("ok", False):
+            reason = parsed.get("error", "template_parse_failed")
+            mark_parse_error(cur, ingest_id, reason)
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "skipped": True,
+                "reason": reason,
+                "actions": actions,
+            }
+
+        published_at_text = parsed.get("published_at_text")
         frequency = parsed.get("frequency")
         mask = parsed.get("mask")
         unit = parsed.get("unit")
         zone = parsed.get("zone")
-        net_description = parsed.get("net_description")
+        net_description = parsed.get("net_line")
         caller = parsed.get("caller") or "НВ"
         callees = parsed.get("callees") or ["НВ"]
         body_text = parsed.get("body") or ""

@@ -3,9 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 from openpyxl import load_workbook
 from pathlib import Path
-
 from uuid import uuid4
-
 
 from app.services.ingest_service import process_whatsapp_payload
 
@@ -19,13 +17,28 @@ def _normalize_header(value) -> str:
     return str(value).strip().lower()
 
 
+def _normalize_cell_text(value: Any) -> str:
+    if value is None:
+        return ""
+
+    text = str(value)
+
+    # Excel/Windows line endings -> unix
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # прибираємо сміттєві unicode-символи, які часто ламають парсер
+    text = text.replace("\u00a0", " ")   # NBSP
+    text = text.replace("\u200b", "")    # zero-width space
+    text = text.replace("\ufeff", "")    # BOM
+
+    return text.strip()
+
+
 def import_xlsx(file_path: str) -> Dict[str, Any]:
-    
     import_session_id = uuid4().hex
 
     wb = load_workbook(filename=file_path, read_only=True, data_only=True)
     sheet = wb.worksheets[0]
-
     rows = sheet.iter_rows(values_only=True)
 
     try:
@@ -52,21 +65,13 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
     filename = Path(file_path).name
 
     for row_number, row in enumerate(rows, start=2):
-
         summary["total_rows"] += 1
 
         if col_index >= len(row):
             summary["skipped"] += 1
             continue
 
-        text = row[col_index]
-
-        if text is None:
-            summary["skipped"] += 1
-            continue
-
-        text = str(text).strip()
-
+        text = _normalize_cell_text(row[col_index])
         if not text:
             summary["skipped"] += 1
             continue
@@ -80,15 +85,22 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
         }
 
         try:
-
             result = process_whatsapp_payload(payload)
-
             summary["processed"] += 1
+
+            if not result.get("ok", False):
+                summary["failed"] += 1
+                continue
 
             if result.get("duplicate"):
                 summary["duplicates"] += 1
-            else:
+                continue
+
+            if result.get("message_row_id"):
                 summary["inserted"] += 1
+                continue
+
+            summary["skipped"] += 1
 
         except Exception:
             summary["failed"] += 1

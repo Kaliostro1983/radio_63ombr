@@ -64,10 +64,10 @@ CREATE TABLE IF NOT EXISTS network_aliases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     network_id INTEGER NOT NULL,
     alias_text TEXT NOT NULL,
-    alias_norm TEXT NOT NULL UNIQUE,
     is_archived INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (network_id) REFERENCES networks(id)
+    FOREIGN KEY (network_id) REFERENCES networks(id),
+    UNIQUE(network_id, alias_text)
 );
 
 CREATE TABLE IF NOT EXISTS network_tags(
@@ -290,10 +290,28 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
 
+    # network_aliases lookup is by alias_text (no alias_norm)
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_network_aliases_alias_norm "
-        "ON network_aliases(alias_norm)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_network_aliases_network_alias_text "
+        "ON network_aliases(network_id, alias_text)"
     )
+    # Enforce alias uniqueness across ACTIVE aliases only (archived aliases are allowed to duplicate).
+    # This matches structured ingest lookup by alias_text.
+    dup = conn.execute(
+        """
+        SELECT alias_text
+        FROM network_aliases
+        WHERE COALESCE(is_archived, 0) = 0
+        GROUP BY alias_text
+        HAVING COUNT(*) > 1
+        LIMIT 1
+        """
+    ).fetchone()
+    if dup is None:
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_network_aliases_alias_text_active "
+            "ON network_aliases(alias_text) WHERE COALESCE(is_archived, 0) = 0"
+        )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_messages_network_created "
         "ON messages(network_id, created_at)"
@@ -301,6 +319,13 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_callsigns_network_name "
         "ON callsigns(network_id, name)"
+    )
+
+    # Required for upsert in callsign_service.upsert_callsign_edge()
+    # Keep name aligned with existing DBs (if present).
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_callsign_edges_net_pair "
+        "ON callsign_edges(network_id, a_callsign_id, b_callsign_id)"
     )
 
 

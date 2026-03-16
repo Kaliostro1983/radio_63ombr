@@ -155,15 +155,22 @@
 
 Призначення: альтернативні назви мереж для structured intercept.
 
-Поля: - `id` --- PK - `network_id` --- FK → `networks.id` - `alias_text`
---- оригінальний текст alias - `alias_norm` --- нормалізований alias,
-унікальний - `is_archived` --- прапорець архівності - `created_at` ---
-час створення
+Поля:
+- `id` — PK
+- `network_id` — FK → `networks.id`
+- `alias_text` — оригінальний текст alias, унікальний у межах активних записів
+- `is_archived` — прапорець архівності
+- `created_at` — час створення
 
-Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(alias_norm)` -
-`FOREIGN KEY(network_id) REFERENCES networks(id)`
+Ключі та обмеження:
+- `PRIMARY KEY(id)`
+- `UNIQUE(network_id, alias_text)` або інша обрана унікальність (за фактичною схемою)
+- `FOREIGN KEY(network_id) REFERENCES networks(id)`
 
-Критично: - пошук structured intercept зав'язаний саме на цю таблицю.
+Критично:
+- пошук structured intercept виконується за `alias_text`, без окремого нормалізованого поля.
+- для уникнення колізій у lookup рекомендовано (або обов'язково, якщо так вирішено в проєкті)
+  тримати `alias_text` унікальним серед **активних** записів: `UNIQUE(alias_text) WHERE is_archived = 0` (partial UNIQUE index).
 
 ------------------------------------------------------------------------
 
@@ -322,7 +329,7 @@ XLSX - `source_chat_id` - `source_chat_name` - `source_message_id` -
 
 Критично: - порядок пари має бути нормалізований:
 `a_callsign_id < b_callsign_id` - для коректної роботи upsert у service
-layer бажаний `UNIQUE(network_id, a_callsign_id, b_callsign_id)`
+layer має бути `UNIQUE(network_id, a_callsign_id, b_callsign_id)` (через constraint або UNIQUE index)
 
 ------------------------------------------------------------------------
 
@@ -388,7 +395,7 @@ lifecycle.
 
 Мінімально очікувані:
 
--   `network_aliases(alias_norm)` --- для structured alias lookup
+-   `network_aliases(network_id, alias_text)` --- для structured alias lookup
 -   `messages(network_id, created_at)` --- для пошуку і дедуплікації
 -   `callsigns(network_id, name)` --- для upsert позивних
 -   `callsign_edges(network_id, a_callsign_id, b_callsign_id)` ---
