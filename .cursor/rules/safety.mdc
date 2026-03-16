@@ -1,0 +1,122 @@
+# Cursor Safety Rules — radio_63ombr
+
+These rules protect critical system invariants.
+Cursor must not modify these areas without explicit user approval.
+
+------------------------------------------------
+
+DATABASE SCHEMA SAFETY
+
+Cursor must NOT:
+
+- change SQLite table structures
+- rename database columns
+- change column types
+- remove constraints
+- remove foreign keys
+- drop indexes
+
+Database schema authority:
+
+docs/DB_SCHEMA.md
+
+The files
+
+app/core/db.py
+app/models/tables.py
+
+must remain consistent with the SQLite schema.
+
+Schema changes are allowed only through explicit migration logic.
+
+------------------------------------------------
+
+INGEST PIPELINE SAFETY
+
+Cursor must NOT change the ingest pipeline order.
+
+Correct pipeline:
+
+incoming payload
+→ ingest_messages
+→ parser
+→ resolve network
+→ duplicate check
+→ insert messages
+→ link callsigns
+→ update callsign_edges
+
+Files involved:
+
+app/routers/ingest.py
+app/services/ingest_service.py
+app/services/structured_intercept_service.py
+
+------------------------------------------------
+
+NETWORK CREATION RULE
+
+Ingest pipeline must never create networks automatically.
+
+If a network is not found in table:
+
+networks
+
+the message must be skipped.
+
+------------------------------------------------
+
+MESSAGE DUPLICATE RULE
+
+Duplicate message rule:
+
+(network_id, created_at, body_text)
+
+Cursor must not change this rule.
+
+------------------------------------------------
+
+CALLSIGN GRAPH SAFETY
+
+Table:
+
+callsign_edges
+
+Invariant:
+
+a_callsign_id < b_callsign_id
+
+Cursor must never generate mirrored pairs.
+
+Recommended unique constraint:
+
+(network_id, a_callsign_id, b_callsign_id)
+
+------------------------------------------------
+
+PARSER SAFETY
+
+Parser modules must never write to the database.
+
+Parsers only return structured data.
+
+Database writes are allowed only in service layer.
+
+Files:
+
+app/core/intercept_parser.py
+app/core/structured_intercept_parser.py
+
+------------------------------------------------
+
+CODE COMMENT RULE
+
+Cursor must preserve file-level documentation and function docstrings.
+
+If a file is rewritten, documentation must be preserved or recreated.
+
+------------------------------------------------
+
+IF A CHANGE VIOLATES THESE RULES
+
+Cursor must stop and ask for user approval before modifying the code.

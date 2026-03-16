@@ -2,6 +2,15 @@
 
 These rules apply when AI tools modify this repository.
 
+Before analyzing code, always read the following project documents:
+
+docs/CURSOR_BOOTSTRAP.md
+docs/INVARIANTS.md
+docs/DB_SCHEMA.md
+docs/ARCHITECTURE.md
+docs/PIPELINE.md
+docs/FILE_MAP.md
+
 ## Project identity
 
 This is a FastAPI + SQLite system for processing radio intercepts.
@@ -199,3 +208,34 @@ When asked to implement a change:
 3. preserve existing behavior unless change is explicit
 4. mention DB impact if any
 5. avoid unrelated cleanup
+
+# Code documentation rules
+
+All Python files must contain a file-level docstring at the beginning of the file.
+
+The file-level docstring must explain:
+- what subsystem this file belongs to
+- what functionality it implements
+- how it is used in the architecture
+
+All non-trivial functions must contain a function-level docstring.
+
+Function docstrings must explain:
+- what the function does
+- main input parameters
+- what the function returns
+- whether the function reads or writes to the database
+- any important invariants or constraints
+
+Important areas that must always contain documentation:
+- ingest pipeline
+- intercept parsing
+- database bootstrap
+- network resolution
+- callsign linking
+- callsign edge updates
+- SQL queries that implement business logic
+
+Cursor must never remove useful comments or docstrings when refactoring code.
+
+If a file is rewritten, the file-level documentation must be preserved or rewritten.

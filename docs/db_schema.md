@@ -1,133 +1,428 @@
-# DB Schema (Radio Monitor)
+# DB Schema --- radio_63ombr
 
-Цей документ — “конституція” БД. Якщо щось змінюємо в схемі — спочатку правимо цей файл, потім міграцію/SCHEMA_SQL.
+Цей файл описує поточну структуру SQLite-бази проєкту `radio_63ombr` на
+основі актуального schema dump. Його призначення --- бути швидкою
+опорною картою для аудиту, розробки та роботи в Cursor.
 
-## Мета
-- Зберігати сирі повідомлення (raw) для аудиту/перепарсу.
-- Зберігати нормалізовані “перехоплення” для UI, фільтрів, пошуку.
-- Не дублювати частоту/маску в таблиці messages: вони належать networks.
-- Працювати так, щоб невідомі частоти автоматично створювали networks з дефолтами.
+## Джерело істини
+
+Для цього документа джерелом істини є реальна SQLite schema dump, а не
+припущення в коді. `db.py` і `tables.py` повинні відповідати цій схемі.
+
+## Основні принципи
+
+-   База даних: SQLite
+-   Часові поля зберігаються як `TEXT`
+-   Більшість зв'язків реалізовано через `FOREIGN KEY`
+-   Частина цілісності підтримується на рівні БД, частина --- на рівні
+    service layer
+-   Для `callsign_edges` критично важливий інваріант:
+    `a_callsign_id < b_callsign_id`
+
+## Групи таблиць
+
+### 1. Довідники
+
+-   `statuses`
+-   `tags`
+-   `chats`
+-   `groups`
+-   `callsign_sources`
+-   `callsign_statuses`
+
+### 2. Радіомережі
+
+-   `networks`
+-   `network_aliases`
+-   `network_changes`
+-   `network_tags`
+-   `etalons`
+
+### 3. Ingest і повідомлення
+
+-   `ingest_messages`
+-   `messages`
+-   `message_tags`
+
+### 4. Позивні та граф
+
+-   `callsigns`
+-   `message_callsigns`
+-   `callsign_edges`
+-   `callsign_status_map`
+
+### 5. Peleng
+
+-   `peleng_batches`
+-   `peleng_points`
+
+### 6. Імпортні / технічні таблиці
+
+-   `import_freq_chat`
+-   `import_networks`
+-   `words`
+
+------------------------------------------------------------------------
 
 ## Таблиці
 
-### 1) networks
-Довідник радіомереж.
+## statuses
 
-Ключове:
-- Унікальність: frequency (або net_key, якщо він є канонічним). В MVP допускаємо UNIQUE(frequency).
-- Якщо перехоплення прийшло з частотою, якої нема — створюємо запис з дефолтними значеннями (“Невідомо”, 0/NULL).
+Призначення: довідник статусів радіомереж або інших сутностей
+інтерфейсу.
 
-Поля (узгоджені):
-- id (PK)
-- frequency TEXT NOT NULL UNIQUE
-- mask TEXT NULL
-- unit TEXT/або unit_id (дефолт “Невідомо”)
-- zone TEXT/або zone_id (дефолт “Невідомо”)
-- chat_id (за потреби)
-- group_id (за потреби)
-- status_id (FK на statuses/або інша таблиця) — дефолт
-- comment TEXT NULL
-- updated_at TEXT NOT NULL
+Поля: - `id` --- PK - `name` --- унікальна назва статусу - `bg_color`
+--- колір фону - `border_color` --- колір рамки
 
-Примітка: точний склад полів у networks залежить від того, що вже є в проєкті. Важливо: messages не має дублювати frequency/mask.
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
 
-### 2) ingest_messages
-Сирий журнал “як прийшло з платформи”.
+------------------------------------------------------------------------
 
-Поля:
-- id (PK)
-- platform TEXT NOT NULL (whatsapp/signal)
-- source_chat_id TEXT NOT NULL
-- source_chat_name TEXT NULL
-- source_message_id TEXT NOT NULL
-- author TEXT NULL
-- raw_text TEXT NOT NULL
-- published_at_text TEXT NULL (якщо витягнули з шапки)
-- published_at_platform TEXT NULL (з месенджера, пріоритетне)
-- received_at TEXT NOT NULL (коли сервер прийняв)
-- parse_status TEXT NOT NULL DEFAULT 'new' ('new'/'parsed'/'failed')
-- parse_error TEXT NULL
-- UNIQUE(platform, source_chat_id, source_message_id)
+## tags
 
-### 3) messages
-Нормалізоване “перехоплення” для UI/пошуку.
+Призначення: довідник тегів для повідомлень і словника тематичного
+аналізу.
 
-Поля:
-- id (PK)
-- ingest_id INTEGER NOT NULL (FK -> ingest_messages.id)
-- network_id INTEGER NOT NULL (FK -> networks.id)  <-- завжди має існувати, бо якщо нема — створюємо networks
-- created_at TEXT NOT NULL   <-- час публікації (переважно published_at_platform, інакше published_at_text)
-- received_at TEXT NOT NULL  <-- дублюємо з ingest для зручності фільтрів
-- net_description TEXT NULL  <-- строка опису мережі з шапки (за наявності)
-- body_text TEXT NOT NULL    <-- тільки текст перехоплення без шапки (для пошуку)
-- comment TEXT NULL          <-- операторський коментар
-- parse_confidence REAL DEFAULT 1.0
-- is_valid INTEGER DEFAULT 1
-- (опційно) UNIQUE(ingest_id) якщо 1:1 ingest->message
+Поля: - `id` --- PK - `name` --- унікальна назва тегу - `template` ---
+шаблон виводу або оформлення, `TEXT NOT NULL DEFAULT ''`
 
-### 4) callsign_statuses
-Довідник статусів позивних.
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
 
-Поля:
-- id (PK)
-- name TEXT NOT NULL UNIQUE
+------------------------------------------------------------------------
 
-Початкові значення:
-- штурмовик
-- оператор БпЛА
-- штабник
-- обозник
-- сп
+## chats
 
-### 5) callsigns
-Довідник позивних.
+Призначення: довідник чатів.
 
-Поля:
-- id (PK)
-- network_id INTEGER NULL (FK -> networks.id)  <-- якщо не знаємо мережу, можна NULL, але в нашому потоці зазвичай відомо
-- name TEXT NOT NULL
-- status_id INTEGER NULL (FK -> callsign_statuses.id)
-- comment TEXT NULL
-- updated_at TEXT NOT NULL
-- UNIQUE(network_id, name)
+Поля: - `id` --- PK - `name` --- унікальна назва чату
 
-### 6) message_callsigns
-Зв’язок “повідомлення ↔ позивний” з роллю.
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
 
-Поля:
-- id (PK) або без id (якщо хочеш composite PK) — обидва норм.
-- message_id INTEGER NOT NULL (FK -> messages.id)
-- callsign_id INTEGER NOT NULL (FK -> callsigns.id)
-- role TEXT NOT NULL CHECK(role IN ('caller','callee'))
-- UNIQUE(message_id, callsign_id, role)
+------------------------------------------------------------------------
 
-Правило:
-- caller завжди один (перевіряється в коді; за потреби додамо constraint логікою).
+## groups
 
-### 7) tags
-Довідник тегів.
+Призначення: довідник груп.
 
-Поля:
-- id (PK)
-- name TEXT NOT NULL UNIQUE
+Поля: - `id` --- PK - `name` --- унікальна назва групи
 
-### 8) message_tags
-Зв’язок message ↔ tag.
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
 
-Поля:
-- message_id INTEGER NOT NULL (FK -> messages.id)
-- tag_id INTEGER NOT NULL (FK -> tags.id)
-- PRIMARY KEY(message_id, tag_id)  <-- унікальна комбінація
+------------------------------------------------------------------------
 
-## Інваріанти (те, що не ламаємо)
-- ingest_messages.raw_text зберігається завжди.
-- messages.body_text = “текст без шапки”.
-- messages НЕ містить frequency/mask.
-- Якщо network не знайдено — створюємо networks з дефолтами.
+## callsign_sources
 
-## Тест після прочитання (для себе/для бота)
-1) Я можу пояснити різницю між ingest_messages та messages однією фразою.
-2) Я знаю, де лежить raw-text і де лежить body_text.
-3) Я знаю, як теги прив’язуються до повідомлення (message_tags).
-4) Я знаю, як caller/callee прив’язуються до повідомлення (message_callsigns.role).
-5) Я знаю, що робимо, якщо частоти немає в networks (створюємо networks з дефолтами).
+Призначення: довідник джерел походження позивного.
+
+Поля: - `id` --- PK - `name` --- унікальна назва джерела
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
+
+------------------------------------------------------------------------
+
+## callsign_statuses
+
+Призначення: довідник статусів позивних.
+
+Поля: - `id` --- PK - `name` --- унікальна назва статусу - `icon` ---
+іконка статусу
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
+
+------------------------------------------------------------------------
+
+## networks
+
+Призначення: головна таблиця радіомереж.
+
+Поля: - `id` --- PK - `frequency` --- частота, унікальна - `mask` ---
+маска - `unit` --- підрозділ - `zone` --- зона - `chat_id` --- FK →
+`chats.id` - `group_id` --- FK → `groups.id` - `status_id` --- FK →
+`statuses.id` - `comment` --- коментар - `updated_at` --- час останнього
+оновлення - `net_key` --- додатковий ключ мережі
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(frequency)` -
+`FOREIGN KEY(chat_id) REFERENCES chats(id)` -
+`FOREIGN KEY(group_id) REFERENCES groups(id)` -
+`FOREIGN KEY(status_id) REFERENCES statuses(id)`
+
+Примітка: - ingest pipeline не повинен автостворювати записи в цій
+таблиці.
+
+------------------------------------------------------------------------
+
+## network_aliases
+
+Призначення: альтернативні назви мереж для structured intercept.
+
+Поля: - `id` --- PK - `network_id` --- FK → `networks.id` - `alias_text`
+--- оригінальний текст alias - `alias_norm` --- нормалізований alias,
+унікальний - `is_archived` --- прапорець архівності - `created_at` ---
+час створення
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(alias_norm)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id)`
+
+Критично: - пошук structured intercept зав'язаний саме на цю таблицю.
+
+------------------------------------------------------------------------
+
+## network_changes
+
+Призначення: журнал змін мережі.
+
+Поля: - `id` --- PK - `network_id` --- FK → `networks.id` - `changed_at`
+--- час зміни - `changed_by` --- хто змінив - `field` --- назва поля -
+`old_value` --- старе значення - `new_value` --- нове значення
+
+Ключі та обмеження: - `PRIMARY KEY(id)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE`
+
+------------------------------------------------------------------------
+
+## network_tags
+
+Призначення: зв'язка many-to-many між мережами і тегами.
+
+Поля: - `network_id` --- FK → `networks.id` - `tag_id` --- FK →
+`tags.id`
+
+Ключі та обмеження: - `PRIMARY KEY(network_id, tag_id)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE` -
+`FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE`
+
+------------------------------------------------------------------------
+
+## etalons
+
+Призначення: еталонний опис мережі.
+
+Поля: - `id` --- PK - `network_id` --- FK → `networks.id`, унікальний -
+`start_date` - `correspondents` - `callsigns` - `purpose` -
+`operation_mode` - `traffic_type` - `raw_import_text` - `updated_at`
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(network_id)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE`
+
+------------------------------------------------------------------------
+
+## ingest_messages
+
+Призначення: сирий ingest до будь-якого парсингу.
+
+Поля: - `id` --- PK - `platform` --- джерело, наприклад WhatsApp /
+XLSX - `source_chat_id` - `source_chat_name` - `source_message_id` -
+`source_file_name` - `source_row_number` - `raw_text` -
+`normalized_text` - `published_at_text` - `received_at` -
+`message_format` - `parse_status` - `parse_error`
+
+Ключі та обмеження: - `PRIMARY KEY(id)` -
+`UNIQUE(platform, source_message_id)`
+
+Примітка: - це перший рівень захисту від повторного ingest одного й того
+самого повідомлення з джерела.
+
+------------------------------------------------------------------------
+
+## messages
+
+Призначення: нормалізовані повідомлення після успішного парсингу і
+визначення мережі.
+
+Поля: - `id` --- PK - `ingest_id` --- FK → `ingest_messages.id` -
+`network_id` --- FK → `networks.id` - `created_at` --- час самого
+повідомлення - `received_at` --- час отримання системою -
+`net_description` --- текстовий опис мережі - `body_text` --- тіло
+перехоплення - `comment` - `parse_confidence` - `is_valid` -
+`delay_sec` - `need_approve` - `tags_json`
+
+Ключі та обмеження: - `PRIMARY KEY(id)` -
+`FOREIGN KEY(ingest_id) REFERENCES ingest_messages(id)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id)`
+
+Критично: - бізнес-правило дубліката:
+`(network_id, created_at, body_text)`
+
+------------------------------------------------------------------------
+
+## message_tags
+
+Призначення: зв'язка many-to-many між повідомленнями і тегами.
+
+Поля: - `message_id` --- FK → `messages.id` - `tag_id` --- FK →
+`tags.id`
+
+Ключі та обмеження: - `PRIMARY KEY(message_id, tag_id)` -
+`FOREIGN KEY(message_id) REFERENCES messages(id)` -
+`FOREIGN KEY(tag_id) REFERENCES tags(id)`
+
+------------------------------------------------------------------------
+
+## callsigns
+
+Призначення: позивні в межах конкретної мережі.
+
+Поля: - `id` --- PK - `network_id` --- FK → `networks.id`, nullable -
+`name` --- текст позивного - `status_id` --- FK →
+`callsign_statuses.id` - `comment` - `updated_at` - `last_seen_dt` -
+`callsign_status_id` - `source_id` --- FK → `callsign_sources.id`
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(network_id, name)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id)` -
+`FOREIGN KEY(status_id) REFERENCES callsign_statuses(id)` -
+`source_id INTEGER REFERENCES callsign_sources(id)`
+
+Критично: - унікальність позивного існує в межах мережі, а не глобально.
+
+------------------------------------------------------------------------
+
+## callsign_status_map
+
+Призначення: many-to-many зв'язка позивних і статусів.
+
+Поля: - `callsign_id` --- FK → `callsigns.id` - `status_id` --- FK →
+`callsign_statuses.id`
+
+Ключі та обмеження: - `PRIMARY KEY(callsign_id, status_id)` -
+`FOREIGN KEY(callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE` -
+`FOREIGN KEY(status_id) REFERENCES callsign_statuses(id) ON DELETE CASCADE`
+
+------------------------------------------------------------------------
+
+## message_callsigns
+
+Призначення: зв'язка повідомлення з позивними і ролями.
+
+Поля: - `message_id` --- FK → `messages.id` - `callsign_id` --- FK →
+`callsigns.id` - `role` --- роль у повідомленні: `caller` / `callee`
+
+Ключі та обмеження: - `PRIMARY KEY(message_id, callsign_id, role)` -
+`FOREIGN KEY(message_id) REFERENCES messages(id)` -
+`FOREIGN KEY(callsign_id) REFERENCES callsigns(id)`
+
+Критично: - одна й та сама пара `(message_id, callsign_id)` може
+існувати більше одного разу тільки якщо відрізняється `role`.
+
+------------------------------------------------------------------------
+
+## callsign_edges
+
+Призначення: агрегований граф зв'язків між позивними всередині мережі.
+
+Поля: - `id` --- PK - `network_id` --- FK → `networks.id` -
+`a_callsign_id` --- FK → `callsigns.id` - `b_callsign_id` --- FK →
+`callsigns.id` - `first_seen_dt` - `last_seen_dt` - `cnt` --- кількість
+взаємодій
+
+Ключі та обмеження: - `PRIMARY KEY(id)` -
+`CHECK(a_callsign_id < b_callsign_id)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE` -
+`FOREIGN KEY(a_callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE` -
+`FOREIGN KEY(b_callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE`
+
+Критично: - порядок пари має бути нормалізований:
+`a_callsign_id < b_callsign_id` - для коректної роботи upsert у service
+layer бажаний `UNIQUE(network_id, a_callsign_id, b_callsign_id)`
+
+------------------------------------------------------------------------
+
+## peleng_batches
+
+Призначення: шапка пакета peleng-даних.
+
+Поля: - `id` --- PK - `event_dt` - `frequency`
+
+Ключі та обмеження: - `PRIMARY KEY(id)`
+
+------------------------------------------------------------------------
+
+## peleng_points
+
+Призначення: точки одного peleng batch.
+
+Поля: - `id` --- PK - `batch_id` --- FK → `peleng_batches.id` - `mgrs`
+
+Ключі та обмеження: - `PRIMARY KEY(id)` -
+`FOREIGN KEY(batch_id) REFERENCES peleng_batches(id) ON DELETE CASCADE`
+
+------------------------------------------------------------------------
+
+## import_freq_chat
+
+Призначення: технічна таблиця для імпорту частот і чатів.
+
+Поля: - `frequency` - `mask3` - `mask_sh` - `chat_name` - `chat_id`
+
+Примітка: - технічна імпортна таблиця, не є частиною основного ingest
+lifecycle.
+
+------------------------------------------------------------------------
+
+## import_networks
+
+Призначення: технічна таблиця для імпорту мереж.
+
+Поля: - `frequency` - `mask` - `comment` - `chat_name` - `unit` -
+`group_name` - `zone` - `status_name` - `status_id` - `chat_id` -
+`group_id`
+
+Примітка: - використовується як staging table для імпорту.
+
+------------------------------------------------------------------------
+
+## words
+
+Призначення: словник слів для тематичної класифікації / аналізу.
+
+Поля: - `id` --- PK - `tag_id` --- FK → `tags.id` - `word` -
+`probability` - `exceptions`
+
+Ключі та обмеження: - `PRIMARY KEY(id)` -
+`FOREIGN KEY(tag_id) REFERENCES tags(id)`
+
+Примітка: - `exceptions` зберігається як JSON-рядок у `TEXT`.
+
+------------------------------------------------------------------------
+
+## Критичні індекси, які треба тримати під контролем
+
+Мінімально очікувані:
+
+-   `network_aliases(alias_norm)` --- для structured alias lookup
+-   `messages(network_id, created_at)` --- для пошуку і дедуплікації
+-   `callsigns(network_id, name)` --- для upsert позивних
+-   `callsign_edges(network_id, a_callsign_id, b_callsign_id)` ---
+    бажано UNIQUE для коректного upsert edges
+
+------------------------------------------------------------------------
+
+## Критичні інваріанти схеми
+
+1.  `callsigns` унікальні в межах мережі: `(network_id, name)`
+2.  `message_callsigns` унікальні за `(message_id, callsign_id, role)`
+3.  `message_tags` унікальні за `(message_id, tag_id)`
+4.  `callsign_edges` не повинні мати дзеркальних пар
+5.  ingest не створює нові мережі
+6.  duplicate rule для `messages` живе в service layer:
+    `(network_id, created_at, body_text)`
+
+------------------------------------------------------------------------
+
+## Що треба перевіряти під час аудиту
+
+-   чи `db.py` відповідає реальній схемі
+-   чи `tables.py` відповідає реальній схемі
+-   чи є всі потрібні індекси
+-   чи upsert-логіка сервісів спирається на реальні constraints
+-   чи service layer не покладається на constraint, якого реально немає
+    в SQLite
+
+------------------------------------------------------------------------
+
+## Рекомендовані пов'язані документи
+
+-   `docs/CURSOR_BOOTSTRAP.md`
+-   `docs/INVARIANTS.md`
+-   `docs/ARCHITECTURE.md`
+-   `docs/PIPELINE.md`
+-   `docs/FILE_MAP.md`
