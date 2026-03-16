@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="intercepts-page">
+  <h2>Intercepts Explorer</h2>
+
+  <form id="interceptsFilterForm" class="intercepts-filter-form" autocomplete="off">
+    <div class="field">
+      <label for="periodStart">Початок періоду</label>
+      <input id="periodStart" name="period_start" type="datetime-local">
+    </div>
+
+    <div class="field">
+      <label for="periodEnd">Завершення періоду</label>
+      <input id="periodEnd" name="period_end" type="datetime-local">
+    </div>
+
+    <div class="field">
+      <label for="networkQuery">р/м</label>
+      <input
+        id="networkQuery"
+        name="network"
+        type="text"
+        placeholder="Усі р/м"
+        autocomplete="off"
+      >
+    </div>
+
+    <div class="field field-btn">
+      <label>&nbsp;</label>
+      <div class="action-buttons">
+        <button type="submit">Показати</button>
+      </div>
+    </div>
+  </form>
+
+  <div id="interceptsWarning" class="warning" style="display:none;"></div>
+
+  <section class="intercepts-workspace">
+    <article class="intercepts-main-card">
+      <div class="intercepts-main-card__empty">
+        Завантаження...
+      </div>
+    </article>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const startInput = document.getElementById("periodStart");
+    const endInput = document.getElementById("periodEnd");
+
+    if (!startInput || !endInput) {
+      return;
+    }
+
+    const now = new Date();
+
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(now);
+    end.setHours(23, 59, 0, 0);
+
+    function toDatetimeLocalValue(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    startInput.value = toDatetimeLocalValue(start);
+    endInput.value = toDatetimeLocalValue(end);
+  })();
+</script>
+<script src="{{ url_for('static', path='intercepts_explorer.js') }}"></script>
+{% endblock %}

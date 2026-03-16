@@ -21,7 +21,7 @@ from app.services.ingest_store import (
     set_normalized_text,
     set_published_at_text,
 )
-from app.services.network_service import ensure_network
+from app.services.network_service import ensure_network, NetworkNotFoundError
 from app.services.structured_intercept_service import process_structured_intercept
 
 log = get_logger("ingest_service")
@@ -357,13 +357,42 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         if platform == "xlsx":
             received_at = created_at
 
-        network_id = ensure_network(
-            cur,
-            frequency=frequency,
-            mask=mask,
-            unit=unit,
-            zone=zone,
-        )
+        try:
+            network_id = ensure_network(
+                cur,
+                frequency=frequency,
+                mask=mask,
+                now_dt=received_at,
+                unit=unit,
+                zone=zone,
+            )
+        except NetworkNotFoundError as e:
+            log.notice(
+                "Intercept skipped: network not found in DB %s",
+                _intercept_log_ctx(parsed, raw_text),
+                extra={
+                    "ingest_id": ingest_id,
+                    "frequency": e.frequency,
+                    "mask": e.mask,
+                    "unit": e.unit,
+                    "zone": e.zone,
+                    "reason": "network_not_found",
+                },
+            )
+            mark_parse_error(cur, ingest_id, str(e))
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "skipped": True,
+                "reason": "network_not_found",
+                "details": {
+                    "frequency": e.frequency,
+                    "mask": e.mask,
+                    "unit": e.unit,
+                    "zone": e.zone,
+                },
+                "actions": actions,
+            }
 
         existing_message_id = find_duplicate_message(
             cur,

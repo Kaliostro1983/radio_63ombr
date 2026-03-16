@@ -1,0 +1,201 @@
+# project.mdc
+
+These rules apply when AI tools modify this repository.
+
+## Project identity
+
+This is a FastAPI + SQLite system for processing radio intercepts.
+
+Core domains:
+- radio networks
+- intercept ingestion
+- template intercept parsing
+- structured alias intercept parsing
+- callsigns and callsign graph
+- tags and word-based analytics
+- etalons
+- peleng reports
+- XLSX import
+
+## Architecture
+
+Follow this layer order:
+
+routers -> services -> core / repositories -> database
+
+Rules:
+1. Routers stay thin.
+2. Business logic goes to `app/services/`.
+3. Parsing logic goes to `app/core/`.
+4. Specialized DB access goes to `app/repositories/`.
+5. Do not move logic across layers unless explicitly requested.
+
+## Authoritative files
+
+Entrypoint:
+- `app/main.py`
+
+Ingest:
+- `app/routers/ingest.py`
+- `app/services/ingest_service.py`
+
+Parsers:
+- `app/core/intercept_parser.py`
+- `app/core/structured_intercept_parser.py`
+- `app/services/structured_intercept_service.py`
+
+Intercept UI:
+- `app/routers/intercepts.py`
+- `app/templates/intercepts_explorer.html`
+- `app/templates/intercepts_search.html`
+- `app/static/intercepts_explorer.js`
+- `app/static/intercepts_search.js`
+
+Schema and DB bootstrap:
+- `app/core/db.py`
+- `app/models/tables.py`
+
+## Database model
+
+Important tables:
+- `networks`
+- `network_aliases`
+- `network_changes`
+- `network_tags`
+- `etalons`
+- `ingest_messages`
+- `messages`
+- `message_tags`
+- `callsigns`
+- `callsign_sources`
+- `callsign_statuses`
+- `callsign_status_map`
+- `message_callsigns`
+- `callsign_edges`
+- `tags`
+- `statuses`
+- `words`
+- `chats`
+- `groups`
+- `peleng_batches`
+- `peleng_points`
+- `import_freq_chat`
+- `import_networks`
+
+When changing schema:
+1. Keep `app/core/db.py` and `app/models/tables.py` synchronized.
+2. Prefer additive migrations for existing SQLite databases.
+3. Do not invent new columns or tables without explicit approval.
+4. Respect existing foreign keys, unique constraints, and indexes.
+
+## Ingest pipeline
+
+Canonical ingest flow:
+1. raw message arrives
+2. router forwards to `process_whatsapp_payload()`
+3. raw payload stored in `ingest_messages`
+4. format detected
+5. message goes through structured alias flow or template parser
+6. network resolved
+7. duplicate checked
+8. parsed row inserted into `messages`
+9. callsigns linked into `message_callsigns`
+10. edges updated in `callsign_edges`
+
+Do not duplicate ingest logic in routers.
+
+## Message formats
+
+Template intercept:
+- datetime
+- frequency
+- network line
+- callee
+- caller
+- body
+
+Structured alias intercept:
+- header / alias line
+- datetime
+- recipients block
+- sender block
+- body
+
+Do not reimplement these parsers elsewhere.
+
+## Duplicate rule
+
+Current duplicate rule in ingest logic:
+- `network_id`
+- `created_at`
+- `body_text`
+
+Treat this as authoritative unless explicitly changed.
+
+## Network resolution rule
+
+Current behavior:
+- ingest expects an existing network
+- if network is not found, intercept is skipped and marked with parse error
+- do not auto-create networks unless explicitly requested across the project
+
+## Callsign rules
+
+Callsign linking is part of message processing.
+Use:
+- `message_callsigns` for per-message links
+- `callsign_edges` for caller/callee graph relationships
+
+Do not change edge-building behavior casually.
+
+## Frontend rules
+
+Frontend stack:
+- Jinja2 templates
+- vanilla JavaScript
+- existing CSS
+
+Rules:
+1. Do not introduce frontend frameworks.
+2. Prefer targeted UI patches.
+3. Reuse existing styles and page structure.
+4. Keep intercept explorer compact and functional.
+
+## Code change policy
+
+Prefer:
+- small focused patches
+- minimal diff per file
+- preserving current architecture
+- explicit explanation of affected files
+
+Avoid:
+- full-file rewrites unless necessary
+- hidden schema changes
+- duplicate helper logic
+- mixing parsing, routing, and DB responsibilities
+
+## Before editing
+
+Always check:
+- `docs/ARCHITECTURE.md`
+- `docs/PIPELINE.md`
+- `docs/FILE_MAP.md`
+- `docs/SYSTEM_CONTEXT.md`
+
+If schema-related:
+- inspect `app/core/db.py`
+- inspect `app/models/tables.py`
+
+If ingest-related:
+- inspect `app/services/ingest_service.py`
+- inspect both intercept parsers
+
+## Output behavior for AI
+
+When asked to implement a change:
+1. identify affected files first
+2. keep change scope minimal
+3. preserve existing behavior unless change is explicit
+4. mention DB impact if any
+5. avoid unrelated cleanup

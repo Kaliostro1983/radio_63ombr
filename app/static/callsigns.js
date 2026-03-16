@@ -25,6 +25,7 @@
   const modalTitle = $("csModalTitle");
   const modalName = $("csModalName");
   const modalStatus = $("csModalStatus");
+  const modalSource = $("csModalSource");
   const modalComment = $("csModalComment");
   const modalNetworkQuery = $("csModalNetworkQuery");
   const modalNetwork = $("csModalNetwork");
@@ -38,8 +39,10 @@
   const btnCreateStatus = $("csCreateStatus");
 
   let STATUS_LIST = []; // [{id, name}]
+  let SOURCE_LIST = []; // [{id, name}]
   let CURRENT_ROW = null;
   let CURRENT_STATUS_ID = null;
+  let CURRENT_SOURCE_ID = null;
   let CURRENT_NETWORK_ID = null;
 
   function setPhotoForStatus(statusId){
@@ -101,6 +104,19 @@
     return (s || "").replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  function renderCallsignNameCell(row){
+    return `
+      <div class="callsign-name" style="font-weight:700">
+        <img
+          class="callsign-ico"
+          src="/static/icons/callsign_statuses/${row.status_id || '_default'}.svg"
+          alt=""
+        >
+        <span>${escapeHtml(row.name || "")}</span>
+      </div>
+    `;
+  }
+
   function openCreateModal(){
     CURRENT_ROW = null;
     modalId.value = "";
@@ -108,11 +124,16 @@
     modalName.value = "";
     modalComment.value = "";
     CURRENT_STATUS_ID = null;
+    CURRENT_SOURCE_ID = null;
     CURRENT_NETWORK_ID = null;
+
     renderStatusSelect(CURRENT_STATUS_ID);
+    renderSourceSelect(CURRENT_SOURCE_ID);
     setPhotoForStatus(CURRENT_STATUS_ID);
+
     modalNetworkQuery.value = "";
     renderNetworkSelect([], CURRENT_NETWORK_ID);
+
     openModal();
     setTimeout(() => modalName.focus(), 0);
   }
@@ -127,6 +148,7 @@
     modal.setAttribute("aria-hidden", "true");
     CURRENT_ROW = null;
     CURRENT_STATUS_ID = null;
+    CURRENT_SOURCE_ID = null;
     modalErr.style.display = "none";
     modalErr.textContent = "";
   }
@@ -165,6 +187,17 @@
     } catch(e){
       console.error(e);
       STATUS_LIST = [];
+    }
+  }
+
+  async function loadSources(){
+    try{
+      const r = await fetch("/api/callsigns/sources");
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      SOURCE_LIST = await r.json();
+    } catch(e){
+      console.error(e);
+      SOURCE_LIST = [];
     }
   }
 
@@ -237,9 +270,32 @@
     }
   }
 
+  function renderSourceSelect(selectedId){
+    if(!modalSource) return;
+    modalSource.innerHTML = "";
+
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = "— не вказано —";
+    modalSource.appendChild(optEmpty);
+
+    SOURCE_LIST.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = String(s.id);
+      opt.textContent = s.name;
+      modalSource.appendChild(opt);
+    });
+
+    if(selectedId){
+      modalSource.value = String(selectedId);
+    } else {
+      modalSource.value = "";
+    }
+  }
+
   function renderTable(rows){
     if(!rows || rows.length === 0){
-      elTbody.innerHTML = '<tr><td colspan="4" class="small" style="opacity:.8">Нічого не знайдено.</td></tr>';
+      elTbody.innerHTML = '<tr><td colspan="5" class="small" style="opacity:.8">Нічого не знайдено.</td></tr>';
       return;
     }
 
@@ -250,10 +306,13 @@
       tr.dataset.row = JSON.stringify(row);
 
       const statusText = row.status_label || "";
+      const sourceText = row.source_label || "";
+
       tr.innerHTML = `
         <td>${row.n}</td>
-        <td style="font-weight:700">${escapeHtml(row.name)}</td>
+        <td>${renderCallsignNameCell(row)}</td>
         <td>${escapeHtml(statusText)}</td>
+        <td>${escapeHtml(sourceText)}</td>
         <td>${escapeHtml(row.comment || "")}</td>
       `;
 
@@ -277,7 +336,7 @@
       const statusText = row.status_label || "";
       tr.innerHTML = `
         <td>${row.n}</td>
-        <td style="font-weight:700">${escapeHtml(row.name)}</td>
+        <td>${renderCallsignNameCell(row)}</td>
         <td>${escapeHtml(statusText)}</td>
         <td>${escapeHtml(row.frequency || "Невідомо")}</td>
         <td>${escapeHtml(row.unit || "Невідомо")}</td>
@@ -291,18 +350,23 @@
   function updateRowInFreqTable(updated){
     const tr = elTbody && elTbody.querySelector(`tr[data-callsign-id="${updated.callsign_id}"]`);
     if(!tr) return;
-    tr.children[1].textContent = updated.name;
+
+    tr.children[1].innerHTML = renderCallsignNameCell(updated);
     tr.children[2].textContent = updated.status_label || "";
-    tr.children[3].textContent = updated.comment || "";
+    tr.children[3].textContent = updated.source_label || "";
+    tr.children[4].textContent = updated.comment || "";
+    tr.dataset.row = JSON.stringify(updated);
   }
 
   function updateRowInSearchTable(updated){
     const tr = elSearchTbody && elSearchTbody.querySelector(`tr[data-callsign-id="${updated.callsign_id}"]`);
     if(!tr) return;
-    tr.children[1].textContent = updated.name;
+
+    tr.children[1].innerHTML = renderCallsignNameCell(updated);
     tr.children[2].textContent = updated.status_label || "";
     tr.children[3].textContent = updated.frequency || "Невідомо";
     tr.children[4].textContent = updated.unit || "Невідомо";
+    tr.dataset.row = JSON.stringify(updated);
   }
 
   function updateRowInTables(updated){
@@ -317,6 +381,7 @@
     modalName.value = row.name;
     modalComment.value = row.comment || "";
     CURRENT_STATUS_ID = row.status_id || null;
+    CURRENT_SOURCE_ID = row.source_id || null;
     CURRENT_NETWORK_ID = row.network_id || null;
 
     modalNetworkQuery.value = "";
@@ -325,6 +390,7 @@
 
     setPhotoForStatus(CURRENT_STATUS_ID);
     renderStatusSelect(CURRENT_STATUS_ID);
+    renderSourceSelect(CURRENT_SOURCE_ID);
 
     openModal();
     setTimeout(() => modalName.focus(), 0);
@@ -370,14 +436,14 @@
 
       if(!data.ok){
         setInfo("Помилка");
-        elTbody.innerHTML = `<tr><td colspan="4" class="small" style="color:var(--danger)">${escapeHtml(data.error || "Помилка")}</td></tr>`;
+        elTbody.innerHTML = `<tr><td colspan="5" class="small" style="color:var(--danger)">${escapeHtml(data.error || "Помилка")}</td></tr>`;
         return;
       }
 
       const rows = data.rows || [];
       if(rows.length === 0 && data.message){
         setInfo(data.message);
-        elTbody.innerHTML = `<tr><td colspan="4" class="small" style="opacity:.85">${escapeHtml(data.message)}</td></tr>`;
+        elTbody.innerHTML = `<tr><td colspan="5" class="small" style="opacity:.85">${escapeHtml(data.message)}</td></tr>`;
         return;
       }
 
@@ -386,7 +452,7 @@
     } catch(e){
       console.error(e);
       setInfo("Помилка запиту");
-      elTbody.innerHTML = `<tr><td colspan="4" class="small" style="color:var(--danger)">Помилка запиту. Перевірте лог сервера.</td></tr>`;
+      elTbody.innerHTML = `<tr><td colspan="5" class="small" style="color:var(--danger)">Помилка запиту. Перевірте лог сервера.</td></tr>`;
     }
   }
 
@@ -435,6 +501,9 @@
     const status_id = (modalStatus && modalStatus.value && modalStatus.value !== "__add__")
       ? parseInt(modalStatus.value, 10)
       : null;
+    const source_id = (modalSource && modalSource.value)
+      ? parseInt(modalSource.value, 10)
+      : null;
 
     if(!name){
       showError("Позивний не може бути порожнім");
@@ -452,6 +521,7 @@
           name,
           comment,
           status_id,
+          source_id,
           network_id: (modalNetwork && modalNetwork.value) ? parseInt(modalNetwork.value, 10) : null
         })
       });
@@ -494,6 +564,7 @@
     if(!elShow) return;
 
     await loadStatuses();
+    await loadSources();
 
     if(tabFreq) tabFreq.addEventListener("click", () => setTab("freq"));
     if(tabSearch) tabSearch.addEventListener("click", () => setTab("search"));
@@ -540,6 +611,13 @@
           CURRENT_STATUS_ID = Number.isFinite(v) ? v : null;
           setPhotoForStatus(CURRENT_STATUS_ID);
         }
+      });
+    }
+
+    if(modalSource){
+      modalSource.addEventListener("change", () => {
+        const v = parseInt(modalSource.value, 10);
+        CURRENT_SOURCE_ID = Number.isFinite(v) ? v : null;
       });
     }
 

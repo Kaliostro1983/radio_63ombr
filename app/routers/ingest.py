@@ -17,3 +17,7 @@ async def ingest_whatsapp(request: Request):
         return JSONResponse(result, status_code=400)
 
     return result
+
+    
+
+    

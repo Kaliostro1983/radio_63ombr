@@ -10,12 +10,13 @@
   <form method="post" action="/networks/search">
     <div class="row">
       <div class="field">
-        <label>Частота</label>
-        <input name="frequency" value="{{ q_freq }}" placeholder="050.6250"/>
-      </div>
-      <div class="field">
-        <label>Маска</label>
-        <input name="mask" value="{{ q_mask }}" placeholder="123.4567"/>
+        <label>Маска/частота</label>
+        <input
+          name="query"
+          value="{{ q_query }}"
+          placeholder="050.6250 або 050.62"
+          autocomplete="off"
+        />
       </div>
       <div class="field" style="min-width:160px; flex:0">
         <label>&nbsp;</label>

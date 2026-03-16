@@ -63,12 +63,13 @@
                   <th style="width:60px">№</th>
                   <th style="min-width:180px">Позивний</th>
                   <th style="min-width:220px">Статус</th>
+                  <th style="min-width:180px">Джерело</th>
                   <th>Коментар</th>
                 </tr>
               </thead>
               <tbody id="csTbody">
                 <tr>
-                  <td colspan="4" class="small callsigns-empty-state">
+                  <td colspan="5" class="small callsigns-empty-state">
                     Введіть частоту та натисніть “Показати”.
                   </td>
                 </tr>
@@ -157,6 +158,13 @@
           <div style="margin-top:10px">
             <label class="small">Статус</label>
             <select id="csModalStatus" style="width:100%"></select>
+          </div>
+
+          <div style="margin-top:10px">
+            <label class="small">Джерело</label>
+            <select id="csModalSource" style="width:100%">
+              <option value="">— не вказано —</option>
+            </select>
           </div>
         </div>
       </div>

@@ -1,80 +1,218 @@
 from __future__ import annotations
+
 import os
 import sqlite3
 from contextlib import contextmanager
+
 from .config import settings
-from pathlib import Path
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS callsign_sources (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS callsign_statuses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    icon TEXT
+);
+
 CREATE TABLE IF NOT EXISTS statuses(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    bg_color TEXT,
+    border_color TEXT
 );
 
 CREATE TABLE IF NOT EXISTS chats(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS groups(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS tags(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    template TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS networks(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  frequency TEXT NOT NULL UNIQUE,
-  mask TEXT,
-  unit TEXT NOT NULL,
-  zone TEXT NOT NULL,
-  chat_id INTEGER NOT NULL,
-  group_id INTEGER NOT NULL,
-  status_id INTEGER NOT NULL,
-  comment TEXT,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY(chat_id) REFERENCES chats(id),
-  FOREIGN KEY(group_id) REFERENCES groups(id),
-  FOREIGN KEY(status_id) REFERENCES statuses(id)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    frequency TEXT NOT NULL UNIQUE,
+    mask TEXT,
+    unit TEXT NOT NULL,
+    zone TEXT NOT NULL,
+    chat_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
+    status_id INTEGER NOT NULL,
+    comment TEXT,
+    updated_at TEXT NOT NULL,
+    net_key TEXT,
+    FOREIGN KEY(chat_id) REFERENCES chats(id),
+    FOREIGN KEY(group_id) REFERENCES groups(id),
+    FOREIGN KEY(status_id) REFERENCES statuses(id)
+);
+
+CREATE TABLE IF NOT EXISTS network_aliases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id INTEGER NOT NULL,
+    alias_text TEXT NOT NULL,
+    alias_norm TEXT NOT NULL UNIQUE,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (network_id) REFERENCES networks(id)
 );
 
 CREATE TABLE IF NOT EXISTS network_tags(
-  network_id INTEGER NOT NULL,
-  tag_id INTEGER NOT NULL,
-  PRIMARY KEY(network_id, tag_id),
-  FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
-  FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    network_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY(network_id, tag_id),
+    FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
+    FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS etalons(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  network_id INTEGER NOT NULL UNIQUE,
-  start_date TEXT,
-  correspondents TEXT,
-  callsigns TEXT,
-  purpose TEXT,
-  operation_mode TEXT,
-  traffic_type TEXT,
-  raw_import_text TEXT,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id INTEGER NOT NULL UNIQUE,
+    start_date TEXT,
+    correspondents TEXT,
+    callsigns TEXT,
+    purpose TEXT,
+    operation_mode TEXT,
+    traffic_type TEXT,
+    raw_import_text TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS network_changes(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  network_id INTEGER NOT NULL,
-  changed_at TEXT NOT NULL,
-  changed_by TEXT NOT NULL,
-  field TEXT NOT NULL,
-  old_value TEXT,
-  new_value TEXT,
-  FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id INTEGER NOT NULL,
+    changed_at TEXT NOT NULL,
+    changed_by TEXT NOT NULL,
+    field TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT,
+    FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS import_freq_chat (
+    frequency REAL,
+    mask3 TEXT,
+    mask_sh TEXT,
+    chat_name TEXT,
+    chat_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS import_networks (
+    frequency REAL,
+    mask TEXT,
+    comment TEXT,
+    chat_name TEXT,
+    unit TEXT,
+    group_name TEXT,
+    zone TEXT,
+    status_name TEXT,
+    status_id INTEGER,
+    chat_id INTEGER,
+    group_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS ingest_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform TEXT NOT NULL,
+    source_chat_id TEXT,
+    source_chat_name TEXT,
+    source_message_id TEXT NOT NULL,
+    source_file_name TEXT,
+    source_row_number INTEGER,
+    raw_text TEXT NOT NULL,
+    normalized_text TEXT,
+    published_at_text TEXT,
+    received_at TEXT NOT NULL,
+    message_format TEXT,
+    parse_status TEXT NOT NULL,
+    parse_error TEXT,
+    UNIQUE(platform, source_message_id)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ingest_id INTEGER NOT NULL,
+    network_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    received_at TEXT NOT NULL,
+    net_description TEXT,
+    body_text TEXT NOT NULL,
+    comment TEXT,
+    parse_confidence REAL DEFAULT 1.0,
+    is_valid INTEGER DEFAULT 1,
+    delay_sec INTEGER,
+    need_approve INTEGER NOT NULL DEFAULT 0,
+    tags_json TEXT DEFAULT '[]',
+    FOREIGN KEY (ingest_id) REFERENCES ingest_messages(id),
+    FOREIGN KEY (network_id) REFERENCES networks(id)
+);
+
+CREATE TABLE IF NOT EXISTS callsigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id INTEGER,
+    name TEXT NOT NULL,
+    status_id INTEGER,
+    comment TEXT,
+    updated_at TEXT NOT NULL,
+    last_seen_dt TEXT,
+    callsign_status_id INTEGER,
+    source_id INTEGER REFERENCES callsign_sources(id),
+    UNIQUE(network_id, name),
+    FOREIGN KEY(network_id) REFERENCES networks(id),
+    FOREIGN KEY(status_id) REFERENCES callsign_statuses(id)
+);
+
+CREATE TABLE IF NOT EXISTS message_callsigns (
+    message_id INTEGER NOT NULL,
+    callsign_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    PRIMARY KEY(message_id, callsign_id, role),
+    FOREIGN KEY(message_id) REFERENCES messages(id),
+    FOREIGN KEY(callsign_id) REFERENCES callsigns(id)
+);
+
+CREATE TABLE IF NOT EXISTS message_tags (
+    message_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY(message_id, tag_id),
+    FOREIGN KEY(message_id) REFERENCES messages(id),
+    FOREIGN KEY(tag_id) REFERENCES tags(id)
+);
+
+CREATE TABLE IF NOT EXISTS callsign_edges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id INTEGER NOT NULL,
+    a_callsign_id INTEGER NOT NULL,
+    b_callsign_id INTEGER NOT NULL,
+    first_seen_dt TEXT NOT NULL,
+    last_seen_dt TEXT NOT NULL,
+    cnt INTEGER NOT NULL DEFAULT 1,
+    CHECK (a_callsign_id < b_callsign_id),
+    FOREIGN KEY (network_id) REFERENCES networks(id) ON DELETE CASCADE,
+    FOREIGN KEY (a_callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE,
+    FOREIGN KEY (b_callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS callsign_status_map (
+    callsign_id INTEGER NOT NULL,
+    status_id INTEGER NOT NULL,
+    PRIMARY KEY(callsign_id, status_id),
+    FOREIGN KEY(callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE,
+    FOREIGN KEY(status_id) REFERENCES callsign_statuses(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS peleng_batches (
@@ -90,137 +228,86 @@ CREATE TABLE IF NOT EXISTS peleng_points (
     FOREIGN KEY (batch_id) REFERENCES peleng_batches(id) ON DELETE CASCADE
 );
 
--- =========================
--- Intercepts (ingest/messages/callsigns)
--- =========================
-
-CREATE TABLE IF NOT EXISTS ingest_messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  platform TEXT NOT NULL,
-
-  source_chat_id TEXT,
-  source_chat_name TEXT,
-
-  source_message_id TEXT NOT NULL,
-
-  source_file_name TEXT,
-  source_row_number INTEGER,
-
-  raw_text TEXT NOT NULL,
-  normalized_text TEXT,
-
-  published_at_text TEXT,
-  received_at TEXT NOT NULL,
-
-  message_format TEXT,
-
-  parse_status TEXT NOT NULL,
-  parse_error TEXT,
-
-  UNIQUE(platform, source_message_id)
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ingest_id INTEGER NOT NULL,
-  network_id INTEGER NOT NULL,
-  created_at TEXT NOT NULL,
-  received_at TEXT NOT NULL,
-  body_text TEXT NOT NULL,
-  comment TEXT,
-  parse_confidence REAL,
-  is_valid INTEGER NOT NULL DEFAULT 1,
-  delay_sec INTEGER,
-  FOREIGN KEY(ingest_id) REFERENCES ingest_messages(id) ON DELETE CASCADE,
-  FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS callsigns (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  network_id INTEGER NOT NULL,
-  name TEXT NOT NULL,
-  status_id INTEGER,
-  comment TEXT,
-  updated_at TEXT NOT NULL,
-  last_seen_dt TEXT,
-  FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
-  FOREIGN KEY(status_id) REFERENCES statuses(id),
-  UNIQUE(network_id, name)
-);
-
-CREATE TABLE IF NOT EXISTS message_callsigns (
-  message_id INTEGER NOT NULL,
-  callsign_id INTEGER NOT NULL,
-  role TEXT,
-  PRIMARY KEY(message_id, callsign_id, role),
-  FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
-  FOREIGN KEY(callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS callsign_edges (
-  network_id INTEGER NOT NULL,
-  a_callsign_id INTEGER NOT NULL,
-  b_callsign_id INTEGER NOT NULL,
-  first_seen_dt TEXT NOT NULL,
-  last_seen_dt TEXT NOT NULL,
-  cnt INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY(network_id, a_callsign_id, b_callsign_id),
-  FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
-  FOREIGN KEY(a_callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE,
-  FOREIGN KEY(b_callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE
-);
-
--- =========================
--- Callsign statuses
--- =========================
--- Lookup table (what user sees in UI)
-CREATE TABLE IF NOT EXISTS callsign_statuses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
-);
-
--- Many-to-many mapping (callsign -> status)
-CREATE TABLE IF NOT EXISTS callsign_status_map (
-  callsign_id INTEGER NOT NULL,
-  status_id INTEGER NOT NULL,
-  PRIMARY KEY(callsign_id, status_id),
-  FOREIGN KEY(callsign_id) REFERENCES callsigns(id) ON DELETE CASCADE,
-  FOREIGN KEY(status_id) REFERENCES callsign_statuses(id) ON DELETE CASCADE
+CREATE TABLE IF NOT EXISTS words (
+    id INTEGER PRIMARY KEY,
+    tag_id INTEGER NOT NULL,
+    word TEXT NOT NULL,
+    probability INTEGER NOT NULL DEFAULT 0,
+    exceptions TEXT DEFAULT '[]',
+    FOREIGN KEY (tag_id) REFERENCES tags(id)
 );
 """
+
 
 def db_path() -> str:
     os.makedirs(os.path.dirname(settings.db_path), exist_ok=True)
     return settings.db_path
 
+
 def init_db():
     with sqlite3.connect(db_path()) as conn:
+        conn.execute("PRAGMA foreign_keys = ON;")
         conn.executescript(SCHEMA_SQL)
-        # Lightweight migrations for existing DBs
-        _ensure_callsign_status_id_column(conn)
+        _run_lightweight_migrations(conn)
         conn.commit()
 
 
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
 def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    if not _table_exists(conn, table):
+        return False
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    return any(r[1] == col for r in rows)  # r[1] = name
+    return any(r[1] == col for r in rows)
 
 
-def _ensure_callsign_status_id_column(conn: sqlite3.Connection) -> None:
-    """Ensure callsigns has callsign_status_id (FK -> callsign_statuses).
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    ddl: str,
+) -> None:
+    if not _has_column(conn, table, column):
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
-    We keep legacy callsigns.status_id (FK -> statuses) untouched.
-    """
-    try:
-        if not _has_column(conn, "callsigns", "callsign_status_id"):
-            conn.execute("ALTER TABLE callsigns ADD COLUMN callsign_status_id INTEGER")
-    except Exception:
-        # Best-effort; if it fails we will catch at runtime in routers.
-        pass
-        
+
+def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
+    _ensure_column(conn, "statuses", "bg_color", "bg_color TEXT")
+    _ensure_column(conn, "statuses", "border_color", "border_color TEXT")
+    _ensure_column(conn, "tags", "template", "template TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "networks", "net_key", "net_key TEXT")
+    _ensure_column(conn, "messages", "net_description", "net_description TEXT")
+    _ensure_column(conn, "messages", "need_approve", "need_approve INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "messages", "tags_json", "tags_json TEXT DEFAULT '[]'")
+    _ensure_column(conn, "callsign_statuses", "icon", "icon TEXT")
+    _ensure_column(conn, "callsigns", "last_seen_dt", "last_seen_dt TEXT")
+    _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
+    _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_network_aliases_alias_norm "
+        "ON network_aliases(alias_norm)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_network_created "
+        "ON messages(network_id, created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_callsigns_network_name "
+        "ON callsigns(network_id, name)"
+    )
+
+
 def get_db():
     conn = sqlite3.connect(db_path())
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 

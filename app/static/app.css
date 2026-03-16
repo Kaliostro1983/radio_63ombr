@@ -53,6 +53,22 @@ a:hover{
 }
 
 /* =========================
+   02.01 CALLSIGN ICONS
+========================= */
+
+.callsign-name{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.callsign-ico{
+  width:16px;
+  height:16px;
+  opacity:.9;
+}
+
+/* =========================
    03. LAYOUT
 ========================= */
 
@@ -694,4 +710,664 @@ button.secondary{
   padding:16px 0;
   text-align:center;
   opacity:.8;
+}
+
+/* =========================
+   16. INTERCEPTS PAGE
+========================= */
+
+.intercepts-page{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+  min-width:0;
+}
+
+.intercepts-page h2{
+  margin:0;
+}
+
+.intercepts-filter-form{
+  display:grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  gap:12px;
+  align-items:end;
+}
+
+.intercepts-filter-form .field{
+  min-width:0;
+}
+
+.intercepts-filter-form .field-btn{
+  flex:none;
+  min-width:auto;
+}
+
+.intercepts-filter-form .action-buttons{
+  height:42px;
+  align-items:stretch;
+}
+
+.intercepts-filter-form .action-buttons > button{
+  height:100%;
+}
+
+.intercepts-workspace{
+  display:grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap:16px;
+  min-width:0;
+  align-items:stretch;
+}
+
+.intercepts-main-card,
+.intercepts-side-card{
+  min-height:520px;
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:var(--card);
+  padding:18px;
+  min-width:0;
+}
+
+.intercepts-main-card__empty,
+.intercepts-side-card__empty{
+  color:var(--muted);
+}
+
+.intercepts-side-card{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+
+@media (max-width: 1100px){
+  .intercepts-filter-form{
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .intercepts-workspace{
+    grid-template-columns: 1fr;
+  }
+
+  .intercepts-main-card,
+  .intercepts-side-card{
+    min-height:320px;
+  }
+}
+
+@media (max-width: 700px){
+  .intercepts-filter-form{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================
+   17. INTERCEPTS EXPLORER
+========================= */
+
+.intercepts-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.intercept-item{
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--card);
+  padding:14px 16px;
+  text-align:left;
+  cursor:pointer;
+  transition:border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+.intercept-item:hover{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(59, 130, 246, 0.10);
+}
+
+.intercept-item.is-active{
+  border-color:var(--accent);
+  background:rgba(59, 130, 246, 0.06);
+  box-shadow:0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.intercept-item__meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 12px;
+  align-items:center;
+  margin-bottom:8px;
+}
+
+.intercept-item__dt{
+  font-size:13px;
+  color:var(--muted);
+  white-space:nowrap;
+}
+
+.intercept-item__network{
+  font-size:13px;
+  color:var(--accent);
+  word-break:break-word;
+}
+
+.intercept-item__text{
+  color:var(--text);
+  line-height:1.45;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+
+.intercepts-editor-preview{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.intercepts-editor-preview__row{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:12px 14px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--bg-elevated);
+}
+
+.intercepts-editor-preview__label{
+  font-size:12px;
+  font-weight:600;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+.intercepts-editor-preview__value{
+  color:var(--text);
+  line-height:1.45;
+  word-break:break-word;
+  white-space:pre-wrap;
+}
+
+.callsign-autocomplete__item.is-selected{
+  background:var(--accent);
+  color:white;
+}
+
+
+.intercepts-workspace {
+  display: block;
+}
+
+.intercepts-main-card {
+  width: 100%;
+}
+
+.intercepts-list {
+  display: grid;
+  gap: 16px;
+}
+
+.intercept-card {
+  border: 1px solid rgba(70, 96, 140, 0.35);
+  border-radius: 20px;
+  background: rgba(17, 24, 39, 0.68);
+  overflow: hidden;
+}
+
+.intercept-card.is-active {
+  border-color: rgba(64, 132, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(64, 132, 255, 0.2) inset;
+}
+
+.intercept-card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(360px, 0.9fr);
+  gap: 20px;
+  padding: 18px;
+  align-items: start;
+}
+
+.intercept-card__left {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: #eef4ff;
+}
+
+.intercept-card__line {
+  color: #eef4ff;
+}
+
+.intercept-card__line--dt {
+  font-size: 29px;
+  line-height: 1.2;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.intercept-card__line--freq {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #dfe9ff;
+}
+
+.intercept-card__line--net {
+  font-size: 16px;
+  line-height: 1.45;
+  color: #b7c6e6;
+  margin-bottom: 14px;
+}
+
+.intercept-card__text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #f3f7ff;
+  white-space: pre-wrap;
+}
+
+.intercept-card__right {
+  min-width: 0;
+}
+
+.intercepts-inline-editor {
+  background: rgba(25, 31, 43, 0.92);
+  border: 1px solid rgba(90, 110, 145, 0.35);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.intercepts-editor-block + .intercepts-editor-block,
+.intercepts-comment-form {
+  margin-top: 14px;
+}
+
+.intercepts-editor-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f3f7ff;
+}
+
+.callsign-input-wrap {
+  position: relative;
+}
+
+.callsign-input {
+  width: 100%;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(90, 110, 145, 0.45);
+  background: #0c111a;
+  color: #eef4ff;
+  padding: 0 12px;
+}
+
+.callsign-input::placeholder,
+.intercepts-comment-textarea::placeholder {
+  color: #8ea1c4;
+}
+
+.callsign-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.callsign-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px 4px 10px;
+  border-radius: 999px;
+  background: #f2f5fa;
+  color: #0f1726;
+}
+
+.callsign-chip__name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.callsign-chip__remove {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #334155;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.callsign-chip__remove:hover {
+  background: rgba(51, 65, 85, 0.12);
+}
+
+.callsign-field-wrap {
+  position: relative;
+}
+
+.callsign-autocomplete {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  border: 1px solid rgba(90, 110, 145, 0.45);
+  border-radius: 10px;
+  background: #0f1623;
+  overflow: hidden;
+}
+
+.callsign-autocomplete__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: #eef4ff;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.callsign-autocomplete__item:hover,
+.callsign-autocomplete__item.is-selected {
+  background: rgba(64, 132, 255, 0.16);
+}
+
+.intercepts-comment-textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  border-radius: 14px;
+  border: 1px solid rgba(90, 110, 145, 0.45);
+  background: #0c111a;
+  color: #eef4ff;
+  padding: 12px;
+  font: inherit;
+}
+
+.intercepts-comment-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.intercepts-save-btn {
+  min-width: 120px;
+}
+
+@media (max-width: 1200px) {
+  .intercept-card__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.intercept-card__body--compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) 320px;
+  gap: 16px;
+  padding: 14px 16px;
+  align-items: start;
+}
+
+.intercept-card__main {
+  min-width: 0;
+}
+
+.intercept-card__left--static {
+  cursor: default;
+}
+
+.intercept-card__line--dt {
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: #eef4ff;
+}
+
+.intercept-card__line--freq {
+  font-size: 17px;
+  line-height: 1.15;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #dfe9ff;
+}
+
+.intercept-card__line--net {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #aebedf;
+  margin-bottom: 10px;
+}
+
+.intercept-card__text {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #eef4ff;
+  white-space: pre-wrap;
+}
+
+.intercept-card__right--compact {
+  min-width: 0;
+}
+
+.intercepts-inline-editor--compact {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(25, 31, 43, 0.88);
+  border: 1px solid rgba(90, 110, 145, 0.28);
+}
+
+.compact-callsigns-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.compact-role-block {
+  display: grid;
+  gap: 6px;
+}
+
+.compact-role-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #eef4ff;
+}
+
+.compact-role-input-wrap {
+  position: relative;
+}
+
+.callsign-input--compact {
+  height: 34px;
+  border-radius: 10px;
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.compact-role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 20px;
+}
+
+.callsign-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 8px 2px 8px;
+  border-radius: 999px;
+  background: #f2f5fa;
+  color: #0f1726;
+}
+
+.callsign-chip__name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.callsign-chip__remove {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #475569;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.intercept-card__comment-under {
+  margin-top: 12px;
+}
+
+.intercepts-comment-form--under {
+  display: grid;
+  gap: 6px;
+}
+
+.intercepts-comment-textarea--under {
+  min-height: 72px;
+  max-height: 140px;
+  resize: vertical;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.intercepts-comment-actions--compact {
+  margin-top: 2px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.intercepts-save-btn {
+  min-width: 96px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.callsign-autocomplete {
+  top: calc(100% + 4px);
+  border-radius: 10px;
+}
+
+.callsign-autocomplete__item {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+@media (max-width: 1200px) {
+  .intercept-card__body--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .intercept-card__right--compact {
+    order: 2;
+  }
+}
+
+.callsign-field-wrap {
+  position: relative;
+}
+
+.callsign-field-input-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 34px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(90, 110, 145, 0.45);
+  background: #0c111a;
+  padding: 4px 8px;
+}
+
+.callsign-input--embedded {
+  flex: 1 1 80px;
+  min-width: 80px;
+  width: auto;
+  height: 24px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.callsign-input--embedded:focus {
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.callsign-input--embedded::placeholder {
+  color: #8ea1c4;
+}
+
+.compact-role-chips,
+.callsign-list {
+  display: contents;
+}
+
+.callsign-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f2f5fa;
+  color: #0f1726;
+  flex: 0 0 auto;
+}
+
+.callsign-chip__name {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.callsign-chip__remove {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #475569;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.callsign-chip__remove:hover {
+  background: rgba(71, 85, 105, 0.12);
 }

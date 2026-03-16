@@ -1,21 +1,50 @@
-# app/core/normalize.py
-# заміни файл повністю
-
 from __future__ import annotations
 
 import re
+
+
+MASK_PREFIXES = ("100", "200", "300")
+
+
+def _clean_numeric(value: str | None) -> str:
+    if value is None:
+        return ""
+
+    s = str(value).strip()
+    if not s:
+        return ""
+
+    s = s.replace(",", ".")
+    s = re.sub(r"\s+", "", s)
+    return s
+
+
+def _digits_only(value: str) -> str:
+    return re.sub(r"\D", "", value)
+
+
+def is_mask_candidate(value: str | None) -> bool:
+    s = _clean_numeric(value)
+    if not s:
+        return False
+
+    digits = _digits_only(s)
+    if len(digits) < 3:
+        return False
+
+    return digits[:3] in MASK_PREFIXES
 
 
 def normalize_freq(value: str | None) -> str | None:
     if value is None:
         return None
 
-    s = str(value).strip()
-    if not s:
+    if is_mask_candidate(value):
         return None
 
-    s = s.replace(",", ".")
-    s = re.sub(r"\s+", "", s)
+    s = _clean_numeric(value)
+    if not s:
+        return None
 
     if "." in s:
         left, right = s.split(".", 1)
@@ -29,7 +58,7 @@ def normalize_freq(value: str | None) -> str | None:
         right = (right + "0000")[:4]
         return f"{left}.{right}"
 
-    digits = re.sub(r"\D", "", s)
+    digits = _digits_only(s)
     if not digits:
         return None
 
@@ -37,49 +66,50 @@ def normalize_freq(value: str | None) -> str | None:
     return f"{left}.0000"
 
 
-def normalize_freq_or_mask(value: str | None) -> tuple[str | None, str | None]:
-    if value is None:
-        return None, None
-
-    s = str(value).strip()
+def normalize_mask(value: str | None) -> str | None:
+    s = _clean_numeric(value)
     if not s:
-        return None, None
+        return None
 
-    s = s.replace(",", ".")
-    s = re.sub(r"\s+", "", s)
+    digits = _digits_only(s)
+    if len(digits) < 3:
+        return None
+
+    if digits[:3] not in MASK_PREFIXES:
+        return None
 
     if "." in s:
         left, right = s.split(".", 1)
         left = re.sub(r"\D", "", left)
         right = re.sub(r"\D", "", right)
 
-        if not left and not right:
-            return None, None
+        if not left:
+            return None
 
-        left = (left or "0")[-3:].rjust(3, "0")
+        left = left[:3].rjust(3, "0")
 
         if not right:
-            return None, f"{left}.%"
+            return f"{left}.%"
 
-        if len(right) >= 4:
-            return f"{left}.{right[:4]}", None
+        return f"{left}.{right[:4]}%"
 
-        return None, f"{left}.{right}%"
-
-    digits = re.sub(r"\D", "", s)
-    if not digits:
-        return None, None
-
-    if len(digits) <= 3:
-        return None, f"{digits.rjust(3, '0')}.%"
-
-    left = digits[:3].rjust(3, "0")
+    left = digits[:3]
     right = digits[3:]
 
-    if len(right) >= 4:
-        return f"{left}.{right[:4]}", None
+    if not right:
+        return f"{left}.%"
 
-    return None, f"{left}.{right}%"
+    return f"{left}.{right[:4]}%"
+
+
+def normalize_freq_or_mask(value: str | None) -> tuple[str | None, str | None]:
+    if value is None:
+        return None, None
+
+    if is_mask_candidate(value):
+        return None, normalize_mask(value)
+
+    return normalize_freq(value), None
 
 
 def normalize_nonstandard_type_1(text: str) -> str:

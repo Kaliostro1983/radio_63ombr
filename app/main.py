@@ -44,7 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(callsigns_router)
     app.include_router(intercepts_router)
     app.include_router(xlsx_import_router)
-    app.include_router(ingest_router)
+
 
     @app.on_event("startup")
     def _startup():
