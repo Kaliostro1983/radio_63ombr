@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1>Головна</h1>
+    <div class="small">Огляд та активність радіомереж.</div>
+  </div>
+
+  <section class="tabs-shell home-tabs-shell">
+    <div class="tabs-nav home-tabs-nav" role="tablist" aria-label="Вкладки Головної">
+      <button
+        id="homeTabOverview"
+        type="button"
+        class="tab-btn active"
+        role="tab"
+        aria-selected="true"
+        aria-controls="homePaneOverview"
+      >
+        Огляд
+      </button>
+
+      <button
+        id="homeTabActivity"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="homePaneActivity"
+      >
+        Активність р/м
+      </button>
+    </div>
+
+    <div class="tab-panel-wrap">
+      <section id="homePaneOverview" class="tab-panel" role="tabpanel" aria-labelledby="homeTabOverview">
+        <div class="tab-panel-section">
+          <div class="small" style="opacity:.8">Поки що порожньо.</div>
+        </div>
+      </section>
+
+      <section id="homePaneActivity" class="tab-panel hidden" role="tabpanel" aria-labelledby="homeTabActivity">
+        <div class="tab-panel-section">
+          <div class="row home-activity-row">
+            <div class="field home-activity-field">
+              <label>Частоти (опційно)</label>
+              <div class="home-freq-input-wrap">
+                <div id="homeFreqChips" class="chips" style="margin-top:0"></div>
+                <input id="homeFreqInput" type="text" placeholder="Додай частоту… (autocomplete)" autocomplete="off" />
+              </div>
+            </div>
+
+            <div class="field home-activity-field home-activity-days">
+              <label>Днів</label>
+              <input id="homeDays" type="number" min="1" max="60" value="5" />
+            </div>
+
+            <div class="field home-activity-field home-activity-check">
+              <label>&nbsp;</label>
+              <div class="home-activity-check-row">
+                <label class="small home-activity-check-item">
+                  <input id="homeAdvanced" type="checkbox" checked />
+                  <span title="Аналізувати усі частоти по яких є хоча б одне перехоплення">Розширений</span>
+                </label>
+                <label class="small home-activity-check-item">
+                  <input id="homeIncludeToday" type="checkbox" />
+                  <span>Враховувати сьогодні</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field home-activity-field" style="flex:0">
+              <label>&nbsp;</label>
+              <button id="homeShowActivity" type="button">Показати</button>
+            </div>
+          </div>
+
+          <div id="homeActivityInfo" class="small" style="margin-top:10px; opacity:.85"></div>
+        </div>
+
+        <div class="tab-panel-section">
+          <div id="homeActivityTables"></div>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/home.js" defer></script>
+{% endblock %}
+

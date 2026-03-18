@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page">
+  <div class="page-header">
+    <h1>Звіти</h1>
+    <div class="small">Генерація звітів та завантаження файлів.</div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:800; margin-bottom:10px">Переміщення</div>
+    <div class="small" style="margin-bottom:12px">
+      Завантаж XLSX з колонками <b>Частота/маска</b> та <b>Переміщення</b>,
+      або залиш поле порожнім — тоді дані візьмуться з Google Sheets (налаштування в <code>reports_config.json</code>).
+    </div>
+
+    <form method="post" action="/reports/enemy-moves" enctype="multipart/form-data">
+      <div class="row" style="align-items:flex-end">
+        <div class="field" style="min-width:320px">
+          <label>XLSX файл (moves)</label>
+          <input type="file" name="moves_xlsx" accept=".xlsx" />
+        </div>
+        <div class="field" style="flex:0">
+          <label>&nbsp;</label>
+          <button type="submit">Створити звіт</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}
+

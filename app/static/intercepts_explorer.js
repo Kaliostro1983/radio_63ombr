@@ -156,8 +156,11 @@
   function renderCallsignChips(items, role) {
     return items
       .map(
-        (item) => `
-          <div class="callsign-chip" data-id="${item.id}" data-role="${role}">
+        (item) => {
+          const statusId = (item.status_id != null && item.status_id !== "") ? item.status_id : "_default";
+          return `
+          <div class="callsign-chip callsign-chip--clickable" data-id="${item.id}" data-role="${role}" title="Редагувати позивний">
+            <img class="callsign-chip__icon" src="/static/icons/callsign_statuses/${statusId}.svg" alt="">
             <span class="callsign-chip__name">${escapeHtml(item.name)}</span>
             <button
               type="button"
@@ -166,7 +169,8 @@
               aria-label="Видалити"
             >×</button>
           </div>
-        `
+        `;
+        }
       )
       .join("");
   }
@@ -588,6 +592,47 @@
     }
   }
 
+  function updateCallsignIconInCard(messageId, callsignId, statusId) {
+    const editor = mainCard.querySelector(
+      ".intercepts-inline-editor[data-message-id=\"" + messageId + "\"]"
+    );
+    if (!editor) return;
+    const chip = editor.querySelector(".callsign-chip[data-id=\"" + callsignId + "\"]");
+    if (!chip) return;
+    const icon = chip.querySelector(".callsign-chip__icon");
+    if (!icon) return;
+    const sid = (statusId != null && statusId !== "") ? statusId : "_default";
+    icon.src = "/static/icons/callsign_statuses/" + sid + ".svg";
+  }
+
+  function onCallsignModalSaved(ev) {
+    const detail = ev && ev.detail;
+    if (!detail || !detail.data) return;
+    const data = detail.data;
+    const context = detail.context || {};
+    const messageId = context.messageId;
+    if (messageId == null) return;
+    const cid = Number(data.callsign_id);
+    const statusId = data.status_id != null && data.status_id !== "" ? Number(data.status_id) : null;
+    updateCallsignIconInCard(messageId, cid, statusId);
+    if (state.detailById[messageId]) {
+      const list = state.detailById[messageId].callsigns || [];
+      const idx = list.findIndex(function (c) { return Number(c.id) === cid; });
+      if (idx !== -1) {
+        const prev = list[idx];
+        list[idx] = {
+          id: cid,
+          name: data.name != null && data.name !== "" ? data.name : prev.name,
+          comment: data.comment != null ? data.comment : prev.comment,
+          status_id: statusId !== null ? statusId : prev.status_id,
+          role: prev.role,
+        };
+      }
+    }
+  }
+
+  window.addEventListener("callsignModalSaved", onCallsignModalSaved);
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     state.offset = 0;
@@ -595,6 +640,18 @@
   });
 
   mainCard.addEventListener("click", async function (event) {
+    const chipClick = event.target.closest(".callsign-chip--clickable");
+    if (chipClick && !event.target.closest(".callsign-chip__remove")) {
+      const chip = chipClick;
+      const editor = chip.closest(".intercepts-inline-editor");
+      const messageId = editor ? Number(editor.dataset.messageId || 0) : 0;
+      const callsignId = Number(chip.dataset.id || 0);
+      if (callsignId && window.openCallsignEditModalById) {
+        window.openCallsignEditModalById(callsignId, { messageId: messageId });
+      }
+      return;
+    }
+
     const selectBtn = event.target.closest('[data-action="select"]');
     if (selectBtn) {
       const messageId = Number(selectBtn.dataset.id || 0);

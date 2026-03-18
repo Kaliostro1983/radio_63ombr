@@ -1,0 +1,515 @@
+/**
+ * Shared callsign edit modal. Used on /callsigns and /intercepts-explorer.
+ * Exposes: openCallsignEditModalById(id, context), openCallsignCreateModal(), setCallsignModalOnSave(fn).
+ * context is optional and passed to the onSave callback when user saves.
+ */
+(function () {
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  const modal = $("csModal");
+  const modalId = $("csModalId");
+  const modalTitle = $("csModalTitle");
+  const modalName = $("csModalName");
+  const modalStatus = $("csModalStatus");
+  const modalSource = $("csModalSource");
+  const modalComment = $("csModalComment");
+  const modalNetworkQuery = $("csModalNetworkQuery");
+  const modalNetwork = $("csModalNetwork");
+  const modalPhoto = $("csModalPhoto");
+  const modalErr = $("csModalErr");
+  const btnSave = $("csSave");
+
+  const statusModal = $("csStatusModal");
+  const newStatusName = $("csNewStatusName");
+  const newStatusErr = $("csNewStatusErr");
+  const btnCreateStatus = $("csCreateStatus");
+
+  let STATUS_LIST = [];
+  let SOURCE_LIST = [];
+  let CURRENT_STATUS_ID = null;
+  let CURRENT_SOURCE_ID = null;
+  let CURRENT_NETWORK_ID = null;
+  let OPEN_CONTEXT = null; // passed to onSave when saving
+  let onSaveCallback = null;
+
+  function setPhotoForStatus(statusId) {
+    if (!modalPhoto) return;
+    const base = "/static/photos/callsign_statuses/";
+    const defWebp = base + "_default.webp";
+    const defPng = base + "_default.png";
+
+    if (!statusId) {
+      modalPhoto.src = defWebp;
+      modalPhoto.dataset.photoTry = "default";
+      return;
+    }
+
+    modalPhoto.dataset.photoTry = "webp";
+    modalPhoto.src = base + String(statusId) + ".webp";
+
+    modalPhoto.onerror = function () {
+      const t = modalPhoto.dataset.photoTry || "";
+      if (t === "webp") {
+        modalPhoto.dataset.photoTry = "png";
+        modalPhoto.src = base + String(statusId) + ".png";
+        return;
+      }
+      modalPhoto.onerror = null;
+      modalPhoto.src = defWebp;
+      modalPhoto.addEventListener("error", function () {
+        modalPhoto.src = defPng;
+      }, { once: true });
+    };
+  }
+
+  async function preselectNetworkById(networkId) {
+    if (!modalNetwork) return;
+    if (!networkId) {
+      renderNetworkSelect([], null);
+      return;
+    }
+    try {
+      const resp = await fetch(
+        `/api/networks/by-id?id=${encodeURIComponent(networkId)}`
+      );
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || "by-id failed");
+      if (data.row) {
+        renderNetworkSelect([data.row], networkId);
+      } else {
+        renderNetworkSelect([], null);
+      }
+    } catch (e) {
+      renderNetworkSelect([], networkId);
+    }
+  }
+
+  function renderNetworkSelect(networks, selectedId) {
+    const sel = modalNetwork;
+    if (!sel) return;
+    sel.innerHTML = "";
+
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "Невідомо";
+    sel.appendChild(opt0);
+
+    (networks || []).forEach(function (n) {
+      const opt = document.createElement("option");
+      opt.value = String(n.id);
+      opt.textContent = `${n.frequency || "—"} / ${n.mask || "—"} — ${n.unit || ""}`.trim();
+      sel.appendChild(opt);
+    });
+
+    if (selectedId) {
+      sel.value = String(selectedId);
+    } else {
+      sel.value = "";
+    }
+  }
+
+  let NET_LOOKUP_TIMER = null;
+
+  async function lookupNetworks(q) {
+    const qs = (q || "").trim();
+    if (!qs) {
+      renderNetworkSelect([], CURRENT_NETWORK_ID);
+      return;
+    }
+    try {
+      const resp = await fetch(
+        `/api/networks/lookup?q=${encodeURIComponent(qs)}`
+      );
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || "lookup failed");
+      renderNetworkSelect(data.rows || [], CURRENT_NETWORK_ID);
+    } catch (e) {
+      renderNetworkSelect([], CURRENT_NETWORK_ID);
+    }
+  }
+
+  function renderStatusSelect(selectedId) {
+    if (!modalStatus) return;
+    modalStatus.innerHTML = "";
+
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = "— не вказано —";
+    modalStatus.appendChild(optEmpty);
+
+    STATUS_LIST.forEach(function (s) {
+      const opt = document.createElement("option");
+      opt.value = String(s.id);
+      opt.textContent = s.name;
+      modalStatus.appendChild(opt);
+    });
+
+    const optAdd = document.createElement("option");
+    optAdd.value = "__add__";
+    optAdd.textContent = "— Додати статус —";
+    modalStatus.appendChild(optAdd);
+
+    if (selectedId) {
+      modalStatus.value = String(selectedId);
+    } else {
+      modalStatus.value = "";
+    }
+  }
+
+  function renderSourceSelect(selectedId) {
+    if (!modalSource) return;
+    modalSource.innerHTML = "";
+
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = "— не вказано —";
+    modalSource.appendChild(optEmpty);
+
+    SOURCE_LIST.forEach(function (s) {
+      const opt = document.createElement("option");
+      opt.value = String(s.id);
+      opt.textContent = s.name;
+      modalSource.appendChild(opt);
+    });
+
+    if (selectedId) {
+      modalSource.value = String(selectedId);
+    } else {
+      modalSource.value = "";
+    }
+  }
+
+  function openModal() {
+    if (!modal) return;
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeModal() {
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    CURRENT_STATUS_ID = null;
+    CURRENT_SOURCE_ID = null;
+    OPEN_CONTEXT = null;
+    if (modalErr) {
+      modalErr.style.display = "none";
+      modalErr.textContent = "";
+    }
+  }
+
+  function showError(msg) {
+    if (!modalErr) return;
+    modalErr.textContent = msg;
+    modalErr.style.display = "block";
+  }
+
+  function openStatusModal() {
+    if (!statusModal) return;
+    if (newStatusErr) {
+      newStatusErr.style.display = "none";
+      newStatusErr.textContent = "";
+    }
+    if (newStatusName) newStatusName.value = "";
+    statusModal.classList.remove("hidden");
+    statusModal.setAttribute("aria-hidden", "false");
+    setTimeout(function () {
+      if (newStatusName) newStatusName.focus();
+    }, 0);
+  }
+
+  function closeStatusModal() {
+    if (!statusModal) return;
+    statusModal.classList.add("hidden");
+    statusModal.setAttribute("aria-hidden", "true");
+  }
+
+  function showStatusError(msg) {
+    if (!newStatusErr) return;
+    newStatusErr.textContent = msg;
+    newStatusErr.style.display = "block";
+  }
+
+  async function loadStatuses() {
+    try {
+      const r = await fetch("/api/callsigns/statuses");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      STATUS_LIST = await r.json();
+    } catch (e) {
+      console.error(e);
+      STATUS_LIST = [];
+    }
+  }
+
+  async function loadSources() {
+    try {
+      const r = await fetch("/api/callsigns/sources");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      SOURCE_LIST = await r.json();
+    } catch (e) {
+      console.error(e);
+      SOURCE_LIST = [];
+    }
+  }
+
+  function fillEditModal(row, context) {
+    OPEN_CONTEXT = context || null;
+    if (modalId) modalId.value = row.callsign_id || "";
+    if (modalTitle) modalTitle.textContent = row.name || "—";
+    if (modalName) modalName.value = row.name || "";
+    if (modalComment) modalComment.value = row.comment || "";
+    CURRENT_STATUS_ID = row.status_id || null;
+    CURRENT_SOURCE_ID = row.source_id || null;
+    CURRENT_NETWORK_ID = row.network_id || null;
+
+    if (modalNetworkQuery) modalNetworkQuery.value = "";
+    renderNetworkSelect([], CURRENT_NETWORK_ID);
+    preselectNetworkById(CURRENT_NETWORK_ID);
+
+    setPhotoForStatus(CURRENT_STATUS_ID);
+    renderStatusSelect(CURRENT_STATUS_ID);
+    renderSourceSelect(CURRENT_SOURCE_ID);
+
+    openModal();
+    setTimeout(function () {
+      if (modalName) modalName.focus();
+    }, 0);
+  }
+
+  async function openEditModalById(callsignId, context) {
+    const cid = callsignId || "";
+    if (!cid) return;
+
+    try {
+      const resp = await fetch(
+        `/api/callsigns/by-id?id=${encodeURIComponent(cid)}`
+      );
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || "by-id failed");
+      if (!data.row) return;
+      fillEditModal(data.row, context);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function openCreateModal() {
+    OPEN_CONTEXT = null;
+    if (modalId) modalId.value = "";
+    if (modalTitle) modalTitle.textContent = "Новий позивний";
+    if (modalName) modalName.value = "";
+    if (modalComment) modalComment.value = "";
+    CURRENT_STATUS_ID = null;
+    CURRENT_SOURCE_ID = null;
+    CURRENT_NETWORK_ID = null;
+
+    renderStatusSelect(CURRENT_STATUS_ID);
+    renderSourceSelect(CURRENT_SOURCE_ID);
+    setPhotoForStatus(CURRENT_STATUS_ID);
+
+    if (modalNetworkQuery) modalNetworkQuery.value = "";
+    renderNetworkSelect([], CURRENT_NETWORK_ID);
+
+    openModal();
+    setTimeout(function () {
+      if (modalName) modalName.focus();
+    }, 0);
+  }
+
+  async function saveModal() {
+    if (!modalErr) return;
+    modalErr.style.display = "none";
+
+    const callsign_id = parseInt(modalId.value, 10);
+    const name = (modalName.value || "").trim();
+    const comment = (modalComment.value || "").trim();
+    const status_id =
+      modalStatus &&
+      modalStatus.value &&
+      modalStatus.value !== "__add__"
+        ? parseInt(modalStatus.value, 10)
+        : null;
+    const source_id =
+      modalSource && modalSource.value
+        ? parseInt(modalSource.value, 10)
+        : null;
+
+    if (!name) {
+      showError("Позивний не може бути порожнім");
+      return;
+    }
+
+    if (btnSave) btnSave.disabled = true;
+
+    try {
+      const r = await fetch("/api/callsigns/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callsign_id,
+          name,
+          comment,
+          status_id,
+          source_id,
+          network_id:
+            modalNetwork && modalNetwork.value
+              ? parseInt(modalNetwork.value, 10)
+              : null,
+        }),
+      });
+
+      const data = await r.json();
+
+      if (!data.ok) {
+        showError(data.error || "Помилка збереження");
+        return;
+      }
+
+      const context = OPEN_CONTEXT;
+      closeModal();
+      if (typeof onSaveCallback === "function") {
+        onSaveCallback(data, context);
+      }
+      try {
+        window.dispatchEvent(new CustomEvent("callsignModalSaved", { detail: { data: data, context: context || {} } }));
+      } catch (e) {}
+    } finally {
+      if (btnSave) btnSave.disabled = false;
+    }
+  }
+
+  function setCallsignModalOnSave(fn) {
+    onSaveCallback = typeof fn === "function" ? fn : null;
+  }
+
+  function init() {
+    if (!modal || !btnSave) return;
+
+    loadStatuses();
+    loadSources();
+
+    btnSave.addEventListener("click", saveModal);
+
+    if (modalNetworkQuery) {
+      modalNetworkQuery.addEventListener("input", function () {
+        clearTimeout(NET_LOOKUP_TIMER);
+        const q = modalNetworkQuery.value || "";
+        NET_LOOKUP_TIMER = setTimeout(function () {
+          lookupNetworks(q);
+        }, 250);
+      });
+    }
+
+    if (modalNetwork) {
+      modalNetwork.addEventListener("change", function () {
+        const v = modalNetwork.value;
+        CURRENT_NETWORK_ID = v ? parseInt(v, 10) : null;
+      });
+    }
+
+    if (modalStatus) {
+      modalStatus.addEventListener("change", function () {
+        if (modalStatus.value === "__add__") {
+          modalStatus.value = CURRENT_STATUS_ID ? String(CURRENT_STATUS_ID) : "";
+          openStatusModal();
+        } else {
+          const v = parseInt(modalStatus.value, 10);
+          CURRENT_STATUS_ID = Number.isFinite(v) ? v : null;
+          setPhotoForStatus(CURRENT_STATUS_ID);
+        }
+      });
+    }
+
+    if (modalSource) {
+      modalSource.addEventListener("change", function () {
+        const v = parseInt(modalSource.value, 10);
+        CURRENT_SOURCE_ID = Number.isFinite(v) ? v : null;
+      });
+    }
+
+    if (btnCreateStatus) {
+      btnCreateStatus.addEventListener("click", async function () {
+        const name = (newStatusName.value || "").trim();
+
+        if (!name) {
+          showStatusError("Вкажіть назву статусу");
+          return;
+        }
+
+        btnCreateStatus.disabled = true;
+
+        try {
+          const r = await fetch("/api/callsigns/statuses", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+
+          const data = await r.json();
+
+          if (!data.ok) {
+            showStatusError(data.error || "Не вдалося створити статус");
+            return;
+          }
+
+          await loadStatuses();
+          CURRENT_STATUS_ID = data.id;
+          renderStatusSelect(CURRENT_STATUS_ID);
+          setPhotoForStatus(CURRENT_STATUS_ID);
+          closeStatusModal();
+        } catch (e) {
+          console.error(e);
+          showStatusError("Помилка запиту");
+        } finally {
+          btnCreateStatus.disabled = false;
+        }
+      });
+    }
+
+    modal.addEventListener("click", function (e) {
+      const t = e.target;
+      if (t && t.getAttribute && t.getAttribute("data-close") === "1") {
+        closeModal();
+      }
+    });
+
+    if (statusModal) {
+      statusModal.addEventListener("click", function (e) {
+        const t = e.target;
+        if (
+          t &&
+          t.getAttribute &&
+          t.getAttribute("data-close-status") === "1"
+        ) {
+          closeStatusModal();
+        }
+      });
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) {
+        closeModal();
+      }
+      if (
+        e.key === "Escape" &&
+        statusModal &&
+        !statusModal.classList.contains("hidden")
+      ) {
+        closeStatusModal();
+      }
+    });
+  }
+
+  window.openCallsignEditModalById = openEditModalById;
+  window.openCallsignCreateModal = openCreateModal;
+  window.setCallsignModalOnSave = setCallsignModalOnSave;
+  window.fillCallsignEditModal = fillEditModal;
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();

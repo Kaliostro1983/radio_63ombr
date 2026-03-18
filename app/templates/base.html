@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ app_name }}</title>
-  <link rel="stylesheet" href="/static/app.css"/>
+  <link rel="stylesheet" href="/static/app.css?v=2"/>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
@@ -12,6 +12,7 @@
   <aside class="sidebar">
     <div class="brand">{{ app_name }}</div>
     <div class="nav">
+      <a href="/home" class="{% if request.url.path.startswith('/home') %}active{% endif %}">Головна</a>
       <a href="/networks" class="{% if request.url.path.startswith('/networks') %}active{% endif %}">Радіомережі</a>
       <a href="/all_networks" class="{% if request.url.path.startswith('/all_networks') %}active{% endif %}">Усі р/м</a>
       <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
@@ -19,7 +20,7 @@
       <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
       <a href="/intercepts" class="{% if request.url.path == '/intercepts' %}active{% endif %}">Пошук</a>
       <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}">Перехоплення</a>
-      <a href="#" class="small" style="pointer-events:none; opacity:.6;">Звіти (пізніше)</a>
+      <a href="/reports" class="{% if request.url.path.startswith('/reports') %}active{% endif %}">Звіти</a>
     </div>
 
     <div style="margin-top:16px" class="card">
@@ -37,6 +38,93 @@
   </main>
 </div>
 
+<!-- Shared callsign edit modal (used on /callsigns and /intercepts-explorer) -->
+<div id="csModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card cs-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Особова справа</div>
+        <div id="csModalTitle" style="font-weight:700">—</div>
+      </div>
+      <button class="secondary" type="button" data-close="1">Закрити</button>
+    </div>
+
+    <div class="modal-body">
+      <input id="csModalId" type="hidden" />
+
+      <div class="cs-profile-top">
+        <div class="cs-photo-wrap">
+          <img id="csModalPhoto" class="cs-photo" src="/static/photos/callsign_statuses/_default.webp" alt="Фото" />
+        </div>
+
+        <div class="cs-profile-fields">
+          <div>
+            <label class="small">Позивний</label>
+            <input id="csModalName" type="text" />
+          </div>
+
+          <div style="margin-top:10px">
+            <label class="small">Статус</label>
+            <select id="csModalStatus" style="width:100%"></select>
+          </div>
+
+          <div style="margin-top:10px">
+            <label class="small">Джерело</label>
+            <select id="csModalSource" style="width:100%">
+              <option value="">— не вказано —</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <label class="small">Мережа (частота/маска або підрозділ)</label>
+        <input id="csModalNetworkQuery" type="text" placeholder="Пошук: 146.025 або ШТЗ..." />
+        <select id="csModalNetwork" style="width:100%; margin-top:6px">
+          <option value="">Невідомо</option>
+        </select>
+      </div>
+
+      <div style="margin-top:10px">
+        <label class="small">Коментар</label>
+        <textarea id="csModalComment" rows="6" style="width:100%; min-height:140px"></textarea>
+      </div>
+
+      <div id="csModalErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+    </div>
+
+    <div class="modal-foot">
+      <button id="csSave" type="button">Зберегти</button>
+      <button class="secondary" type="button" data-close="1">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add status mini-modal -->
+<div id="csStatusModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close-status="1"></div>
+  <div class="modal-card cs-status-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Новий статус</div>
+        <div style="font-weight:700">Додати статус</div>
+      </div>
+      <button class="secondary" type="button" data-close-status="1">Закрити</button>
+    </div>
+    <div class="modal-body">
+      <label class="small">Назва</label>
+      <input id="csNewStatusName" type="text" />
+      <div id="csNewStatusErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="csCreateStatus" type="button">Створити</button>
+      <button class="secondary" type="button" data-close-status="1">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/callsign_modal.js?v=3" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

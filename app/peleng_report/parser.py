@@ -1,3 +1,18 @@
+"""Peleng WhatsApp/export text parser.
+
+This parser converts a block of human text (often copied from WhatsApp
+export or similar sources) into a stream of peleng records suitable for
+reporting.
+
+Supported header formats include:
+    - WhatsApp export prefix: `[07:29, 28.02.2026] Name: 146.6350 / 28.02.2026 07.26`
+    - bare header: `146.6350 / 28.02.2026 07.26`
+    - legacy prefix: `Пеленг РЕР_63: 146.6350 / 28.02.2026 07.26`
+
+Each header is followed by 1..N MGRS coordinate lines. Each coordinate
+line becomes a separate record in the output.
+"""
+
 # src/pelengreport/parser.py
 from __future__ import annotations
 
@@ -44,10 +59,12 @@ class ParseDiag:
 
 
 def _norm_spaces(s: str) -> str:
+    """Normalize whitespace to single spaces and strip ends."""
     return _SPACE_RE.sub(" ", (s or "").strip())
 
 
 def norm_time(t: str) -> str:
+    """Normalize time token into `HH:MM`."""
     t = (t or "").strip().replace(".", ":")
     # "7:26" -> "07:26"
     if len(t) == 4 and t[1] == ":":
@@ -56,6 +73,7 @@ def norm_time(t: str) -> str:
 
 
 def norm_date(d: str) -> str:
+    """Normalize date token into `DD.MM.YYYY` (expand 2-digit year)."""
     d = (d or "").strip()
     parts = d.split(".")
     if len(parts) == 3 and len(parts[2]) == 2:
@@ -87,6 +105,9 @@ def parse_whatsapp_text(lines: Iterable[str], diag: Optional[ParseDiag] = None) 
     Повертає dict:
       {freq_or_mask, unit_desc, dt, mgrs}
     """
+    # The parser is resilient to noisy exports: it scans line-by-line,
+    # detects headers with regex, then collects subsequent MGRS lines until
+    # the next header.
     if diag is None:
         diag = ParseDiag()
 

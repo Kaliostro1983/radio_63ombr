@@ -16,6 +16,12 @@ backups/
 config.env
 .env
 
+# Peleng report local config (contains sensitive/unit-specific text)
+peleng_report_config.json
+
+# Reports local config (contains sensitive/unit-specific text)
+reports_config.json
+
 # Logs
 *.log
 
@@ -24,3 +30,4 @@ config.env
 Thumbs.db
 
 posts.json
+reports_config.json

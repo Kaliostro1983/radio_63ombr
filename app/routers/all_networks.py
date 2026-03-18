@@ -1,3 +1,16 @@
+"""UI router for viewing all networks with filters.
+
+This router renders the `/all_networks` page, which provides a filtered
+listing of all radio networks. It supports filtering by:
+
+- status
+- chat
+- group
+
+The router reads from SQLite using `get_conn` and renders a Jinja template.
+It is a presentation-focused module (no ingest/network-resolution logic).
+"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Request, Form
@@ -9,12 +22,14 @@ router = APIRouter()
 
 
 def _status_has_colors(conn) -> bool:
+    """Return True if `statuses` table supports bg/border color columns."""
     cols = conn.execute("PRAGMA table_info(statuses)").fetchall()
     col_names = [c[1] for c in cols]
     return "bg_color" in col_names and "border_color" in col_names
 
 
 def _all_filters(conn):
+    """Load filter reference data for the UI (statuses, chats, groups)."""
     statuses = conn.execute(
         "SELECT id, name FROM statuses ORDER BY id"
     ).fetchall()
@@ -31,6 +46,17 @@ def _all_filters(conn):
 
 
 def _all_networks_list(conn, status_ids, chat_ids, group_ids):
+    """List networks applying optional filter lists.
+
+    Args:
+        conn: SQLite connection.
+        status_ids: list of status ids from form.
+        chat_ids: list of chat ids from form.
+        group_ids: list of group ids from form.
+
+    Returns:
+        list: SQLite rows for template rendering.
+    """
     has_colors = _status_has_colors(conn)
 
     select_colors = (
@@ -60,6 +86,11 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
     params = []
 
     def add_in(field, values):
+        """Add an `IN (...)` clause to the WHERE conditions if values exist.
+
+        Special UI rule:
+            Value `0` is treated as "All" and disables the filter.
+        """
         if not values:
             return
         # '0' використовується як спеціальне значення 'Усі' (фільтр не застосовувати)
@@ -84,6 +115,7 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
 
 @router.get("/all_networks", response_class=HTMLResponse)
 def all_networks_get(request: Request):
+    """Render the page with default filters applied."""
     with get_conn() as conn:
         statuses, chats, groups = _all_filters(conn)
 
@@ -117,6 +149,7 @@ def all_networks_post(
     chat_ids: list[int] = Form(default=[]),
     group_ids: list[int] = Form(default=[]),
 ):
+    """Apply filters and render the page."""
     with get_conn() as conn:
         statuses, chats, groups = _all_filters(conn)
         rows = _all_networks_list(conn, status_ids, chat_ids, group_ids)

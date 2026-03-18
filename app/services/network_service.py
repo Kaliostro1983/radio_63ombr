@@ -1,3 +1,20 @@
+"""Network resolution service.
+
+This module contains service-layer logic for mapping parsed intercept
+fields to an existing `networks` row in the database.
+
+Key system invariant:
+    The ingest pipeline must **not** auto-create networks. If a network
+    cannot be resolved from the database, ingestion of the message is
+    skipped.
+
+Usage in the system:
+    `app.services.ingest_service` calls `ensure_network` after parsing a
+    template intercept to resolve `network_id` by priority:
+    - exact frequency match, then
+    - mask match (prefix-like values).
+"""
+
 from __future__ import annotations
 
 from typing import Optional
@@ -9,6 +26,7 @@ log = get_logger("network_service")
 
 
 class NetworkNotFoundError(ValueError):
+    """Raised when network resolution fails against the `networks` table."""
     def __init__(
         self,
         *,
@@ -47,6 +65,25 @@ def ensure_network(
     unit: Optional[str],
     zone: Optional[str],
 ) -> int:
+    """Resolve an existing network id by frequency or mask.
+
+    The function never inserts into `networks`. If no matching network
+    exists, it raises `NetworkNotFoundError`.
+
+    Args:
+        cur: SQLite cursor.
+        frequency: raw frequency value from parser (may be None/dirty).
+        mask: raw mask value from parser (may be None).
+        now_dt: current timestamp (reserved for future logging/audit).
+        unit: parsed unit (currently used only in error context).
+        zone: parsed zone (currently used only in error context).
+
+    Returns:
+        int: resolved `networks.id`.
+
+    Raises:
+        NetworkNotFoundError: when no matching network exists.
+    """
     def norm_s(v: Optional[str]) -> Optional[str]:
         v = (v or "").strip()
         return v or None
@@ -60,6 +97,7 @@ def ensure_network(
     frequency = normalized_frequency
     mask = raw_mask or detected_mask
 
+    # Priority 1: exact frequency match.
     if frequency:
         row = cur.execute(
             "SELECT id FROM networks WHERE frequency = ? LIMIT 1",
@@ -68,10 +106,34 @@ def ensure_network(
         if row:
             return int(row[0] if not isinstance(row, dict) else row["id"])
 
+    # Priority 2: exact mask match.
     if mask:
         row = cur.execute(
             "SELECT id FROM networks WHERE mask = ? LIMIT 1",
             (mask,),
+        ).fetchone()
+        if row:
+            return int(row[0] if not isinstance(row, dict) else row["id"])
+
+        # Priority 3: prefix-like match using normalized mask (e.g. '300.3010%').
+        # This allows networks whose frequency/mask are stored without '%' or
+        # with minor formatting differences to still be resolved.
+        row = cur.execute(
+            "SELECT id FROM networks WHERE frequency LIKE ? OR mask LIKE ? LIMIT 1",
+            (mask, mask),
+        ).fetchone()
+        if row:
+            return int(row[0] if not isinstance(row, dict) else row["id"])
+
+    # Priority 4: if we have only normalized frequency (no mask), try prefix match.
+    if frequency and not mask:
+        # Build a simple prefix pattern from normalized frequency.
+        like = frequency
+        if not like.endswith("%"):
+            like = like + "%"
+        row = cur.execute(
+            "SELECT id FROM networks WHERE frequency LIKE ? OR mask LIKE ? LIMIT 1",
+            (like, like),
         ).fetchone()
         if row:
             return int(row[0] if not isinstance(row, dict) else row["id"])

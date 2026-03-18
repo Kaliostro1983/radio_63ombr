@@ -1,3 +1,19 @@
+"""Offline peleng report runner.
+
+This module provides a script-style entrypoint for generating peleng DOCX
+reports from a text file (typically exported/copied from WhatsApp).
+
+Usage:
+    python -m app.peleng_report.runner path\\to\\input.txt
+
+If no input file is provided, the runner attempts to find the newest `.txt`
+file in a set of candidate directories (see `_resolve_input_path`).
+
+The runner also maintains `posts.json` (a small runtime config file
+describing peleng posts) and writes a parse diagnostics log on errors or
+suspicious input.
+"""
+
 # src/pelengreport/runner.py
 from __future__ import annotations
 
@@ -12,18 +28,25 @@ import os
 
 from .parser import parse_whatsapp_text, ParseDiag
 from .report import build_docx
+from .config import load_config, get_posts_seed
+
+
+_CFG = load_config()
 
 
 def _repo_root() -> Path:
+    """Return repository root directory."""
     # .../src/pelengreport/runner.py -> .../src -> .../
     return Path(__file__).resolve().parents[2]
 
 
 def _module_dir() -> Path:
+    """Return directory of this module."""
     return Path(__file__).resolve().parent
 
 
 def _next_free_path(path: Path) -> Path:
+    """Return a non-existing path by appending ' (n)' if needed."""
     if not path.exists():
         return path
     stem, suffix = path.stem, path.suffix
@@ -36,6 +59,7 @@ def _next_free_path(path: Path) -> Path:
 
 
 def _resolve_input_path(arg: str | None) -> Path:
+    """Resolve input .txt file path from CLI arg or default search."""
     root = _repo_root()
 
     if arg:
@@ -85,15 +109,23 @@ def _ensure_posts_json() -> Path:
     if p.exists():
         return p
 
-    seed = [
-        {"id": "post_1", "active": True, "name": "МІКОЛАЇВКА", "bp_number": "0000", "unit": "А3719\n(63 омбр)", "equipment": "“Пластун”"},
-        {"id": "post_2", "active": True, "name": "МАЯКИ", "bp_number": "0001", "unit": "А3719\n(63 омбр)", "equipment": "“Пластун”"},
-    ]
+    seed = get_posts_seed(_CFG)
+    if not seed:
+        # If no seed provided in config, create an empty list that user can edit.
+        seed = []
     p.write_text(json.dumps(seed, ensure_ascii=False, indent=2), encoding="utf-8")
     return p
 
 
 def load_posts(active_only: bool = True) -> list[dict]:
+    """Load posts configuration from `posts.json`.
+
+    Args:
+        active_only: if True, return only posts with `active=true`.
+
+    Returns:
+        list[dict]: list of post objects.
+    """
     path = _ensure_posts_json()
     posts = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(posts, list):
@@ -125,6 +157,16 @@ def _write_parse_log_and_open(
     diag: ParseDiag,
     exc: Exception | None,
 ) -> None:
+    """Write a diagnostic log file for parse failures and open it in OS.
+
+    Args:
+        log_path: path to write diagnostic log.
+        input_txt: input file being parsed.
+        lines: raw input lines.
+        records_count: number of records parsed.
+        diag: parse diagnostic object.
+        exc: optional exception raised during parsing.
+    """
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -168,6 +210,15 @@ def _write_parse_log_and_open(
 
 
 def run(input_txt: Path, out_dir: Path | None = None) -> Path:
+    """Parse input text and generate a DOCX report.
+
+    Args:
+        input_txt: path to input `.txt` file.
+        out_dir: optional output directory (default: `<repo>/build`).
+
+    Returns:
+        Path: path to the generated DOCX report.
+    """
     root = _repo_root()
     out_dir = Path(out_dir or (root / "build"))
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -179,7 +230,9 @@ def run(input_txt: Path, out_dir: Path | None = None) -> Path:
         raise RuntimeError("Немає активних постів у posts.json. Увімкни хоча б 1 пост.")
 
     today = datetime.now().strftime("%d.%m.%Y")
-    out_path = _next_free_path(out_dir / f"форма_1.2.13 {today}.docx")
+    pattern = str(_CFG["output_filename_pattern"])
+    out_name = pattern.format(date=today)
+    out_path = _next_free_path(out_dir / out_name)
 
     print(f"[i] Using input: {input_txt}")
 

@@ -1,3 +1,20 @@
+"""Peleng report orchestration service.
+
+This module builds DOCX reports for peleng (direction finding) data stored
+in SQLite.
+
+Usage in the system:
+
+- Routers call `PelengReportService` to generate a report for a selected
+  time period.
+- The service loads peleng batches/points from the DB, enriches them with
+  network metadata (unit/zone), converts them into record format, and
+  renders a DOCX using the peleng reporting subsystem.
+
+The report content is returned as bytes together with a suggested filename,
+so routers can return it as a downloadable file.
+"""
+
 # src/peleng/services/peleng_report_service.py
 from __future__ import annotations
 
@@ -15,14 +32,33 @@ from app.routers.peleng_report import build_records_from_db
 
 @dataclass(frozen=True)
 class ReportResult:
+    """DOCX report binary payload and suggested filename."""
     filename: str
     content: bytes
 
 class PelengReportService:
+    """Service that generates peleng DOCX reports from database data."""
     def __init__(self, conn: sqlite3.Connection):
+        """Create service with a DB connection.
+
+        Args:
+            conn: SQLite connection to read peleng/network data.
+        """
         self.repo = PelengRepo(conn)
 
     def build_report_by_period(self, from_dt: str, to_dt: str) -> ReportResult:
+        """Build a peleng report for a given datetime period.
+
+        Args:
+            from_dt: period start (inclusive), in DB-compatible TEXT format.
+            to_dt: period end (inclusive), in DB-compatible TEXT format.
+
+        Returns:
+            ReportResult: filename + DOCX bytes.
+
+        Raises:
+            RuntimeError: if no active posts are configured.
+        """
         batches = self.repo.list_batches(from_dt, to_dt)
         batch_ids = [b.id for b in batches]
         points = self.repo.list_points(batch_ids)
@@ -30,10 +66,10 @@ class PelengReportService:
         freqs = sorted({b.frequency for b in batches})
         net_map = self.repo.latest_networks_by_frequency(freqs)
 
-        # адаптуємо NetworkRow -> dict для domain
+        # Adapt repo rows into the record-builder shape.
         net_by_freq = {k: {"unit": v.unit, "zone": v.zone} for k, v in net_map.items()}
 
-        # batches/points -> mappings для domain
+        # Convert batches/points into lightweight mappings for the record builder.
         batch_dicts = [{"id": b.id, "event_dt": b.event_dt, "frequency": b.frequency} for b in batches]
         point_dicts = [{"batch_id": p.batch_id, "mgrs": p.mgrs} for p in points]
 

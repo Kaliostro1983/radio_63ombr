@@ -1,9 +1,24 @@
+"""Low-level SQLite database utilities and schema management.
+
+This module is responsible for:
+
+- defining the initial SQLite schema for the project (`SCHEMA_SQL`);
+- creating the database file and running schema initialization on startup;
+- executing lightweight, additive migrations for existing databases;
+- providing helpers to obtain SQLite connections (`get_db`, `get_conn`).
+
+All higher-level code (services, repositories) should use these helpers
+instead of opening raw SQLite connections directly. The actual DB path is
+resolved via `app.core.config.settings.db_path`.
+"""
+
 from __future__ import annotations
 
 import os
 import sqlite3
 from contextlib import contextmanager
 
+from app.db_utils import safe_execute
 from .config import settings
 
 SCHEMA_SQL = """
@@ -43,6 +58,12 @@ CREATE TABLE IF NOT EXISTS tags(
     template TEXT NOT NULL DEFAULT ''
 );
 
+-- Network-only tags (UI labels for radio networks; unrelated to `tags` used in text tagging).
+CREATE TABLE IF NOT EXISTS network_tags(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS networks(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     frequency TEXT NOT NULL UNIQUE,
@@ -70,18 +91,19 @@ CREATE TABLE IF NOT EXISTS network_aliases (
     UNIQUE(network_id, alias_text)
 );
 
-CREATE TABLE IF NOT EXISTS network_tags(
+CREATE TABLE IF NOT EXISTS network_tag_links(
     network_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY(network_id, tag_id),
     FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
-    FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    FOREIGN KEY(tag_id) REFERENCES network_tags(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS etalons(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     network_id INTEGER NOT NULL UNIQUE,
     start_date TEXT,
+    end_date TEXT,
     correspondents TEXT,
     callsigns TEXT,
     purpose TEXT,
@@ -240,30 +262,70 @@ CREATE TABLE IF NOT EXISTS words (
 
 
 def db_path() -> str:
+    """Return absolute filesystem path to the SQLite database file.
+
+    The directory is created if it does not yet exist, which allows the
+    application to bootstrap a fresh environment without manual setup.
+
+    Returns:
+        str: absolute path to the SQLite database file as configured in
+        `settings.db_path`.
+    """
     os.makedirs(os.path.dirname(settings.db_path), exist_ok=True)
     return settings.db_path
 
 
-def init_db():
+def init_db() -> None:
+    """Initialize the SQLite database and run lightweight migrations.
+
+    This function is typically called once on application startup. It:
+
+    - ensures foreign keys are enabled;
+    - executes the static schema SQL (`SCHEMA_SQL`) to create missing tables;
+    - applies idempotent "lightweight" migrations on top of the schema;
+    - commits all changes before closing the connection.
+    """
     with sqlite3.connect(db_path()) as conn:
-        conn.execute("PRAGMA foreign_keys = ON;")
+        safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="init_db")
         conn.executescript(SCHEMA_SQL)
         _run_lightweight_migrations(conn)
         conn.commit()
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
-    row = conn.execute(
+    """Return True if a table with the given name exists in the database.
+
+    Args:
+        conn: open SQLite connection.
+        table: name of the table to check.
+
+    Returns:
+        bool: True if the table exists, False otherwise.
+    """
+    row = safe_execute(
+        conn,
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
         (table,),
+        module="app.core.db",
+        function="_table_exists",
     ).fetchone()
     return row is not None
 
 
 def _has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    """Return True if a table has a column with the given name.
+
+    Args:
+        conn: open SQLite connection.
+        table: name of the table to introspect.
+        col: column name to look for.
+
+    Returns:
+        bool: True if the column exists, False otherwise.
+    """
     if not _table_exists(conn, table):
         return False
-    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    rows = safe_execute(conn, f"PRAGMA table_info({table})", module="app.core.db", function="_has_column").fetchall()
     return any(r[1] == col for r in rows)
 
 
@@ -273,11 +335,40 @@ def _ensure_column(
     column: str,
     ddl: str,
 ) -> None:
+    """Ensure that a column exists on a table, adding it if necessary.
+
+    This helper is used by `_run_lightweight_migrations` to evolve tables
+    additively (via `ALTER TABLE ... ADD COLUMN`) without destructive
+    operations.
+
+    Args:
+        conn: open SQLite connection.
+        table: table name to alter.
+        column: column name that should exist.
+        ddl: full column definition used in the ALTER TABLE statement.
+    """
     if not _has_column(conn, table, column):
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+        safe_execute(
+            conn,
+            f"ALTER TABLE {table} ADD COLUMN {ddl}",
+            module="app.core.db",
+            function="_ensure_column",
+            stage=f"add_column:{table}.{column}",
+        )
 
 
 def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
+    """Apply idempotent, additive migrations to an existing database.
+
+    Migrations performed here are intentionally conservative:
+
+    - only `ADD COLUMN` operations (via `_ensure_column`);
+    - creation of missing indexes and UNIQUE constraints;
+    - no destructive changes to existing tables.
+
+    This function can be safely called multiple times; it is used both
+    during initial schema creation and on subsequent application starts.
+    """
     _ensure_column(conn, "statuses", "bg_color", "bg_color TEXT")
     _ensure_column(conn, "statuses", "border_color", "border_color TEXT")
     _ensure_column(conn, "tags", "template", "template TEXT NOT NULL DEFAULT ''")
@@ -289,15 +380,112 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "callsigns", "last_seen_dt", "last_seen_dt TEXT")
     _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
+    _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
+
+    # --- Network tags migration ---
+    # Older DBs used:
+    # - `tags` as the source of network tags
+    # - `network_tags(network_id, tag_id)` as the link table to `tags`.
+    #
+    # New model:
+    # - `network_tags(id, name)` is a dedicated dictionary for network tags
+    # - `network_tag_links(network_id, tag_id)` links to that dictionary.
+    if _table_exists(conn, "network_tags") and _has_column(conn, "network_tags", "network_id") and _has_column(conn, "network_tags", "tag_id"):
+        # Rename old link table away to free the `network_tags` name for the new dictionary.
+        safe_execute(
+            conn,
+            "ALTER TABLE network_tags RENAME TO network_tag_links_old",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="rename:network_tags_to_network_tag_links_old",
+        )
+
+    # Ensure new tables exist (safe even if already created by SCHEMA_SQL).
+    safe_execute(
+        conn,
+        "CREATE TABLE IF NOT EXISTS network_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:network_tags",
+    )
+
+    # If a partially-migrated DB created `network_tag_links` with a wrong foreign key target,
+    # rebuild it to reference `network_tags(id)` correctly.
+    if _table_exists(conn, "network_tag_links"):
+        fk_rows = safe_execute(
+            conn,
+            "PRAGMA foreign_key_list(network_tag_links)",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="inspect_fk:network_tag_links",
+        ).fetchall()
+        # fk_rows columns: (id, seq, table, from, to, on_update, on_delete, match)
+        bad_fk = any(r[2] != "network_tags" and r[3] == "tag_id" for r in fk_rows)
+        if bad_fk:
+            safe_execute(
+                conn,
+                "DROP TABLE IF EXISTS network_tag_links",
+                module="app.core.db",
+                function="_run_lightweight_migrations",
+                stage="drop_table:network_tag_links_bad_fk",
+            )
+
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS network_tag_links(
+            network_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY(network_id, tag_id),
+            FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
+            FOREIGN KEY(tag_id) REFERENCES network_tags(id) ON DELETE CASCADE
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:network_tag_links",
+    )
+
+    # Seed required network tags (idempotent).
+    for name in ("БпЛА", "ППО", "ШД", "Загальна", "Арта", "Евак"):
+        safe_execute(
+            conn,
+            "INSERT OR IGNORE INTO network_tags(name) VALUES (?)",
+            (name,),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="seed:network_tags",
+        )
+
+    # Migrate old selections by matching tag names, if we have the old table.
+    if _table_exists(conn, "network_tag_links_old"):
+        safe_execute(
+            conn,
+            """
+            INSERT OR IGNORE INTO network_tag_links(network_id, tag_id)
+            SELECT l.network_id, nt.id
+            FROM network_tag_links_old l
+            JOIN tags t ON t.id = l.tag_id
+            JOIN network_tags nt ON nt.name = t.name
+            """,
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="migrate:network_tag_links_old",
+        )
 
     # network_aliases lookup is by alias_text (no alias_norm)
-    conn.execute(
+    safe_execute(
+        conn,
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_network_aliases_network_alias_text "
-        "ON network_aliases(network_id, alias_text)"
+        "ON network_aliases(network_id, alias_text)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_network_aliases_network_alias_text",
     )
     # Enforce alias uniqueness across ACTIVE aliases only (archived aliases are allowed to duplicate).
     # This matches structured ingest lookup by alias_text.
-    dup = conn.execute(
+    dup = safe_execute(
+        conn,
         """
         SELECT alias_text
         FROM network_aliases
@@ -305,42 +493,87 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         GROUP BY alias_text
         HAVING COUNT(*) > 1
         LIMIT 1
-        """
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="check_active_alias_duplicates",
     ).fetchone()
     if dup is None:
-        conn.execute(
+        safe_execute(
+            conn,
             "CREATE UNIQUE INDEX IF NOT EXISTS ux_network_aliases_alias_text_active "
-            "ON network_aliases(alias_text) WHERE COALESCE(is_archived, 0) = 0"
+            "ON network_aliases(alias_text) WHERE COALESCE(is_archived, 0) = 0",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="create_index:ux_network_aliases_alias_text_active",
         )
-    conn.execute(
+    safe_execute(
+        conn,
         "CREATE INDEX IF NOT EXISTS idx_messages_network_created "
-        "ON messages(network_id, created_at)"
+        "ON messages(network_id, created_at)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_messages_network_created",
     )
-    conn.execute(
+    safe_execute(
+        conn,
         "CREATE INDEX IF NOT EXISTS idx_callsigns_network_name "
-        "ON callsigns(network_id, name)"
+        "ON callsigns(network_id, name)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_callsigns_network_name",
     )
 
     # Required for upsert in callsign_service.upsert_callsign_edge()
     # Keep name aligned with existing DBs (if present).
-    conn.execute(
+    safe_execute(
+        conn,
         "CREATE UNIQUE INDEX IF NOT EXISTS ux_callsign_edges_net_pair "
-        "ON callsign_edges(network_id, a_callsign_id, b_callsign_id)"
+        "ON callsign_edges(network_id, a_callsign_id, b_callsign_id)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:ux_callsign_edges_net_pair",
     )
 
 
-def get_db():
+def get_db() -> sqlite3.Connection:
+    """Create and return a new low-level SQLite connection.
+
+    The caller is responsible for closing the returned connection when it
+    is no longer needed.
+
+    Returns:
+        sqlite3.Connection: connection with `Row` row_factory and foreign
+        keys enabled.
+    """
     conn = sqlite3.connect(db_path())
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
+    safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_db")
     return conn
 
 
 @contextmanager
-def get_conn():
+def get_conn() -> sqlite3.Connection:
+    """Context manager that yields a transactional SQLite connection.
+
+    Usage:
+
+        with get_conn() as conn:
+            conn.execute(...)
+
+    The context manager:
+
+    - opens a new connection with foreign keys enabled;
+    - yields it to the caller;
+    - commits on normal exit;
+    - closes the connection in all cases.
+
+    Yields:
+        sqlite3.Connection: open transactional SQLite connection.
+    """
     conn = sqlite3.connect(db_path())
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
+    safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_conn")
     try:
         yield conn
         conn.commit()

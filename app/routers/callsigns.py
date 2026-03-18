@@ -1,3 +1,19 @@
+"""UI and API router for callsign management.
+
+This router serves the callsigns UI page and provides JSON APIs used by the
+frontend to:
+
+- list and create callsign statuses and sources;
+- fetch callsigns by frequency/mask (recently seen within N days);
+- search callsigns by name/comment;
+- fetch a single callsign by id;
+- create/update callsigns and their metadata.
+
+The router performs direct SQLite queries and keeps logic close to the UI
+needs. System-level invariants for graph edges are enforced in the service
+layer during ingest; this router focuses on CRUD and lookup views.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -14,10 +30,12 @@ router = APIRouter(tags=["callsigns"])
 
 
 def _now_sql() -> str:
+    """Return current local datetime as ISO string with seconds precision."""
     return datetime.now().isoformat(timespec="seconds")
 
 
 def _as_int(v: Any, default: int = 0) -> int:
+    """Best-effort convert a value to int with a default fallback."""
     try:
         return int(v)
     except Exception:
@@ -26,6 +44,7 @@ def _as_int(v: Any, default: int = 0) -> int:
 
 @router.get("/callsigns", response_class=HTMLResponse)
 def callsigns_page(request: Request):
+    """Render the callsigns UI page."""
     templates = request.app.state.templates
     return templates.TemplateResponse(
         "callsigns.html",
@@ -38,6 +57,7 @@ def callsigns_page(request: Request):
 
 @router.get("/api/callsigns/statuses")
 def api_statuses():
+    """Return list of callsign statuses for UI dropdowns."""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, name FROM callsign_statuses ORDER BY name"
@@ -48,6 +68,10 @@ def api_statuses():
 
 @router.post("/api/callsigns/statuses")
 async def api_status_create(request: Request):
+    """Create a new callsign status (if not already present).
+
+    Expects JSON: `{ "name": "..." }`.
+    """
     payload: Dict[str, Any] = await request.json()
     name = (payload.get("name") or "").strip()
     if not name:
@@ -73,6 +97,7 @@ async def api_status_create(request: Request):
 
 @router.get("/api/callsigns/sources")
 def api_sources():
+    """Return list of callsign sources for UI dropdowns."""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, name FROM callsign_sources ORDER BY name"
@@ -82,6 +107,7 @@ def api_sources():
 
 
 def _find_network_id(conn, frequency_or_mask: str) -> Optional[int]:
+    """Resolve network id by frequency or mask (helper for callsigns views)."""
     q_raw = (frequency_or_mask or "").strip()
     q = normalize_freq(q_raw) or q_raw
     if not q:
@@ -107,12 +133,23 @@ def _find_network_id(conn, frequency_or_mask: str) -> Optional[int]:
 
 @router.get("/api/callsigns/by-frequency")
 def api_callsigns_by_frequency(frequency: str, days: int = 7):
+    """List callsigns for a network resolved by frequency/mask.
+
+    Args:
+        frequency: string containing frequency, mask, or `freq/mask` pair.
+        days: how many days back to consider `last_seen_dt`.
+
+    Returns:
+        dict: payload including `rows` and network metadata; `rows` include
+        callsign fields plus status/source labels.
+    """
     q_raw = (frequency or "").strip()
     days = max(1, min(_as_int(days, 7), 365))
     start_dt = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
 
     freq_part = q_raw
     mask_part: Optional[str] = None
+    # Support `freq/mask` input in a single field.
     if "/" in q_raw:
         parts = [p.strip() for p in q_raw.split("/", 1)]
         freq_part = parts[0] or ""
@@ -234,6 +271,7 @@ def api_callsigns_by_frequency(frequency: str, days: int = 7):
 
 @router.get("/api/callsigns/search")
 def api_callsigns_search(q: str):
+    """Search callsigns by name or comment (case-insensitive LIKE)."""
     query = (q or "").strip()
     if not query:
         return {"ok": True, "rows": []}
@@ -291,6 +329,7 @@ def api_callsigns_search(q: str):
 
 @router.get("/api/callsigns/by-id")
 def api_callsign_by_id(id: int):
+    """Fetch a callsign row by id with related network/status/source info."""
     cid = _as_int(id, 0)
     if not cid:
         return JSONResponse({"ok": False, "error": "id is required"}, status_code=400)
@@ -341,6 +380,12 @@ def api_callsign_by_id(id: int):
 
 @router.post("/api/callsigns/save")
 async def api_callsign_save(request: Request):
+    """Create or update a callsign based on JSON payload.
+
+    Payload supports either:
+    - creating a new callsign (callsign_id omitted/0), or
+    - updating an existing callsign (callsign_id provided).
+    """
     payload: Dict[str, Any] = await request.json()
 
     callsign_id = payload.get("callsign_id")

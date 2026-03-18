@@ -1,10 +1,40 @@
+"""Persistence helpers for the ingest pipeline.
+
+This module contains low-level SQL helpers used by `ingest_service` to
+persist ingestion state and parsed messages into SQLite.
+
+Usage in the system:
+
+- `insert_ingest_message` stores the raw payload into `ingest_messages` for
+  traceability and potential re-processing.
+- `set_message_format` / `set_normalized_text` / `set_published_at_text`
+  update ingestion metadata after parsing/normalization decisions.
+- `find_duplicate_message` implements the system invariant for message
+  duplicates: (network_id, created_at, body_text).
+- `insert_message` inserts parsed, normalized messages into `messages`.
+
+These functions intentionally do not contain parsing or business logic; the
+service layer coordinates the pipeline order.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from app.db_utils import safe_execute
+
 
 def get_table_columns(cur, table_name: str) -> List[str]:
-    rows = cur.execute(f"PRAGMA table_info({table_name})").fetchall()
+    """Return a list of column names for a SQLite table.
+
+    Args:
+        cur: SQLite cursor.
+        table_name: name of the table.
+
+    Returns:
+        List[str]: column names in table order.
+    """
+    rows = safe_execute(cur, f"PRAGMA table_info({table_name})", module="app.services.ingest_store", function="get_table_columns").fetchall()
     out: List[str] = []
     for r in rows:
         out.append(r[1] if not isinstance(r, dict) else r["name"])
@@ -21,7 +51,25 @@ def insert_ingest_message(
     raw_text: str,
     received_at: str,
 ) -> int:
-    cur.execute(
+    """Insert a raw incoming message into `ingest_messages`.
+
+    The raw ingest row is stored before any parsing to preserve traceability
+    and to provide a stable deduplication point for source messages.
+
+    Args:
+        cur: SQLite cursor.
+        platform: ingestion source identifier (e.g. `whatsapp`, `xlsx`).
+        source_chat_id: external chat identifier.
+        source_chat_name: human-readable chat name.
+        source_message_id: external message identifier.
+        raw_text: raw message body text.
+        received_at: timestamp when the system received the payload.
+
+    Returns:
+        int: inserted `ingest_messages.id`.
+    """
+    safe_execute(
+        cur,
         """
         INSERT INTO ingest_messages (
           platform, source_chat_id, source_chat_name, source_message_id,
@@ -45,37 +93,63 @@ def insert_ingest_message(
 
 
 def set_message_format(cur, ingest_id: int, message_format: str) -> None:
-    cur.execute(
+    """Persist the detected message format for an ingest row.
+
+    Args:
+        cur: SQLite cursor.
+        ingest_id: `ingest_messages.id` to update.
+        message_format: string format label used by the system.
+    """
+    safe_execute(
+        cur,
         "UPDATE ingest_messages SET message_format=? WHERE id=?",
         (message_format, ingest_id),
+        module="app.services.ingest_store",
+        function="set_message_format",
     )
 
 
 def mark_unknown_format(cur, ingest_id: int) -> None:
-    cur.execute(
+    """Mark an ingest row as skipped due to unknown message format."""
+    safe_execute(
+        cur,
         "UPDATE ingest_messages SET parse_status=?, parse_error=? WHERE id=?",
         ("skipped_unknown_format", "unknown format", ingest_id),
+        module="app.services.ingest_store",
+        function="mark_unknown_format",
     )
 
 
 def set_normalized_text(cur, ingest_id: int, normalized_text: str) -> None:
-    cur.execute(
+    """Store normalized text for an ingest row (nonstandard normalization path)."""
+    safe_execute(
+        cur,
         "UPDATE ingest_messages SET normalized_text=?, parse_status=? WHERE id=?",
         (normalized_text, "normalized_nonstandard", ingest_id),
+        module="app.services.ingest_store",
+        function="set_normalized_text",
     )
 
 
 def mark_parse_error(cur, ingest_id: int, err: str) -> None:
-    cur.execute(
+    """Mark an ingest row as failed/skipped due to a parse error."""
+    safe_execute(
+        cur,
         "UPDATE ingest_messages SET parse_status=?, parse_error=? WHERE id=?",
         ("parse_error", str(err), ingest_id),
+        module="app.services.ingest_store",
+        function="mark_parse_error",
     )
 
 
 def set_published_at_text(cur, ingest_id: int, published_at_text: Optional[str]) -> None:
-    cur.execute(
+    """Store the parsed/published datetime text for an ingest row."""
+    safe_execute(
+        cur,
         "UPDATE ingest_messages SET published_at_text=?, parse_status=? WHERE id=?",
         (published_at_text, "parsed", ingest_id),
+        module="app.services.ingest_store",
+        function="set_published_at_text",
     )
 
 
@@ -86,7 +160,22 @@ def find_duplicate_message(
     created_at: str,
     body_text: str,
 ) -> Optional[int]:
-    row = cur.execute(
+    """Find an existing message that is a duplicate by invariant rule.
+
+    Duplicate rule (system invariant):
+        (network_id, created_at, body_text)
+
+    Args:
+        cur: SQLite cursor.
+        network_id: resolved network id.
+        created_at: message timestamp (ISO TEXT).
+        body_text: message body text.
+
+    Returns:
+        Optional[int]: existing `messages.id` if a duplicate exists, else None.
+    """
+    row = safe_execute(
+        cur,
         """
         SELECT id
         FROM messages
@@ -96,6 +185,8 @@ def find_duplicate_message(
         LIMIT 1
         """,
         (network_id, created_at, body_text.strip()),
+        module="app.services.ingest_store",
+        function="find_duplicate_message",
     ).fetchone()
 
     if not row:
@@ -105,9 +196,19 @@ def find_duplicate_message(
 
 
 def mark_duplicate_content(cur, ingest_id: int, existing_message_id: int) -> None:
-    cur.execute(
+    """Mark an ingest row as duplicate of an already stored message.
+
+    Args:
+        cur: SQLite cursor.
+        ingest_id: `ingest_messages.id` to update.
+        existing_message_id: `messages.id` of the duplicate target.
+    """
+    safe_execute(
+        cur,
         "UPDATE ingest_messages SET parse_status=?, parse_error=? WHERE id=?",
         ("duplicate_content", f"duplicate of message_id={existing_message_id}", ingest_id),
+        module="app.services.ingest_store",
+        function="mark_duplicate_content",
     )
 
 
@@ -123,6 +224,26 @@ def insert_message(
     delay_sec: Optional[int],
     net_description: Optional[str] = None,
 ) -> int:
+    """Insert a parsed message into `messages`.
+
+    The helper introspects the table columns to remain compatible with
+    lightweight migrations (e.g. optional columns like `net_description`,
+    `delay_sec`).
+
+    Args:
+        cur: SQLite cursor.
+        ingest_id: FK to `ingest_messages.id`.
+        network_id: FK to `networks.id`.
+        created_at: message datetime (ISO TEXT).
+        received_at: ingest receive datetime (ISO TEXT).
+        body_text: message body.
+        parse_confidence: parse confidence score.
+        delay_sec: delay between platform timestamp and message timestamp.
+        net_description: optional network description line for UI display.
+
+    Returns:
+        int: inserted `messages.id`.
+    """
     message_cols = set(get_table_columns(cur, "messages"))
 
     insert_cols = [
@@ -160,5 +281,11 @@ def insert_message(
           {", ".join(insert_cols)}
         ) VALUES ({placeholders})
     """
-    cur.execute(sql, tuple(insert_vals))
+    safe_execute(
+        cur,
+        sql,
+        tuple(insert_vals),
+        module="app.services.ingest_store",
+        function="insert_message",
+    )
     return int(cur.lastrowid)

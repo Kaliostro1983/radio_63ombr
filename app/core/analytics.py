@@ -1,3 +1,19 @@
+"""Legacy analytics/text parsing helpers.
+
+This module contains older/experimental helpers related to intercept text
+parsing and simple data transformations.
+
+Usage in the system:
+
+- Some UI flows or scripts may call `parse_intercept_text` to validate and
+  parse raw intercept messages in the template format.
+
+Note:
+    The module currently delegates parsing to `app.core.intercept_parser`
+    and keeps additional legacy code paths for reference. The service
+    ingest pipeline uses `app.core.intercept_parser` directly.
+"""
+
 from __future__ import annotations
 import json
 import re
@@ -10,6 +26,15 @@ DT_RE = re.compile(r"^\s*(\d{2}\.\d{2}\.\d{4}),\s*(\d{2}:\d{2}:\d{2})\s*$")
 FREQ_RE = re.compile(r"^\s*(\d{2,3}\.\d{3,4})\s*$")
 
 def _to_iso_from_text(dt_line: str) -> Optional[str]:
+    """Convert a `dd.mm.yyyy, HH:MM:SS` line into an ISO datetime string.
+
+    Args:
+        dt_line: raw datetime line.
+
+    Returns:
+        Optional[str]: naive ISO datetime string (no timezone) or None if
+        the input does not match expected format.
+    """
     m = DT_RE.match(dt_line or "")
     if not m:
         return None
@@ -21,10 +46,19 @@ def _to_iso_from_text(dt_line: str) -> Optional[str]:
         return None
 
 def _split_lines(text: str) -> List[str]:
+    """Split raw text into lines with normalized CR characters removed."""
     return [ln.rstrip("\r") for ln in (text or "").split("\n")]
 
 def parse_intercept_text(raw_text: str) -> Dict[str, Any]:
-    
+    """Parse intercept text using the template parser if possible.
+
+    Args:
+        raw_text: raw intercept text.
+
+    Returns:
+        Dict[str, Any]: parsed intercept record from `parse_template_intercept`,
+        or `{"ok": False, "error": ...}` if the format is not supported.
+    """
     if not is_template_intercept(raw_text):
         return {"ok": False, "error": "nonstandard format"}
     return parse_template_intercept(raw_text)
@@ -102,4 +136,12 @@ def parse_intercept_text(raw_text: str) -> Dict[str, Any]:
     }
 
 def callees_to_json(callees: List[str]) -> str:
+    """Serialize callees list to JSON preserving Cyrillic characters.
+
+    Args:
+        callees: list of callsign strings.
+
+    Returns:
+        str: JSON string.
+    """
     return json.dumps(callees, ensure_ascii=False)

@@ -1,3 +1,24 @@
+"""Ingest pipeline orchestrator.
+
+This module implements the main deterministic ingest pipeline for incoming
+intercept messages from external sources (e.g., WhatsApp bot payloads or
+XLSX imports).
+
+High-level flow (system invariant / docs):
+    incoming payload -> ingest_messages -> detect format -> parse ->
+    resolve network -> duplicate check -> insert into messages ->
+    link message_callsigns -> update callsign_edges
+
+Key properties:
+    - raw payload is stored first for traceability;
+    - message duplicates are detected strictly by (network_id, created_at, body_text);
+    - networks are never auto-created (missing network => message is skipped);
+    - callsign graph is updated only after message insertion.
+
+The primary entrypoint is `process_whatsapp_payload`, which is called by
+the `/api/ingest/whatsapp` router.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -28,6 +49,15 @@ log = get_logger("ingest_service")
 
 
 def _intercept_log_ctx(parsed: dict | None, raw_text: str | None = None) -> str:
+    """Build a short, safe-to-log summary of an intercept for diagnostics.
+
+    Args:
+        parsed: parsed diagnostic dict (structured path) or None.
+        raw_text: raw message text used as fallback summary.
+
+    Returns:
+        str: compact string with header/date/sender/body preview.
+    """
     if parsed:
         header = (parsed.get("header_line_1") or "").strip()
         dt = (parsed.get("published_at_text") or "").strip()
@@ -64,6 +94,28 @@ def _intercept_log_ctx(parsed: dict | None, raw_text: str | None = None) -> str:
 
 
 def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Process an incoming ingest payload and store it in the database.
+
+    The function:
+    - validates minimal required fields (chat/message ids and text);
+    - stores a raw row in `ingest_messages`;
+    - detects format and chooses parsing path:
+      - structured alias pipeline, or
+      - template parser (optionally normalizing nonstandard type 1);
+    - resolves `network_id` (without creating new networks);
+    - checks message content duplicates using invariant rule;
+    - inserts parsed message into `messages`;
+    - links callsigns and updates callsign graph;
+    - returns an object suitable for JSON response for the ingest endpoint.
+
+    Args:
+        payload: dict received from ingest transport layer (e.g., WhatsApp bot).
+
+    Returns:
+        Dict[str, Any]: response object with `ok` boolean and additional
+        fields such as `ingest_id`, `message_row_id`, `duplicate`, `skipped`,
+        `reason`, and optional `actions`.
+    """
     platform = payload.get("platform") or "whatsapp"
     source_chat_id = payload.get("chat_id")
     source_chat_name = payload.get("chat_name")
@@ -99,6 +151,8 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     received_at = now_sql()
 
+    # Use a single transactional connection for the entire ingest flow so
+    # that ingest metadata and message inserts remain consistent.
     with get_conn() as conn:
         cur = conn.cursor()
 
@@ -143,6 +197,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "actions": actions,
             }
 
+        # Format detection determines the parsing branch.
         message_format = detect_message_format(raw_text)
         set_message_format(cur, ingest_id, message_format)
 
@@ -174,6 +229,8 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
 
         if message_format == "structured_alias":
+            # Structured intercepts resolve network via alias_text, not by
+            # frequency/mask.
             structured_result = process_structured_intercept(conn, raw_text)
             structured_diag = structured_result.get("diag") or {}
 
@@ -198,6 +255,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
                 network_id = int(payload2["network_id"])
 
+                # Duplicate invariant: (network_id, created_at, body_text)
                 existing_message_id = find_duplicate_message(
                     cur,
                     network_id=network_id,
@@ -259,6 +317,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     },
                 )
 
+                # Callsign graph is updated only after the message exists in `messages`.
                 link_message_callsigns(
                     cur,
                     network_id=network_id,
@@ -332,6 +391,8 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
 
         if message_format == "nonstandard_type_1":
+            # Normalize the nonstandard layout into a template-like shape
+            # before running the template parser.
             normalized = normalize_nonstandard_type_1(raw_text)
             set_normalized_text(cur, ingest_id, normalized)
             raw_text = normalized
@@ -420,6 +481,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "actions": actions,
             }
 
+        # Duplicate invariant: (network_id, created_at, body_text)
         existing_message_id = find_duplicate_message(
             cur,
             network_id=network_id,
@@ -466,6 +528,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             net_description=net_description,
         )
 
+        # Callsign graph is updated only after the message exists in `messages`.
         link_message_callsigns(
             cur,
             network_id=network_id,

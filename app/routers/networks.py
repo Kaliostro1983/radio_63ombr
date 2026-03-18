@@ -1,3 +1,16 @@
+"""UI and API router for managing radio networks.
+
+This router serves:
+
+- HTML pages for viewing/searching/editing networks (`/networks`);
+- small JSON API helpers used by frontend code for lookups.
+
+The router is primarily a presentation layer: it loads reference data
+(statuses/chats/groups/tags), renders templates, and executes simple SQL
+updates. Complex domain rules such as network resolution during ingest are
+handled in service modules (see `app.services.network_service`).
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, date
@@ -9,7 +22,7 @@ from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 
 from app.core.db import get_conn
-from app.core.normalize import normalize_freq
+from app.core.normalize import normalize_freq, normalize_freq_or_mask
 from app.core.auth_context import get_actor
 
 router = APIRouter()
@@ -17,6 +30,15 @@ router = APIRouter()
 
 @router.get("/api/networks/lookup")
 def api_networks_lookup(q: str):
+    """Lookup networks matching a query for autocomplete/select widgets.
+
+    Args:
+        q: query string (frequency/mask/free text).
+
+    Returns:
+        dict: `{"ok": True, "rows": [...]}` where rows contain minimal
+        network metadata.
+    """
 
     query = (q or "").strip()
     if not query:
@@ -39,6 +61,14 @@ def api_networks_lookup(q: str):
 
 @router.get("/api/networks/by-id")
 def api_network_by_id(id: int):
+    """Fetch a single network by id for UI components.
+
+    Args:
+        id: network id.
+
+    Returns:
+        dict: `{"ok": True, "row": {...}}` or `{"ok": True, "row": None}`.
+    """
     try:
         network_id = int(id)
     except Exception:
@@ -65,20 +95,23 @@ def api_network_by_id(id: int):
 
 
 def _fetchall(conn, sql: str, params=()):
+    """Fetch all rows for a query (small helper for this router)."""
     cur = conn.execute(sql, params)
     return cur.fetchall()
 
 
 def _fetchone(conn, sql: str, params=()):
+    """Fetch a single row for a query (small helper for this router)."""
     cur = conn.execute(sql, params)
     return cur.fetchone()
 
 
 def _lookup(conn):
+    """Load reference data used by the networks UI."""
     statuses = _fetchall(conn, "SELECT id, name FROM statuses ORDER BY name")
     chats = _fetchall(conn, "SELECT id, name FROM chats ORDER BY name")
     groups = _fetchall(conn, "SELECT id, name FROM groups ORDER BY name")
-    tags = _fetchall(conn, "SELECT id, name FROM tags ORDER BY name")
+    tags = _fetchall(conn, "SELECT id, name FROM network_tags ORDER BY name")
 
     status_map = {r["id"]: r["name"] for r in statuses}
     chat_map = {r["id"]: r["name"] for r in chats}
@@ -89,40 +122,50 @@ def _lookup(conn):
 
 
 def _get_tag_ids(conn, network_id: int) -> List[int]:
-    rows = _fetchall(conn, "SELECT tag_id FROM network_tags WHERE network_id=?", (network_id,))
+    """Return tag ids currently assigned to a network."""
+    rows = _fetchall(conn, "SELECT tag_id FROM network_tag_links WHERE network_id=?", (network_id,))
     return [int(r["tag_id"]) for r in rows]
 
 
 def _ensure_etalon(conn, network_id: int):
+    """Ensure an `etalons` row exists for the given network."""
     row = _fetchone(conn, "SELECT id FROM etalons WHERE network_id=?", (network_id,))
     if row:
         return
     now = datetime.utcnow().isoformat(timespec="seconds")
     conn.execute(
-        "INSERT INTO etalons(network_id, start_date, updated_at) VALUES (?,?,?)",
-        (network_id, None, now),
+        "INSERT INTO etalons(network_id, start_date, end_date, updated_at) VALUES (?,?,?,?)",
+        (network_id, None, None, now),
     )
     
 
-def _get_etalon_start_date(conn, network_id: int) -> Optional[date]:
-    row = _fetchone(conn, "SELECT start_date FROM etalons WHERE network_id=?", (network_id,))
-    if not row or not row["start_date"]:
-        return None
-    try:
-        return date.fromisoformat(row["start_date"])
-    except Exception:
-        return None
+def _get_etalon_dates(conn, network_id: int) -> tuple[Optional[date], Optional[date]]:
+    """Return (start_date, end_date) for a network, if set and parseable."""
+    row = _fetchone(conn, "SELECT start_date, end_date FROM etalons WHERE network_id=?", (network_id,))
+    if not row:
+        return None, None
+
+    def parse_d(v) -> Optional[date]:
+        if not v:
+            return None
+        try:
+            return date.fromisoformat(str(v))
+        except Exception:
+            return None
+
+    return parse_d(row["start_date"]), parse_d(row["end_date"])
     
 
 def _load_network_card(conn, network_id: int):
+    """Load a network card: current network row + selected tags + etalon date."""
     current = _fetchone(conn, "SELECT * FROM networks WHERE id=?", (int(network_id),))
     if not current:
         return None, [], None
 
     selected_tags = _get_tag_ids(conn, int(current["id"]))
     _ensure_etalon(conn, int(current["id"]))
-    start_date_val = _get_etalon_start_date(conn, int(current["id"]))
-    return current, selected_tags, start_date_val
+    start_date_val, end_date_val = _get_etalon_dates(conn, int(current["id"]))
+    return current, selected_tags, (start_date_val, end_date_val)
 
 
 def _build_networks_context(
@@ -142,8 +185,10 @@ def _build_networks_context(
     matches=None,
     selected_tags=None,
     start_date_val: Optional[date] = None,
+    end_date_val: Optional[date] = None,
     message: str = "",
 ):
+    """Build Jinja template context for the networks page."""
     return dict(
         request=request,
         actor=actor,
@@ -162,6 +207,7 @@ def _build_networks_context(
         tag_map=tag_map,
         selected_tags=selected_tags or [],
         start_date=start_date_val,
+        end_date=end_date_val,
         message=message,
     )
 
@@ -173,6 +219,7 @@ def networks_page(
     pick: Optional[int] = None,
     actor=Depends(get_actor),
 ):
+    """Render networks page (initial view or when selecting a network)."""
     network_id = pick or id
 
     with get_conn() as conn:
@@ -181,13 +228,32 @@ def networks_page(
         current = None
         selected_tags: List[int] = []
         start_date_val: Optional[date] = None
+        end_date_val: Optional[date] = None
         q_query = ""
         message = request.query_params.get("msg", "")
+        draft = request.session.pop("network_save_draft", None)
 
         if network_id:
-            current, selected_tags, start_date_val = _load_network_card(conn, int(network_id))
+            current, selected_tags, dates = _load_network_card(conn, int(network_id))
+            if dates:
+                start_date_val, end_date_val = dates
             if current:
                 q_query = current["frequency"] or current["mask"] or ""
+        elif draft:
+            q_query = draft.get("frequency", "") or draft.get("mask", "")
+            start_date_raw = draft.get("start_date_str", "")
+            if start_date_raw:
+                try:
+                    start_date_val = date.fromisoformat(start_date_raw)
+                except Exception:
+                    start_date_val = None
+            end_date_raw = draft.get("end_date_str", "")
+            if end_date_raw:
+                try:
+                    end_date_val = date.fromisoformat(end_date_raw)
+                except Exception:
+                    end_date_val = None
+            selected_tags = draft.get("tag_ids") or []
 
     context = _build_networks_context(
         request,
@@ -205,8 +271,11 @@ def networks_page(
         matches=[],
         selected_tags=selected_tags,
         start_date_val=start_date_val,
+        end_date_val=end_date_val,
         message=message,
     )
+    if draft and not current:
+        context["draft"] = draft
     return request.app.state.templates.TemplateResponse("networks.html", context)
 
 
@@ -216,6 +285,7 @@ def networks_search(
     query: str = Form(""),
     actor=Depends(get_actor),
 ):
+    """Search networks and render results in the networks page template."""
     q_query = (query or "").strip()
 
     with get_conn() as conn:
@@ -225,6 +295,7 @@ def networks_search(
         matches = []
         selected_tags: List[int] = []
         start_date_val: Optional[date] = None
+        end_date_val: Optional[date] = None
         message = ""
 
         if not q_query:
@@ -233,7 +304,9 @@ def networks_search(
             matches = search_network_rows(conn, q_query, limit=100)
 
             if len(matches) == 1:
-                current, selected_tags, start_date_val = _load_network_card(conn, int(matches[0]["id"]))
+                current, selected_tags, dates = _load_network_card(conn, int(matches[0]["id"]))
+                if dates:
+                    start_date_val, end_date_val = dates
             elif len(matches) == 0:
                 message = "Не знайдено. Заповни картку і тисни “Зберегти”."
 
@@ -253,31 +326,105 @@ def networks_search(
             matches=matches,
             selected_tags=selected_tags,
             start_date_val=start_date_val,
+            end_date_val=end_date_val,
             message=message,
         )
         return request.app.state.templates.TemplateResponse("networks.html", context)
     
 def _set_tags(conn, network_id: int, tag_ids: List[int]):
-    conn.execute("DELETE FROM network_tags WHERE network_id=?", (network_id,))
+    """Replace network tags with the provided tag id list."""
+    conn.execute("DELETE FROM network_tag_links WHERE network_id=?", (network_id,))
     for tid in sorted(set(int(x) for x in tag_ids or [])):
         conn.execute(
-            "INSERT OR IGNORE INTO network_tags(network_id, tag_id) VALUES (?,?)",
+            "INSERT OR IGNORE INTO network_tag_links(network_id, tag_id) VALUES (?,?)",
             (network_id, tid),
         )
         
         
-def _set_etalon_start_date(conn, network_id: int, start_date_str: str):
+def _set_etalon_dates(conn, network_id: int, start_date_str: str, end_date_str: str):
+    """Update etalon start/end date fields for a network."""
     now = datetime.utcnow().isoformat(timespec="seconds")
     conn.execute(
-        "UPDATE etalons SET start_date=?, updated_at=? WHERE network_id=?",
-        (start_date_str, now, network_id),
+        "UPDATE etalons SET start_date=?, end_date=?, updated_at=? WHERE network_id=?",
+        (start_date_str or None, end_date_str or None, now, network_id),
     )
+
+
+def _store_network_draft(request: Request, **fields):
+    """Store last network form values in session for restore after validation errors."""
+    request.session["network_save_draft"] = fields
+
+
+def _draft_payload(
+    frequency: str,
+    mask: str,
+    unit: str,
+    zone: str,
+    chat_id: int,
+    group_id: int,
+    status_id: int,
+    comment: str,
+    tag_ids: List[int],
+    start_date_str: str,
+    end_date_str: str,
+):
+    return {
+        "frequency": frequency,
+        "mask": mask,
+        "unit": unit,
+        "zone": zone,
+        "chat_id": str(chat_id),
+        "group_id": str(group_id),
+        "status_id": str(status_id),
+        "comment": comment,
+        "tag_ids": [int(x) for x in tag_ids or []],
+        "start_date_str": start_date_str,
+        "end_date_str": end_date_str,
+    }
+
+
+def _missing_fields_message(
+    *,
+    frequency_ok: bool,
+    unit: str,
+    zone: str,
+    chat_id: int,
+    group_id: int,
+    status_id: int,
+) -> tuple[str, list[str]]:
+    missing_labels: list[str] = []
+    missing_keys: list[str] = []
+    if not frequency_ok:
+        missing_labels.append("частоту")
+        missing_keys.append("frequency")
+    if not (unit or "").strip():
+        missing_labels.append("підрозділ")
+        missing_keys.append("unit")
+    if not (zone or "").strip():
+        missing_labels.append("зону функціонування")
+        missing_keys.append("zone")
+    if not chat_id:
+        missing_labels.append("чат (джерело)")
+        missing_keys.append("chat_id")
+    if not group_id:
+        missing_labels.append("групу")
+        missing_keys.append("group_id")
+    if not status_id:
+        missing_labels.append("статус")
+        missing_keys.append("status_id")
+
+    if not missing_labels:
+        return "", []
+    if len(missing_labels) == 1:
+        return f"Потрібно вказати {missing_labels[0]}.", missing_keys
+    if len(missing_labels) == 2:
+        return f"Потрібно вказати {missing_labels[0]} та {missing_labels[1]}.", missing_keys
+    return "Потрібно вказати: " + ", ".join(missing_labels[:-1]) + f" та {missing_labels[-1]}.", missing_keys
     
     
 @router.post("/networks/save")
 def networks_save(
     request: Request,
-    action: str = Form("save"),
     frequency: str = Form(...),
     mask: str = Form(""),
     unit: str = Form(""),
@@ -288,21 +435,73 @@ def networks_save(
     comment: str = Form(""),
     tag_ids: List[int] = Form(default=[]),
     start_date_str: str = Form(""),
+    end_date_str: str = Form(""),
     actor=Depends(get_actor),
 ):
+    """Insert or update a network record from the networks page form."""
     freq_norm = normalize_freq(frequency)
+
+    # Normalize mask using the same rules as ingest/network_service so that
+    # values entered on the networks page match tokens parsed from intercepts.
+    raw_mask = (mask or "").strip()
+    if raw_mask:
+        mask_freq, mask_mask = normalize_freq_or_mask(raw_mask)
+        # Prefer "mask-like" normalization; fall back to normalized frequency.
+        if mask_mask:
+            # Store mask in DB without trailing '%' so that users
+            # don't see SQL wildcard characters in the UI. The '%'
+            # is only needed in query patterns, not in persisted values.
+            mask_val = mask_mask[:-1] if mask_mask.endswith("%") else mask_mask
+        else:
+            mask_val = mask_freq
+    else:
+        mask_val = None
+    unit_val = (unit or "").strip() or None
+    zone_val = (zone or "").strip() or None
+    comment_val = (comment or "").strip() or None
+
+    message, missing_keys = _missing_fields_message(
+        frequency_ok=bool(freq_norm),
+        unit=unit_val or "",
+        zone=zone_val or "",
+        chat_id=chat_id,
+        group_id=group_id,
+        status_id=status_id,
+    )
+    if message:
+        _store_network_draft(
+            request,
+            **{
+                **_draft_payload(
+                frequency=frequency,
+                mask=mask,
+                unit=unit,
+                zone=zone,
+                chat_id=chat_id,
+                group_id=group_id,
+                status_id=status_id,
+                comment=comment,
+                tag_ids=tag_ids,
+                start_date_str=start_date_str,
+                end_date_str=end_date_str,
+                ),
+                "missing_fields": missing_keys,
+            },
+        )
+        return RedirectResponse(url=f"/networks?msg={message}", status_code=303)
+
     now = datetime.utcnow().isoformat(timespec="seconds")
 
     with get_conn() as conn:
         existing = _fetchone(conn, "SELECT id FROM networks WHERE frequency=?", (freq_norm,))
 
-        if action == "save_new" or not existing:
+        if not existing:
             cur = conn.execute(
                 """
                 INSERT INTO networks (frequency, mask, unit, zone, chat_id, group_id, status_id, comment, updated_at)
                 VALUES (?,?,?,?,?,?,?,?,?)
                 """,
-                (freq_norm, mask or None, unit, zone, int(chat_id), int(group_id), int(status_id), comment, now),
+                (freq_norm, mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now),
             )
             network_id = int(cur.lastrowid)
         else:
@@ -313,15 +512,16 @@ def networks_save(
                 SET mask=?, unit=?, zone=?, chat_id=?, group_id=?, status_id=?, comment=?, updated_at=?
                 WHERE id=?
                 """,
-                (mask or None, unit, zone, int(chat_id), int(group_id), int(status_id), comment, now, network_id),
+                (mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now, network_id),
             )
 
         _set_tags(conn, network_id, tag_ids)
 
         _ensure_etalon(conn, network_id)
-        if start_date_str:
-            _set_etalon_start_date(conn, network_id, start_date_str)
+        if start_date_str or end_date_str:
+            _set_etalon_dates(conn, network_id, start_date_str, end_date_str)
 
         conn.commit()
 
+    request.session.pop("network_save_draft", None)
     return RedirectResponse(url=f"/networks?pick={network_id}", status_code=303)

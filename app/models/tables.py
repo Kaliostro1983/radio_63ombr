@@ -1,3 +1,19 @@
+"""SQLModel table definitions (optional/legacy ORM layer).
+
+This module defines SQLModel models corresponding to SQLite tables used by
+the application. The project primarily uses direct `sqlite3` access in
+`app.core.db` and service/repository modules; these models are useful for:
+
+- type hints and schema reference in IDEs,
+- future refactors toward SQLModel/ORM usage,
+- documentation of table fields.
+
+Important:
+    The SQLite schema in production is the source of truth. If the database
+    schema evolves (e.g., columns removed/renamed), this module may require
+    updates to stay in sync.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, date
@@ -7,6 +23,7 @@ from sqlmodel import SQLModel, Field, UniqueConstraint
 
 
 class Status(SQLModel, table=True):
+    """Reference status row (used for network/UI statuses)."""
     __tablename__ = "statuses"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -16,6 +33,7 @@ class Status(SQLModel, table=True):
 
 
 class Chat(SQLModel, table=True):
+    """Chat reference row."""
     __tablename__ = "chats"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -23,6 +41,7 @@ class Chat(SQLModel, table=True):
 
 
 class Group(SQLModel, table=True):
+    """Group reference row."""
     __tablename__ = "groups"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -30,6 +49,7 @@ class Group(SQLModel, table=True):
 
 
 class Tag(SQLModel, table=True):
+    """Tag reference row used for message/network tagging."""
     __tablename__ = "tags"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -38,6 +58,7 @@ class Tag(SQLModel, table=True):
 
 
 class Network(SQLModel, table=True):
+    """Radio network definition row."""
     __tablename__ = "networks"
     __table_args__ = (UniqueConstraint("frequency"),)
 
@@ -55,6 +76,7 @@ class Network(SQLModel, table=True):
 
 
 class NetworkAlias(SQLModel, table=True):
+    """Alias row used to resolve structured intercepts to networks."""
     __tablename__ = "network_aliases"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -65,19 +87,30 @@ class NetworkAlias(SQLModel, table=True):
     created_at: Optional[str] = None
 
 
-class NetworkTag(SQLModel, table=True):
+class NetworkTagDef(SQLModel, table=True):
+    """Dictionary table for network-only tags (UI labels)."""
     __tablename__ = "network_tags"
 
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+
+
+class NetworkTagLink(SQLModel, table=True):
+    """Many-to-many link table for networks and network tags."""
+    __tablename__ = "network_tag_links"
+
     network_id: int = Field(foreign_key="networks.id", primary_key=True)
-    tag_id: int = Field(foreign_key="tags.id", primary_key=True)
+    tag_id: int = Field(foreign_key="network_tags.id", primary_key=True)
 
 
 class Etalon(SQLModel, table=True):
+    """Etalon (reference) description for a network."""
     __tablename__ = "etalons"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     network_id: int = Field(foreign_key="networks.id", unique=True, index=True)
     start_date: Optional[date] = Field(default=None)
+    end_date: Optional[date] = Field(default=None)
     correspondents: Optional[str] = None
     callsigns: Optional[str] = None
     purpose: Optional[str] = None
@@ -88,6 +121,7 @@ class Etalon(SQLModel, table=True):
 
 
 class NetworkChange(SQLModel, table=True):
+    """Audit log row for changes to networks."""
     __tablename__ = "network_changes"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -100,6 +134,7 @@ class NetworkChange(SQLModel, table=True):
 
 
 class IngestMessage(SQLModel, table=True):
+    """Raw incoming message preserved for traceability."""
     __tablename__ = "ingest_messages"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -119,6 +154,7 @@ class IngestMessage(SQLModel, table=True):
 
 
 class Message(SQLModel, table=True):
+    """Parsed/normalized intercept message stored in the database."""
     __tablename__ = "messages"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -137,6 +173,7 @@ class Message(SQLModel, table=True):
 
 
 class CallsignSource(SQLModel, table=True):
+    """Reference row for callsign sources."""
     __tablename__ = "callsign_sources"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -144,6 +181,7 @@ class CallsignSource(SQLModel, table=True):
 
 
 class CallsignStatus(SQLModel, table=True):
+    """Reference row for callsign statuses."""
     __tablename__ = "callsign_statuses"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -152,6 +190,7 @@ class CallsignStatus(SQLModel, table=True):
 
 
 class Callsign(SQLModel, table=True):
+    """Callsign entity scoped to a network."""
     __tablename__ = "callsigns"
     __table_args__ = (UniqueConstraint("network_id", "name"),)
 
@@ -167,6 +206,7 @@ class Callsign(SQLModel, table=True):
 
 
 class CallsignStatusMap(SQLModel, table=True):
+    """Many-to-many link table for callsigns and statuses."""
     __tablename__ = "callsign_status_map"
 
     callsign_id: int = Field(foreign_key="callsigns.id", primary_key=True)
@@ -174,6 +214,7 @@ class CallsignStatusMap(SQLModel, table=True):
 
 
 class MessageCallsign(SQLModel, table=True):
+    """Link table between messages and callsigns with a role."""
     __tablename__ = "message_callsigns"
 
     message_id: int = Field(foreign_key="messages.id", primary_key=True)
@@ -182,6 +223,7 @@ class MessageCallsign(SQLModel, table=True):
 
 
 class CallsignEdge(SQLModel, table=True):
+    """Aggregated interaction edge between callsigns in a network."""
     __tablename__ = "callsign_edges"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -194,6 +236,7 @@ class CallsignEdge(SQLModel, table=True):
 
 
 class MessageTag(SQLModel, table=True):
+    """Many-to-many link table between messages and tags."""
     __tablename__ = "message_tags"
 
     message_id: int = Field(foreign_key="messages.id", primary_key=True)
@@ -201,6 +244,7 @@ class MessageTag(SQLModel, table=True):
 
 
 class PelengBatch(SQLModel, table=True):
+    """Peleng batch header row."""
     __tablename__ = "peleng_batches"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -209,6 +253,7 @@ class PelengBatch(SQLModel, table=True):
 
 
 class PelengPoint(SQLModel, table=True):
+    """Peleng point row belonging to a batch."""
     __tablename__ = "peleng_points"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -217,6 +262,7 @@ class PelengPoint(SQLModel, table=True):
 
 
 class Word(SQLModel, table=True):
+    """Word rule row used by tag analysis."""
     __tablename__ = "words"
 
     id: Optional[int] = Field(default=None, primary_key=True)

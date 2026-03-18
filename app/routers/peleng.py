@@ -1,3 +1,20 @@
+"""UI and API router for peleng (direction finding) workflows.
+
+This router provides the peleng UI page and a set of API endpoints for:
+
+- normalizing and validating frequency/mask values;
+- validating/sanitizing MGRS coordinate input;
+- saving peleng batches/points into SQLite (`peleng_batches`, `peleng_points`);
+- managing runtime `posts.json` configuration used by DOCX report templates;
+- generating DOCX reports either from pasted text or from DB data by period;
+- serving version and changelog endpoints used by the UI.
+
+The router includes a number of helper functions for input cleaning and
+record building. Complex DOCX generation is delegated to
+`app.peleng_report.report.build_docx`, and WhatsApp text parsing to
+`app.peleng_report.parser.parse_whatsapp_text`.
+"""
+
 # app/routers/peleng.py
 from __future__ import annotations
 
@@ -43,30 +60,37 @@ class PostsSaveIn(BaseModel):
 # helpers
 # =========================================================
 def project_root() -> Path:
+    """Return repository root directory for version/changelog/posts files."""
     return Path(__file__).resolve().parents[2]
 
 def version_file_path() -> Path:
-    return project_root() / "VERSION"
+    """Return path to VERSION file (docs/VERSION)."""
+    return project_root() / "docs" / "VERSION"
 
 def changelog_file_path() -> Path:
+    """Return path to docs/CHANGELOG.md."""
     return project_root() / "docs" / "CHANGELOG.md"
 
 def read_version() -> str:
+    """Read version string from VERSION file (fallback to 0.0.0)."""
     p = version_file_path()
     if not p.exists():
         return "0.0.0"
     return p.read_text(encoding="utf-8").strip() or "0.0.0"
 
 def read_changelog() -> str:
+    """Read changelog file content (fallback to a placeholder text)."""
     p = changelog_file_path()
     if not p.exists():
         return "# Changelog\n\nФайл changelog ще не створено."
     return p.read_text(encoding="utf-8")
 
 def posts_json_path() -> Path:
+    """Return path to runtime posts.json."""
     return Path(__file__).resolve().parents[2] / "posts.json"
 
 def ensure_posts_json() -> Path:
+    """Ensure posts.json exists (seed it with default posts if missing)."""
     p = posts_json_path()
     if p.exists():
         return p
@@ -93,6 +117,7 @@ def ensure_posts_json() -> Path:
     return p
 
 def load_all_posts() -> list[dict]:
+    """Load posts.json as a list of dicts (no filtering)."""
     p = ensure_posts_json()
     data = json.loads(p.read_text(encoding="utf-8"))
     if not isinstance(data, list):
@@ -100,10 +125,12 @@ def load_all_posts() -> list[dict]:
     return data
 
 def save_all_posts(posts: list[dict]) -> None:
+    """Persist posts list to posts.json."""
     p = ensure_posts_json()
     p.write_text(json.dumps(posts, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def _to_float(value: str) -> float:
+    """Parse string into float supporting comma decimal separator."""
     s = str(value or "").strip().replace(",", ".")
     if not s:
         raise ValueError("Порожнє значення")
@@ -111,16 +138,26 @@ def _to_float(value: str) -> float:
 
 
 def norm4(value: str) -> str:
+    """Normalize numeric input into a 4-decimal string representation."""
     v = _to_float(value)
     return f"{v:.4f}"
 
 
 def is_mask_like(value: str) -> bool:
+    """Return True if the value looks like a mask line (dash-prefixed)."""
     s = str(value or "").strip()
     return s.startswith(MASK_PREFIXES)
 
 
 def sanitize_mgrs_line(line: str) -> str:
+    """Validate and normalize a single MGRS line into canonical token spacing.
+
+    Args:
+        line: raw input line.
+
+    Returns:
+        str: normalized MGRS line formatted as `T0 T1 12345 67890`.
+    """
     s = (line or "").strip()
     if not s:
         raise ValueError("Порожній рядок")
@@ -141,6 +178,7 @@ def sanitize_mgrs_line(line: str) -> str:
 
 
 def fmt_dt(date_iso: str, time_hhmm: str) -> str:
+    """Format date/time into the message header format used in peleng texts."""
     # YYYY-MM-DD + HH:MM -> DD.MM.YYYY HH.MM
     y, m, d = date_iso.split("-")
     hh, mi = time_hhmm.split(":")
@@ -148,6 +186,7 @@ def fmt_dt(date_iso: str, time_hhmm: str) -> str:
 
 
 def fetch_unit_zone_by_value(db, value4: str):
+    """Fetch unit/zone from networks table for a frequency/mask value."""
     # Для першого режиму лишаємо поточну поведінку:
     # шукаємо або по frequency, або по mask.
     cur = db.execute(
@@ -166,6 +205,7 @@ def fetch_unit_zone_by_value(db, value4: str):
 
 
 def build_unit_desc(unit: str | None, zone: str | None) -> str:
+    """Build a human-readable unit description for reports."""
     unit = (unit or "").strip()
     zone = (zone or "").strip()
     if unit and zone:
@@ -215,6 +255,7 @@ def fetch_latest_networks_by_frequencies(db, freqs: list[str]) -> dict[str, dict
 
 
 def build_records_from_db_rows(batches, points, net_by_freq: dict[str, dict]) -> list[dict]:
+    """Convert DB rows into record dicts expected by DOCX generator."""
     batch_by_id = {int(b["id"]): b for b in batches}
     records: list[dict] = []
 
@@ -237,6 +278,7 @@ def build_records_from_db_rows(batches, points, net_by_freq: dict[str, dict]) ->
 
 
 def render_docx_bytes(records: list[dict]) -> tuple[bytes, str]:
+    """Render DOCX content bytes for records using active posts config."""
     posts = load_posts(active_only=True)
     if not posts:
         raise RuntimeError("Немає активних постів у posts.json")
@@ -255,10 +297,12 @@ def render_docx_bytes(records: list[dict]) -> tuple[bytes, str]:
 # =========================================================
 @router.get("/version")
 def app_version():
+    """Return current app version as JSON."""
     return {"version": read_version()}
 
 @router.get("/changelog", response_class=PlainTextResponse)
 def app_changelog():
+    """Return changelog content as plain text."""
     return read_changelog()
 
 # =========================================================
@@ -266,6 +310,7 @@ def app_changelog():
 # =========================================================
 @router.get("/peleng", response_class=HTMLResponse)
 def peleng_page(request: Request):
+    """Render peleng UI page."""
     return request.app.state.templates.TemplateResponse(
         "peleng.html",
         {"request": request},
@@ -320,6 +365,7 @@ class ReportFromTextIn(BaseModel):
 # =========================================================
 @router.post("/peleng/accept", response_model=AcceptOut)
 def peleng_accept(payload: AcceptIn):
+    """Validate/normalize frequency input and fetch unit/zone if available."""
     raw = (payload.value or "").strip()
     if not raw:
         return JSONResponse(status_code=400, content={"detail": "Порожнє значення"})
@@ -347,6 +393,7 @@ def peleng_accept(payload: AcceptIn):
 # =========================================================
 @router.post("/peleng/generate", response_model=GenerateOut)
 def peleng_generate(payload: GenerateIn):
+    """Generate a peleng message text from form inputs (no DB writes)."""
     missing = []
     if not (payload.date or "").strip():
         missing.append("Дата")
@@ -414,6 +461,7 @@ def peleng_generate(payload: GenerateIn):
 # =========================================================
 @router.post("/peleng/save", response_model=SaveOut)
 def peleng_save(payload: SaveIn):
+    """Persist a peleng batch and its MGRS points into SQLite."""
     missing = []
     if not (payload.date or "").strip():
         missing.append("Дата")
@@ -485,6 +533,7 @@ def peleng_save(payload: SaveIn):
 
 @router.get("/peleng/posts")
 def peleng_get_posts():
+    """Return current posts configuration."""
     try:
         return {"posts": load_all_posts()}
     except Exception as e:
@@ -492,6 +541,7 @@ def peleng_get_posts():
 
 @router.post("/peleng/posts/save")
 def peleng_save_posts(payload: PostsSaveIn):
+    """Validate and save posts configuration to posts.json."""
     try:
         posts = payload.posts or []
 
@@ -520,6 +570,7 @@ def peleng_report_preview(
     from_dt: str = Query(..., description="YYYY-MM-DD HH:MM:SS"),
     to_dt: str = Query(..., description="YYYY-MM-DD HH:MM:SS"),
 ):
+    """Return counts of batches and points for a period (preview before report)."""
     db = get_db()
     try:
         batches = db.execute(
@@ -558,6 +609,7 @@ def peleng_report_preview(
 
 @router.post("/peleng/report/from-text")
 def peleng_report_from_text(payload: ReportFromTextIn):
+    """Build a DOCX report from pasted WhatsApp/export text."""
     raw_text = (payload.text or "").strip()
     if not raw_text:
         return JSONResponse(status_code=400, content={"detail": "Текст для звіту порожній"})
@@ -589,6 +641,7 @@ def peleng_report_by_period(
     from_dt: str = Query(..., description="YYYY-MM-DD HH:MM:SS"),
     to_dt: str = Query(..., description="YYYY-MM-DD HH:MM:SS"),
 ):
+    """Build a DOCX report from DB peleng data for a selected period."""
     db = get_db()
     try:
         batches = db.execute(

@@ -1,3 +1,24 @@
+"""Word-based tagging and approval hints for messages.
+
+This module implements a lightweight text analyzer driven by database
+tables:
+
+- `words` holds (tag_id, word, probability, exceptions)
+- `tags` holds (id, name, template)
+
+The analyzer scans message text, finds matches by prefix-ish word regexes,
+applies exceptions (negative matches), and returns:
+
+- a suggested comment template (from the top-scoring tag),
+- whether the message should be flagged as "need approve",
+- a JSON payload with match details suitable for storing in `messages.tags_json`.
+
+Usage in the system:
+
+- The ingest pipeline (service layer) can call `load_rules` once and then
+  `analyze_text` per message, optionally persisting tags via `persist_message_tags`.
+"""
+
 # app/core/text_tag_analyzer.py
 from __future__ import annotations
 
@@ -10,6 +31,7 @@ from typing import Iterable
 
 @dataclass(frozen=True)
 class TagRule:
+    """Single word rule associated with a tag."""
     tag_id: int
     tag_name: str
     template: str
@@ -20,6 +42,7 @@ class TagRule:
 
 @dataclass(frozen=True)
 class TagMatch:
+    """Aggregated match for a tag built from multiple word matches."""
     tag_id: int
     tag_name: str
     template: str
@@ -29,6 +52,7 @@ class TagMatch:
 
 @dataclass(frozen=True)
 class AnalyzeResult:
+    """Result of analyzing a message text against tag rules."""
     comment: str
     need_approve: bool
     tags_json: str
@@ -36,6 +60,18 @@ class AnalyzeResult:
 
 
 def _prefix_regex(word: str) -> re.Pattern[str]:
+    """Build a regex that matches a word as a prefix of a token.
+
+    For very short words (<3), the match is exact (`\\bword\\b`) to reduce
+    false positives. For longer words, the match is prefix-based to catch
+    inflections and suffixes (`\\bword[\\w\\-]*`).
+
+    Args:
+        word: word token from rule or exception list.
+
+    Returns:
+        re.Pattern[str]: compiled regex pattern.
+    """
     raw = (word or "").strip().lower().replace("ё", "е")
     escaped = re.escape(raw)
     if len(raw) < 3:
@@ -46,10 +82,23 @@ def _prefix_regex(word: str) -> re.Pattern[str]:
 
 
 def _normalize_text(text: str) -> str:
+    """Normalize input text for matching (lowercase + 'ё'->'е')."""
     return (text or "").strip().lower().replace("ё", "е")
 
 
 def _parse_exceptions(raw: str | None) -> tuple[str, ...]:
+    """Parse exceptions value stored in DB into a tuple of strings.
+
+    The DB field may contain:
+    - JSON list of strings, or
+    - a single raw string.
+
+    Args:
+        raw: raw DB value.
+
+    Returns:
+        tuple[str, ...]: normalized exception tokens.
+    """
     if not raw:
         return ()
     try:
@@ -63,6 +112,14 @@ def _parse_exceptions(raw: str | None) -> tuple[str, ...]:
 
 
 def load_rules(conn: sqlite3.Connection) -> list[TagRule]:
+    """Load tag rules from the database.
+
+    Args:
+        conn: open SQLite connection.
+
+    Returns:
+        list[TagRule]: rules joined from `words` and `tags`.
+    """
     rows = conn.execute(
         """
         SELECT
@@ -94,6 +151,16 @@ def load_rules(conn: sqlite3.Connection) -> list[TagRule]:
 
 
 def analyze_text(text: str, rules: Iterable[TagRule]) -> AnalyzeResult:
+    """Analyze text against tag rules and return matches.
+
+    Args:
+        text: message text to analyze.
+        rules: iterable of TagRule records, typically loaded from DB.
+
+    Returns:
+        AnalyzeResult: match list, JSON payload, suggestion comment, and
+        approval flag.
+    """
     text_norm = _normalize_text(text)
     grouped: dict[int, TagMatch] = {}
 
@@ -161,6 +228,15 @@ def persist_message_tags(
     message_id: int,
     matches: Iterable[TagMatch],
 ) -> None:
+    """Persist tag matches for a message into the `message_tags` table.
+
+    The function replaces existing rows for the message.
+
+    Args:
+        conn: open SQLite connection.
+        message_id: ID of the message in `messages`.
+        matches: tag matches to persist.
+    """
     rows = [
         (
             message_id,

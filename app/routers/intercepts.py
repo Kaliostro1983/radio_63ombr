@@ -1,3 +1,17 @@
+"""UI and API router for intercept search and exploration.
+
+This router provides:
+
+- HTML pages for intercept search (`/intercepts`) and explorer (`/intercepts-explorer`);
+- message detail page (`/messages/{message_id}`);
+- JSON APIs used by the explorer UI to list messages, fetch details,
+  update message comments, and manage message↔callsign links.
+
+The ingest pipeline (parsing, deduplication, network resolution) is handled
+by the service layer. This router focuses on read/search functionality and
+manual review/editing workflows.
+"""
+
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -14,12 +28,20 @@ DB_PATH = Path("database/radio.db")
 
 
 def get_conn():
+    """Open a SQLite connection for this router.
+
+    Note:
+        This router currently opens a direct sqlite3 connection using a
+        hardcoded DB_PATH. Other parts of the application use
+        `app.core.db.get_conn`.
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def _normalize_callsign_role(role: str) -> str:
+    """Normalize and validate callsign role for explorer operations."""
     value = (role or "").strip().lower()
     if value not in {"caller", "callee", "mentioned"}:
         raise HTTPException(status_code=400, detail="Invalid callsign role")
@@ -27,6 +49,12 @@ def _normalize_callsign_role(role: str) -> str:
 
 
 def _rebuild_message_edges(conn: sqlite3.Connection, message_id: int):
+    """Rebuild callsign edges for a specific message after manual edits.
+
+    The explorer UI can change message_callsigns manually. This helper
+    adjusts `callsign_edges` to reflect the current caller/callees for that
+    message.
+    """
     message_row = conn.execute(
         """
         SELECT id, network_id
@@ -54,6 +82,8 @@ def _rebuild_message_edges(conn: sqlite3.Connection, message_id: int):
     caller_ids = [int(row["callsign_id"]) for row in rows if row["role"] == "caller"]
     callee_ids = [int(row["callsign_id"]) for row in rows if row["role"] == "callee"]
 
+    # Best-effort cleanup: delete existing edges that correspond to callsigns
+    # linked to this message, then re-insert/update based on current roles.
     conn.execute(
         """
         DELETE FROM callsign_edges
@@ -126,25 +156,30 @@ def _rebuild_message_edges(conn: sqlite3.Connection, message_id: int):
 
 
 class InterceptsExplorerAddCallsignPayload(BaseModel):
+    """Payload for adding a single callsign link to a message."""
     name: str
     role: str
 
 
 class InterceptsExplorerCommentPayload(BaseModel):
+    """Payload for updating a message comment."""
     comment: str = ""
 
 
 class InterceptsExplorerCallsignItemPayload(BaseModel):
+    """Single callsign link item used for bulk update."""
     callsign_id: int
     role: str = ""
 
 
 class InterceptsExplorerCallsignsPayload(BaseModel):
+    """Bulk callsign links payload used for replacing all message_callsigns."""
     items: list[InterceptsExplorerCallsignItemPayload] = []
 
 
 @router.get("/messages/{message_id}", response_class=HTMLResponse)
 def message_detail_page(request: Request, message_id: int):
+    """Render a message detail page with raw ingest context if available."""
     templates = request.app.state.templates
 
     conn = get_conn()
@@ -196,6 +231,7 @@ def message_detail_page(request: Request, message_id: int):
 
 @router.get("/intercepts")
 def intercepts_page(request: Request):
+    """Render intercept search page UI."""
     templates = request.app.state.templates
     return templates.TemplateResponse(
         "intercepts_search.html",
@@ -208,6 +244,7 @@ def intercepts_page(request: Request):
 
 @router.get("/intercepts-explorer")
 def intercepts_explorer_page(request: Request):
+    """Render intercept explorer page UI."""
     templates = request.app.state.templates
     return templates.TemplateResponse(
         "intercepts_explorer.html",
@@ -226,6 +263,7 @@ def intercepts_search(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
+    """Search intercepts by phrase and/or network frequency/mask."""
     phrase = (phrase or "").strip()
     frequency_raw = (frequency or "").strip()
 
@@ -355,9 +393,15 @@ def intercepts_explorer_list(
     offset: int = Query(0, ge=0),
     debug: int = Query(0),
 ):
+    """List intercepts for explorer UI with optional datetime/network filters.
+
+    When `debug=1`, the response includes rendered SQL and preview rows to
+    simplify troubleshooting.
+    """
     network_raw = (network or "").strip()
 
     def parse_browser_dt(value: str | None) -> str | None:
+        """Parse browser-provided ISO datetime into DB comparison format."""
         if not value:
             return None
 
@@ -380,6 +424,7 @@ def intercepts_explorer_list(
         return "'" + str(value).replace("'", "''") + "'"
 
     def render_sql(sql: str, params: list[object]) -> str:
+        """Render a parameterized SQL string for debug output."""
         rendered = sql
         for value in params:
             rendered = rendered.replace("?", sql_quote(value), 1)
@@ -550,6 +595,7 @@ def intercepts_explorer_list(
 
 @router.get("/api/intercepts-explorer/{message_id}")
 def intercepts_explorer_detail(message_id: int):
+    """Fetch full intercept detail including callsigns for explorer UI."""
     conn = get_conn()
     try:
         message_row = conn.execute(
@@ -582,7 +628,7 @@ def intercepts_explorer_detail(message_id: int):
                 c.id,
                 c.name,
                 c.comment,
-                c.status_id,
+                c.callsign_status_id AS status_id,
                 mc.role
             FROM message_callsigns mc
             JOIN callsigns c ON c.id = mc.callsign_id
@@ -634,6 +680,7 @@ def intercepts_explorer_update_comment(
     message_id: int,
     payload: InterceptsExplorerCommentPayload,
 ):
+    """Update message comment field (manual review workflow)."""
     conn = get_conn()
     try:
         row = conn.execute(
@@ -680,6 +727,11 @@ def intercepts_explorer_update_callsigns(
     message_id: int,
     payload: InterceptsExplorerCallsignsPayload,
 ):
+    """Replace all message_callsigns links for a message.
+
+    The function validates callsign ids and roles, rewrites the link table,
+    and returns the resulting callsigns list.
+    """
     conn = get_conn()
     try:
         message_row = conn.execute(
@@ -771,7 +823,7 @@ def intercepts_explorer_update_callsigns(
                 c.id,
                 c.name,
                 c.comment,
-                c.status_id,
+                c.callsign_status_id AS status_id,
                 mc.role
             FROM message_callsigns mc
             JOIN callsigns c ON c.id = mc.callsign_id
@@ -994,7 +1046,7 @@ def intercepts_explorer_add_callsign(
                     c.id,
                     c.name,
                     c.comment,
-                    c.status_id,
+                    c.callsign_status_id AS status_id,
                     mc.role
                 FROM message_callsigns mc
                 JOIN callsigns c ON c.id = mc.callsign_id
@@ -1057,7 +1109,7 @@ def intercepts_explorer_add_callsign(
                 c.id,
                 c.name,
                 c.comment,
-                c.status_id,
+                c.callsign_status_id AS status_id,
                 mc.role
             FROM message_callsigns mc
             JOIN callsigns c ON c.id = mc.callsign_id
@@ -1144,7 +1196,7 @@ def intercepts_explorer_delete_callsign(
                 c.id,
                 c.name,
                 c.comment,
-                c.status_id,
+                c.callsign_status_id AS status_id,
                 mc.role
             FROM message_callsigns mc
             JOIN callsigns c ON c.id = mc.callsign_id

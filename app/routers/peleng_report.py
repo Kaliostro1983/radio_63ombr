@@ -1,3 +1,17 @@
+"""Peleng record helpers for report generation (router-local).
+
+This module duplicates a small set of record-building helpers used to
+generate peleng report records from database rows.
+
+Usage in the system:
+    `app.services.peleng_report_service` imports `build_records_from_db`
+    from this module for historical reasons.
+
+Note:
+    A similar implementation also exists in `app.core.peleng_records`.
+    Both produce the same record shape: `{freq_or_mask, unit_desc, dt, mgrs}`.
+"""
+
 from __future__ import annotations
 
 from typing import Iterable, Mapping
@@ -5,6 +19,7 @@ from typing import Iterable, Mapping
 FALLBACK_UNIT_DESC = "УКХ р/м НВ підрозділу, н.п. УТОЧНЮЄТЬСЯ"
 
 def build_unit_desc(unit: str | None, zone: str | None) -> str:
+    """Build the unit description string used in peleng report rows."""
     unit = (unit or "").strip()
     zone = (zone or "").strip()
     if unit and zone:
@@ -16,7 +31,17 @@ def build_records_from_db(
     points: Iterable[Mapping],
     net_by_freq: Mapping[str, Mapping],
 ) -> list[dict]:
-    # index batches by id for fast lookup
+    """Build report record dicts from `peleng_batches` and `peleng_points`.
+
+    Args:
+        batches: rows for peleng batches.
+        points: rows for peleng points.
+        net_by_freq: mapping from frequency to network metadata (`unit`, `zone`).
+
+    Returns:
+        list[dict]: list of record dicts used by DOCX generator.
+    """
+    # Index batches by id for fast lookup.
     batch_by_id = {int(b["id"]): b for b in batches}
 
     records: list[dict] = []

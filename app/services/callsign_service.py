@@ -1,3 +1,22 @@
+"""Callsign persistence and callsign-graph updates.
+
+This module is responsible for linking parsed callsigns to messages and
+maintaining the aggregated callsign interaction graph:
+
+- Upsert callsigns into `callsigns` (unique per network).
+- Link callsigns to a message in `message_callsigns` with roles
+  (`caller` / `callee`).
+- Update aggregated edges in `callsign_edges` to track interactions over
+  time.
+
+Key system invariants enforced here:
+
+- Callsign uniqueness is scoped to a network: (network_id, name).
+- Graph edges are stored in normalized order: a_callsign_id < b_callsign_id.
+- Technical callsign "НВ" must not create edges.
+- Edges are updated only after the message is inserted into `messages`.
+"""
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -12,6 +31,20 @@ def upsert_callsign(
     created_at: str,
     received_at: str,
 ) -> Optional[int]:
+    """Upsert a callsign and link it to a message with a specific role.
+
+    Args:
+        cur: SQLite cursor.
+        network_id: network scope for callsign uniqueness.
+        message_id: message to link the callsign to.
+        name: callsign name token.
+        role: callsign role in message (`caller` or `callee`).
+        created_at: message time (for last_seen updates).
+        received_at: ingest receive time (for updated_at field on insert).
+
+    Returns:
+        Optional[int]: callsign id, or None if the provided name is empty.
+    """
     name = (name or "").strip()
     if not name:
         return None
@@ -23,6 +56,7 @@ def upsert_callsign(
 
     if row:
         cs_id = int(row[0] if not isinstance(row, dict) else row["id"])
+        # Only move last_seen_dt forward; never decrease it.
         cur.execute(
             """
             UPDATE callsigns
@@ -52,6 +86,19 @@ def upsert_callsign(
 
 
 def upsert_callsign_edge(cur, network_id: int, a_id: int, b_id: int, dt: str) -> None:
+    """Upsert an interaction edge between two callsigns.
+
+    The function normalizes the pair ordering (a_id < b_id) to satisfy the
+    schema invariant and uses an `ON CONFLICT` upsert to increment counters
+    and update last_seen timestamps.
+
+    Args:
+        cur: SQLite cursor.
+        network_id: network id for scoping the edge.
+        a_id: first callsign id.
+        b_id: second callsign id.
+        dt: interaction datetime (ISO TEXT) used for first/last seen updates.
+    """
     if not network_id or not a_id or not b_id or a_id == b_id:
         return
 
@@ -85,6 +132,25 @@ def link_message_callsigns(
     created_at: str,
     received_at: str,
 ) -> None:
+    """Link message callsigns and update callsign_edges graph.
+
+    The function:
+    - upserts caller and callee callsigns under a network scope;
+    - creates `message_callsigns` rows with roles;
+    - updates `callsign_edges` for caller↔callee interactions.
+
+    Special rule:
+        Callsign "НВ" is technical and does not create edges.
+
+    Args:
+        cur: SQLite cursor.
+        network_id: network id.
+        message_id: message id in `messages`.
+        caller: caller callsign token (may be None/empty).
+        callees: list of callee tokens.
+        created_at: message timestamp.
+        received_at: ingest receive timestamp.
+    """
     TECH_UNKNOWN = "НВ"
 
     def norm_name(value: Optional[str]) -> Optional[str]:

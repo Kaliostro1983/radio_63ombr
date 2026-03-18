@@ -35,7 +35,8 @@
 -   `networks`
 -   `network_aliases`
 -   `network_changes`
--   `network_tags`
+-   `network_tags` (довідник)
+-   `network_tag_links` (звʼязка many-to-many)
 -   `etalons`
 
 ### 3. Ingest і повідомлення
@@ -189,14 +190,31 @@
 
 ## network_tags
 
-Призначення: зв'язка many-to-many між мережами і тегами.
+Призначення: довідник тегів **саме для радіомереж** (UI-мітки). Не плутати з
+`tags`, які використовуються для тематичного аналізу текстів.
 
-Поля: - `network_id` --- FK → `networks.id` - `tag_id` --- FK →
-`tags.id`
+Поля:
+- `id` — PK
+- `name` — унікальна назва тегу
 
-Ключі та обмеження: - `PRIMARY KEY(network_id, tag_id)` -
-`FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE` -
-`FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE`
+Ключі та обмеження:
+- `PRIMARY KEY(id)`
+- `UNIQUE(name)`
+
+------------------------------------------------------------------------
+
+## network_tag_links
+
+Призначення: зв'язка many-to-many між мережами і `network_tags`.
+
+Поля:
+- `network_id` — FK → `networks.id`
+- `tag_id` — FK → `network_tags.id`
+
+Ключі та обмеження:
+- `PRIMARY KEY(network_id, tag_id)`
+- `FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE`
+- `FOREIGN KEY(tag_id) REFERENCES network_tags(id) ON DELETE CASCADE`
 
 ------------------------------------------------------------------------
 
@@ -205,7 +223,7 @@
 Призначення: еталонний опис мережі.
 
 Поля: - `id` --- PK - `network_id` --- FK → `networks.id`, унікальний -
-`start_date` - `correspondents` - `callsigns` - `purpose` -
+`start_date` - `end_date` - `correspondents` - `callsigns` - `purpose` -
 `operation_mode` - `traffic_type` - `raw_import_text` - `updated_at`
 
 Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(network_id)` -

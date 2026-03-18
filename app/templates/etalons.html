@@ -88,6 +88,16 @@
   </div>
 
   <div class="card">
+    <div style="font-weight:800; margin-bottom:10px">Позивні (з БД)</div>
+    <div class="small" style="margin-bottom:8px">Позивні, виявлені по цій радіомережі (таблиця <code>callsigns</code>).</div>
+    {% if callsigns_from_db %}
+      <textarea readonly rows="6" style="width:100%; font-family:inherit; resize:vertical">{{ callsigns_from_db | join(', ') }}</textarea>
+    {% else %}
+      <div class="small" style="color:var(--muted)">По цій мережі позивних у БД поки немає.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
     <div style="font-weight:800; margin-bottom:10px">Поля еталонки (зберігаються)</div>
 
     <form method="post" action="/etalons/save">
@@ -95,10 +105,6 @@
         <div class="field">
           <label>Дата початку (якщо порожньо — “невідомо”)</label>
           <input type="date" name="start_date_str" value="{{ et.start_date if et and et.start_date else '' }}"/>
-        </div>
-        <div class="field">
-          <label>Позивні (підтягуються пізніше)</label>
-          <textarea readonly placeholder="Підтягнеться автоматично з іншої таблиці.">{{ et.callsigns if et and et.callsigns else '' }}</textarea>
         </div>
       </div>
 

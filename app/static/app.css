@@ -63,9 +63,11 @@ a:hover{
 }
 
 .callsign-ico{
-  width:16px;
-  height:16px;
-  opacity:.9;
+  width:24px;
+  height:24px;
+  flex-shrink:0;
+  object-fit:contain;
+  opacity:.95;
 }
 
 /* =========================
@@ -169,6 +171,31 @@ textarea{
   color:var(--inputfg);
 }
 
+.input-error{
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent) !important;
+}
+
+.tag-toggle-wrap{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.tag-toggle{
+  padding:8px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--fg);
+  font-weight:650;
+}
+
+.tag-toggle.is-on{
+  background: color-mix(in srgb, #22c55e 18%, transparent);
+  border-color: color-mix(in srgb, #22c55e 65%, var(--border));
+}
+
 textarea{
   min-height:88px;
   resize:vertical;
@@ -211,6 +238,18 @@ button.secondary{
   padding:10px 8px;
   text-align:left;
   font-size:14px;
+}
+
+.home-activity-table{
+  font-size:1.2em;
+}
+
+.home-activity-summary{
+  font-size:1.3em;
+}
+
+.home-activity-summary .heat-pill{
+  font-weight:800;
 }
 
 .badge{
@@ -366,6 +405,93 @@ button.secondary{
   gap:12px;
 }
 
+/* =========================
+   HOME PAGE
+========================= */
+
+.home-activity-row{
+  align-items:flex-end;
+  gap:12px;
+}
+
+.home-activity-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.home-activity-days{
+  width:120px;
+  min-width:120px;
+  flex:0 0 120px;
+}
+
+.home-freq-input-wrap{
+  position:relative;
+}
+
+.home-freq-input-wrap input{
+  width:100%;
+}
+
+.home-activity-table th{
+  text-align:center;
+  vertical-align:middle;
+}
+
+.home-activity-meta{
+  margin-top:4px;
+}
+
+.home-activity-check-row{
+  display:flex;
+  flex-direction:row;
+  gap:16px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.home-activity-check-item{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+.home-activity-table td{
+  text-align:center;
+}
+
+/* У таблицях груп: перші три колонки зліва, колонки з датами по центру. */
+.home-activity-table:not(.home-activity-summary) td:nth-child(1),
+.home-activity-table:not(.home-activity-summary) td:nth-child(2),
+.home-activity-table:not(.home-activity-summary) td:nth-child(3){
+  text-align:center;
+}
+
+.heat-pill{
+  display:inline-block;
+  min-width:40px;
+  padding:6px 10px;
+  border-radius:6px;
+  font-weight:600;
+  text-align:center;
+}
+
+.heat-0{
+  background: color-mix(in srgb, #ef4444 55%, transparent);
+  color:#fff;
+}
+
+.heat-1{
+  background: color-mix(in srgb, #f97316 55%, transparent);
+  color:#fff;
+}
+
+.heat-2{
+  background: color-mix(in srgb, #22c55e 55%, transparent);
+  color:#fff;
+}
+
 .callsigns-field{
   display:flex;
   flex-direction:column;
@@ -478,20 +604,20 @@ button.secondary{
 
 /* Callsigns modal */
 .cs-modal-card{
-  max-width:504px;
+  max-width:560px;
 }
 
 .cs-profile-top{
   display:flex;
-  gap:14px;
-  align-items:flex-start;
-  flex-wrap:wrap;
+  gap:16px;
+  align-items:stretch;
+  flex-wrap:nowrap;
 }
 
 .cs-photo-wrap{
-  width:160px;
-  height:160px;
-  flex:0 0 160px;
+  width:240px;
+  height:240px;
+  flex:0 0 240px;
   border:1px solid var(--border);
   border-radius:14px;
   overflow:hidden;
@@ -502,12 +628,13 @@ button.secondary{
   width:100%;
   height:100%;
   object-fit:cover;
+  object-position:center top;
   display:block;
 }
 
 .cs-profile-fields{
   flex:1;
-  min-width:240px;
+  min-width:200px;
 }
 
 /* Callsigns status modal */
@@ -1059,6 +1186,21 @@ button.secondary{
   background: rgba(51, 65, 85, 0.12);
 }
 
+.callsign-chip__icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.callsign-chip--clickable {
+  cursor: pointer;
+}
+
+.callsign-chip--clickable:hover {
+  filter: brightness(0.96);
+}
+
 .callsign-field-wrap {
   position: relative;
 }
@@ -1370,4 +1512,11 @@ button.secondary{
 
 .callsign-chip__remove:hover {
   background: rgba(71, 85, 105, 0.12);
+}
+
+.callsign-chip__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  object-fit: contain;
 }

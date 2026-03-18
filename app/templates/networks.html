@@ -79,20 +79,23 @@
   </div>
 
   <form method="post" action="/networks/save" style="margin-top:14px">
-    <input type="hidden" name="action" id="save_action" value="save"/>
-
     <div class="row">
       <div class="field">
         <label>Частота</label>
-        <input name="frequency" value="{{ current.frequency if current else q_freq }}" required/>
+        <input name="frequency" class="{% if draft and 'frequency' in draft.missing_fields %}input-error{% endif %}" value="{{ current.frequency if current else (draft.frequency if draft else q_freq) }}" required/>
       </div>
       <div class="field">
         <label>Маска</label>
-        <input name="mask" value="{{ current.mask if current else q_mask }}"/>
+        <input name="mask" value="{{ current.mask if current else (draft.mask if draft else q_mask) }}"/>
       </div>
       <div class="field">
         <label>Дата початку</label>
-        <input type="date" name="start_date_str" value="{{ start_date.isoformat() if start_date else '' }}"/>
+        <input type="date" name="start_date_str" value="{{ start_date.isoformat() if start_date else (draft.start_date_str if draft else '') }}"/>
+        <div class="small">Зберігається в еталонці. Якщо порожньо — “невідомо”.</div>
+      </div>
+      <div class="field">
+        <label>Дата завершення</label>
+        <input type="date" name="end_date_str" value="{{ end_date.isoformat() if end_date else (draft.end_date_str if draft else '') }}"/>
         <div class="small">Зберігається в еталонці. Якщо порожньо — “невідомо”.</div>
       </div>
     </div>
@@ -100,38 +103,38 @@
     <div class="row" style="margin-top:10px">
       <div class="field">
         <label>Підрозділ</label>
-        <input name="unit" value="{{ current.unit if current else '' }}" required/>
+        <input name="unit" class="{% if draft and 'unit' in draft.missing_fields %}input-error{% endif %}" value="{{ current.unit if current else (draft.unit if draft else '') }}" required/>
       </div>
       <div class="field">
         <label>Зона функціонування</label>
-        <input name="zone" value="{{ current.zone if current else '' }}" required/>
+        <input name="zone" class="{% if draft and 'zone' in draft.missing_fields %}input-error{% endif %}" value="{{ current.zone if current else (draft.zone if draft else '') }}" required/>
       </div>
     </div>
 
     <div class="row" style="margin-top:10px">
       <div class="field">
         <label>Статус</label>
-        <select name="status_id" required>
+        <select name="status_id" class="{% if draft and 'status_id' in draft.missing_fields %}input-error{% endif %}" required>
           {% for s in statuses %}
-            <option value="{{ s.id }}" {% if current and current.status_id==s.id %}selected{% endif %}>{{ s.name }}</option>
+            <option value="{{ s.id }}" {% if (current and current.status_id==s.id) or (draft and draft.status_id|int==s.id) %}selected{% endif %}>{{ s.name }}</option>
           {% endfor %}
         </select>
       </div>
 
       <div class="field">
         <label>Чат (джерело)</label>
-        <select name="chat_id" required>
+        <select name="chat_id" class="{% if draft and 'chat_id' in draft.missing_fields %}input-error{% endif %}" required>
           {% for c in chats %}
-            <option value="{{ c.id }}" {% if current and current.chat_id==c.id %}selected{% endif %}>{{ c.name }}</option>
+            <option value="{{ c.id }}" {% if (current and current.chat_id==c.id) or (draft and draft.chat_id|int==c.id) %}selected{% endif %}>{{ c.name }}</option>
           {% endfor %}
         </select>
       </div>
 
       <div class="field">
         <label>Хто (група)</label>
-        <select name="group_id" required>
+        <select name="group_id" class="{% if draft and 'group_id' in draft.missing_fields %}input-error{% endif %}" required>
           {% for g in groups %}
-            <option value="{{ g.id }}" {% if current and current.group_id==g.id %}selected{% endif %}>{{ g.name }}</option>
+            <option value="{{ g.id }}" {% if (current and current.group_id==g.id) or (draft and draft.group_id|int==g.id) %}selected{% endif %}>{{ g.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -139,24 +142,28 @@
 
     <div class="row" style="margin-top:10px">
       <div class="field">
-        <label>Теги (мультивибір)</label>
-        <select name="tag_ids" multiple size="4">
+        <label>Теги</label>
+        {% set selected_ids = selected_tags or [] %}
+        {% if draft and draft.tag_ids %}
+          {% set selected_ids = draft.tag_ids %}
+        {% endif %}
+        <div id="netTagButtons" class="tag-toggle-wrap">
           {% for t in tags %}
-            <option value="{{ t.id }}" {% if t.id in selected_tag_ids %}selected{% endif %}>{{ t.name }}</option>
+            {% set is_on = (t.id in selected_ids) %}
+            <button type="button" class="tag-toggle {% if is_on %}is-on{% endif %}" data-tag-id="{{ t.id }}">{{ t.name }}</button>
           {% endfor %}
-        </select>
-        <div class="small">Утримуй Ctrl для мультивибору.</div>
+        </div>
+        <div id="netTagHidden"></div>
       </div>
 
       <div class="field">
         <label>Коментар</label>
-        <textarea name="comment" placeholder="Пояснення/особливості...">{{ current.comment if current and current.comment else '' }}</textarea>
+        <textarea name="comment" placeholder="Пояснення/особливості...">{{ current.comment if current and current.comment else (draft.comment if draft else '') }}</textarea>
       </div>
     </div>
 
     <div class="btnrow" style="margin-top:12px">
-      <button type="submit" onclick="document.getElementById('save_action').value='save'">Зберегти</button>
-      <button type="submit" class="secondary" onclick="document.getElementById('save_action').value='save_new'">Зберегти як нову р/м</button>
+      <button type="submit">Зберегти</button>
 
       {% if current %}
         {% if etalon_exists %}
@@ -168,17 +175,36 @@
     </div>
   </form>
 
-  <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px">
-    <form method="post" action="/tags/add" class="row" style="align-items:end">
-      <div class="field">
-        <label>Додати тег</label>
-        <input name="name" placeholder="Наприклад: Зв'язок штабу"/>
-      </div>
-      <div style="min-width:160px">
-        <button type="submit">+</button>
-      </div>
-    </form>
-  </div>
+  <script>
+    (function () {
+      const wrap = document.getElementById("netTagButtons");
+      const hidden = document.getElementById("netTagHidden");
+      if (!wrap || !hidden) return;
+
+      function rebuildHidden() {
+        hidden.innerHTML = "";
+        const on = wrap.querySelectorAll(".tag-toggle.is-on");
+        on.forEach((b) => {
+          const id = b.getAttribute("data-tag-id");
+          if (!id) return;
+          const inp = document.createElement("input");
+          inp.type = "hidden";
+          inp.name = "tag_ids";
+          inp.value = id;
+          hidden.appendChild(inp);
+        });
+      }
+
+      wrap.addEventListener("click", (e) => {
+        const btn = e.target.closest(".tag-toggle");
+        if (!btn) return;
+        btn.classList.toggle("is-on");
+        rebuildHidden();
+      });
+
+      rebuildHidden();
+    })();
+  </script>
 </div>
 
 {% endblock %}

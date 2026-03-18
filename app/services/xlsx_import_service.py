@@ -1,3 +1,19 @@
+"""XLSX import service for intercepts.
+
+This module implements importing intercept messages from an Excel file.
+
+Usage in the system:
+
+- The web UI allows uploading an `.xlsx` file.
+- The router forwards the file path (or uploaded content) to this service.
+- The service reads the workbook, extracts message text from a target
+  column, and feeds each row into the same ingest pipeline
+  (`process_whatsapp_payload`) as real-time sources.
+
+The import result is a summary dict containing counts for processed rows,
+inserted messages, duplicates, failures, and skips.
+"""
+
 from __future__ import annotations
 
 from typing import Dict, Any
@@ -6,18 +22,35 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.services.ingest_service import process_whatsapp_payload
+from app.core.logging import get_logger
+
+
+log = get_logger("xlsx_import_service")
 
 
 TARGET_COLUMN = "р\\обмін"
 
 
 def _normalize_header(value) -> str:
+    """Normalize an XLSX header cell into a comparable string."""
     if value is None:
         return ""
     return str(value).strip().lower()
 
 
 def _normalize_cell_text(value: Any) -> str:
+    """Normalize an XLSX cell value into clean text for parsing.
+
+    The function:
+    - normalizes Windows-style line endings;
+    - removes common invisible Unicode characters that break parsers.
+
+    Args:
+        value: raw cell value.
+
+    Returns:
+        str: cleaned text (may be empty).
+    """
     if value is None:
         return ""
 
@@ -35,6 +68,18 @@ def _normalize_cell_text(value: Any) -> str:
 
 
 def import_xlsx(file_path: str) -> Dict[str, Any]:
+    """Import intercept messages from an XLSX file.
+
+    Args:
+        file_path: path to `.xlsx` file.
+
+    Returns:
+        Dict[str, Any]: summary metrics including:
+        `total_rows`, `processed`, `inserted`, `duplicates`, `failed`, `skipped`.
+
+    Raises:
+        ValueError: if the file is empty or target column is missing.
+    """
     import_session_id = uuid4().hex
 
     wb = load_workbook(filename=file_path, read_only=True, data_only=True)
@@ -60,7 +105,12 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
         "duplicates": 0,
         "failed": 0,
         "skipped": 0,
+        "reasons": {},
     }
+
+    skip_reasons: dict[str, int] = {}
+    reason_samples: dict[str, set[str]] = {}
+    missing_network_samples: set[str] = set()
 
     filename = Path(file_path).name
 
@@ -69,11 +119,15 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
 
         if col_index >= len(row):
             summary["skipped"] += 1
+            reason = "xlsx_row_missing_target_column"
+            skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
             continue
 
         text = _normalize_cell_text(row[col_index])
         if not text:
             summary["skipped"] += 1
+            reason = "xlsx_empty_cell"
+            skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
             continue
 
         payload = {
@@ -101,8 +155,51 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
                 continue
 
             summary["skipped"] += 1
+            reason = str(result.get("reason") or "skipped")
+            skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
+            if len(reason_samples.get(reason, set())) < 5:
+                s = reason_samples.setdefault(reason, set())
+                # Keep the sample compact and single-line.
+                s.add(text.replace("\n", " ")[:120])
+            if reason == "network_not_found":
+                details = result.get("details") or {}
+                freq = str(details.get("frequency") or "").strip()
+                mask = str(details.get("mask") or "").strip()
+                token = freq or mask or text[:80]
+                if token:
+                    missing_network_samples.add(token)
 
         except Exception:
             summary["failed"] += 1
 
+    summary["reasons"] = skip_reasons
+
+    if missing_network_samples:
+        sample = sorted(missing_network_samples)[:50]
+        log.warning(
+            "XLSX import: network_not_found for %d unique tokens. Samples: %s",
+            len(missing_network_samples),
+            ", ".join(sample),
+        )
+
+    if skip_reasons:
+        # Use NOTICE so it shows up even when INFO is filtered out.
+        parts = []
+        for k, v in sorted(skip_reasons.items(), key=lambda kv: (-kv[1], kv[0])):
+            samples = sorted(reason_samples.get(k, set()))
+            if samples:
+                parts.append(f"{k}={v} (samples: " + " | ".join(samples) + ")")
+            else:
+                parts.append(f"{k}={v}")
+        log.notice("XLSX import skip reasons breakdown: %s", "; ".join(parts))
+
+    log.notice(
+        "XLSX import done: total=%d processed=%d inserted=%d duplicates=%d skipped=%d failed=%d",
+        summary["total_rows"],
+        summary["processed"],
+        summary["inserted"],
+        summary["duplicates"],
+        summary["skipped"],
+        summary["failed"],
+    )
     return summary

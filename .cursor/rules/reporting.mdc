@@ -1,0 +1,15 @@
+---
+description: Reporting modules must keep sensitive text in local config
+alwaysApply: true
+---
+
+## Reporting modules and sensitive text
+
+- **Config for sensitive strings**: When implementing or modifying any module that generates reports (DOCX, PDF, HTML, XLSX, text exports, etc.), do **not** hardcode sensitive or unit-specific text (назви частин, позивні, обладнання, службові формулювання, шаблони назв файлів, тощо) безпосередньо в коді.
+- **External configuration file**: Instead, keep such text in a **configuration file**, which:
+  - lives outside the Python package by default (e.g., in the repo root), or in a clearly separated `config` module that only contains loaders and defaults;
+  - is loaded at runtime (JSON/TOML/ENV/ini — формат не критичний);
+  - містить безпечні дефолти, якщо локальний файл відсутній.
+- **Git ignore**: Усі реальні конфігураційні файли з чутливими даними для звітів **мають бути додані в `.gitignore`**, щоб не потрапляти в репозиторій (зберігати тільки loader-модулі з дефолтами).
+- **Шаблони імен файлів**: Назви/шаблони вихідних файлів звітів (наприклад, імена, що містять назву форми або частини) теж мають знаходитися в конфігурації, а не бути жорстко зашитими в код.
+

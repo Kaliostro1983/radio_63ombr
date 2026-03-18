@@ -1,9 +1,35 @@
+"""Network search service helpers.
+
+This module implements a search query over the `networks` table used by UI
+features (e.g. autocomplete or search fields).
+
+The function `search_network_rows` supports flexible user input:
+
+- exact frequency (normalized to `DDD.DDDD`) or
+- mask/prefix values (converted to SQL LIKE patterns), plus
+- substring matches across frequency/mask/unit/zone.
+
+The logic intentionally returns rows rather than domain objects; routers or
+services can convert results into the response shape they need.
+"""
+
 from __future__ import annotations
 
 from app.core.normalize import normalize_freq_or_mask
 
 
 def search_network_rows(conn, query: str, limit: int = 100):
+    """Search network rows by frequency/mask and other descriptive fields.
+
+    Args:
+        conn: SQLite connection.
+        query: user-provided query string (frequency, mask, or free text).
+        limit: maximum number of rows to return.
+
+    Returns:
+        list: SQLite rows (as returned by cursor.fetchall()) containing
+        `id, frequency, mask, unit, zone, chat_id, status_id`.
+    """
     raw = (query or "").strip()
     if not raw:
         return []
@@ -15,6 +41,7 @@ def search_network_rows(conn, query: str, limit: int = 100):
 
     raw_like = f"%{raw}%"
 
+    # Build a set of OR conditions based on what the query can represent.
     where_parts = []
     params = []
 

@@ -1,3 +1,15 @@
+"""UI router for managing etalon (reference) network descriptions.
+
+Etalons store human-curated descriptive metadata for a radio network
+(`etalons` table). This router provides:
+
+- an HTML page for selecting a network and viewing/editing its etalon;
+- search flow to pick a network by frequency/mask;
+- save flow to persist etalon fields.
+
+The router uses the session to remember the last selected network id.
+"""
+
 # app/routers/etalons.py
 from __future__ import annotations
 
@@ -20,11 +32,13 @@ router = APIRouter()
 
 
 def _fetchone(conn, sql: str, params=()):
+    """Fetch one row from SQLite for a query."""
     cur = conn.execute(sql, params)
     return cur.fetchone()
 
 
 def _ensure_etalon(conn, network_id: int):
+    """Ensure an etalon row exists for the network and return it."""
     row = _fetchone(conn, "SELECT * FROM etalons WHERE network_id=?", (int(network_id),))
     if row:
         return row
@@ -38,6 +52,7 @@ def _ensure_etalon(conn, network_id: int):
 
 
 def _build_generated(net, et):
+    """Build derived display-only fields for the UI (name/period/etc.)."""
     name = f"УКХ р/м {net['unit']}, {net['zone']}"
     area = net["zone"]
     period = "з невідомої дати по сьогоднішній день"
@@ -58,17 +73,28 @@ def _build_generated(net, et):
     }
 
 
+def _load_callsigns_for_network(conn, network_id: int) -> list[str]:
+    """Load callsign names for the given network from DB (callsigns table)."""
+    cur = conn.execute(
+        "SELECT name FROM callsigns WHERE network_id = ? ORDER BY name",
+        (int(network_id),),
+    )
+    return [row[0] for row in cur.fetchall() if row[0]]
+
+
 def _load_page_state(conn, network_id: Optional[int]):
+    """Load current network + etalon + generated fields + callsigns from DB for rendering."""
     if not network_id:
-        return None, None, None
+        return None, None, None, []
 
     net = _fetchone(conn, "SELECT * FROM networks WHERE id=?", (int(network_id),))
     if not net:
-        return None, None, None
+        return None, None, None, []
 
     et = _ensure_etalon(conn, int(net["id"]))
     gen = _build_generated(net, et)
-    return net, et, gen
+    callsigns_from_db = _load_callsigns_for_network(conn, int(net["id"]))
+    return net, et, gen, callsigns_from_db
 
 
 def _build_context(
@@ -81,7 +107,9 @@ def _build_context(
     net=None,
     et=None,
     gen=None,
+    callsigns_from_db=None,
 ):
+    """Build Jinja template context for the etalons page."""
     return {
         "request": request,
         "actor": actor,
@@ -98,6 +126,7 @@ def _build_context(
             "modulation": DEFAULT_MODULATION,
             "period": "",
         },
+        "callsigns_from_db": callsigns_from_db or [],
         "defaults": {
             "purpose": DEFAULT_PURPOSE,
             "operation_mode": DEFAULT_OPERATION_MODE,
@@ -112,6 +141,7 @@ def page(
     pick: Optional[int] = None,
     actor=Depends(get_actor),
 ):
+    """Render the etalons page for the last-selected (or picked) network."""
     msg = request.query_params.get("msg", "")
 
     if pick:
@@ -120,7 +150,7 @@ def page(
     last_id = request.session.get("last_network_id")
 
     with get_conn() as conn:
-        net, et, gen = _load_page_state(conn, last_id)
+        net, et, gen, callsigns_from_db = _load_page_state(conn, last_id)
 
     context = _build_context(
         request,
@@ -131,6 +161,7 @@ def page(
         net=net,
         et=et,
         gen=gen,
+        callsigns_from_db=callsigns_from_db,
     )
     return request.app.state.templates.TemplateResponse("etalons.html", context)
 
@@ -141,11 +172,12 @@ def search(
     query: str = Form(""),
     actor=Depends(get_actor),
 ):
+    """Search networks and either select a single match or show match list."""
     q_query = (query or "").strip()
     current_id = request.session.get("last_network_id")
 
     with get_conn() as conn:
-        net, et, gen = _load_page_state(conn, current_id)
+        net, et, gen, callsigns_from_db = _load_page_state(conn, current_id)
 
         if not q_query:
             context = _build_context(
@@ -157,6 +189,7 @@ def search(
                 net=net,
                 et=et,
                 gen=gen,
+                callsigns_from_db=callsigns_from_db,
             )
             return request.app.state.templates.TemplateResponse("etalons.html", context)
 
@@ -175,6 +208,7 @@ def search(
             net=net,
             et=et,
             gen=gen,
+            callsigns_from_db=callsigns_from_db,
         )
         return request.app.state.templates.TemplateResponse("etalons.html", context)
 
@@ -188,6 +222,7 @@ def save(
     operation_mode: str = Form(default=""),
     traffic_type: str = Form(default=""),
 ):
+    """Persist etalon fields for the last-selected network."""
     last_id = request.session.get("last_network_id")
     if not last_id:
         return RedirectResponse(url="/etalons?msg=Спочатку обери радіомережу.", status_code=303)

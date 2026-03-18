@@ -1,3 +1,14 @@
+"""Time helpers for the ingest pipeline and UI.
+
+The project stores most timestamps in SQLite as `TEXT` using ISO-8601-like
+strings (via `datetime.isoformat(timespec="seconds")`). This module
+provides:
+
+- current timestamp in storage format (`now_sql`);
+- conversion from intercept template datetime strings to storage format (`to_sql_dt`);
+- delay calculation between source platform timestamp and intercept timestamp (`calc_delay_sec`).
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -5,10 +16,27 @@ from typing import Optional
 
 
 def now_sql() -> str:
+    """Return current local time formatted for SQLite TEXT storage.
+
+    Returns:
+        str: ISO-formatted datetime string with second precision.
+    """
     return datetime.now().isoformat(timespec="seconds")
 
 
 def to_sql_dt(dt_text: str | None) -> str | None:
+    """Convert intercept datetime text into ISO storage format.
+
+    Supported input formats:
+        - `DD.MM.YYYY, HH:MM:SS`
+        - `DD.MM.YYYY HH:MM:SS`
+
+    Args:
+        dt_text: datetime string extracted from an intercept message.
+
+    Returns:
+        str | None: ISO-formatted datetime string or None if parsing fails.
+    """
     if not dt_text:
         return None
 
@@ -28,6 +56,17 @@ def calc_delay_sec(
     published_at_platform: Optional[str],
     published_at_text: Optional[str],
 ) -> Optional[int]:
+    """Calculate delay in seconds between platform timestamp and intercept timestamp.
+
+    Args:
+        platform: ingestion source identifier (e.g. `whatsapp`, `xlsx`).
+        published_at_platform: timestamp provided by the platform (typically ISO).
+        published_at_text: timestamp extracted from intercept text (template format).
+
+    Returns:
+        Optional[int]: delay in seconds (`platform_dt - intercept_dt`), 0 for
+        certain import sources, or None if inputs are missing/invalid.
+    """
     if platform == "xlsx_import":
         return 0
 
