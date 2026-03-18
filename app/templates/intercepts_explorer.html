@@ -26,6 +26,17 @@
       >
     </div>
 
+    <div class="field">
+      <label for="callsignQuery">Позивний</label>
+      <input
+        id="callsignQuery"
+        name="callsign"
+        type="text"
+        placeholder="Усі позивні"
+        autocomplete="off"
+      >
+    </div>
+
     <div class="field field-btn">
       <label>&nbsp;</label>
       <div class="action-buttons">
@@ -51,10 +62,18 @@
   (function () {
     const startInput = document.getElementById("periodStart");
     const endInput = document.getElementById("periodEnd");
+    const networkInput = document.getElementById("networkQuery");
+    const callsignInput = document.getElementById("callsignQuery");
 
     if (!startInput || !endInput) {
       return;
     }
+
+    const qs = new URLSearchParams(window.location.search);
+    const qsStart = (qs.get("period_start") || "").trim();
+    const qsEnd = (qs.get("period_end") || "").trim();
+    const qsNet = (qs.get("network") || "").trim();
+    const qsCs = (qs.get("callsign") || "").trim();
 
     const now = new Date();
 
@@ -73,9 +92,11 @@
       return `${year}-${month}-${day}T${hours}:${minutes}`;
     }
 
-    startInput.value = toDatetimeLocalValue(start);
-    endInput.value = toDatetimeLocalValue(end);
+    startInput.value = qsStart || toDatetimeLocalValue(start);
+    endInput.value = qsEnd || toDatetimeLocalValue(end);
+    if (networkInput && qsNet) networkInput.value = qsNet;
+    if (callsignInput && qsCs) callsignInput.value = qsCs;
   })();
 </script>
-<script src="/static/intercepts_explorer.js?v=5"></script>
+<script src="/static/intercepts_explorer.js?v=6"></script>
 {% endblock %}

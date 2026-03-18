@@ -50,6 +50,7 @@
     const startDt = String(formData.get("period_start") || "").trim();
     const endDt = String(formData.get("period_end") || "").trim();
     const network = String(formData.get("network") || "").trim();
+    const callsign = String(formData.get("callsign") || "").trim();
 
     if (startDt) {
       params.set("start_dt", startDt);
@@ -61,6 +62,10 @@
 
     if (network) {
       params.set("network", network);
+    }
+
+    if (callsign) {
+      params.set("callsign", callsign);
     }
 
     params.set("limit", String(state.limit));

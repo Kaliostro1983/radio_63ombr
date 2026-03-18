@@ -47,7 +47,11 @@
         <div class="small" style="opacity:.75">Особова справа</div>
         <div id="csModalTitle" style="font-weight:700">—</div>
       </div>
-      <button class="secondary" type="button" data-close="1">Закрити</button>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button id="csOpenIntercepts" class="secondary" type="button">Перехоплення</button>
+        <button id="csOpenLinks" class="secondary" type="button">Зв'язки</button>
+        <button class="secondary" type="button" data-close="1">Закрити</button>
+      </div>
     </div>
 
     <div class="modal-body">
@@ -124,7 +128,7 @@
   </div>
 </div>
 
-<script src="/static/callsign_modal.js?v=3" defer></script>
+<script src="/static/callsign_modal.js?v=6" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

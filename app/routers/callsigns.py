@@ -378,6 +378,160 @@ def api_callsign_by_id(id: int):
     }
 
 
+@router.get("/api/callsigns/{callsign_id}/graph")
+def api_callsign_graph(
+    callsign_id: int,
+    days: int = 14,
+    advanced: int = 0,
+):
+    """Return callsign interaction graph centered on a callsign.
+
+    - advanced=0: 1-hop neighbors (who interacted with the callsign)
+    - advanced=1: 2-hop expansion (also include interactions of neighbors)
+    """
+    cid = _as_int(callsign_id, 0)
+    if not cid:
+        return JSONResponse({"ok": False, "error": "invalid callsign_id"}, status_code=400)
+
+    try:
+        days_n = int(days)
+        if days_n < 1:
+            days_n = 1
+        if days_n > 365:
+            days_n = 365
+    except Exception:
+        days_n = 14
+
+    adv = bool(int(advanced or 0))
+    start_dt = (datetime.now() - timedelta(days=days_n)).isoformat(timespec="seconds")
+
+    with get_conn() as conn:
+        base = conn.execute(
+            """
+            SELECT
+              id,
+              network_id,
+              name,
+              COALESCE(callsign_status_id, status_id) AS status_id
+            FROM callsigns
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (cid,),
+        ).fetchone()
+
+        if not base:
+            return {"ok": True, "nodes": [], "edges": [], "meta": {"days": days_n}}
+
+        network_id = int(base["network_id"]) if base["network_id"] else 0
+        if not network_id:
+            return {"ok": True, "nodes": [], "edges": [], "meta": {"days": days_n}}
+
+        # 1-hop edges for center
+        e1 = conn.execute(
+            """
+            SELECT a_callsign_id AS a_id, b_callsign_id AS b_id, cnt
+            FROM callsign_edges
+            WHERE network_id = ?
+              AND last_seen_dt >= ?
+              AND (a_callsign_id = ? OR b_callsign_id = ?)
+            """,
+            (network_id, start_dt, cid, cid),
+        ).fetchall()
+
+        lvl1: set[int] = set()
+        for r in e1:
+            a = int(r["a_id"])
+            b = int(r["b_id"])
+            other = b if a == cid else a
+            if other != cid:
+                lvl1.add(other)
+
+        nodes_set: set[int] = {cid, *lvl1}
+        lvl2: set[int] = set()
+
+        if adv and lvl1:
+            placeholders = ",".join(["?"] * len(lvl1))
+            e2 = conn.execute(
+                f"""
+                SELECT a_callsign_id AS a_id, b_callsign_id AS b_id
+                FROM callsign_edges
+                WHERE network_id = ?
+                  AND last_seen_dt >= ?
+                  AND (a_callsign_id IN ({placeholders}) OR b_callsign_id IN ({placeholders}))
+                """,
+                (network_id, start_dt, *sorted(lvl1), *sorted(lvl1)),
+            ).fetchall()
+            for r in e2:
+                a = int(r["a_id"])
+                b = int(r["b_id"])
+                if a not in nodes_set:
+                    lvl2.add(a)
+                if b not in nodes_set:
+                    lvl2.add(b)
+            # cap to avoid huge graphs
+            if len(lvl2) > 220:
+                lvl2 = set(list(sorted(lvl2))[:220])
+            nodes_set |= lvl2
+
+        # Pull edges among the selected node set
+        placeholders = ",".join(["?"] * len(nodes_set))
+        edges_rows = conn.execute(
+            f"""
+            SELECT a_callsign_id AS a_id, b_callsign_id AS b_id, cnt
+            FROM callsign_edges
+            WHERE network_id = ?
+              AND last_seen_dt >= ?
+              AND a_callsign_id IN ({placeholders})
+              AND b_callsign_id IN ({placeholders})
+            ORDER BY cnt DESC
+            LIMIT 600
+            """,
+            (network_id, start_dt, *sorted(nodes_set), *sorted(nodes_set)),
+        ).fetchall()
+
+        # Load node metadata and exclude technical "НВ"
+        meta_rows = conn.execute(
+            f"""
+            SELECT
+              id,
+              name,
+              COALESCE(callsign_status_id, status_id) AS status_id
+            FROM callsigns
+            WHERE id IN ({placeholders})
+              AND name <> 'НВ'
+            """,
+            (*sorted(nodes_set),),
+        ).fetchall()
+
+    nodes = []
+    ok_ids = set()
+    for r in meta_rows:
+        sid = r["status_id"]
+        sid_num = int(sid) if sid is not None and str(sid).strip() != "" else None
+        icon = f"/static/icons/callsign_statuses/{sid_num}.svg" if sid_num else "/static/icons/callsign_statuses/_default.svg"
+        nid = int(r["id"])
+        ok_ids.add(nid)
+        level = 0 if nid == cid else (1 if nid in lvl1 else 2)
+        nodes.append({"id": nid, "name": r["name"] or "", "status_id": sid_num, "icon": icon, "level": level})
+
+    edges = []
+    for r in edges_rows:
+        a = int(r["a_id"])
+        b = int(r["b_id"])
+        if a not in ok_ids or b not in ok_ids:
+            continue
+        edges.append({"source": a, "target": b, "cnt": int(r["cnt"] or 0)})
+
+    return {
+        "ok": True,
+        "center_id": cid,
+        "nodes": nodes,
+        "edges": edges,
+        "meta": {"days": days_n, "advanced": 1 if adv else 0, "start_dt": start_dt},
+    }
+
+
 @router.post("/api/callsigns/save")
 async def api_callsign_save(request: Request):
     """Create or update a callsign based on JSON payload.

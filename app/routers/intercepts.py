@@ -389,6 +389,7 @@ def intercepts_explorer_list(
     start_dt: str | None = Query(None),
     end_dt: str | None = Query(None),
     network: str | None = Query(None),
+    callsign: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     debug: int = Query(0),
@@ -399,6 +400,7 @@ def intercepts_explorer_list(
     simplify troubleshooting.
     """
     network_raw = (network or "").strip()
+    callsign_raw = (callsign or "").strip()
 
     def parse_browser_dt(value: str | None) -> str | None:
         """Parse browser-provided ISO datetime into DB comparison format."""
@@ -482,6 +484,20 @@ def intercepts_explorer_list(
                 )
                 params.extend([like_value, like_value, like_value, like_value, like_value])
 
+        if callsign_raw:
+            where.append(
+                """
+                EXISTS (
+                    SELECT 1
+                    FROM message_callsigns mc
+                    JOIN callsigns c ON c.id = mc.callsign_id
+                    WHERE mc.message_id = m.id
+                      AND lower(c.name) = lower(?)
+                )
+                """
+            )
+            params.append(callsign_raw)
+
         where_sql = " AND ".join(where)
 
         count_sql = f"""
@@ -564,6 +580,7 @@ def intercepts_explorer_list(
                     "start_dt": start_dt,
                     "end_dt": end_dt,
                     "network": network,
+                    "callsign": callsign,
                     "limit": limit,
                     "offset": offset,
                 },

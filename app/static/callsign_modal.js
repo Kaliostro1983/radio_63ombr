@@ -20,6 +20,8 @@
   const modalPhoto = $("csModalPhoto");
   const modalErr = $("csModalErr");
   const btnSave = $("csSave");
+  const btnOpenIntercepts = $("csOpenIntercepts");
+  const btnOpenLinks = $("csOpenLinks");
 
   const statusModal = $("csStatusModal");
   const newStatusName = $("csNewStatusName");
@@ -33,6 +35,69 @@
   let CURRENT_NETWORK_ID = null;
   let OPEN_CONTEXT = null; // passed to onSave when saving
   let onSaveCallback = null;
+
+  function toDatetimeLocalValue(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  async function openInterceptsForCurrent() {
+    const callsignName = (modalName && modalName.value ? String(modalName.value) : "").trim();
+    if (!callsignName) return;
+
+    const now = new Date();
+    const end = toDatetimeLocalValue(now);
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - 10);
+    const start = toDatetimeLocalValue(startDate);
+
+    const params = new URLSearchParams();
+    params.set("period_start", start);
+    params.set("period_end", end);
+    params.set("callsign", callsignName);
+
+    // Try to derive a compact network token without async calls.
+    // Prefer frequency, fall back to mask, from the select option label.
+    let networkToken = "";
+    try {
+      if (modalNetwork && modalNetwork.value) {
+        const opt = modalNetwork.options ? modalNetwork.options[modalNetwork.selectedIndex] : null;
+        const txt = opt && opt.textContent ? String(opt.textContent) : "";
+        // Format: "146.6350 / 300.3010 — unit"
+        const head = txt.split("—")[0] || "";
+        const parts = head.split("/").map((s) => s.trim()).filter(Boolean);
+        const freq = parts[0] && parts[0] !== "—" ? parts[0] : "";
+        const mask = parts[1] && parts[1] !== "—" ? parts[1] : "";
+        networkToken = freq || mask || "";
+      }
+    } catch (e) {
+      networkToken = "";
+    }
+    if (networkToken) params.set("network", networkToken);
+
+    // Open directly with final URL (sync) to avoid popup blockers and blank tabs.
+    const url = `/intercepts-explorer?${params.toString()}`;
+    const w = window.open(url, "_blank", "noopener");
+    if (!w) {
+      showError("Браузер заблокував відкриття вкладки. Дозволь popups для цього сайту.");
+    }
+  }
+
+  function openLinksForCurrent() {
+    const callsignId = modalId && modalId.value ? parseInt(modalId.value, 10) : 0;
+    if (!callsignId) return;
+    const days = 14;
+    const adv = 0;
+    const url = `/callsigns?tab=links&callsign_id=${encodeURIComponent(callsignId)}&days=${encodeURIComponent(days)}&advanced=${encodeURIComponent(adv)}`;
+    const w = window.open(url, "_blank", "noopener");
+    if (!w) {
+      showError("Браузер заблокував відкриття вкладки. Дозволь popups для цього сайту.");
+    }
+  }
 
   function setPhotoForStatus(statusId) {
     if (!modalPhoto) return;
@@ -391,6 +456,12 @@
     loadSources();
 
     btnSave.addEventListener("click", saveModal);
+    if (btnOpenIntercepts) {
+      btnOpenIntercepts.addEventListener("click", openInterceptsForCurrent);
+    }
+    if (btnOpenLinks) {
+      btnOpenLinks.addEventListener("click", openLinksForCurrent);
+    }
 
     if (modalNetworkQuery) {
       modalNetworkQuery.addEventListener("input", function () {

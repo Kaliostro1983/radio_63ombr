@@ -30,6 +30,17 @@
       >
         Пошук/правка
       </button>
+
+      <button
+        id="csTabLinks"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="csPaneLinks"
+      >
+        Зв'язки
+      </button>
     </div>
 
     <div class="tab-panel-wrap">
@@ -125,9 +136,60 @@
           </div>
         </div>
       </section>
+
+      <!-- TAB: links graph -->
+      <section
+        id="csPaneLinks"
+        class="tab-panel callsigns-tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="csTabLinks"
+      >
+        <div class="tab-panel-section callsigns-toolbar">
+          <div class="row callsigns-form-row">
+            <div class="callsigns-field callsigns-field-frequency">
+              <label class="small">Частота</label>
+              <div class="home-freq-input-wrap">
+                <input id="csLinkFreq" type="text" placeholder="Додай частоту… (autocomplete)" autocomplete="off" />
+              </div>
+              <input id="csLinkNetworkId" type="hidden" />
+            </div>
+
+            <div class="callsigns-field callsigns-field-query">
+              <label class="small">Позивний</label>
+              <div class="home-freq-input-wrap">
+                <input id="csLinkCallsign" type="text" placeholder="Почни вводити… (autocomplete)" autocomplete="off" />
+              </div>
+              <input id="csLinkCallsignId" type="hidden" />
+            </div>
+
+            <div class="callsigns-field callsigns-field-days">
+              <label class="small">Днів</label>
+              <input id="csLinkDays" type="number" min="1" max="365" value="14" />
+            </div>
+
+            <div class="callsigns-field" style="min-width:180px; flex:0 0 180px">
+              <label class="small">&nbsp;</label>
+              <label class="small cs-links-check">
+                <input id="csLinkAdvanced" type="checkbox" />
+                <span>Розширений</span>
+              </label>
+            </div>
+
+            <div class="callsigns-actions">
+              <button id="csLinkShow" type="button">Показати зв'язки</button>
+            </div>
+
+            <div id="csLinkInfo" class="small callsigns-info"></div>
+          </div>
+        </div>
+
+        <div class="tab-panel-section callsigns-results">
+          <div id="csLinkGraphOut" class="net-graph-out"></div>
+        </div>
+      </section>
     </div>
   </section>
 </div>
 
-<script src="/static/callsigns.js" defer></script>
+<script src="/static/callsigns.js?v=3" defer></script>
 {% endblock %}

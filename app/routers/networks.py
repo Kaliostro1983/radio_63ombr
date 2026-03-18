@@ -13,7 +13,7 @@ handled in service modules (see `app.services.network_service`).
 
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Optional
 
 from app.services.network_search import search_network_rows
@@ -26,6 +26,92 @@ from app.core.normalize import normalize_freq, normalize_freq_or_mask
 from app.core.auth_context import get_actor
 
 router = APIRouter()
+
+
+@router.get("/api/networks/{network_id}/callsign-graph")
+def api_network_callsign_graph(network_id: int, days: int = 14):
+    """Return callsign graph (nodes+edges) for a network within last N days."""
+    try:
+        nid = int(network_id)
+    except Exception:
+        return {"ok": False, "error": "invalid network_id"}
+
+    try:
+        days_n = int(days)
+        if days_n < 1:
+            days_n = 1
+        if days_n > 365:
+            days_n = 365
+    except Exception:
+        days_n = 14
+
+    start_dt = (datetime.now() - timedelta(days=days_n)).isoformat(timespec="seconds")
+
+    with get_conn() as conn:
+        # Nodes: callsigns seen in the period.
+        node_rows = conn.execute(
+            """
+            SELECT
+              c.id,
+              c.name,
+              COALESCE(c.callsign_status_id, c.status_id) AS status_id
+            FROM callsigns c
+            WHERE c.network_id = ?
+              AND COALESCE(c.last_seen_dt, '') >= ?
+              AND c.name <> 'НВ'
+            ORDER BY c.name
+            """,
+            (nid, start_dt),
+        ).fetchall()
+
+        node_ids = [int(r["id"]) for r in node_rows]
+        if not node_ids:
+            return {"ok": True, "nodes": [], "edges": [], "meta": {"days": days_n}}
+
+        placeholders = ",".join(["?"] * len(node_ids))
+
+        edge_rows = conn.execute(
+            f"""
+            SELECT
+              a_callsign_id AS a_id,
+              b_callsign_id AS b_id,
+              cnt,
+              last_seen_dt
+            FROM callsign_edges
+            WHERE network_id = ?
+              AND last_seen_dt >= ?
+              AND a_callsign_id IN ({placeholders})
+              AND b_callsign_id IN ({placeholders})
+            ORDER BY cnt DESC, last_seen_dt DESC
+            """,
+            (nid, start_dt, *node_ids, *node_ids),
+        ).fetchall()
+
+    nodes = []
+    for r in node_rows:
+        sid = r["status_id"]
+        sid_num = int(sid) if sid is not None and str(sid).strip() != "" else None
+        icon = f"/static/icons/callsign_statuses/{sid_num}.svg" if sid_num else "/static/icons/callsign_statuses/_default.svg"
+        nodes.append(
+            {
+                "id": int(r["id"]),
+                "name": r["name"] or "",
+                "status_id": sid_num,
+                "icon": icon,
+            }
+        )
+
+    edges = []
+    for r in edge_rows:
+        edges.append(
+            {
+                "source": int(r["a_id"]),
+                "target": int(r["b_id"]),
+                "cnt": int(r["cnt"] or 0),
+            }
+        )
+
+    return {"ok": True, "nodes": nodes, "edges": edges, "meta": {"days": days_n, "start_dt": start_dt}}
 
 
 @router.get("/api/networks/lookup")

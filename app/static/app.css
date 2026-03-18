@@ -196,6 +196,49 @@ textarea{
   border-color: color-mix(in srgb, #22c55e 65%, var(--border));
 }
 
+.net-graph-out{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  overflow:hidden;
+}
+
+.net-graph-svg{
+  display:block;
+}
+
+.net-graph-link{
+  stroke: color-mix(in srgb, var(--border) 70%, transparent);
+  stroke-width:1.2;
+}
+
+.net-graph-node{
+  cursor:pointer;
+}
+
+.net-graph-node__dot{
+  fill: color-mix(in srgb, var(--bg) 80%, transparent);
+  stroke: color-mix(in srgb, var(--border) 75%, transparent);
+  stroke-width:1;
+}
+
+.net-graph-node__label{
+  fill: var(--fg);
+  font-size:12px;
+  font-weight:650;
+  paint-order: stroke;
+  stroke: rgba(0,0,0,.45);
+  stroke-width:2px;
+}
+
+.cs-links-check{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:6px;
+}
+
 textarea{
   min-height:88px;
   resize:vertical;
@@ -856,13 +899,24 @@ button.secondary{
 
 .intercepts-filter-form{
   display:grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  grid-template-columns: 220px 220px 220px 220px auto;
   gap:12px;
   align-items:end;
 }
 
 .intercepts-filter-form .field{
   min-width:0;
+}
+
+/* Keep explorer filters compact. */
+.intercepts-filter-form #periodStart,
+.intercepts-filter-form #periodEnd{
+  max-width:220px;
+}
+
+.intercepts-filter-form #networkQuery,
+.intercepts-filter-form #callsignQuery{
+  max-width:220px;
 }
 
 .intercepts-filter-form .field-btn{
