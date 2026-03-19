@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <!-- Helmet -->
+  <path d="M3 11c0-4 3-7 7-7s7 3 7 7H3z" fill="#374151"></path>
+  <!-- Brim -->
+  <rect x="3" y="11" width="14" height="2" rx="1" fill="#374151"></rect>
+</svg>

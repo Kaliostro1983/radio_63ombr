@@ -16,7 +16,7 @@
     </div>
 
     <div class="field">
-      <label for="networkQuery">р/м</label>
+      <label for="networkQuery">Частота</label>
       <input
         id="networkQuery"
         name="network"
@@ -41,6 +41,7 @@
       <label>&nbsp;</label>
       <div class="action-buttons">
         <button type="submit">Показати</button>
+        <div id="interceptsFoundCount" class="intercepts-found-pill" title="Кількість знайдених перехоплень">—</div>
       </div>
     </div>
   </form>
@@ -98,5 +99,5 @@
     if (callsignInput && qsCs) callsignInput.value = qsCs;
   })();
 </script>
-<script src="/static/intercepts_explorer.js?v=6"></script>
+<script src="/static/intercepts_explorer.js?v=7"></script>
 {% endblock %}

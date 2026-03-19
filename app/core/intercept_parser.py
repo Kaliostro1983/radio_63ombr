@@ -197,8 +197,8 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
        1) datetime
        2) frequency
        3) net_line
-       4) callee
-       5) caller
+       4) caller
+       5) callee
        6+) body
 
     B) Broken:
@@ -282,8 +282,8 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
 
     # Case A: callee + caller
     else:
-        maybe_callee = _norm_s(tail[0]) if len(tail) >= 1 else None
-        maybe_caller = _norm_s(tail[1]) if len(tail) >= 2 else None
+        maybe_caller = _norm_s(tail[0]) if len(tail) >= 1 else None
+        maybe_callee = _norm_s(tail[1]) if len(tail) >= 2 else None
 
         parsed_callees: List[str] = []
         if maybe_callee and looks_like_callsign(maybe_callee):

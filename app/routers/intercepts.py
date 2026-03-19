@@ -1009,33 +1009,48 @@ def intercepts_explorer_add_callsign(
             """
             SELECT id
             FROM callsigns
-            WHERE UPPER(name) = ?
+            WHERE network_id = ? AND name = ?
             LIMIT 1
             """,
-            (name,),
+            (message_row["network_id"], name),
         ).fetchone()
 
         if callsign_row:
             callsign_id = int(callsign_row["id"])
         else:
             now_iso = datetime.utcnow().isoformat()
-            cursor = conn.execute(
-                """
-                INSERT INTO callsigns (
-                    network_id,
-                    name,
-                    status_id,
-                    comment,
-                    updated_at,
-                    last_seen_dt,
-                    callsign_status_id,
-                    source_id
+            try:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO callsigns (
+                        network_id,
+                        name,
+                        status_id,
+                        comment,
+                        updated_at,
+                        last_seen_dt,
+                        callsign_status_id,
+                        source_id
+                    )
+                    VALUES (?, ?, NULL, '', ?, ?, NULL, NULL)
+                    """,
+                    (message_row["network_id"], name, now_iso, now_iso),
                 )
-                VALUES (?, ?, NULL, '', ?, ?, NULL, NULL)
-                """,
-                (message_row["network_id"], name, now_iso, now_iso),
-            )
-            callsign_id = int(cursor.lastrowid)
+                callsign_id = int(cursor.lastrowid)
+            except sqlite3.IntegrityError:
+                # Concurrent create or existing unique (network_id, name): reuse row.
+                existing = conn.execute(
+                    """
+                    SELECT id
+                    FROM callsigns
+                    WHERE network_id = ? AND name = ?
+                    LIMIT 1
+                    """,
+                    (message_row["network_id"], name),
+                ).fetchone()
+                if not existing:
+                    raise
+                callsign_id = int(existing["id"])
 
         if role == "caller":
             conn.execute(

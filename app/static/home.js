@@ -187,6 +187,7 @@
       return;
     }
 
+    const dayKeys = Array.isArray(data.days) ? data.days : []; // YYYY-MM-DD
     const dayLabels = data.day_labels || [];
     const summary = data.summary || [];
     const meta = (data.meta || {});
@@ -210,11 +211,13 @@
             <tbody>
               <tr>
                 <td style="text-align:center; font-size:1.2em"><b>Σ</b></td>
-                ${summary.map((c) => {
+                ${summary.map((c, idx) => {
                   const n = Number(c || 0);
                   const cls = heatClass(n);
                   const label = Number.isFinite(n) ? String(n) : "0";
-                  return `<td><span class="heat-pill ${cls}">${escapeHtml(label)}</span></td>`;
+                  const day = dayKeys[idx] || "";
+                  const attrs = day ? ` data-day="${escapeHtml(day)}"` : "";
+                  return `<td><span class="heat-pill is-link ${cls}"${attrs} data-kind="summary" title="Відкрити перехоплення за день">${escapeHtml(label)}</span></td>`;
                 }).join("")}
               </tr>
             </tbody>
@@ -244,16 +247,19 @@
                   const c0 = `<span style="${baseStyle}">${escapeHtml(r.frequency)}</span>`;
                   const c1 = `<span style="${baseStyle}">${escapeHtml(r.mask || "—")}</span>`;
                   const c2 = `<span style="${baseStyle}">${escapeHtml(r.unit || "")}</span>`;
+                  const token = (r.mask || r.frequency || "").trim();
                   return `
                     <tr>
                       <td>${c0}</td>
                       <td>${c1}</td>
                       <td>${c2}</td>
-                      ${(r.counts || []).map((c) => {
+                      ${(r.counts || []).map((c, idx) => {
                         const n = Number(c || 0);
                         const cls = heatClass(n);
                         const label = Number.isFinite(n) ? String(n) : "0";
-                        return `<td><span class="heat-pill ${cls}">${escapeHtml(label)}</span></td>`;
+                        const day = dayKeys[idx] || "";
+                        const attrs = ` data-day="${escapeHtml(day)}" data-net="${escapeHtml(token)}"`;
+                        return `<td><span class="heat-pill is-link ${cls}"${attrs} data-kind="network" title="Відкрити перехоплення за день">${escapeHtml(label)}</span></td>`;
                       }).join("")}
                     </tr>
                   `;
@@ -267,6 +273,32 @@
 
     tables.innerHTML = html;
   }
+
+  function openInterceptsForDay(dayIso, networkToken) {
+    const day = String(dayIso || "").trim(); // YYYY-MM-DD
+    if (!day) return;
+    const periodStart = `${day}T00:00`;
+    const periodEnd = `${day}T23:59`;
+    const qs = new URLSearchParams();
+    qs.set("period_start", periodStart);
+    qs.set("period_end", periodEnd);
+    if (networkToken) qs.set("network", String(networkToken));
+    const url = `/intercepts-explorer?${qs.toString()}`;
+    window.open(url, "_blank", "noopener");
+  }
+
+  tables.addEventListener("click", (e) => {
+    const pill = e.target.closest(".heat-pill.is-link");
+    if (!pill) return;
+    const day = pill.getAttribute("data-day") || "";
+    const kind = pill.getAttribute("data-kind") || "";
+    const net = pill.getAttribute("data-net") || "";
+    if (kind === "summary") {
+      openInterceptsForDay(day, "");
+      return;
+    }
+    openInterceptsForDay(day, net);
+  });
 
   async function loadActivity() {
     tables.innerHTML = `<div class="small" style="opacity:.8">Завантаження…</div>`;

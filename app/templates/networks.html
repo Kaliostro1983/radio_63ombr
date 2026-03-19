@@ -2,6 +2,8 @@
 {% block content %}
 <h2 style="margin-top:0">Радіомережі</h2>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
 {% if message %}
   <div class="notice" style="margin-bottom:12px">{{ message }}</div>
 {% endif %}
@@ -225,6 +227,28 @@
   </div>
   <div id="netGraphOut" class="net-graph-out" style="margin-top:12px"></div>
 </div>
+
+<div class="card" id="netPelengGraph" data-network-id="{{ current.id }}" style="margin-top:16px">
+  <div style="font-weight:800; margin-bottom:10px">Пеленги</div>
+  <div class="row" style="align-items:flex-end">
+    <div class="field" style="max-width:220px; flex:0 0 220px">
+      <label>Давність (днів)</label>
+      <input id="netPelengDays" type="number" min="1" max="365" value="7" />
+    </div>
+    <div class="field" style="max-width:220px; flex:0 0 220px">
+      <label>Карта</label>
+      <select id="netPelengMapStyle" style="width:100%">
+        <option value="satellite" selected>Супутник</option>
+        <option value="osm">Вулиці</option>
+      </select>
+    </div>
+    <div class="field" style="flex:0">
+      <label>&nbsp;</label>
+      <button id="netPelengShow" type="button">Показати пеленги</button>
+    </div>
+  </div>
+  <div id="netPelengOut" style="margin-top:12px"></div>
+</div>
 {% endif %}
 
 {% endblock %}
@@ -232,4 +256,7 @@
 {% block scripts %}
 <script src="/static/networks_autocomplete.js?v=1" defer></script>
 <script src="/static/networks_graph.js?v=3" defer></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
+<script src="/static/networks_peleng.js?v=2" defer></script>
 {% endblock %}

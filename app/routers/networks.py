@@ -114,6 +114,139 @@ def api_network_callsign_graph(network_id: int, days: int = 14):
     return {"ok": True, "nodes": nodes, "edges": edges, "meta": {"days": days_n, "start_dt": start_dt}}
 
 
+@router.get("/api/networks/{network_id}/peleng")
+def api_network_peleng(network_id: int, days: int = 7):
+    """Return peleng batches/points for a given network.
+
+    `peleng_batches` stores only `frequency` (not network_id). On the networks
+    page a "network value" can live either in `networks.frequency` or in
+    `networks.mask`, so we try to match peleng data by both fields.
+    """
+
+    def _norm_peleng_number(value: object) -> str | None:
+        """Normalize to 4-decimal string like `DDD.DDDD`.
+
+        Peleng UI stores whatever numeric user enters (often mask-like numbers)
+        into `peleng_batches.frequency`, so we need a permissive normalizer here.
+        """
+        s = str(value or "").strip()
+        if not s:
+            return None
+        s = s.replace(",", ".")
+        s = "".join(s.split())  # remove all whitespace
+        if s.endswith("%"):
+            s = s[:-1]
+        if not s:
+            return None
+        try:
+            f = float(s)
+        except Exception:
+            return None
+        return f"{f:.4f}"
+    try:
+        nid = int(network_id)
+    except Exception:
+        return {"ok": False, "error": "invalid network_id"}
+
+    try:
+        days_n = int(days)
+        if days_n < 1:
+            days_n = 1
+        if days_n > 365:
+            days_n = 365
+    except Exception:
+        days_n = 7
+
+    now = datetime.now().replace(microsecond=0)
+    to_dt = now.isoformat(timespec="seconds").replace("T", " ")
+    from_dt = (now - timedelta(days=days_n)).isoformat(timespec="seconds").replace("T", " ")
+
+    with get_conn() as conn:
+        net_row = conn.execute(
+            "SELECT id, frequency, mask FROM networks WHERE id=? LIMIT 1",
+            (nid,),
+        ).fetchone()
+
+        if not net_row:
+            return {"ok": False, "error": "network not found"}
+
+        cand_freqs: set[str] = set()
+        nf = _norm_peleng_number(net_row["frequency"])
+        nm = _norm_peleng_number(net_row["mask"])
+        if nf:
+            cand_freqs.add(nf)
+        if nm:
+            cand_freqs.add(nm)
+
+        if not cand_freqs:
+            return {"ok": True, "batches": [], "meta": {"days": days_n, "points_total": 0}}
+
+        cand_list = sorted(cand_freqs)
+
+        freq_placeholders = ",".join(["?"] * len(cand_list))
+        batch_rows = conn.execute(
+            f"""
+            SELECT id, event_dt, frequency
+            FROM peleng_batches
+            WHERE frequency IN ({freq_placeholders})
+              AND event_dt >= ?
+              AND event_dt <= ?
+            ORDER BY event_dt DESC, id DESC
+            LIMIT 80
+            """,
+            tuple(cand_list) + (from_dt, to_dt),
+        ).fetchall()
+
+        batch_ids = [int(r["id"]) for r in batch_rows]
+        points_rows = []
+        if batch_ids:
+            placeholders = ",".join(["?"] * len(batch_ids))
+            points_rows = conn.execute(
+                f"""
+                SELECT batch_id, mgrs
+                FROM peleng_points
+                WHERE batch_id IN ({placeholders})
+                ORDER BY batch_id ASC, id ASC
+                """,
+                tuple(batch_ids),
+            ).fetchall()
+
+    points_by_batch: dict[int, list[str]] = {}
+    for r in points_rows:
+        bid = int(r["batch_id"])
+        mgrs = str(r["mgrs"] or "").strip()
+        if not mgrs:
+            continue
+        points_by_batch.setdefault(bid, []).append(mgrs)
+
+    batches_out = []
+    points_total = 0
+    for br in batch_rows:
+        bid = int(br["id"])
+        pts = points_by_batch.get(bid, [])
+        points_total += len(pts)
+        batches_out.append(
+            {
+                "id": bid,
+                "event_dt": str(br["event_dt"] or ""),
+                "frequency": str(br["frequency"] or ""),
+                "points_count": len(pts),
+                "points": pts[:200],  # cap to avoid huge payload
+            }
+        )
+
+    # Keep payload size bounded: if many points exist in a batch, tell UI.
+    for b in batches_out:
+        full_cnt = len(points_by_batch.get(b["id"], []))
+        b["points_truncated"] = full_cnt > b["points_count"] or b["points_count"] > len(b["points"])
+
+    return {
+        "ok": True,
+        "batches": batches_out,
+        "meta": {"days": days_n, "from_dt": from_dt, "to_dt": to_dt, "points_total": points_total},
+    }
+
+
 @router.get("/api/networks/lookup")
 def api_networks_lookup(q: str):
     """Lookup networks matching a query for autocomplete/select widgets.

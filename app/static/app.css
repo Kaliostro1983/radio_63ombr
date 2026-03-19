@@ -239,6 +239,38 @@ textarea{
   margin-top:6px;
 }
 
+.peleng-map-wrap{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  overflow:hidden;
+}
+
+.peleng-map-svg{
+  width: 100%;
+  height: 420px;
+  display:block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.peleng-leaflet{
+  width: 100%;
+  height: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.peleng-map-svg:active{
+  cursor: grabbing;
+}
+
+.peleng-map-hint{
+  margin-top:10px;
+  opacity:.78;
+}
+
 textarea{
   min-height:88px;
   resize:vertical;
@@ -518,6 +550,19 @@ button.secondary{
   border-radius:6px;
   font-weight:600;
   text-align:center;
+}
+
+.heat-pill.is-link{
+  cursor:pointer;
+  user-select:none;
+}
+
+.heat-pill.is-link:hover{
+  filter: brightness(1.06);
+}
+
+.heat-pill.is-link:active{
+  transform: translateY(1px);
 }
 
 .heat-0{
@@ -899,7 +944,7 @@ button.secondary{
 
 .intercepts-filter-form{
   display:grid;
-  grid-template-columns: 220px 220px 220px 220px auto;
+  grid-template-columns: 220px 220px 110px 220px auto;
   gap:12px;
   align-items:end;
 }
@@ -919,6 +964,10 @@ button.secondary{
   max-width:220px;
 }
 
+.intercepts-filter-form #networkQuery{
+  max-width:110px;
+}
+
 .intercepts-filter-form .field-btn{
   flex:none;
   min-width:auto;
@@ -927,10 +976,25 @@ button.secondary{
 .intercepts-filter-form .action-buttons{
   height:42px;
   align-items:stretch;
+  gap:10px;
 }
 
 .intercepts-filter-form .action-buttons > button{
   height:100%;
+}
+
+.intercepts-found-pill{
+  height:100%;
+  min-width:70px;
+  padding:0 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--card);
+  color:var(--fg);
+  font-weight:700;
 }
 
 .intercepts-workspace{

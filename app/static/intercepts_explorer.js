@@ -2,6 +2,7 @@
   const form = document.getElementById("interceptsFilterForm");
   const warningBox = document.getElementById("interceptsWarning");
   const mainCard = document.querySelector(".intercepts-main-card");
+  const foundCountPill = document.getElementById("interceptsFoundCount");
 
   if (!form || !mainCard) {
     return;
@@ -41,6 +42,15 @@
 
     warningBox.style.display = "block";
     warningBox.textContent = message;
+  }
+
+  function setFoundCount(value) {
+    if (!foundCountPill) return;
+    if (value == null || value === "") {
+      foundCountPill.textContent = "—";
+      return;
+    }
+    foundCountPill.textContent = String(value);
   }
 
   function buildQuery() {
@@ -545,6 +555,7 @@
     closeAutocomplete();
     renderWarning("");
     renderLoading();
+    setFoundCount("—");
 
     try {
       const query = buildQuery();
@@ -561,6 +572,7 @@
       const data = await response.json();
       state.total = Number(data.total || 0);
       state.items = Array.isArray(data.items) ? data.items : [];
+      setFoundCount(state.total);
 
       renderList();
 
@@ -592,6 +604,7 @@
       console.error(error);
       renderWarning("Не вдалося завантажити перехоплення.");
       renderEmpty();
+      setFoundCount("—");
     } finally {
       state.loadingList = false;
     }
