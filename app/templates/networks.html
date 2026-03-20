@@ -4,64 +4,111 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-{% if message %}
-  <div class="notice" style="margin-bottom:12px">{{ message }}</div>
-{% endif %}
+<section class="tabs-shell">
+  <div class="tabs-nav" role="tablist" aria-label="Вкладки сторінки Радіомережі">
+    <button
+      id="netTabCard"
+      type="button"
+      class="tab-btn {% if active_tab != 'all' %}active{% endif %}"
+      role="tab"
+      aria-selected="{% if active_tab != 'all' %}true{% else %}false{% endif %}"
+      aria-controls="netPaneCard"
+    >
+      Картка р/м
+    </button>
+    <button
+      id="netTabAll"
+      type="button"
+      class="tab-btn {% if active_tab == 'all' %}active{% endif %}"
+      role="tab"
+      aria-selected="{% if active_tab == 'all' %}true{% else %}false{% endif %}"
+      aria-controls="netPaneAll"
+    >
+      Усі р/м
+    </button>
+  </div>
 
-<div class="card">
-  <form method="post" action="/networks/search">
-    <div class="row">
-      <div class="field">
-        <label>Маска/частота</label>
-        <div class="home-freq-input-wrap">
-          <input
-            id="netSearchQuery"
-            name="query"
-            value="{{ q_query }}"
-            placeholder="050.6250 або 050.62"
-            autocomplete="off"
-          />
-        </div>
+  <div class="tab-panel-wrap">
+    <section
+      id="netPaneCard"
+      class="tab-panel {% if active_tab == 'all' %}hidden{% endif %}"
+      role="tabpanel"
+      aria-labelledby="netTabCard"
+    >
+      {% if message %}
+      <div class="notice" style="margin-bottom:12px">{{ message }}</div>
+      {% endif %}
+
+      <div class="card">
+        <form method="post" action="/networks/search">
+          <div class="row">
+            <div class="field">
+              <label>Маска/частота</label>
+              <div class="home-freq-input-wrap">
+                <input
+                  id="netSearchQuery"
+                  name="query"
+                  value="{{ q_query }}"
+                  placeholder="050.6250 або 050.62"
+                  autocomplete="off"
+                />
+              </div>
+            </div>
+            <div class="field" style="min-width:160px; flex:0">
+              <label>&nbsp;</label>
+              <button type="submit">Пошук</button>
+            </div>
+          </div>
+        </form>
       </div>
-      <div class="field" style="min-width:160px; flex:0">
-        <label>&nbsp;</label>
-        <button type="submit">Пошук</button>
+
+      {% if matches and matches|length > 1 %}
+      <div class="card">
+        <div style="font-weight:700; margin-bottom:8px">Знайдено кілька збігів — обери:</div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Частота</th>
+              <th>Підрозділ</th>
+              <th>Теги</th>
+              <th>Зона</th>
+              <th>Статус</th>
+              <th>Чат</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for n in matches %}
+            <tr>
+              <td>{{ n.frequency }}</td>
+              <td>{{ n.unit }}</td>
+              <td class="net-tags-cell">
+                {% set tids = match_tags.get(n.id, []) %}
+                {% if tids %}
+                  {% for tid in tids %}
+                    <img
+                      class="net-tag-icon"
+                      src="/static/icons/network_tags/{{ tid }}.svg"
+                      alt="Тег {{ tid }}"
+                      onerror="this.onerror=null; this.src='/static/icons/network_tags/_default.svg';"
+                    />
+                  {% endfor %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ n.zone }}</td>
+              <td>{{ status_map.get(n.status_id, "") }}</td>
+              <td>{{ chat_map.get(n.chat_id, "") }}</td>
+              <td><a href="/networks?pick={{ n.id }}">Відкрити</a></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
       </div>
-    </div>
-  </form>
-</div>
+      {% endif %}
 
-{% if matches and matches|length > 1 %}
-<div class="card">
-  <div style="font-weight:700; margin-bottom:8px">Знайдено кілька збігів — обери:</div>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Частота</th>
-        <th>Підрозділ</th>
-        <th>Зона</th>
-        <th>Статус</th>
-        <th>Чат</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for n in matches %}
-      <tr>
-        <td>{{ n.frequency }}</td>
-        <td>{{ n.unit }}</td>
-        <td>{{ n.zone }}</td>
-        <td>{{ status_map.get(n.status_id, "") }}</td>
-        <td>{{ chat_map.get(n.chat_id, "") }}</td>
-        <td><a href="/networks?pick={{ n.id }}">Відкрити</a></td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-
-<div class="card">
+      <div class="card">
   <div class="row" style="align-items:center; justify-content:space-between">
     <div>
       <div style="font-weight:800">Картка радіомережі</div>
@@ -210,10 +257,10 @@
       rebuildHidden();
     })();
   </script>
-</div>
+      </div>
 
-{% if current %}
-<div class="card" id="netCallsignGraph" data-network-id="{{ current.id }}">
+      {% if current %}
+      <div class="card" id="netCallsignGraph" data-network-id="{{ current.id }}">
   <div style="font-weight:800; margin-bottom:10px">Позивні радіомережі</div>
   <div class="row" style="align-items:flex-end">
     <div class="field" style="max-width:220px; flex:0 0 220px">
@@ -226,9 +273,9 @@
     </div>
   </div>
   <div id="netGraphOut" class="net-graph-out" style="margin-top:12px"></div>
-</div>
+      </div>
 
-<div class="card" id="netPelengGraph" data-network-id="{{ current.id }}" style="margin-top:16px">
+      <div class="card" id="netPelengGraph" data-network-id="{{ current.id }}" style="margin-top:16px">
   <div style="font-weight:800; margin-bottom:10px">Пеленги</div>
   <div class="row" style="align-items:flex-end">
     <div class="field" style="max-width:220px; flex:0 0 220px">
@@ -248,12 +295,112 @@
     </div>
   </div>
   <div id="netPelengOut" style="margin-top:12px"></div>
-</div>
-{% endif %}
+      </div>
+      {% endif %}
+    </section>
+
+    <section
+      id="netPaneAll"
+      class="tab-panel {% if active_tab != 'all' %}hidden{% endif %}"
+      role="tabpanel"
+      aria-labelledby="netTabAll"
+    >
+      <div class="card">
+        <form method="post" action="/networks/all">
+          <div class="row" style="align-items:flex-end;">
+            <div class="field" style="max-width:420px;">
+              <label>Статус</label>
+              <select name="status_ids" multiple size="6">
+                <option value="0" {% if not all_selected_statuses or 0 in all_selected_statuses %}selected{% endif %}>Усі</option>
+                {% for s in statuses %}
+                  <option value="{{ s.id }}" {% if s.id in all_selected_statuses %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="field" style="max-width:320px;">
+              <label>Чат</label>
+              <select name="chat_ids" multiple size="6">
+                <option value="0" {% if not all_selected_chats or 0 in all_selected_chats %}selected{% endif %}>Усі</option>
+                {% for c in chats %}
+                  <option value="{{ c.id }}" {% if c.id in all_selected_chats %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="field" style="max-width:420px;">
+              <label>Група</label>
+              <select name="group_ids" multiple size="6">
+                <option value="0" {% if not all_selected_groups or 0 in all_selected_groups %}selected{% endif %}>Усі</option>
+                {% for g in groups %}
+                  <option value="{{ g.id }}" {% if g.id in all_selected_groups %}selected{% endif %}>{{ g.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="field" style="min-width:160px; flex:0">
+              <label>&nbsp;</label>
+              <button type="submit">Показати</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="small" style="margin-bottom:10px; opacity:.85;">Знайдено: {{ all_rows|length }}</div>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:44px">#</th>
+              <th style="width:120px">Частота</th>
+              <th style="width:140px">Маска</th>
+              <th>Назва р/м</th>
+              <th style="width:220px">Чат</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in all_rows %}
+              <tr style="{% if r['bg_color'] %}background: {{ r['bg_color'] }}; border-left: 4px solid {{ r['border_color'] }};{% endif %}">
+                <td>{{ loop.index }}</td>
+                <td>{{ r['frequency'] }}</td>
+                <td>{{ r['mask'] }}</td>
+                <td>УКХ р/м {{ r['unit'] }}, н.п. {{ r['zone'] }}</td>
+                <td>{{ r['chat_name'] }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</section>
 
 {% endblock %}
 
 {% block scripts %}
+<script>
+  (function () {
+    const tabCard = document.getElementById("netTabCard");
+    const tabAll = document.getElementById("netTabAll");
+    const paneCard = document.getElementById("netPaneCard");
+    const paneAll = document.getElementById("netPaneAll");
+    if (!tabCard || !tabAll || !paneCard || !paneAll) return;
+
+    function setTab(which) {
+      const isCard = which === "card";
+      tabCard.classList.toggle("active", isCard);
+      tabAll.classList.toggle("active", !isCard);
+      tabCard.setAttribute("aria-selected", isCard ? "true" : "false");
+      tabAll.setAttribute("aria-selected", isCard ? "false" : "true");
+      paneCard.classList.toggle("hidden", !isCard);
+      paneAll.classList.toggle("hidden", isCard);
+    }
+
+    tabCard.addEventListener("click", () => setTab("card"));
+    tabAll.addEventListener("click", () => setTab("all"));
+  })();
+</script>
 <script src="/static/networks_autocomplete.js?v=1" defer></script>
 <script src="/static/networks_graph.js?v=3" defer></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>

@@ -35,8 +35,10 @@ from app.routers.xlsx_import import router as xlsx_import_router
 from app.routers.reports import router as reports_router
 from app.routers.home import router as home_router
 from app.routers.health import router as health_router
+from app.routers.landmarks import router as landmarks_router
 
 from app.routers.ingest import router as ingest_router
+from app.services.landmark_match_service import start_landmark_match_worker
 
 from fastapi.templating import Jinja2Templates
 
@@ -80,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(intercepts_router)
     app.include_router(xlsx_import_router)
     app.include_router(reports_router)
+    app.include_router(landmarks_router)
 
 
     @app.on_event("startup")
@@ -93,6 +96,7 @@ def create_app() -> FastAPI:
         """
         init_db()
         maybe_backup_db()
+        start_landmark_match_worker()
 
     @app.get("/")
     def root():

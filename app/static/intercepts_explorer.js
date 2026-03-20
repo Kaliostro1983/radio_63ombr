@@ -18,10 +18,13 @@
     loadingDetail: false,
     savingComment: false,
     detailById: {},
+    landmarkMatchesByMessageId: {},
     autocompleteBox: null,
     autocompleteInput: null,
     autocompleteItems: [],
     autocompleteIndex: -1,
+    hoverRefreshByMessageId: {},
+    hoverRefreshInFlight: {},
   };
 
   function escapeHtml(value) {
@@ -118,30 +121,102 @@
     const network = item.network || {};
     const dt = formatDateTime(item.created_at || item.received_at || "");
 
-    const freqMaskParts = [];
-    if (network.frequency) {
-      freqMaskParts.push(network.frequency);
-    }
-    if (network.mask) {
-      freqMaskParts.push(network.mask);
-    }
+    const frequency = String(network.frequency || "").trim();
+    const mask = String(network.mask || "").trim();
+    const freqMask = frequency
+      ? (mask ? `${frequency} (${mask})` : frequency)
+      : (mask ? `(${mask})` : "");
 
-    const restParts = [];
-    if (network.unit) {
-      restParts.push(network.unit);
-    }
-    if (network.zone) {
-      restParts.push(network.zone);
-    }
-    if (item.net_description) {
-      restParts.push(item.net_description);
-    }
+    // Keep only the detailed description line to avoid duplicate prefixes.
+    const rest = String(item.net_description || "").trim();
 
     return {
       dt,
-      freqMask: freqMaskParts.join(" • "),
-      rest: restParts.join(" • "),
+      freqMask,
+      rest,
     };
+  }
+
+  async function copyTextToClipboard(text) {
+    const value = String(text ?? "");
+    if (!value) return false;
+
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (e) {}
+
+    // Fallback for older browsers / clipboard restrictions.
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.setAttribute("readonly", "true");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.left = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e2) {
+      return false;
+    }
+  }
+
+  function buildInterceptCopyText(messageId) {
+    const mid = Number(messageId || 0);
+    if (!mid) return "";
+
+    const item = (state.items || []).find((x) => Number(x.id) === mid) || null;
+    if (!item) return "";
+
+    const detail = state.detailById[mid] || {};
+    const callsigns = Array.isArray(detail.callsigns) ? detail.callsigns : [];
+
+    const callerNames = callsigns
+      .filter((x) => String(x.role || "") === "caller")
+      .map((x) => String(x.name || "").trim())
+      .filter(Boolean);
+
+    // In the standard template we treat both "callee" and "mentioned"
+    // as "callees" list to output a single 2nd callsign line.
+    const calleeNames = callsigns
+      .filter((x) => {
+        const r = String(x.role || "");
+        return r === "callee" || r === "mentioned";
+      })
+      .map((x) => String(x.name || "").trim())
+      .filter(Boolean);
+
+    const callerLine = callerNames.join(", ");
+    const calleesLine = calleeNames.join(", ");
+
+    const header = getHeaderParts(item);
+
+    const network = item.network || {};
+    const freq = String(network.frequency || "").trim();
+    const mask = String(network.mask || "").trim();
+    // Standard requirement:
+    // 2nd line is ONLY mask if present, otherwise ONLY frequency.
+    const secondLine = mask ? mask : freq;
+
+    const netLine = String(item.net_description || "").trim();
+    const body = String(detail.text || item.text || "").trimEnd();
+
+    const parts = [
+      header.dt,
+      secondLine,
+      netLine,
+      callerLine,
+      calleesLine,
+    ];
+
+    if (body) {
+      parts.push("");
+      parts.push(body);
+    }
+    return parts.join("\n");
   }
 
   function closeAutocomplete() {
@@ -188,6 +263,63 @@
         }
       )
       .join("");
+  }
+
+  function normalizeMatches(matches) {
+    if (!Array.isArray(matches)) return [];
+    return matches
+      .map((m, source_index) => ({
+        source_index,
+        id: Number(m.id || 0),
+        id_message: Number(m.id_message || 0),
+        id_landmark: Number(m.id_landmark || 0),
+        matched_text: String(m.matched_text || ""),
+        start_pos: Number(m.start_pos),
+        end_pos: Number(m.end_pos),
+        landmark: m.landmark || {},
+      }))
+      .filter(
+        (m) =>
+          Number.isFinite(m.start_pos) &&
+          Number.isFinite(m.end_pos) &&
+          m.start_pos >= 0 &&
+          m.end_pos > m.start_pos
+      )
+      .sort((a, b) => a.start_pos - b.start_pos);
+  }
+
+  function renderTextWithLandmarkHighlights(messageId, text, matchesRaw) {
+    const src = String(text || "");
+    if (!src) return "";
+
+    const matches = normalizeMatches(matchesRaw);
+    if (!matches.length) return escapeHtml(src);
+
+    let out = "";
+    let cursor = 0;
+    let rendered = 0;
+
+    for (let idx = 0; idx < matches.length; idx += 1) {
+      const m = matches[idx];
+      if (m.start_pos < cursor || m.end_pos > src.length) {
+        continue;
+      }
+
+      out += escapeHtml(src.slice(cursor, m.start_pos));
+
+      const chunk = src.slice(m.start_pos, m.end_pos);
+      const landmarkName = String((m.landmark && m.landmark.name) || "");
+      const title = landmarkName ? `Орієнтир: ${landmarkName}` : "Орієнтир";
+
+      // Important: do not add newlines/indentation around the <span>,
+      // otherwise pre-wrap layout will render them as extra "enters".
+      out += `<span class="intercepts-landmark-hit" data-message-id="${messageId}" data-match-index="${m.source_index}" title="${escapeHtml(title)}">${escapeHtml(chunk)}</span>`;
+      cursor = m.end_pos;
+      rendered += 1;
+    }
+
+    out += escapeHtml(src.slice(cursor));
+    return rendered ? out : escapeHtml(src);
   }
 
   function renderInlineEditor(detail) {
@@ -251,9 +383,16 @@
       const detail = state.detailById[item.id] || {
         id: item.id,
         network_id: item.network_id,
+        text: item.text || "",
         comment: item.comment || "",
         callsigns: [],
       };
+      const matches = state.landmarkMatchesByMessageId[item.id] || [];
+      const highlightedText = renderTextWithLandmarkHighlights(
+        item.id,
+        detail.text || item.text || "",
+        matches
+      );
 
       const callsigns = Array.isArray(detail.callsigns) ? detail.callsigns : [];
       const caller = callsigns.filter((x) => x.role === "caller");
@@ -278,7 +417,15 @@
                 <div class="intercept-card__line intercept-card__line--net">
                   ${escapeHtml(header.rest)}
                 </div>
-                <div class="intercept-card__text">${escapeHtml(item.text || "")}</div>
+                <div style="display:flex; justify-content:flex-end; margin-bottom:8px">
+                  <button
+                    type="button"
+                    class="intercepts-copy-btn secondary"
+                    data-message-id="${item.id}"
+                    title="Скопіювати перехоплення у стандартному форматі"
+                  >Копіювати</button>
+                </div>
+                <div class="intercept-card__text">${highlightedText}</div>
               </div>
 
               <div class="intercept-card__comment-under">
@@ -322,23 +469,75 @@
     state.loadingDetail = true;
 
     try {
-      const response = await fetch(`/api/intercepts-explorer/${messageId}`, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
+      const [detailResponse, landmarksResponse] = await Promise.all([
+        fetch(`/api/intercepts-explorer/${messageId}`, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        }),
+        fetch(`/api/intercepts-explorer/${messageId}/landmarks`, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        }),
+      ]);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      if (!detailResponse.ok) {
+        throw new Error(`HTTP ${detailResponse.status}`);
       }
 
-      const data = await response.json();
+      const data = await detailResponse.json();
       state.detailById[messageId] = data.item || null;
+
+      if (landmarksResponse.ok) {
+        const lmData = await landmarksResponse.json();
+        state.landmarkMatchesByMessageId[messageId] = Array.isArray(lmData.matches)
+          ? lmData.matches
+          : [];
+      } else {
+        state.landmarkMatchesByMessageId[messageId] = [];
+      }
       renderList();
     } catch (error) {
       console.error(error);
       renderWarning("Не вдалося завантажити деталі перехоплення.");
     } finally {
       state.loadingDetail = false;
+    }
+  }
+
+  async function refreshCallsignsOnHover(messageId) {
+    if (!messageId) return;
+
+    const now = Date.now();
+    const last = Number(state.hoverRefreshByMessageId[messageId] || 0);
+    // Protect API from noisy mouse movement.
+    if (now - last < 3000) return;
+    if (state.hoverRefreshInFlight[messageId]) return;
+
+    state.hoverRefreshInFlight[messageId] = true;
+    try {
+      const response = await fetch(`/api/intercepts-explorer/${messageId}`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const item = data && data.item ? data.item : null;
+      if (!item) return;
+
+      const prev = state.detailById[messageId] || {};
+      state.detailById[messageId] = item;
+      state.hoverRefreshByMessageId[messageId] = now;
+
+      const prevCallsigns = JSON.stringify(prev.callsigns || []);
+      const newCallsigns = JSON.stringify(item.callsigns || []);
+      if (prevCallsigns !== newCallsigns) {
+        renderList();
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      state.hoverRefreshInFlight[messageId] = false;
     }
   }
 
@@ -401,7 +600,23 @@
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        let detail = "";
+        try {
+          const data = await response.json();
+          detail =
+            data.detail ||
+            data.error ||
+            data.message ||
+            (typeof data === "string" ? data : "") ||
+            "";
+        } catch (e) {
+          try {
+            detail = await response.text();
+          } catch (e2) {
+            detail = "";
+          }
+        }
+        throw new Error(detail ? detail : `HTTP ${response.status}`);
       }
 
       const data = await response.json();
@@ -412,9 +627,10 @@
 
       closeAutocomplete();
       renderList();
+      focusCallsignInput(messageId, role);
     } catch (error) {
       console.error(error);
-      renderWarning("Не вдалося додати позивний.");
+      renderWarning(String(error?.message || "Не вдалося додати позивний."));
     }
   }
 
@@ -429,7 +645,23 @@
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        let detail = "";
+        try {
+          const data = await response.json();
+          detail =
+            data.detail ||
+            data.error ||
+            data.message ||
+            (typeof data === "string" ? data : "") ||
+            "";
+        } catch (e) {
+          try {
+            detail = await response.text();
+          } catch (e2) {
+            detail = "";
+          }
+        }
+        throw new Error(detail ? detail : `HTTP ${response.status}`);
       }
 
       const data = await response.json();
@@ -439,6 +671,7 @@
       }
 
       renderList();
+      focusCallsignInput(messageId, role);
     } catch (error) {
       console.error(error);
       renderWarning("Не вдалося видалити позивний.");
@@ -552,6 +785,7 @@
 
     state.loadingList = true;
     state.detailById = {};
+    state.landmarkMatchesByMessageId = {};
     closeAutocomplete();
     renderWarning("");
     renderLoading();
@@ -575,31 +809,15 @@
       setFoundCount(state.total);
 
       renderList();
-
-      for (const item of state.items) {
-        try {
-          const detailResponse = await fetch(`/api/intercepts-explorer/${item.id}`, {
-            method: "GET",
-            headers: { Accept: "application/json" },
-          });
-
-          if (!detailResponse.ok) {
-            continue;
-          }
-
-          const detailData = await detailResponse.json();
-          state.detailById[item.id] = detailData.item || {
-            id: item.id,
-            network_id: item.network_id,
-            comment: item.comment || "",
-            callsigns: [],
-          };
-        } catch (error) {
-          console.error(error);
+      // Lazy-load detail for only the first visible card.
+      // Previously we fetched detail+landmarks for *every* item sequentially,
+      // which caused long waits and "database is locked" under load.
+      if (state.items && state.items.length) {
+        const firstId = Number(state.items[0].id || 0);
+        if (firstId) {
+          loadDetail(firstId).catch(() => {});
         }
       }
-
-      renderList();
     } catch (error) {
       console.error(error);
       renderWarning("Не вдалося завантажити перехоплення.");
@@ -651,6 +869,27 @@
 
   window.addEventListener("callsignModalSaved", onCallsignModalSaved);
 
+  function focusCallsignInput(messageId, role) {
+    // `renderList()` re-creates inline editors and inputs, which makes the
+    // browser drop focus. Restore focus to the input after re-render.
+    requestAnimationFrame(function () {
+      const selector =
+        '.callsign-input[data-message-id="' +
+        String(messageId) +
+        '"][data-role="' +
+        String(role) +
+        '"]';
+      const inputEl = document.querySelector(selector);
+      if (!inputEl) return;
+
+      inputEl.focus();
+      try {
+        const v = String(inputEl.value || "");
+        inputEl.setSelectionRange(v.length, v.length);
+      } catch {}
+    });
+  }
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     state.offset = 0;
@@ -658,6 +897,22 @@
   });
 
   mainCard.addEventListener("click", async function (event) {
+    const copyBtn = event.target.closest(".intercepts-copy-btn");
+    if (copyBtn) {
+      const messageId = Number(copyBtn.dataset.messageId || 0);
+      if (!messageId) return;
+
+      const text = buildInterceptCopyText(messageId);
+      if (!text) {
+        renderWarning("Немає даних для копіювання.");
+        return;
+      }
+
+      const ok = await copyTextToClipboard(text);
+      renderWarning(ok ? "Скопійовано в буфер." : "Не вдалося скопіювати.");
+      return;
+    }
+
     const chipClick = event.target.closest(".callsign-chip--clickable");
     if (chipClick && !event.target.closest(".callsign-chip__remove")) {
       const chip = chipClick;
@@ -718,6 +973,64 @@
         await addCallsign(messageId, role, name);
       }
     }
+
+    const landmarkHit = event.target.closest(".intercepts-landmark-hit");
+    if (landmarkHit) {
+      const messageId = Number(landmarkHit.dataset.messageId || 0);
+      const matchIndex = Number(landmarkHit.dataset.matchIndex || -1);
+      const list = state.landmarkMatchesByMessageId[messageId] || [];
+      const match = list[matchIndex];
+      if (messageId && match) {
+        window.dispatchEvent(
+          new CustomEvent("interceptsLandmarkSelected", {
+            detail: {
+              messageId,
+              match,
+              location_wkt: (match.landmark && match.landmark.location_wkt) || "",
+              location_kind: (match.landmark && match.landmark.location_kind) || "",
+            },
+          })
+        );
+      }
+      return;
+    }
+
+  });
+
+  mainCard.addEventListener("mouseover", function (event) {
+    const card = event.target.closest(".intercept-card");
+    if (!card) return;
+
+    // Fire only when cursor enters the card from outside, not on every child move.
+    const from = event.relatedTarget;
+    if (from && card.contains(from)) return;
+
+    const messageId = Number(card.dataset.id || 0);
+    if (!messageId) return;
+    refreshCallsignsOnHover(messageId).catch(() => {});
+  });
+
+  window.addEventListener("callsignModalDeleted", function (ev) {
+    const data = ev && ev.detail ? ev.detail.data : null;
+    if (!data || !data.callsign_id) return;
+    const mids = Object.keys(state.detailById)
+      .map((x) => Number(x))
+      .filter((x) => Number.isFinite(x) && x > 0);
+    if (!mids.length) return;
+
+    Promise.all(
+      mids.map((messageId) =>
+        fetch(`/api/intercepts-explorer/${messageId}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (!d || !d.item) return;
+            state.detailById[messageId] = d.item;
+          })
+          .catch(() => {})
+      )
+    ).then(() => {
+      renderList();
+    });
   });
 
   mainCard.addEventListener("input", function (event) {

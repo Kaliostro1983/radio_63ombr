@@ -20,8 +20,10 @@
   const modalPhoto = $("csModalPhoto");
   const modalErr = $("csModalErr");
   const btnSave = $("csSave");
+  const btnDelete = $("csDelete");
   const btnOpenIntercepts = $("csOpenIntercepts");
   const btnOpenLinks = $("csOpenLinks");
+  const quickWrap = $("csQuickId");
 
   const statusModal = $("csStatusModal");
   const newStatusName = $("csNewStatusName");
@@ -35,6 +37,10 @@
   let CURRENT_NETWORK_ID = null;
   let OPEN_CONTEXT = null; // passed to onSave when saving
   let onSaveCallback = null;
+
+  // Optional: limit quick buttons to specific status ids.
+  // Set to null to show all statuses.
+  const QUICK_STATUS_WHITELIST = null;
 
   function toDatetimeLocalValue(date) {
     const year = date.getFullYear();
@@ -246,6 +252,63 @@
     }
   }
 
+  function getSourceIdByName(sourceName) {
+    const n = String(sourceName || "").trim().toLowerCase();
+    if (!n) return null;
+    for (const s of SOURCE_LIST) {
+      if (String(s?.name || "").trim().toLowerCase() === n) return s.id;
+    }
+    return null;
+  }
+
+  function renderQuickIdButtons() {
+    if (!quickWrap) return;
+    if (!Array.isArray(STATUS_LIST) || !STATUS_LIST.length) return;
+
+    const rerSourceId = getSourceIdByName("РЕР");
+    if (rerSourceId == null) return;
+
+    const list = QUICK_STATUS_WHITELIST
+      ? STATUS_LIST.filter((s) => QUICK_STATUS_WHITELIST.includes(Number(s.id)))
+      : STATUS_LIST;
+
+    quickWrap.innerHTML = "";
+
+    for (const s of list) {
+      const sid = Number(s.id);
+      if (!Number.isFinite(sid)) continue;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cs-quickid-btn";
+      btn.dataset.statusId = String(sid);
+      btn.title = String(s.name || sid);
+
+      const img = document.createElement("img");
+      img.alt = String(s.name || sid);
+      img.src = `/static/icons/callsign_statuses/${sid}.svg`;
+      img.onerror = function () {
+        this.onerror = null;
+        this.src = "/static/icons/callsign_statuses/_default.svg";
+      };
+
+      btn.appendChild(img);
+      btn.addEventListener("click", function () {
+        CURRENT_STATUS_ID = sid;
+        if (modalStatus) modalStatus.value = String(sid);
+        setPhotoForStatus(CURRENT_STATUS_ID);
+
+        CURRENT_SOURCE_ID = Number(rerSourceId);
+        if (modalSource) modalSource.value = String(CURRENT_SOURCE_ID);
+        try {
+          modalSource.dispatchEvent(new Event("change"));
+        } catch (e) {}
+      });
+
+      quickWrap.appendChild(btn);
+    }
+  }
+
   function openModal() {
     if (!modal) return;
     modal.classList.remove("hidden");
@@ -336,6 +399,8 @@
     setPhotoForStatus(CURRENT_STATUS_ID);
     renderStatusSelect(CURRENT_STATUS_ID);
     renderSourceSelect(CURRENT_SOURCE_ID);
+    renderQuickIdButtons();
+    if (btnDelete) btnDelete.style.display = "inline-block";
 
     openModal();
     setTimeout(function () {
@@ -373,6 +438,7 @@
     renderStatusSelect(CURRENT_STATUS_ID);
     renderSourceSelect(CURRENT_SOURCE_ID);
     setPhotoForStatus(CURRENT_STATUS_ID);
+    if (btnDelete) btnDelete.style.display = "none";
 
     if (modalNetworkQuery) modalNetworkQuery.value = "";
     renderNetworkSelect([], CURRENT_NETWORK_ID);
@@ -381,6 +447,8 @@
     setTimeout(function () {
       if (modalName) modalName.focus();
     }, 0);
+
+    renderQuickIdButtons();
   }
 
   async function saveModal() {
@@ -445,6 +513,53 @@
     }
   }
 
+  async function deleteModalCallsign() {
+    if (!modalErr) return;
+    modalErr.style.display = "none";
+
+    const callsign_id = parseInt(modalId && modalId.value ? modalId.value : "0", 10);
+    if (!callsign_id) {
+      showError("Видалення доступне лише для існуючого позивного");
+      return;
+    }
+
+    const callsignName = (modalName && modalName.value ? String(modalName.value) : "").trim();
+    const ok = window.confirm(
+      `Видалити позивний "${callsignName || callsign_id}" з БД та очистити пов'язані зв'язки?`
+    );
+    if (!ok) return;
+
+    if (btnDelete) btnDelete.disabled = true;
+    if (btnSave) btnSave.disabled = true;
+
+    try {
+      const r = await fetch("/api/callsigns/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ callsign_id }),
+      });
+      const data = await r.json();
+      if (!data.ok) {
+        showError(data.error || "Помилка видалення");
+        return;
+      }
+
+      const context = OPEN_CONTEXT;
+      closeModal();
+      try {
+        window.dispatchEvent(
+          new CustomEvent("callsignModalDeleted", { detail: { data: data, context: context || {} } })
+        );
+      } catch (e) {}
+    } catch (e) {
+      console.error(e);
+      showError("Помилка запиту");
+    } finally {
+      if (btnDelete) btnDelete.disabled = false;
+      if (btnSave) btnSave.disabled = false;
+    }
+  }
+
   function setCallsignModalOnSave(fn) {
     onSaveCallback = typeof fn === "function" ? fn : null;
   }
@@ -452,10 +567,18 @@
   function init() {
     if (!modal || !btnSave) return;
 
-    loadStatuses();
-    loadSources();
+    Promise.all([loadStatuses(), loadSources()])
+      .then(function () {
+        renderQuickIdButtons();
+      })
+      .catch(function () {
+        // ignore
+      });
 
     btnSave.addEventListener("click", saveModal);
+    if (btnDelete) {
+      btnDelete.addEventListener("click", deleteModalCallsign);
+    }
     if (btnOpenIntercepts) {
       btnOpenIntercepts.addEventListener("click", openInterceptsForCurrent);
     }

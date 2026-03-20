@@ -62,6 +62,10 @@
 -   `import_freq_chat`
 -   `import_networks`
 -   `words`
+-   `landmark_types`
+-   `landmarks`
+-   `message_landmark_matches`
+-   `message_landmark_queue`
 
 ------------------------------------------------------------------------
 
@@ -409,6 +413,88 @@ lifecycle.
 
 ------------------------------------------------------------------------
 
+## landmark_types
+
+Призначення: довідник типів об'єктів-орієнтирів (landmark).
+
+Поля: - `id` --- PK - `name` --- унікальна назва типу
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
+
+------------------------------------------------------------------------
+
+## landmarks
+
+Призначення: словник ключових слів-орієнтирів та їх геометрії для
+прив'язки перехоплень до координат/полігонів.
+
+Поля:
+- `id` --- PK
+- `name` --- назва орієнтиру
+- `key_word` --- ключове слово (нормалізоване, lower-case)
+- `location_wkt` --- геометрія у форматі WKT (`POINT(...)`, `POLYGON(...)`, ...)
+- `location_kind` --- тип геометрії (опційно)
+- `comment` --- коментар
+- `date_creation` --- дата/час створення
+- `updated_at` --- дата/час останнього оновлення
+- `id_group` --- FK → `groups.id` (nullable)
+- `id_type` --- FK → `landmark_types.id`
+- `is_active` --- прапорець активності
+
+Ключі та обмеження:
+- `PRIMARY KEY(id)`
+- `CHECK(key_word = lower(trim(key_word)))`
+- `FOREIGN KEY(id_group) REFERENCES groups(id)`
+- `FOREIGN KEY(id_type) REFERENCES landmark_types(id)`
+
+Критично:
+- у БД `key_word` зберігається вже нормалізованим у lower-case;
+- геометрія зберігається у `location_wkt` (WKT), інтерпретація робиться на рівні сервісу/UI.
+
+------------------------------------------------------------------------
+
+## message_landmark_matches
+
+Призначення: результати матчингу тексту повідомлень до орієнтирів.
+
+Поля:
+- `id` --- PK
+- `id_message` --- FK → `messages.id`
+- `id_landmark` --- FK → `landmarks.id`
+- `matched_text` --- фактично знайдений фрагмент
+- `start_pos` --- позиція початку збігу (для хайлайту)
+- `end_pos` --- позиція завершення збігу (для хайлайту)
+- `created_at` --- час створення матчу
+- `matcher_version` --- версія матчера/правил
+
+Ключі та обмеження:
+- `PRIMARY KEY(id)`
+- `FOREIGN KEY(id_message) REFERENCES messages(id) ON DELETE CASCADE`
+- `FOREIGN KEY(id_landmark) REFERENCES landmarks(id) ON DELETE CASCADE`
+- `UNIQUE(id_message, id_landmark, start_pos, end_pos)` (через UNIQUE index)
+
+------------------------------------------------------------------------
+
+## message_landmark_queue
+
+Призначення: черга фонового пост-оброблення повідомлень для keyword-matching
+по `landmarks`.
+
+Поля:
+- `message_id` --- PK/FK → `messages.id`
+- `status` --- стан (`pending`, `processing`, `done`, `error`)
+- `attempts` --- кількість спроб обробки
+- `last_error` --- текст останньої помилки
+- `queued_at` --- час постановки в чергу
+- `processed_at` --- час успішної обробки
+- `updated_at` --- час останньої зміни стану
+
+Ключі та обмеження:
+- `PRIMARY KEY(message_id)`
+- `FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE`
+
+------------------------------------------------------------------------
+
 ## Критичні індекси, які треба тримати під контролем
 
 Мінімально очікувані:
@@ -418,6 +504,10 @@ lifecycle.
 -   `callsigns(network_id, name)` --- для upsert позивних
 -   `callsign_edges(network_id, a_callsign_id, b_callsign_id)` ---
     бажано UNIQUE для коректного upsert edges
+-   `landmarks(key_word)` --- для пошуку keyword у словнику
+-   `message_landmark_matches(id_message)` --- швидке отримання хітів для повідомлення
+-   `message_landmark_matches(id_landmark)` --- аналітика по конкретному landmark
+-   `message_landmark_queue(status, queued_at)` --- вибірка pending/error для воркера
 
 ------------------------------------------------------------------------
 

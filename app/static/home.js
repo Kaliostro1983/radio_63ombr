@@ -238,21 +238,51 @@
                   <th style="min-width:120px">Частота</th>
                   <th style="min-width:120px">Маска</th>
                   <th style="min-width:260px">Підрозділ</th>
+                  <th style="min-width:120px">Теги</th>
                   ${dayLabels.map((d) => `<th style="width:70px">${escapeHtml(d)}</th>`).join("")}
                 </tr>
               </thead>
               <tbody>
                 ${rows.map((r) => {
                   const baseStyle = `display:block; text-align:center; border-radius:8px; padding:4px 8px; margin:2px 0; background:${r.status_bg || "transparent"}; border:1px solid ${r.status_border || "transparent"}`;
-                  const c0 = `<span style="${baseStyle}">${escapeHtml(r.frequency)}</span>`;
-                  const c1 = `<span style="${baseStyle}">${escapeHtml(r.mask || "—")}</span>`;
-                  const c2 = `<span style="${baseStyle}">${escapeHtml(r.unit || "")}</span>`;
+                  // Clicking frequency/mask/subdivision should open the network card.
+                  const netId = String(r.id || "");
+                  const c0 = `<span class="home-net-card-link" data-net-id="${escapeHtml(
+                    netId
+                  )}" style="${baseStyle}" title="Відкрити картку р/м">${escapeHtml(
+                    r.frequency
+                  )}</span>`;
+                  const c1 = `<span class="home-net-card-link" data-net-id="${escapeHtml(
+                    netId
+                  )}" style="${baseStyle}" title="Відкрити картку р/м">${escapeHtml(
+                    r.mask || "—"
+                  )}</span>`;
+                  const c2 = `<span class="home-net-card-link" data-net-id="${escapeHtml(
+                    netId
+                  )}" style="${baseStyle}" title="Відкрити картку р/м">${escapeHtml(
+                    r.unit || ""
+                  )}</span>`;
                   const token = (r.mask || r.frequency || "").trim();
+                  const tagIds = Array.isArray(r.tag_ids) ? r.tag_ids : [];
+                  const tagsCell = tagIds.length
+                    ? tagIds
+                        .map((tid) => {
+                          const t = String(tid);
+                          return `<img
+                            class="net-tag-icon"
+                            src="/static/icons/network_tags/${escapeHtml(t)}.svg"
+                            alt="Тег ${escapeHtml(t)}"
+                            onerror="this.onerror=null; this.src='/static/icons/network_tags/_default.svg';"
+                          />`;
+                        })
+                        .join("")
+                    : "—";
                   return `
                     <tr>
                       <td>${c0}</td>
                       <td>${c1}</td>
                       <td>${c2}</td>
+                      <td>${tagsCell}</td>
                       ${(r.counts || []).map((c, idx) => {
                         const n = Number(c || 0);
                         const cls = heatClass(n);
@@ -288,6 +318,16 @@
   }
 
   tables.addEventListener("click", (e) => {
+    const cardLink = e.target.closest(".home-net-card-link");
+    if (cardLink) {
+      const netId = cardLink.getAttribute("data-net-id") || "";
+      if (netId) {
+        const url = `/networks?pick=${encodeURIComponent(netId)}`;
+        window.open(url, "_blank", "noopener");
+      }
+      return;
+    }
+
     const pill = e.target.closest(".heat-pill.is-link");
     if (!pill) return;
     const day = pill.getAttribute("data-day") || "";

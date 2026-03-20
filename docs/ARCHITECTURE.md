@@ -55,6 +55,7 @@ Registered routers:
 - callsigns
 - intercepts
 - xlsx_import
+- landmarks
 
 ---
 
@@ -307,6 +308,7 @@ Templates render pages:
 - intercepts_explorer.html
 - callsigns.html
 - networks.html
+- landmarks.html
 - peleng.html
 
 Frontend JavaScript handles:
@@ -314,6 +316,7 @@ Frontend JavaScript handles:
 - intercept search
 - intercept explorer
 - callsign editing
+- landmarks editing/search
 - XLSX import
 
 ---
@@ -343,6 +346,14 @@ UI for intercept exploration:
 routers/intercepts.py  
 templates/intercepts_explorer.html  
 static/intercepts_explorer.js  
+
+UI for landmarks management:
+routers/landmarks.py  
+templates/landmarks.html  
+static/landmarks.js  
+
+Landmark keyword matching worker:
+services/landmark_match_service.py  
 
 ---
 

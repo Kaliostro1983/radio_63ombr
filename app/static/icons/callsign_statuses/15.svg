@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-label="Перекреслений дрон">
+  <circle cx="12" cy="12" r="12" fill="#D32F2F"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9.2" y="9.2" width="5.6" height="5.6" rx="1.2" stroke-width="1.4"/>
+    <path d="M7.2 8.2 L9.2 10.0" stroke-width="1.2"/>
+    <path d="M16.8 8.2 L14.8 10.0" stroke-width="1.2"/>
+    <path d="M7.2 15.8 L9.2 14.0" stroke-width="1.2"/>
+    <path d="M16.8 15.8 L14.8 14.0" stroke-width="1.2"/>
+    <circle cx="6.3" cy="7.3" r="1.8" stroke-width="1.2"/>
+    <circle cx="17.7" cy="7.3" r="1.8" stroke-width="1.2"/>
+    <circle cx="6.3" cy="16.7" r="1.8" stroke-width="1.2"/>
+    <circle cx="17.7" cy="16.7" r="1.8" stroke-width="1.2"/>
+    <path d="M5 19 L19 5" stroke-width="2.2"/>
+  </g>
+</svg>

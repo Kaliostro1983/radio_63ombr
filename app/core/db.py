@@ -258,6 +258,53 @@ CREATE TABLE IF NOT EXISTS words (
     exceptions TEXT DEFAULT '[]',
     FOREIGN KEY (tag_id) REFERENCES tags(id)
 );
+
+CREATE TABLE IF NOT EXISTS landmark_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS landmarks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    key_word TEXT NOT NULL,
+    location_wkt TEXT NOT NULL,
+    location_kind TEXT,
+    comment TEXT,
+    date_creation TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    id_group INTEGER,
+    id_type INTEGER NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    CHECK (key_word = lower(trim(key_word))),
+    FOREIGN KEY (id_group) REFERENCES groups(id),
+    FOREIGN KEY (id_type) REFERENCES landmark_types(id)
+);
+
+CREATE TABLE IF NOT EXISTS message_landmark_matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_message INTEGER NOT NULL,
+    id_landmark INTEGER NOT NULL,
+    matched_text TEXT,
+    start_pos INTEGER NOT NULL DEFAULT -1,
+    end_pos INTEGER NOT NULL DEFAULT -1,
+    created_at TEXT NOT NULL,
+    matcher_version TEXT NOT NULL DEFAULT 'v1',
+    FOREIGN KEY (id_message) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_landmark) REFERENCES landmarks(id) ON DELETE CASCADE,
+    UNIQUE (id_message, id_landmark, start_pos, end_pos)
+);
+
+CREATE TABLE IF NOT EXISTS message_landmark_queue (
+    message_id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    queued_at TEXT NOT NULL,
+    processed_at TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
 """
 
 
@@ -381,6 +428,100 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
     _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
+
+    # --- Landmark keyword matching schema ---
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS landmark_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:landmark_types",
+    )
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS landmarks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            key_word TEXT NOT NULL,
+            location_wkt TEXT NOT NULL,
+            location_kind TEXT,
+            comment TEXT,
+            date_creation TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            id_group INTEGER,
+            id_type INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            CHECK (key_word = lower(trim(key_word))),
+            FOREIGN KEY (id_group) REFERENCES groups(id),
+            FOREIGN KEY (id_type) REFERENCES landmark_types(id)
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:landmarks",
+    )
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS message_landmark_matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_message INTEGER NOT NULL,
+            id_landmark INTEGER NOT NULL,
+            matched_text TEXT,
+            start_pos INTEGER NOT NULL DEFAULT -1,
+            end_pos INTEGER NOT NULL DEFAULT -1,
+            created_at TEXT NOT NULL,
+            matcher_version TEXT NOT NULL DEFAULT 'v1',
+            FOREIGN KEY (id_message) REFERENCES messages(id) ON DELETE CASCADE,
+            FOREIGN KEY (id_landmark) REFERENCES landmarks(id) ON DELETE CASCADE
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:message_landmark_matches",
+    )
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS message_landmark_queue (
+            message_id INTEGER PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            queued_at TEXT NOT NULL,
+            processed_at TEXT,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:message_landmark_queue",
+    )
+    _ensure_column(conn, "landmarks", "location_kind", "location_kind TEXT")
+    _ensure_column(conn, "landmarks", "updated_at", "updated_at TEXT")
+    _ensure_column(conn, "landmarks", "is_active", "is_active INTEGER NOT NULL DEFAULT 1")
+    _ensure_column(conn, "message_landmark_matches", "matched_text", "matched_text TEXT")
+    _ensure_column(conn, "message_landmark_matches", "start_pos", "start_pos INTEGER NOT NULL DEFAULT -1")
+    _ensure_column(conn, "message_landmark_matches", "end_pos", "end_pos INTEGER NOT NULL DEFAULT -1")
+    _ensure_column(
+        conn,
+        "message_landmark_matches",
+        "matcher_version",
+        "matcher_version TEXT NOT NULL DEFAULT 'v1'",
+    )
+    _ensure_column(conn, "message_landmark_queue", "status", "status TEXT NOT NULL DEFAULT 'pending'")
+    _ensure_column(conn, "message_landmark_queue", "attempts", "attempts INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "message_landmark_queue", "last_error", "last_error TEXT")
+    _ensure_column(conn, "message_landmark_queue", "queued_at", "queued_at TEXT")
+    _ensure_column(conn, "message_landmark_queue", "processed_at", "processed_at TEXT")
+    _ensure_column(conn, "message_landmark_queue", "updated_at", "updated_at TEXT")
 
     # --- Network tags migration ---
     # Older DBs used:
@@ -534,6 +675,71 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         function="_run_lightweight_migrations",
         stage="create_index:ux_callsign_edges_net_pair",
     )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_landmarks_keyword ON landmarks(key_word)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_landmarks_keyword",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_landmarks_type ON landmarks(id_type)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_landmarks_type",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_landmarks_group ON landmarks(id_group)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_landmarks_group",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_landmarks_active ON landmarks(is_active)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_landmarks_active",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_matches_message ON message_landmark_matches(id_message)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_matches_message",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_matches_landmark ON message_landmark_matches(id_landmark)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_matches_landmark",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_matches_created ON message_landmark_matches(created_at)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_matches_created",
+    )
+    safe_execute(
+        conn,
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_matches_message_landmark_pos "
+        "ON message_landmark_matches(id_message, id_landmark, start_pos, end_pos)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:ux_matches_message_landmark_pos",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_message_landmark_queue_status "
+        "ON message_landmark_queue(status, queued_at)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_message_landmark_queue_status",
+    )
 
 
 def get_db() -> sqlite3.Connection:
@@ -546,8 +752,9 @@ def get_db() -> sqlite3.Connection:
         sqlite3.Connection: connection with `Row` row_factory and foreign
         keys enabled.
     """
-    conn = sqlite3.connect(db_path())
+    conn = sqlite3.connect(db_path(), timeout=30)
     conn.row_factory = sqlite3.Row
+    safe_execute(conn, "PRAGMA busy_timeout = 30000;", module="app.core.db", function="get_db")
     safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_db")
     return conn
 
@@ -571,8 +778,9 @@ def get_conn() -> sqlite3.Connection:
     Yields:
         sqlite3.Connection: open transactional SQLite connection.
     """
-    conn = sqlite3.connect(db_path())
+    conn = sqlite3.connect(db_path(), timeout=30)
     conn.row_factory = sqlite3.Row
+    safe_execute(conn, "PRAGMA busy_timeout = 30000;", module="app.core.db", function="get_conn")
     safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_conn")
     try:
         yield conn

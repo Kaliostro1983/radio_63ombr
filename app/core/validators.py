@@ -78,10 +78,22 @@ def detect_message_format(text: str) -> str:
         str: one of `template`, `nonstandard_type_1`, `unknown`.
     """
 
+    text_l = (text or "").lower()
+    # Use regex-based prefix detection (more tolerant to spacing/OCR quirks)
+    # and do NOT rely on any other markers like '$'.
+    has_rec = bool(re.search(r"отримувач\s*\(\s*і\s*\)\s*:", text_l, flags=re.IGNORECASE))
+    has_send = bool(re.search(r"відправник\s*:", text_l, flags=re.IGNORECASE))
+
     if is_template_intercept(text):
         return "template"
 
-    if "укх" in text.lower() and "р/м" in text.lower():
+    # Structured alias layout detection:
+    # these messages always contain both blocks, so this is the most reliable
+    # way to route structured parser.
+    if has_rec and has_send:
+        return "structured_alias"
+
+    if "укх" in text_l and "р/м" in text_l:
         return "nonstandard_type_1"
 
     return "unknown"

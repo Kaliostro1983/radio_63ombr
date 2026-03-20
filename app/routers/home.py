@@ -175,6 +175,23 @@ def api_home_activity(
                 "groups": [],
             }
 
+        # Load tag ids for each network (for the Home activity table).
+        tag_map: dict[int, list[int]] = {}
+        placeholders = ",".join(["?"] * len(network_ids))
+        tag_rows = conn.execute(
+            f"""
+            SELECT network_id, tag_id
+            FROM network_tag_links
+            WHERE network_id IN ({placeholders})
+            ORDER BY network_id ASC, tag_id ASC
+            """,
+            tuple(network_ids),
+        ).fetchall()
+        for tr in tag_rows:
+            nid = int(tr["network_id"])
+            tid = int(tr["tag_id"])
+            tag_map.setdefault(nid, []).append(tid)
+
         placeholders = ",".join(["?"] * len(network_ids))
         cnt_rows = conn.execute(
             f"""
@@ -222,6 +239,7 @@ def api_home_activity(
                 "frequency": r["frequency"] or "",
                 "mask": r["mask"] or "",
                 "unit": r["unit"] or "",
+                "tag_ids": tag_map.get(nid, []),
                 "status_bg": r["bg_color"] or "",
                 "status_border": r["border_color"] or "",
                 "counts": row_counts,

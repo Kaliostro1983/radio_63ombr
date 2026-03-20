@@ -24,6 +24,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.core.db import get_conn
 from app.core.normalize import normalize_freq
+from app.services.callsign_service import link_message_callsigns
 
 
 router = APIRouter(tags=["callsigns"])
@@ -692,4 +693,186 @@ async def api_callsign_save(request: Request):
         "source_label": source_name,
         "frequency": freq,
         "unit": unit,
+    }
+
+
+@router.post("/api/callsigns/delete")
+async def api_callsign_delete(request: Request):
+    """Replace a callsign with technical "НВ" across messages and then delete it.
+
+    We avoid FK/cleanup complexity by:
+    1) ensuring callsign "НВ" exists for the same network;
+    2) updating `message_callsigns` to point to "НВ";
+    3) rebuilding `callsign_edges` for the affected network from scratch;
+    4) deleting the callsign row and its status mapping.
+    """
+    payload: Dict[str, Any] = await request.json()
+    callsign_id = _as_int(payload.get("callsign_id"), 0)
+    if not callsign_id:
+        return JSONResponse({"ok": False, "error": "callsign_id is required"}, status_code=400)
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name FROM callsigns WHERE id = ? LIMIT 1",
+            (callsign_id,),
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "callsign not found"}, status_code=404)
+
+        callsign_name = row["name"] or ""
+        network_row = conn.execute(
+            "SELECT network_id FROM callsigns WHERE id = ? LIMIT 1",
+            (callsign_id,),
+        ).fetchone()
+        if not network_row or not network_row["network_id"]:
+            return JSONResponse(
+                {"ok": False, "error": "callsign has no network_id"},
+                status_code=400,
+            )
+        network_id = int(network_row["network_id"])
+
+        tech_name = "НВ"
+
+        # Ensure "НВ" exists in this network.
+        nv_row = conn.execute(
+            """
+            SELECT id FROM callsigns
+            WHERE network_id = ?
+              AND name = ?
+            LIMIT 1
+            """,
+            (network_id, tech_name),
+        ).fetchone()
+
+        now_dt = _now_sql()
+        if nv_row:
+            nv_id = int(nv_row["id"])
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO callsigns (
+                    network_id,
+                    name,
+                    comment,
+                    callsign_status_id,
+                    source_id,
+                    updated_at,
+                    last_seen_dt
+                ) VALUES (?, ?, NULL, NULL, NULL, ?, ?)
+                """,
+                (network_id, tech_name, now_dt, None),
+            )
+            nv_id = int(cur.lastrowid)
+
+        try:
+            # Avoid no-op.
+            if callsign_id == nv_id:
+                return JSONResponse({"ok": True, "callsign_id": callsign_id, "deleted": False, "name": callsign_name})
+
+            affected_messages = conn.execute(
+                "SELECT DISTINCT message_id FROM message_callsigns WHERE callsign_id = ?",
+                (callsign_id,),
+            ).fetchall()
+            affected_ids = [int(r["message_id"]) for r in affected_messages if r and r["message_id"] is not None]
+
+            # Replace callsign_id -> nv_id in all message roles.
+            # Guard against PK collisions: (message_id, callsign_id, role) is a PK.
+            # If a message already has "НВ" for the same role, delete the old row first.
+            duplicates = conn.execute(
+                """
+                SELECT mc_del.message_id, mc_del.role
+                FROM message_callsigns mc_del
+                JOIN message_callsigns mc_nv
+                  ON mc_nv.message_id = mc_del.message_id
+                 AND mc_nv.role = mc_del.role
+                WHERE mc_del.callsign_id = ?
+                  AND mc_nv.callsign_id = ?
+                """,
+                (callsign_id, nv_id),
+            ).fetchall()
+            for d in duplicates:
+                conn.execute(
+                    """
+                    DELETE FROM message_callsigns
+                    WHERE message_id = ?
+                      AND callsign_id = ?
+                      AND role = ?
+                    """,
+                    (int(d["message_id"]), callsign_id, d["role"]),
+                )
+
+            conn.execute(
+                "UPDATE message_callsigns SET callsign_id = ? WHERE callsign_id = ?",
+                (nv_id, callsign_id),
+            )
+
+            # Rebuild graph edges for this network from scratch.
+            conn.execute("DELETE FROM callsign_edges WHERE network_id = ?", (network_id,))
+
+            if affected_ids:
+                cur = conn.cursor()
+                # We can rebuild only for affected messages, but safe approach is to replay all messages in network.
+                # Since networks are typically manageable, we replay all for correctness.
+                message_rows = conn.execute(
+                    """
+                    SELECT id, created_at, received_at
+                    FROM messages
+                    WHERE network_id = ?
+                    """,
+                    (network_id,),
+                ).fetchall()
+
+                for mr in message_rows:
+                    mid = int(mr["id"])
+                    created_at = mr["created_at"]
+                    received_at = mr["received_at"]
+
+                    caller_row = conn.execute(
+                        """
+                        SELECT c.name
+                        FROM message_callsigns mc
+                        JOIN callsigns c ON c.id = mc.callsign_id
+                        WHERE mc.message_id = ?
+                          AND mc.role = 'caller'
+                        LIMIT 1
+                        """,
+                        (mid,),
+                    ).fetchone()
+                    caller_name = caller_row["name"] if caller_row else None
+
+                    callee_rows = conn.execute(
+                        """
+                        SELECT c.name
+                        FROM message_callsigns mc
+                        JOIN callsigns c ON c.id = mc.callsign_id
+                        WHERE mc.message_id = ?
+                          AND mc.role = 'callee'
+                        """,
+                        (mid,),
+                    ).fetchall()
+                    callee_names = [r["name"] for r in callee_rows if r and r["name"]]
+
+                    link_message_callsigns(
+                        cur=cur,
+                        network_id=network_id,
+                        message_id=mid,
+                        caller=caller_name,
+                        callees=callee_names,
+                        created_at=created_at,
+                        received_at=received_at,
+                    )
+
+            # Finally remove old callsign row (no longer referenced by message_callsigns).
+            conn.execute("DELETE FROM callsign_status_map WHERE callsign_id = ?", (callsign_id,))
+            conn.execute("DELETE FROM callsigns WHERE id = ?", (callsign_id,))
+            conn.commit()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    return {
+        "ok": True,
+        "callsign_id": callsign_id,
+        "name": callsign_name,
+        "deleted": True,
+        "replaced_with": tech_name,
     }

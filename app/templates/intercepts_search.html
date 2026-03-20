@@ -27,9 +27,7 @@
       <label>&nbsp;</label>
       <div class="action-buttons">
         <button type="submit">Пошук</button>
-        <button type="button" id="importXlsxBtn" class="secondary">Імпорт XLSX</button>
       </div>
-      <input id="xlsxFileInput" type="file" accept=".xlsx" hidden>
     </div>
   </form>
 
@@ -37,23 +35,8 @@
 <div id="results" class="results-list"></div>
 <div id="loading" class="loading" style="display:none;">Завантаження...</div>
 
-  <div id="xlsxImportModal" class="modal-backdrop" hidden aria-hidden="true">
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="xlsxImportModalTitle">
-      <div class="modal-header">
-        <h3 id="xlsxImportModalTitle">Результат імпорту XLSX</h3>
-        <button type="button" id="closeXlsxModalBtn" class="modal-close" aria-label="Закрити">×</button>
-      </div>
-
-      <div id="xlsxImportModalBody" class="modal-body"></div>
-
-      <div class="modal-footer">
-        <button type="button" id="closeXlsxModalBtnFooter" class="secondary">Закрити</button>
-      </div>
-    </div>
-  </div>
 </section>
 
 
 <script src="/static/intercepts_search.js"></script>
-<script src="/static/intercepts_import.js"></script>
 {% endblock %}

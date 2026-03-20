@@ -288,4 +288,21 @@ def insert_message(
         module="app.services.ingest_store",
         function="insert_message",
     )
-    return int(cur.lastrowid)
+    message_id = int(cur.lastrowid)
+
+    # Schedule post-ingest landmark matching in background queue.
+    safe_execute(
+        cur,
+        """
+        INSERT OR IGNORE INTO message_landmark_queue (
+            message_id, status, attempts, last_error, queued_at, processed_at, updated_at
+        )
+        VALUES (?, 'pending', 0, NULL, ?, NULL, ?)
+        """,
+        (message_id, received_at, received_at),
+        module="app.services.ingest_store",
+        function="insert_message",
+        stage="enqueue:message_landmark_queue",
+    )
+
+    return message_id

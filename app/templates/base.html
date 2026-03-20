@@ -4,19 +4,42 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ app_name }}</title>
-  <link rel="stylesheet" href="/static/app.css?v=2"/>
+  <script>
+    // Apply saved theme before CSS paints to avoid light/dark flicker.
+    (function () {
+      try {
+        var savedTheme = localStorage.getItem("theme");
+        if (savedTheme) {
+          document.documentElement.setAttribute("data-theme", savedTheme);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/app.css?v=3"/>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
 <div class="layout">
   <aside class="sidebar">
+    <div class="brand-avatar-wrap" aria-hidden="true">
+      <img
+        class="brand-avatar brand-avatar--light"
+        src="/static/branding/service_light.webp"
+        alt=""
+      />
+      <img
+        class="brand-avatar brand-avatar--dark"
+        src="/static/branding/service_dark.webp"
+        alt=""
+      />
+    </div>
     <div class="brand">{{ app_name }}</div>
     <div class="nav">
       <a href="/home" class="{% if request.url.path.startswith('/home') %}active{% endif %}">Головна</a>
       <a href="/networks" class="{% if request.url.path.startswith('/networks') %}active{% endif %}">Радіомережі</a>
-      <a href="/all_networks" class="{% if request.url.path.startswith('/all_networks') %}active{% endif %}">Усі р/м</a>
       <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
       <a href="/etalons" class="{% if request.url.path.startswith('/etalons') %}active{% endif %}">Еталонки</a>
+      <a href="/landmarks" class="{% if request.url.path.startswith('/landmarks') %}active{% endif %}">Орієнтири</a>
       <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
       <a href="/intercepts" class="{% if request.url.path == '/intercepts' %}active{% endif %}">Пошук</a>
       <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}">Перехоплення</a>
@@ -79,6 +102,11 @@
               <option value="">— не вказано —</option>
             </select>
           </div>
+
+          <div style="margin-top:10px">
+            <div class="small" style="opacity:.7; margin-bottom:6px">Швидка ідентифікація</div>
+            <div id="csQuickId" class="cs-quickid-wrap"></div>
+          </div>
         </div>
       </div>
 
@@ -99,6 +127,7 @@
     </div>
 
     <div class="modal-foot">
+      <button id="csDelete" type="button" class="secondary" style="border-color:#7f1d1d;color:#fecaca">Видалити</button>
       <button id="csSave" type="button">Зберегти</button>
       <button class="secondary" type="button" data-close="1">Скасувати</button>
     </div>
@@ -128,7 +157,7 @@
   </div>
 </div>
 
-<script src="/static/callsign_modal.js?v=6" defer></script>
+<script src="/static/callsign_modal.js?v=9" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

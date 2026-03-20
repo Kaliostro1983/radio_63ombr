@@ -24,6 +24,7 @@ intercepts.py
 ingest.py  
 xlsx_import.py  
 peleng.py
+landmarks.py
 
 Routers must remain thin and contain only request/response logic.
 
@@ -48,6 +49,7 @@ network_service.py
 network_search.py  
 xlsx_import_service.py  
 peleng_report_service.py
+landmark_match_service.py
 
 ---
 
@@ -113,7 +115,9 @@ JS modules:
 intercepts_explorer.js  
 intercepts_search.js  
 callsigns.js  
+home.js  
 peleng.js
+landmarks.js
 
 ---
 

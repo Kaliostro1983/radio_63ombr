@@ -35,6 +35,85 @@
     setTimeout(() => t.classList.remove("show"), ms);
   }
 
+  async function apiNetworksLookup(q) {
+    const resp = await fetch(`/api/networks/lookup?q=${encodeURIComponent(q)}`, {
+      headers: { Accept: "application/json" },
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      return { rows: [] };
+    }
+    return { rows: Array.isArray(data.rows) ? data.rows : [] };
+  }
+
+  function setupFreqAutocomplete() {
+    const freqInput = $("frequency");
+    const unitInput = $("unit");
+    const datalist = $("pelengFreqMasksList");
+    if (!freqInput || !unitInput || !datalist) return;
+
+    let lastNetworkLookupResults = [];
+    let timer = null;
+    const minLen = 2;
+
+    function setUnitFromValue(val) {
+      const v = String(val || "").trim();
+      if (!v) return;
+      const hit = lastNetworkLookupResults.find((r) => (r.frequency && r.frequency === v) || (r.mask && r.mask === v));
+      if (!hit) return;
+      if (hit.unit) setVal("unit", hit.unit);
+    }
+
+    function clearDatalist() {
+      while (datalist.firstChild) datalist.removeChild(datalist.firstChild);
+    }
+
+    async function updateDatalist(query) {
+      const { rows } = await apiNetworksLookup(query);
+      lastNetworkLookupResults = rows;
+
+      clearDatalist();
+      if (!rows.length) return;
+
+      // Add only unique option values to avoid duplicated suggestions.
+      const seen = new Set();
+      const pushOpt = (val) => {
+        const v = String(val || "").trim();
+        if (!v || seen.has(v)) return;
+        seen.add(v);
+        const opt = document.createElement("option");
+        opt.value = v;
+        datalist.appendChild(opt);
+      };
+
+      for (const r of rows) {
+        pushOpt(r.frequency);
+        pushOpt(r.mask);
+      }
+    }
+
+    freqInput.addEventListener("input", () => {
+      const q = String(freqInput.value || "").trim();
+      if (timer) clearTimeout(timer);
+
+      // If user erased the input - keep UI clean.
+      if (!q) {
+        lastNetworkLookupResults = [];
+        clearDatalist();
+        return;
+      }
+
+      if (q.length < minLen) return;
+
+      timer = setTimeout(() => {
+        updateDatalist(q).catch(() => {});
+      }, 250);
+    });
+
+    freqInput.addEventListener("change", () => setUnitFromValue(freqInput.value));
+    freqInput.addEventListener("blur", () => setUnitFromValue(freqInput.value));
+  }
+
   function nowToInputs() {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -440,6 +519,7 @@
     nowToInputs();
     initReportInputs();
     loadPosts();
+    setupFreqAutocomplete();
     setPelengTab("compose");
     scheduleReportPreview();
 

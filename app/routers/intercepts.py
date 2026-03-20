@@ -13,6 +13,7 @@ manual review/editing workflows.
 """
 
 import sqlite3
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.core.normalize import normalize_freq_or_mask
+from app.services.landmark_match_service import get_message_landmark_matches
 
 router = APIRouter()
 
@@ -35,8 +37,13 @@ def get_conn():
         hardcoded DB_PATH. Other parts of the application use
         `app.core.db.get_conn`.
     """
-    conn = sqlite3.connect(DB_PATH)
+    # Allow waiting for short-lived writer locks (background ingest/matchers).
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA busy_timeout = 30000;")
+    except Exception:
+        pass
     return conn
 
 
@@ -690,6 +697,37 @@ def intercepts_explorer_detail(message_id: int):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+
+@router.get("/api/intercepts-explorer/{message_id}/landmarks")
+def intercepts_explorer_landmark_matches(message_id: int):
+    """Return keyword landmark matches for one message."""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM messages
+            WHERE id = ? AND is_valid = 1
+            """,
+            (message_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Intercept not found")
+    finally:
+        conn.close()
+
+    try:
+        matches = get_message_landmark_matches(message_id)
+        return JSONResponse(
+            {
+                "ok": True,
+                "message_id": message_id,
+                "matches": matches,
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/api/intercepts-explorer/{message_id}/comment")

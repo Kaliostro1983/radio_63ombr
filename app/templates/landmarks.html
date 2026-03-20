@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="landmarks-page">
+  <h2 style="margin-top:0">Орієнтири</h2>
+
+  <div class="card" style="margin-bottom:12px">
+    <form id="lmSearchForm" autocomplete="off">
+      <div class="row" style="gap:12px; align-items:flex-end">
+        <div class="field" style="min-width:260px; flex:1">
+          <label for="lmName">Назва</label>
+          <input
+            id="lmName"
+            name="name"
+            type="text"
+            placeholder="пошук за назвою..."
+            list="lmNameList"
+            autocomplete="off"
+          />
+          <datalist id="lmNameList"></datalist>
+        </div>
+
+        <div class="field" style="min-width:190px">
+          <label for="lmGroupId">Підрозділ</label>
+          <select id="lmGroupId">
+            <option value="">Усі</option>
+          </select>
+        </div>
+
+        <div class="field" style="min-width:190px">
+          <label for="lmTypeId">Тип</label>
+          <select id="lmTypeId">
+            <option value="">Усі</option>
+          </select>
+        </div>
+
+        <div class="field" style="min-width:220px; flex:0">
+          <label>&nbsp;</label>
+          <div style="display:flex; gap:10px; align-items:center; justify-content:flex-end">
+            <button id="lmSearchBtn" type="button">Шукати</button>
+            <button id="lmCreateBtn" type="button" class="secondary">+ орієнтир</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div id="lmResultsCard" class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:10px">
+      <div class="small" id="lmMeta"></div>
+      <div class="small" id="lmLoading" style="display:none; opacity:.85">Завантаження...</div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table" id="lmTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Тип</th>
+            <th>Назва</th>
+            <th>Підрозділ</th>
+          </tr>
+        </thead>
+        <tbody id="lmTbody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex; justify-content:center; padding:12px 0 6px 0">
+      <button id="lmLoadMoreBtn" type="button" class="secondary" style="display:none">
+        Показати ще
+      </button>
+    </div>
+  </div>
+
+  <div id="lmModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card lm-modal-card" role="dialog" aria-modal="true" aria-labelledby="lmModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="small" style="opacity:.75">Редагування орієнтира</div>
+          <div id="lmModalTitle" style="font-weight:700">—</div>
+        </div>
+        <button class="secondary" type="button" data-close="1">Закрити</button>
+      </div>
+
+      <div class="modal-body">
+        <input id="lmEditId" type="hidden" />
+
+        <div class="row" style="margin-top:10px">
+          <div class="field" style="flex:1">
+            <label class="small" style="display:flex; gap:10px; align-items:center; cursor:pointer">
+              <input id="lmEditIsActive" type="checkbox" checked />
+              <span>Активний</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field" style="flex:1; min-width:220px">
+            <label for="lmEditName">Назва</label>
+            <input id="lmEditName" type="text" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div class="field" style="flex:1; min-width:240px">
+            <label for="lmEditLocationWkt">Координати (WKT)</label>
+            <textarea id="lmEditLocationWkt" rows="3" style="width:100%; resize:vertical"></textarea>
+          </div>
+        </div>
+
+        <div class="row" style="gap:12px; margin-top:10px">
+          <div class="field" style="min-width:220px; flex:1">
+            <label for="lmEditGroupId">Підрозділ</label>
+            <select id="lmEditGroupId"></select>
+          </div>
+
+          <div class="field" style="min-width:220px; flex:1">
+            <label for="lmEditTypeId">Тип</label>
+            <select id="lmEditTypeId"></select>
+          </div>
+        </div>
+
+        <div class="row" style="gap:12px; margin-top:10px">
+          <div class="field" style="min-width:220px; flex:1">
+            <label for="lmEditLocationKind">Тип геометрії</label>
+            <input id="lmEditLocationKind" type="text" readonly />
+          </div>
+
+          <div class="field" style="min-width:240px; flex:1">
+            <label for="lmEditComment">Коментар</label>
+            <textarea id="lmEditComment" rows="2" style="width:100%; resize:vertical"></textarea>
+          </div>
+        </div>
+
+        <div id="lmEditErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+      </div>
+
+      <div class="modal-foot">
+        <button
+          id="lmEditDeleteBtn"
+          type="button"
+          class="secondary"
+          style="color: var(--danger); border-color: color-mix(in srgb, var(--danger) 65%, var(--border));"
+        >Видалити</button>
+        <button id="lmEditSaveBtn" type="button">Зберегти</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/landmarks.js?v=5" defer></script>
+{% endblock %}
+

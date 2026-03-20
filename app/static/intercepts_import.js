@@ -5,6 +5,7 @@
 
   const modal = document.getElementById("xlsxImportModal");
   const modalBody = document.getElementById("xlsxImportModalBody");
+  const modalTitle = document.getElementById("xlsxImportModalTitle");
   const closeBtn = document.getElementById("closeXlsxModalBtn");
   const closeBtnFooter = document.getElementById("closeXlsxModalBtnFooter");
 
@@ -24,11 +25,15 @@
     modal.classList.remove("is-open");
     modal.setAttribute("aria-hidden", "true");
     modalBody.innerHTML = "";
+    if (modalTitle) modalTitle.textContent = "Результат імпорту XLSX";
     document.body.classList.remove("modal-open");
   }
 
-  function openModal(html) {
+  function openModal(html, titleText) {
     modalBody.innerHTML = html;
+    if (modalTitle) {
+      modalTitle.textContent = String(titleText || "Результат імпорту XLSX");
+    }
     showModal();
   }
 
@@ -43,14 +48,24 @@
 
   function renderSuccess(filename, result) {
     return `
-      <div class="import-result">
-        <div class="import-result-row"><strong>Файл:</strong> ${escapeHtml(filename)}</div>
-        <div class="import-result-row"><strong>Усього рядків:</strong> ${result.total_rows ?? 0}</div>
-        <div class="import-result-row"><strong>Оброблено:</strong> ${result.processed ?? 0}</div>
-        <div class="import-result-row"><strong>Додано:</strong> ${result.inserted ?? 0}</div>
-        <div class="import-result-row"><strong>Дублікатів:</strong> ${result.duplicates ?? 0}</div>
-        <div class="import-result-row"><strong>Пропущено:</strong> ${result.skipped ?? 0}</div>
-        <div class="import-result-row"><strong>Помилок:</strong> ${result.failed ?? 0}</div>
+      <div class="import-result-layout">
+        <div class="import-result-left">
+          <img
+            src="/static/photos/techninal/import_completed.webp"
+            alt="Import completed"
+            class="import-result-completed-img"
+          />
+        </div>
+        <div class="import-result-right">
+          <div class="import-result">
+            <div class="import-result-row"><strong>Усього рядків:</strong> ${result.total_rows ?? 0}</div>
+            <div class="import-result-row"><strong>Оброблено:</strong> ${result.processed ?? 0}</div>
+            <div class="import-result-row"><strong>Додано:</strong> ${result.inserted ?? 0}</div>
+            <div class="import-result-row"><strong>Дублікатів:</strong> ${result.duplicates ?? 0}</div>
+            <div class="import-result-row"><strong>Пропущено:</strong> ${result.skipped ?? 0}</div>
+            <div class="import-result-row"><strong>Помилок:</strong> ${result.failed ?? 0}</div>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -108,7 +123,7 @@
 
     const lowerName = file.name.toLowerCase();
     if (!lowerName.endsWith(".xlsx")) {
-      openModal(renderError("Підтримуються лише файли .xlsx"));
+      openModal(renderError("Підтримуються лише файли .xlsx"), "Результат імпорту XLSX");
       return;
     }
 
@@ -118,9 +133,9 @@
 
     try {
       const result = await uploadFile(file);
-      openModal(renderSuccess(file.name, result));
+      openModal(renderSuccess(file.name, result), file.name);
     } catch (error) {
-      openModal(renderError(error.message || "Невідома помилка."));
+      openModal(renderError(error.message || "Невідома помилка."), "Результат імпорту XLSX");
     } finally {
       importBtn.disabled = false;
       importBtn.textContent = originalBtnText;

@@ -270,3 +270,43 @@ class Word(SQLModel, table=True):
     word: str
     probability: int = 0
     exceptions: str = "[]"
+
+
+class LandmarkType(SQLModel, table=True):
+    """Reference row for landmark categories."""
+    __tablename__ = "landmark_types"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+
+
+class Landmark(SQLModel, table=True):
+    """Landmark dictionary row with keyword and geometry in WKT."""
+    __tablename__ = "landmarks"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    key_word: str = Field(index=True)
+    location_wkt: str
+    location_kind: Optional[str] = None
+    comment: Optional[str] = None
+    date_creation: str
+    updated_at: str
+    id_group: Optional[int] = Field(default=None, foreign_key="groups.id", index=True)
+    id_type: int = Field(foreign_key="landmark_types.id", index=True)
+    is_active: int = 1
+
+
+class MessageLandmarkMatch(SQLModel, table=True):
+    """Link table between messages and matched landmarks."""
+    __tablename__ = "message_landmark_matches"
+    __table_args__ = (UniqueConstraint("id_message", "id_landmark", "start_pos", "end_pos"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    id_message: int = Field(foreign_key="messages.id", index=True)
+    id_landmark: int = Field(foreign_key="landmarks.id", index=True)
+    matched_text: Optional[str] = None
+    start_pos: int = -1
+    end_pos: int = -1
+    created_at: str
+    matcher_version: str = "v1"

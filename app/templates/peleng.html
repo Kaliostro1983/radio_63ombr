@@ -52,7 +52,15 @@
 
           <div class="row row2">
             <label class="lbl" for="frequency">Частота/Маска</label>
-            <input class="in in-freq" type="text" id="frequency" placeholder="145.5000 або 300.3250">
+            <input
+              class="in in-freq"
+              type="text"
+              id="frequency"
+              placeholder="145.5000 або 300.3250"
+              list="pelengFreqMasksList"
+              autocomplete="off"
+            >
+            <datalist id="pelengFreqMasksList"></datalist>
             <button class="btn" type="button" id="btn_accept">Прийняти</button>
           </div>
 
@@ -165,6 +173,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/peleng.js"></script>
+<script src="/static/peleng.js?v=2"></script>
 {% endblock %}
 {% endblock %}

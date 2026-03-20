@@ -28,6 +28,74 @@ from app.core.auth_context import get_actor
 router = APIRouter()
 
 
+def _status_has_colors(conn) -> bool:
+    """Return True if `statuses` table supports bg/border color columns."""
+    cols = conn.execute("PRAGMA table_info(statuses)").fetchall()
+    col_names = [c[1] for c in cols]
+    return "bg_color" in col_names and "border_color" in col_names
+
+
+def _all_networks_list(conn, status_ids, chat_ids, group_ids):
+    """List networks for the "Усі р/м" tab with optional filters."""
+    has_colors = _status_has_colors(conn)
+    select_colors = (
+        "s.bg_color, s.border_color"
+        if has_colors
+        else "NULL as bg_color, NULL as border_color"
+    )
+
+    base_sql = f"""
+    SELECT
+        n.id,
+        n.frequency,
+        n.mask,
+        n.unit,
+        n.zone,
+        c.name AS chat_name,
+        g.name AS group_name,
+        s.name AS status_name,
+        {select_colors}
+    FROM networks n
+    JOIN chats c    ON c.id = n.chat_id
+    JOIN groups g   ON g.id = n.group_id
+    JOIN statuses s ON s.id = n.status_id
+    """
+
+    clauses = []
+    params = []
+
+    def add_in(field, values):
+        if not values:
+            return
+        values = [int(v) for v in values if int(v) != 0]
+        if not values:
+            return
+        placeholders = ",".join(["?"] * len(values))
+        clauses.append(f"{field} IN ({placeholders})")
+        params.extend(values)
+
+    add_in("n.status_id", status_ids)
+    add_in("n.chat_id", chat_ids)
+    add_in("n.group_id", group_ids)
+
+    if clauses:
+        base_sql += " WHERE " + " AND ".join(clauses)
+
+    base_sql += " ORDER BY n.frequency ASC"
+    return conn.execute(base_sql, params).fetchall()
+
+
+def _default_all_status_ids(conn) -> list[int]:
+    rows = conn.execute(
+        """
+        SELECT id
+        FROM statuses
+        WHERE name IN ('Спостерігається нами', 'Спостерігається сусідами')
+        """
+    ).fetchall()
+    return [int(r[0]) for r in rows] if rows else [0]
+
+
 @router.get("/api/networks/{network_id}/callsign-graph")
 def api_network_callsign_graph(network_id: int, days: int = 14):
     """Return callsign graph (nodes+edges) for a network within last N days."""
@@ -402,10 +470,16 @@ def _build_networks_context(
     q_query: str = "",
     current=None,
     matches=None,
+    match_tags=None,
     selected_tags=None,
     start_date_val: Optional[date] = None,
     end_date_val: Optional[date] = None,
     message: str = "",
+    all_rows=None,
+    all_selected_statuses=None,
+    all_selected_chats=None,
+    all_selected_groups=None,
+    active_tab: str = "card",
 ):
     """Build Jinja template context for the networks page."""
     return dict(
@@ -415,6 +489,7 @@ def _build_networks_context(
         q_freq=current["frequency"] if current else "",
         q_mask=current["mask"] if current else "",
         matches=matches or [],
+        match_tags=match_tags or {},
         current=current,
         statuses=statuses,
         chats=chats,
@@ -428,7 +503,36 @@ def _build_networks_context(
         start_date=start_date_val,
         end_date=end_date_val,
         message=message,
+        all_rows=all_rows or [],
+        all_selected_statuses=all_selected_statuses or [0],
+        all_selected_chats=all_selected_chats or [0],
+        all_selected_groups=all_selected_groups or [0],
+        active_tab=active_tab or "card",
     )
+
+
+def _get_tag_ids_for_networks(conn, network_ids: List[int]) -> dict[int, List[int]]:
+    """Return mapping: network_id -> list[tag_id]."""
+    net_ids = [int(x) for x in (network_ids or []) if x is not None]
+    if not net_ids:
+        return {}
+
+    placeholders = ",".join(["?"] * len(net_ids))
+    rows = conn.execute(
+        f"""
+        SELECT network_id, tag_id
+        FROM network_tag_links
+        WHERE network_id IN ({placeholders})
+        """,
+        tuple(net_ids),
+    ).fetchall()
+
+    out: dict[int, List[int]] = {}
+    for r in rows:
+        nid = int(r["network_id"])
+        tid = int(r["tag_id"])
+        out.setdefault(nid, []).append(tid)
+    return out
 
 
 @router.get("/networks", response_class=HTMLResponse)
@@ -443,6 +547,14 @@ def networks_page(
 
     with get_conn() as conn:
         statuses, chats, groups, tags, status_map, chat_map, group_map, tag_map = _lookup(conn)
+        all_selected_statuses = _default_all_status_ids(conn)
+        all_selected_chats = [0]
+        all_selected_groups = [0]
+        all_rows = _all_networks_list(conn, all_selected_statuses, all_selected_chats, all_selected_groups)
+        all_selected_statuses = _default_all_status_ids(conn)
+        all_selected_chats = [0]
+        all_selected_groups = [0]
+        all_rows = _all_networks_list(conn, all_selected_statuses, all_selected_chats, all_selected_groups)
 
         current = None
         selected_tags: List[int] = []
@@ -492,6 +604,11 @@ def networks_page(
         start_date_val=start_date_val,
         end_date_val=end_date_val,
         message=message,
+        all_rows=all_rows,
+        all_selected_statuses=all_selected_statuses,
+        all_selected_chats=all_selected_chats,
+        all_selected_groups=all_selected_groups,
+        active_tab=(request.query_params.get("tab") or "card"),
     )
     if draft and not current:
         context["draft"] = draft
@@ -509,6 +626,10 @@ def networks_search(
 
     with get_conn() as conn:
         statuses, chats, groups, tags, status_map, chat_map, group_map, tag_map = _lookup(conn)
+        all_selected_statuses = _default_all_status_ids(conn)
+        all_selected_chats = [0]
+        all_selected_groups = [0]
+        all_rows = _all_networks_list(conn, all_selected_statuses, all_selected_chats, all_selected_groups)
 
         current = None
         matches = []
@@ -529,6 +650,15 @@ def networks_search(
             elif len(matches) == 0:
                 message = "Не знайдено. Заповни картку і тисни “Зберегти”."
 
+        match_ids: List[int] = []
+        for r in matches or []:
+            try:
+                if r and r["id"] is not None:
+                    match_ids.append(int(r["id"]))
+            except Exception:
+                continue
+        match_tags = _get_tag_ids_for_networks(conn, match_ids) if match_ids else {}
+
         context = _build_networks_context(
             request,
             actor,
@@ -543,13 +673,61 @@ def networks_search(
             q_query=q_query,
             current=current,
             matches=matches,
+            match_tags=match_tags,
             selected_tags=selected_tags,
             start_date_val=start_date_val,
             end_date_val=end_date_val,
             message=message,
+            all_rows=all_rows,
+            all_selected_statuses=all_selected_statuses,
+            all_selected_chats=all_selected_chats,
+            all_selected_groups=all_selected_groups,
+            active_tab="card",
         )
         return request.app.state.templates.TemplateResponse("networks.html", context)
-    
+
+
+@router.post("/networks/all", response_class=HTMLResponse)
+def networks_all_tab(
+    request: Request,
+    status_ids: list[int] = Form(default=[]),
+    chat_ids: list[int] = Form(default=[]),
+    group_ids: list[int] = Form(default=[]),
+    actor=Depends(get_actor),
+):
+    """Apply filters for the "Усі р/м" tab within `/networks` page."""
+    with get_conn() as conn:
+        statuses, chats, groups, tags, status_map, chat_map, group_map, tag_map = _lookup(conn)
+        rows = _all_networks_list(conn, status_ids, chat_ids, group_ids)
+
+    context = _build_networks_context(
+        request,
+        actor,
+        statuses,
+        chats,
+        groups,
+        tags,
+        status_map,
+        chat_map,
+        group_map,
+        tag_map,
+        q_query="",
+        current=None,
+        matches=[],
+        match_tags={},
+        selected_tags=[],
+        start_date_val=None,
+        end_date_val=None,
+        message="",
+        all_rows=rows,
+        all_selected_statuses=status_ids,
+        all_selected_chats=chat_ids,
+        all_selected_groups=group_ids,
+        active_tab="all",
+    )
+    return request.app.state.templates.TemplateResponse("networks.html", context)
+
+
 def _set_tags(conn, network_id: int, tag_ids: List[int]):
     """Replace network tags with the provided tag id list."""
     conn.execute("DELETE FROM network_tag_links WHERE network_id=?", (network_id,))

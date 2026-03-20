@@ -20,6 +20,43 @@ from typing import Optional, List, Dict, Any
 
 from app.core.normalize import normalize_freq_or_mask
 
+# Optional "received from post" noise header.
+# Sometimes messages start with two extra non-empty lines:
+#   Отримано з поста "Name"
+#   --------------------------------------
+# which breaks template detection/parser expecting datetime at line #1.
+RE_RECEIVED_FROM_POST_LINE = re.compile(r"^\s*отримано\s+з\s+поста\s*.*$", flags=re.IGNORECASE)
+RE_POST_SEPARATOR_LINE = re.compile(r"^\s*[-—]{2,}\s*$")
+
+# Structured-alias markers; used to avoid misrouting structured messages into
+# the template parser.
+RE_HAS_STRUCTURED_REC = re.compile(r"отримувач\s*\(\s*і\s*\)\s*:", flags=re.IGNORECASE)
+RE_HAS_STRUCTURED_SEND = re.compile(r"відправник\s*:", flags=re.IGNORECASE)
+
+
+def strip_received_from_post_header_noise(text: str) -> str:
+    """Remove optional 'Отримано з поста ...' noise from the message beginning."""
+    if not text:
+        return text
+
+    lines = str(text).splitlines()
+    nonempty_idx: list[int] = []
+    for i, line in enumerate(lines):
+        if str(line).strip():
+            nonempty_idx.append(i)
+        if len(nonempty_idx) >= 2:
+            break
+
+    if len(nonempty_idx) < 2:
+        return text
+
+    i0 = nonempty_idx[0]
+    i1 = nonempty_idx[1]
+    if RE_RECEIVED_FROM_POST_LINE.match(lines[i0]) and RE_POST_SEPARATOR_LINE.match(lines[i1]):
+        return "\n".join(lines[i1 + 1 :])
+
+    return text
+
 # 27.02.2026, 16:43:47  або  27.02.2026 16:00:21
 RE_DT = re.compile(r"^\s*\d{2}\.\d{2}\.\d{4}[,\s]+\d{2}:\d{2}:\d{2}\s*$")
 
@@ -70,6 +107,12 @@ def is_template_intercept(text: str) -> bool:
     Returns:
         bool: True if the message matches template header heuristics.
     """
+    text = strip_received_from_post_header_noise(text)
+
+    # Don't treat structured-alias messages as templates.
+    if RE_HAS_STRUCTURED_REC.search(text) and RE_HAS_STRUCTURED_SEND.search(text):
+        return False
+
     head = first_nonempty_lines(text, 2)
     if len(head) < 2:
         return False
@@ -97,10 +140,21 @@ def looks_like_callsign(s: str) -> bool:
         return False
     if len(s) > 40:
         return False
+    if s.startswith("—") or s.startswith("-"):
+        return False
     # кома тут не допускається: CSV-рядок розбираємо окремо
     if re.search(r"[.,:;]", s):
         return False
     if re.fullmatch(r"\d+", s):
+        return False
+    # Callsigns are written in uppercase in this domain.
+    # Allow spaces and digits (e.g., "БРАМА 2"), but reject lowercase phrases.
+    letters = [ch for ch in s if ch.isalpha()]
+    if not letters:
+        return False
+    upper_letters = [ch for ch in letters if ch == ch.upper()]
+    # Require most letters to be uppercase (tolerate minor OCR/noise).
+    if len(upper_letters) / len(letters) < 0.8:
         return False
     return True
 
@@ -227,6 +281,7 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
         On failure returns `ok=False` with an `error` code.
     """
 
+    text = strip_received_from_post_header_noise(text)
     lines = [ln.strip() for ln in (text or "").splitlines()]
     nonempty = [ln for ln in lines if ln]
 

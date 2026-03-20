@@ -84,11 +84,41 @@ a:hover{
   padding:16px;
   border-right:1px solid var(--border);
   background:var(--card);
+  text-align:center;
 }
 
 .brand{
   font-weight:700;
   margin-bottom:12px;
+}
+
+.brand-avatar-wrap{
+  width:168px;
+  height:168px;
+  border-radius:999px;
+  overflow:hidden;
+  border:1px solid var(--border);
+  background:var(--bg);
+  margin:0 auto 12px auto;
+}
+
+.brand-avatar{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.brand-avatar--dark{
+  display:none;
+}
+
+[data-theme="dark"] .brand-avatar--light{
+  display:none;
+}
+
+[data-theme="dark"] .brand-avatar--dark{
+  display:block;
 }
 
 .nav a{
@@ -97,6 +127,7 @@ a:hover{
   border-radius:10px;
   margin:6px 0;
   color:var(--fg);
+  text-align:center;
 }
 
 .nav a.active{
@@ -196,6 +227,18 @@ textarea{
   border-color: color-mix(in srgb, #22c55e 65%, var(--border));
 }
 
+.net-tags-cell{
+  text-align:center;
+  white-space:nowrap;
+}
+
+.net-tag-icon{
+  width:18px;
+  height:18px;
+  vertical-align:middle;
+  margin:0 3px;
+}
+
 .net-graph-out{
   border:1px solid var(--border);
   border-radius:14px;
@@ -223,6 +266,12 @@ textarea{
   stroke-width:1;
 }
 
+.net-graph-node__dot--center{
+  fill:#f8fafc;
+  stroke:rgba(15,23,42,.45);
+  stroke-width:1.2;
+}
+
 .net-graph-node__label{
   fill: var(--fg);
   font-size:12px;
@@ -234,9 +283,14 @@ textarea{
 
 .cs-links-check{
   display:flex;
-  gap:10px;
+  gap:8px;
   align-items:center;
-  margin-top:6px;
+  margin-top:0;
+  min-height:38px;
+}
+
+.cs-links-check input[type="checkbox"]{
+  margin:0;
 }
 
 .peleng-map-wrap{
@@ -565,6 +619,15 @@ button.secondary{
   transform: translateY(1px);
 }
 
+.home-net-card-link{
+  cursor:pointer;
+  user-select:none;
+}
+
+.home-net-card-link:hover{
+  filter: brightness(1.06);
+}
+
 .heat-0{
   background: color-mix(in srgb, #ef4444 55%, transparent);
   color:#fff;
@@ -606,6 +669,12 @@ button.secondary{
 .callsigns-field-query{
   min-width:260px;
   flex:0 1 320px;
+}
+
+.callsigns-field-advanced{
+  min-width:180px;
+  flex:0 0 180px;
+  justify-content:flex-end;
 }
 
 .callsigns-actions{
@@ -693,6 +762,36 @@ button.secondary{
 /* Callsigns modal */
 .cs-modal-card{
   max-width:560px;
+}
+
+/* Quick callsign identification buttons */
+.cs-quickid-wrap{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.cs-quickid-btn{
+  width:32px;
+  height:32px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:transparent;
+  cursor:pointer;
+}
+
+.cs-quickid-btn:hover{
+  filter:brightness(1.06);
+}
+
+.cs-quickid-btn img{
+  width:20px;
+  height:20px;
+  object-fit:contain;
 }
 
 .cs-profile-top{
@@ -1220,8 +1319,24 @@ button.secondary{
   white-space: pre-wrap;
 }
 
+.intercepts-landmark-hit {
+  background: color-mix(in srgb, #f59e0b 45%, transparent);
+  border-bottom: 1px dashed #f59e0b;
+  border-radius: 4px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.intercepts-landmark-hit:hover {
+  background: color-mix(in srgb, #f59e0b 60%, transparent);
+}
+
 .intercept-card__right {
   min-width: 0;
+}
+
+.intercepts-copy-btn{
+  white-space:nowrap;
 }
 
 .intercepts-inline-editor {
@@ -1637,4 +1752,49 @@ button.secondary{
   height: 20px;
   flex-shrink: 0;
   object-fit: contain;
+}
+
+/* Import XLSX modal: left picture + right statistics */
+.import-result-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.import-result-left {
+  flex: 0 0 auto;
+}
+
+.import-result-completed-img {
+  width: 170px;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+  opacity: 0.95;
+}
+
+.import-result-right {
+  flex: 1 1 auto;
+}
+
+#xlsxImportModal .modal-body {
+  padding: 20px;
+}
+
+#xlsxImportModal .modal-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 18px 20px 8px 20px;
+}
+
+#xlsxImportModal .modal-header h3 {
+  margin: 0;
+  text-align: center;
+  width: 100%;
+  word-break: break-word;
+}
+
+#xlsxImportModal .modal-footer {
+  padding: 10px 20px 20px 20px;
 }

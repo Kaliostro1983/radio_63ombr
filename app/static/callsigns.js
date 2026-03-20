@@ -262,6 +262,7 @@
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("r", isCenter ? "18" : "14");
       circle.classList.add("net-graph-node__dot");
+      if (isCenter) circle.classList.add("net-graph-node__dot--center");
       g.appendChild(circle);
 
       const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
@@ -702,5 +703,10 @@
     if (elLinkShow) elLinkShow.addEventListener("click", runLinks);
 
     applyLinksQueryParams();
+  });
+
+  window.addEventListener("callsignModalDeleted", function () {
+    // Easiest safe approach: reload to avoid stale UI state.
+    window.location.reload();
   });
 })();
