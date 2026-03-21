@@ -359,9 +359,10 @@ layer має бути `UNIQUE(network_id, a_callsign_id, b_callsign_id)` (чер
 
 Призначення: шапка пакета peleng-даних.
 
-Поля: - `id` --- PK - `event_dt` - `frequency`
+Поля: - `id` --- PK - `event_dt` - `network_id` --- FK → `networks.id`
 
-Ключі та обмеження: - `PRIMARY KEY(id)`
+Ключі та обмеження: - `PRIMARY KEY(id)` -
+`FOREIGN KEY(network_id) REFERENCES networks(id)`
 
 ------------------------------------------------------------------------
 

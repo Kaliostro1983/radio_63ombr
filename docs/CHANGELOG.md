@@ -10,6 +10,17 @@
 
 ---
 
+## [0.6.4] - 2026-03-21
+
+### Changed
+- Для `peleng_batches` виконано міграцію схеми: прибрано поле `frequency`, основний зв’язок з радіомережею тепер через `network_id`.
+- Оновлено ingest/peleng-записи та вибірки звіту під модель `peleng_batches(event_dt, network_id)`.
+
+### Notes
+- Під час міграції збережено `id` батчів і зв’язки з `peleng_points`; `network_id` для старих рядків заповнюється через `networks.frequency` (latest by `updated_at`, tie-break `id`).
+
+---
+
 ## [0.3.0] - 2026-03-07
 
 ### Added

@@ -204,6 +204,23 @@ def fetch_unit_zone_by_value(db, value4: str):
     return row["unit"], row["zone"]
 
 
+def fetch_network_id_by_frequency(db, value4: str) -> int | None:
+    """Resolve latest network id for an exact frequency value."""
+    row = db.execute(
+        """
+        SELECT id
+        FROM networks
+        WHERE frequency = ?
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        """,
+        (value4,),
+    ).fetchone()
+    if not row:
+        return None
+    return int(row["id"])
+
+
 def build_unit_desc(unit: str | None, zone: str | None) -> str:
     """Build a human-readable unit description for reports."""
     unit = (unit or "").strip()
@@ -508,9 +525,10 @@ def peleng_save(payload: SaveIn):
 
     db = get_db()
     try:
+        network_id = fetch_network_id_by_frequency(db, value4)
         cur = db.execute(
-            "INSERT INTO peleng_batches (event_dt, frequency) VALUES (?, ?)",
-            (event_dt, value4),
+            "INSERT INTO peleng_batches (event_dt, network_id) VALUES (?, ?)",
+            (event_dt, network_id),
         )
         batch_id = cur.lastrowid
 
@@ -646,10 +664,14 @@ def peleng_report_by_period(
     try:
         batches = db.execute(
             """
-            SELECT id, event_dt, frequency
-            FROM peleng_batches
-            WHERE event_dt >= ? AND event_dt <= ?
-            ORDER BY event_dt ASC, id ASC
+            SELECT
+                pb.id,
+                pb.event_dt,
+                COALESCE(n.frequency, '') AS frequency
+            FROM peleng_batches pb
+            LEFT JOIN networks n ON n.id = pb.network_id
+            WHERE pb.event_dt >= ? AND pb.event_dt <= ?
+            ORDER BY pb.event_dt ASC, pb.id ASC
             """,
             (from_dt, to_dt),
         ).fetchall()

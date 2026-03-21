@@ -30,7 +30,7 @@
 ## DB / schema
 
 - `app/core/db.py` — `SCHEMA_SQL` + lightweight міграції (`_run_lightweight_migrations`).
-- `docs/DB_SCHEMA.md` / `docs/db_schema.md` — опис поточної схеми SQLite (людська довідка).
+- `docs/DB_SCHEMA.md` — опис поточної схеми SQLite (людська довідка).
 
 ## Ingest / parsing
 

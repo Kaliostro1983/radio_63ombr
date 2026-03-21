@@ -21,6 +21,19 @@ from contextlib import contextmanager
 from app.db_utils import safe_execute
 from .config import settings
 
+
+def _register_sql_functions(conn: sqlite3.Connection) -> None:
+    """Register Python callables for use in SQL (e.g. alias lookup)."""
+
+    from app.core.alias_normalizer import normalize_network_alias
+
+    def _norm_alias_sql(val: object) -> str:
+        if val is None:
+            return ""
+        return normalize_network_alias(str(val))
+
+    conn.create_function("norm_alias", 1, _norm_alias_sql)
+
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
 
@@ -240,7 +253,8 @@ CREATE TABLE IF NOT EXISTS callsign_status_map (
 CREATE TABLE IF NOT EXISTS peleng_batches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_dt TEXT NOT NULL,
-    frequency TEXT NOT NULL
+    network_id INTEGER,
+    FOREIGN KEY (network_id) REFERENCES networks(id)
 );
 
 CREATE TABLE IF NOT EXISTS peleng_points (
@@ -428,6 +442,51 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
     _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
+    _ensure_column(conn, "peleng_batches", "network_id", "network_id INTEGER")
+    # Rebuild legacy peleng_batches(event_dt, frequency) into
+    # peleng_batches(event_dt, network_id), preserving ids and points links.
+    if _table_exists(conn, "peleng_batches") and _has_column(conn, "peleng_batches", "frequency"):
+        safe_execute(conn, "PRAGMA foreign_keys = OFF", module="app.core.db", function="_run_lightweight_migrations", stage="fk_off:peleng_batches_rebuild")
+        safe_execute(
+            conn,
+            """
+            CREATE TABLE IF NOT EXISTS peleng_batches_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_dt TEXT NOT NULL,
+                network_id INTEGER,
+                FOREIGN KEY (network_id) REFERENCES networks(id)
+            )
+            """,
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="create_table:peleng_batches_new",
+        )
+        safe_execute(
+            conn,
+            """
+            INSERT INTO peleng_batches_new (id, event_dt, network_id)
+            SELECT
+                pb.id,
+                pb.event_dt,
+                COALESCE(
+                    pb.network_id,
+                    (
+                        SELECT n.id
+                        FROM networks n
+                        WHERE n.frequency = pb.frequency
+                        ORDER BY n.updated_at DESC, n.id DESC
+                        LIMIT 1
+                    )
+                ) AS network_id
+            FROM peleng_batches pb
+            """,
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="copy:peleng_batches_to_new",
+        )
+        safe_execute(conn, "DROP TABLE peleng_batches", module="app.core.db", function="_run_lightweight_migrations", stage="drop_table:peleng_batches_old")
+        safe_execute(conn, "ALTER TABLE peleng_batches_new RENAME TO peleng_batches", module="app.core.db", function="_run_lightweight_migrations", stage="rename:peleng_batches_new")
+        safe_execute(conn, "PRAGMA foreign_keys = ON", module="app.core.db", function="_run_lightweight_migrations", stage="fk_on:peleng_batches_rebuild")
 
     # --- Landmark keyword matching schema ---
     safe_execute(
@@ -648,6 +707,17 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             function="_run_lightweight_migrations",
             stage="create_index:ux_network_aliases_alias_text_active",
         )
+    # Older DBs may have been created with UNIQUE(network_id, created_at), which
+    # contradicts ingest dedup (network_id, created_at, body_text) and causes
+    # insert failures when two messages share the same second. Recreate as a
+    # non-unique index for search performance only.
+    safe_execute(
+        conn,
+        "DROP INDEX IF EXISTS idx_messages_network_created",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="drop_index:idx_messages_network_created_if_wrong_unique",
+    )
     safe_execute(
         conn,
         "CREATE INDEX IF NOT EXISTS idx_messages_network_created "
@@ -663,6 +733,14 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         module="app.core.db",
         function="_run_lightweight_migrations",
         stage="create_index:idx_callsigns_network_name",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_peleng_batches_network_id "
+        "ON peleng_batches(network_id)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_peleng_batches_network_id",
     )
 
     # Required for upsert in callsign_service.upsert_callsign_edge()
@@ -754,6 +832,7 @@ def get_db() -> sqlite3.Connection:
     """
     conn = sqlite3.connect(db_path(), timeout=30)
     conn.row_factory = sqlite3.Row
+    _register_sql_functions(conn)
     safe_execute(conn, "PRAGMA busy_timeout = 30000;", module="app.core.db", function="get_db")
     safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_db")
     return conn
@@ -780,6 +859,7 @@ def get_conn() -> sqlite3.Connection:
     """
     conn = sqlite3.connect(db_path(), timeout=30)
     conn.row_factory = sqlite3.Row
+    _register_sql_functions(conn)
     safe_execute(conn, "PRAGMA busy_timeout = 30000;", module="app.core.db", function="get_conn")
     safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_conn")
     try:

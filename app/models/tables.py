@@ -249,7 +249,7 @@ class PelengBatch(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     event_dt: str
-    frequency: str
+    network_id: Optional[int] = Field(default=None, foreign_key="networks.id", index=True)
 
 
 class PelengPoint(SQLModel, table=True):

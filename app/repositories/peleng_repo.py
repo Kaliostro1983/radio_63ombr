@@ -25,6 +25,7 @@ class BatchRow:
     """Row shape for `peleng_batches` list queries."""
     id: int
     event_dt: str
+    network_id: int | None
     frequency: str
 
 @dataclass(frozen=True)
@@ -51,14 +52,27 @@ class PelengRepo:
         """List peleng batches within the requested period."""
         cur = self.conn.execute(
             """
-            SELECT id, event_dt, frequency
-            FROM peleng_batches
-            WHERE event_dt >= ? AND event_dt <= ?
-            ORDER BY event_dt ASC, id ASC
+            SELECT
+                pb.id,
+                pb.event_dt,
+                pb.network_id,
+                COALESCE(n.frequency, '') AS frequency
+            FROM peleng_batches pb
+            LEFT JOIN networks n ON n.id = pb.network_id
+            WHERE pb.event_dt >= ? AND pb.event_dt <= ?
+            ORDER BY pb.event_dt ASC, pb.id ASC
             """,
             (from_dt, to_dt),
         )
-        return [BatchRow(int(r["id"]), str(r["event_dt"]), str(r["frequency"])) for r in cur.fetchall()]
+        return [
+            BatchRow(
+                int(r["id"]),
+                str(r["event_dt"]),
+                int(r["network_id"]) if r["network_id"] is not None else None,
+                str(r["frequency"] or ""),
+            )
+            for r in cur.fetchall()
+        ]
 
     def list_points(self, batch_ids: Sequence[int]) -> list[PointRow]:
         """List peleng points for the provided batch ids."""

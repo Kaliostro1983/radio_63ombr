@@ -28,6 +28,7 @@ from app.core.db import get_conn
 from app.core.intercept_parser import parse_template_intercept
 from app.core.logging import get_logger
 from app.core.normalize import normalize_nonstandard_type_1
+from app.core.peleng_intercept_parser import parse_peleng_intercept
 from app.core.time_utils import calc_delay_sec, now_sql, to_sql_dt
 from app.core.validators import detect_message_format
 from app.services.callsign_service import link_message_callsigns
@@ -225,6 +226,67 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "ingest_id": ingest_id,
                 "skipped": True,
                 "reason": "unknown_format",
+                "actions": actions,
+            }
+
+        if message_format == "peleng_type":
+            peleng = parse_peleng_intercept(raw_text)
+            if not peleng.get("ok"):
+                reason = str(peleng.get("error") or "peleng_parse_failed")
+                mark_parse_error(cur, ingest_id, reason)
+                return {
+                    "ok": True,
+                    "ingest_id": ingest_id,
+                    "skipped": True,
+                    "reason": reason,
+                    "actions": actions,
+                }
+
+            published_at_text = str(peleng["published_at_text"])
+            created_at = to_sql_dt(published_at_text) or received_at
+            set_published_at_text(cur, ingest_id, published_at_text)
+
+            frequency = str(peleng["frequency"])
+            try:
+                network_id = ensure_network(
+                    cur,
+                    frequency=frequency,
+                    mask=None,
+                    now_dt=received_at,
+                    unit=None,
+                    zone=None,
+                )
+            except NetworkNotFoundError:
+                mark_parse_error(cur, ingest_id, "network_not_found")
+                return {
+                    "ok": True,
+                    "ingest_id": ingest_id,
+                    "skipped": True,
+                    "reason": "network_not_found",
+                    "details": {"frequency": frequency},
+                    "actions": actions,
+                }
+
+            cur.execute(
+                "INSERT INTO peleng_batches (event_dt, network_id) VALUES (?, ?)",
+                (created_at, network_id),
+            )
+            batch_id = int(cur.lastrowid)
+            points = list(peleng.get("points") or [])
+            cur.executemany(
+                "INSERT INTO peleng_points (batch_id, mgrs) VALUES (?, ?)",
+                [(batch_id, p) for p in points],
+            )
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "peleng_batch_id": batch_id,
+                "parsed": {
+                    "message_format": "peleng_type",
+                    "network_id": network_id,
+                    "frequency": frequency,
+                    "points_count": len(points),
+                },
                 "actions": actions,
             }
 
