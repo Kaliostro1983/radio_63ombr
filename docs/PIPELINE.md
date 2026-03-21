@@ -169,3 +169,34 @@ UI routes:
 
 /intercepts
 /intercepts-explorer
+
+---
+
+## Landmark keyword matching (optional, off by default)
+
+Automatic matching of message text against `landmarks.key_word` is **disabled by default** so the process does not enqueue work or run a background worker unless explicitly enabled.
+
+**What it does when enabled**
+
+- After a new row is inserted into `messages`, the ingest path may enqueue `message_id` into `message_landmark_queue`.
+- A daemon thread (`services/landmark_match_service.py`) drains the queue and fills `message_landmark_matches`.
+- Creating or updating landmarks may enqueue messages for re-matching (see `routers/landmarks.py`).
+
+**How to enable**
+
+Set in `config.env` (or the environment):
+
+```env
+LANDMARK_AUTO_MATCH=1
+```
+
+Accepted truthy values: `1`, `true`, `yes`, `on` (case-insensitive).  
+Restart the application after changing this variable.
+
+**When disabled (default)**
+
+- No background worker thread is started.
+- No enqueue from ingest (`insert_message` in `services/ingest_store.py`).
+- Landmark API does not bulk-queue or per-message-queue for re-matching.
+
+Existing rows in `message_landmark_matches` are unchanged; the UI still reads them if present.

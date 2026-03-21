@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.core.config import settings
 from app.core.db import get_conn
 
 router = APIRouter()
@@ -447,35 +448,34 @@ async def api_landmark_create(request: Request):
             (name, key_word, location_wkt, location_kind, comment, now_iso, now_iso, id_group, id_type, is_active),
         )
 
-        # After creation, enqueue ALL valid messages for background matching
-        # so the new keyword is applied to existing intercept history.
-        #
-        # We use a single INSERT..SELECT to avoid slow Python loops.
-        conn.execute(
-            """
-            INSERT INTO message_landmark_queue (
-                message_id, status, attempts, last_error, queued_at, processed_at, updated_at
+        # After creation, optionally enqueue ALL valid messages for background matching
+        # so the new keyword is applied to existing intercept history (LANDMARK_AUTO_MATCH).
+        if settings.landmark_auto_match_enabled:
+            conn.execute(
+                """
+                INSERT INTO message_landmark_queue (
+                    message_id, status, attempts, last_error, queued_at, processed_at, updated_at
+                )
+                SELECT
+                    id,
+                    'pending',
+                    0,
+                    NULL,
+                    ?,
+                    NULL,
+                    ?
+                FROM messages
+                WHERE COALESCE(is_valid, 1) = 1
+                  AND body_text IS NOT NULL
+                  AND TRIM(body_text) <> ''
+                ON CONFLICT(message_id) DO UPDATE SET
+                    status = 'pending',
+                    last_error = NULL,
+                    queued_at = excluded.queued_at,
+                    updated_at = excluded.updated_at
+                """,
+                (now_iso, now_iso),
             )
-            SELECT
-                id,
-                'pending',
-                0,
-                NULL,
-                ?,
-                NULL,
-                ?
-            FROM messages
-            WHERE COALESCE(is_valid, 1) = 1
-              AND body_text IS NOT NULL
-              AND TRIM(body_text) <> ''
-            ON CONFLICT(message_id) DO UPDATE SET
-                status = 'pending',
-                last_error = NULL,
-                queued_at = excluded.queued_at,
-                updated_at = excluded.updated_at
-            """,
-            (now_iso, now_iso),
-        )
 
         conn.commit()
 

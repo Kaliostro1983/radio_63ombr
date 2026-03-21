@@ -96,7 +96,8 @@ def create_app() -> FastAPI:
         """
         init_db()
         maybe_backup_db()
-        start_landmark_match_worker()
+        if settings.landmark_auto_match_enabled:
+            start_landmark_match_worker()
 
     @app.get("/")
     def root():

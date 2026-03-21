@@ -5,9 +5,11 @@ keywords and stores results in `message_landmark_matches`.
 
 Architecture:
 - ingest inserts into `messages`;
-- ingest enqueues `message_id` into `message_landmark_queue`;
-- a lightweight background worker processes pending queue rows;
+- when `LANDMARK_AUTO_MATCH=1`, ingest enqueues `message_id` into `message_landmark_queue`;
+- a lightweight background worker processes pending queue rows (same flag);
 - API/UI reads match rows and renders highlight + map geometry.
+
+When automatic matching is off (default), nothing is queued and the worker is not started.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ import time
 from datetime import datetime
 from typing import Any
 
+from app.core.config import settings
 from app.core.db import get_conn
 
 MATCHER_VERSION = "v1"
@@ -56,6 +59,8 @@ def _load_active_landmarks(conn) -> list[dict[str, Any]]:
 
 def enqueue_message_landmark_match(conn, message_id: int, queued_at: str | None = None) -> None:
     """Queue one message for background landmark matching."""
+    if not settings.landmark_auto_match_enabled:
+        return
     ts = queued_at or _now_iso()
     conn.execute(
         """
@@ -200,6 +205,8 @@ def process_pending_landmark_queue_batch(batch_size: int = 50) -> int:
 
 def start_landmark_match_worker(poll_interval_sec: float = 2.0, batch_size: int = 10) -> None:
     """Start daemon worker thread once per process."""
+    if not settings.landmark_auto_match_enabled:
+        return
     global _worker_started
     with _worker_lock:
         if _worker_started:

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from app.core.config import settings
 from app.db_utils import safe_execute
 
 
@@ -290,19 +291,20 @@ def insert_message(
     )
     message_id = int(cur.lastrowid)
 
-    # Schedule post-ingest landmark matching in background queue.
-    safe_execute(
-        cur,
-        """
-        INSERT OR IGNORE INTO message_landmark_queue (
-            message_id, status, attempts, last_error, queued_at, processed_at, updated_at
+    # Schedule post-ingest landmark matching in background queue (optional; see LANDMARK_AUTO_MATCH).
+    if settings.landmark_auto_match_enabled:
+        safe_execute(
+            cur,
+            """
+            INSERT OR IGNORE INTO message_landmark_queue (
+                message_id, status, attempts, last_error, queued_at, processed_at, updated_at
+            )
+            VALUES (?, 'pending', 0, NULL, ?, NULL, ?)
+            """,
+            (message_id, received_at, received_at),
+            module="app.services.ingest_store",
+            function="insert_message",
+            stage="enqueue:message_landmark_queue",
         )
-        VALUES (?, 'pending', 0, NULL, ?, NULL, ?)
-        """,
-        (message_id, received_at, received_at),
-        module="app.services.ingest_store",
-        function="insert_message",
-        stage="enqueue:message_landmark_queue",
-    )
 
     return message_id

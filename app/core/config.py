@@ -9,12 +9,23 @@ Usage in the system:
 - `app.main` uses `settings.app_name` for the FastAPI title.
 - `app.core.db` uses `settings.db_path` to locate the SQLite database.
 - `app.core.backup` uses backup-related settings for automatic backups.
+- Optional `LANDMARK_AUTO_MATCH` controls automatic landmark keyword matching
+  (background worker + queueing); see `docs/PIPELINE.md`.
 """
 
 from __future__ import annotations
 import os
 from dataclasses import dataclass
 from dotenv import load_dotenv
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse truthy env values: 1, true, yes, on (case-insensitive)."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -25,6 +36,9 @@ class Settings:
     backup_keep: int = 30
     freq_xlsx: str = "Frequencies_63.xlsx"
     etalon_xlsx: str = ""
+    # When False: no background thread; no enqueue from ingest / landmark APIs.
+    landmark_auto_match_enabled: bool = False
+
 
 def load_settings() -> Settings:
     """Load configuration from environment variables (optionally via dotenv).
@@ -46,6 +60,7 @@ def load_settings() -> Settings:
         backup_keep=int(os.getenv("BACKUP_KEEP", "30")),
         freq_xlsx=os.getenv("FREQ_XLSX", "Frequencies_63.xlsx"),
         etalon_xlsx=os.getenv("ETALON_XLSX", ""),
+        landmark_auto_match_enabled=_env_bool("LANDMARK_AUTO_MATCH", default=False),
     )
 
 settings = load_settings()

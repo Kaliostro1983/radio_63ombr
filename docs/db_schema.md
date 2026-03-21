@@ -480,6 +480,9 @@ lifecycle.
 Призначення: черга фонового пост-оброблення повідомлень для keyword-matching
 по `landmarks`.
 
+Заповнення черги та робота воркера **керуються конфігурацією** `LANDMARK_AUTO_MATCH`
+(див. `docs/PIPELINE.md`): за замовчуванням автоматична обробка вимкнена.
+
 Поля:
 - `message_id` --- PK/FK → `messages.id`
 - `status` --- стан (`pending`, `processing`, `done`, `error`)

@@ -355,6 +355,8 @@ static/landmarks.js
 Landmark keyword matching worker:
 services/landmark_match_service.py  
 
+Automatic landmark matching (queue + background worker) is controlled by `LANDMARK_AUTO_MATCH` in `config.env` (default: off). See `docs/PIPELINE.md`.
+
 ---
 
 # Current Focus Areas

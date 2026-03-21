@@ -69,7 +69,7 @@ normalize.py
 validators.py  
 time_utils.py  
 callsign_normalizer.py  
-config.py  
+config.py (including `LANDMARK_AUTO_MATCH` for optional landmark matching)  
 db.py
 
 ---
