@@ -14,7 +14,7 @@
 - `app/routers/networks.py` — сторінка “Радіомережі” (пошук/збереження), теги мереж, дати еталонки.
 - `app/routers/intercepts.py` — пошук/перегляд перехоплень.
 - `app/routers/xlsx_import.py` — імпорт перехоплень з XLSX (UI/API).
-- `app/routers/reports.py` — генерація звітів (DOCX тощо).
+- `app/routers/reports.py` — генерація звітів (DOCX); UI звітів на Головній (`/home?tab=reports`), `GET /reports` → редірект.
 - `app/routers/callsigns.py` — “Позивні” (UI/API).
 - `app/routers/etalons.py` — “Еталонки” (UI/API).
 - `app/routers/peleng.py` — “Пеленгація” (UI/API).

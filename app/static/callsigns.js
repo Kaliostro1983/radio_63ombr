@@ -117,41 +117,6 @@
     return svg;
   }
 
-  function attachPanZoom(svg, width, height) {
-    const vb = { x: 0, y: 0, w: width, h: height };
-    let drag = null;
-    function setVb() { svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
-    function svgPoint(evt) {
-      const rect = svg.getBoundingClientRect();
-      const sx = (evt.clientX - rect.left) / rect.width;
-      const sy = (evt.clientY - rect.top) / rect.height;
-      return { x: vb.x + sx * vb.w, y: vb.y + sy * vb.h };
-    }
-    svg.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const p = svgPoint(e);
-      const zoom = e.deltaY > 0 ? 1.12 : 0.89;
-      const nw = Math.max(240, Math.min(width * 6, vb.w * zoom));
-      const nh = Math.max(240, Math.min(height * 6, vb.h * zoom));
-      const kx = (p.x - vb.x) / vb.w;
-      const ky = (p.y - vb.y) / vb.h;
-      vb.x = p.x - kx * nw;
-      vb.y = p.y - ky * nh;
-      vb.w = nw; vb.h = nh;
-      setVb();
-    }, { passive: false });
-    svg.addEventListener("mousedown", (e) => { if (e.button === 0) drag = { p: svgPoint(e), x: vb.x, y: vb.y }; });
-    window.addEventListener("mousemove", (e) => {
-      if (!drag) return;
-      const p2 = svgPoint(e);
-      vb.x = drag.x + (drag.p.x - p2.x);
-      vb.y = drag.y + (drag.p.y - p2.y);
-      setVb();
-    });
-    window.addEventListener("mouseup", () => { drag = null; });
-    setVb();
-  }
-
   function forceLayout(nodes, edges, width, height, centerId) {
     const byId = new Map(nodes.map((n) => [n.id, n]));
     nodes.forEach((n) => {
@@ -167,8 +132,8 @@
       .filter((l) => l.a && l.b);
 
     const kLink = 0.0022;
-    const kRepel = 5200;
-    const kCenter = 0.0006;
+    const kRepel = 2400;
+    const kCenter = 0.00045;
     const damping = 0.86;
     const minDist = 34;
     const margin = 170;
@@ -222,29 +187,80 @@
     return { step, links };
   }
 
+  function applyLinksLabelSide(g, n, width) {
+    const label = g.querySelector(".net-graph-node__label");
+    if (!label) return;
+    if (n.x > width - 210) {
+      label.setAttribute("x", "-18");
+      label.setAttribute("text-anchor", "end");
+    } else {
+      label.setAttribute("x", "18");
+      label.setAttribute("text-anchor", "start");
+    }
+  }
+
+  function refreshLinksVisuals(linkEls, nodeEls, width) {
+    linkEls.forEach(({ line, l }) => {
+      line.setAttribute("x1", String(l.a.x));
+      line.setAttribute("y1", String(l.a.y));
+      line.setAttribute("x2", String(l.b.x));
+      line.setAttribute("y2", String(l.b.y));
+    });
+    nodeEls.forEach(({ g, n }) => {
+      applyLinksLabelSide(g, n, width);
+      g.setAttribute("transform", `translate(${n.x},${n.y})`);
+    });
+  }
+
   function drawLinksGraph(data) {
     if (!elLinkGraphOut) return;
     const nodes = Array.isArray(data.nodes) ? data.nodes.slice(0) : [];
     const edges = Array.isArray(data.edges) ? data.edges.slice(0) : [];
     const centerId = Number(data.center_id || 0);
     if (!nodes.length || !centerId) {
+      if (typeof elLinkGraphOut._csGraphCleanup === "function") {
+        elLinkGraphOut._csGraphCleanup();
+        elLinkGraphOut._csGraphCleanup = null;
+      }
       elLinkGraphOut.innerHTML = `<div class="small" style="opacity:.85">Немає даних.</div>`;
       return;
     }
+
+    if (typeof elLinkGraphOut._csGraphCleanup === "function") {
+      elLinkGraphOut._csGraphCleanup();
+      elLinkGraphOut._csGraphCleanup = null;
+    }
+
     elLinkGraphOut.innerHTML = "";
     const width = elLinkGraphOut.clientWidth ? Math.max(520, elLinkGraphOut.clientWidth) : 900;
     const height = 520;
     const svg = buildSvg(width, height);
     elLinkGraphOut.appendChild(svg);
-    attachPanZoom(svg, width, height);
+
+    const marginX = 170;
+    const marginY = 22;
+    const vb = { x: 0, y: 0, w: width, h: height };
+    let panDrag = null;
+    let nodeDrag = null;
+
+    function setVb() {
+      svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+    }
+
+    function svgPoint(evt) {
+      const rect = svg.getBoundingClientRect();
+      const sx = (evt.clientX - rect.left) / rect.width;
+      const sy = (evt.clientY - rect.top) / rect.height;
+      return { x: vb.x + sx * vb.w, y: vb.y + sy * vb.h };
+    }
 
     const gLinks = document.createElementNS("http://www.w3.org/2000/svg", "g");
     const gNodes = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    svg.appendChild(gLinks); svg.appendChild(gNodes);
+    svg.appendChild(gLinks);
+    svg.appendChild(gNodes);
 
     const layout = forceLayout(nodes, edges, width, height, centerId);
 
-    const byId = new Map(nodes.map((n) => [n.id, n]));
     const linkEls = layout.links.map((l) => {
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       line.classList.add("net-graph-link");
@@ -257,6 +273,7 @@
     const nodeEls = nodes.map((n) => {
       const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
       g.classList.add("net-graph-node");
+      g.style.cursor = "grab";
       const isCenter = n.id === centerId;
 
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -279,7 +296,29 @@
       text.classList.add("net-graph-node__label");
       g.appendChild(text);
 
-      g.addEventListener("click", () => {
+      g.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const p = svgPoint(e);
+        nodeDrag = {
+          n,
+          ox: n.x - p.x,
+          oy: n.y - p.y,
+          g,
+          sx: e.clientX,
+          sy: e.clientY,
+          moved: false,
+        };
+        g.style.cursor = "grabbing";
+      });
+
+      g.addEventListener("click", (e) => {
+        if (g.dataset.suppressClick === "1") {
+          delete g.dataset.suppressClick;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         if (window.openCallsignEditModalById) window.openCallsignEditModalById(Number(n.id));
       });
 
@@ -287,28 +326,52 @@
       return { g, n };
     });
 
+    function onWindowMove(e) {
+      if (nodeDrag) {
+        const p = svgPoint(e);
+        nodeDrag.n.x = Math.max(marginX, Math.min(width - marginX, p.x + nodeDrag.ox));
+        nodeDrag.n.y = Math.max(marginY, Math.min(height - marginY, p.y + nodeDrag.oy));
+        if (!nodeDrag.moved && (Math.abs(e.clientX - nodeDrag.sx) > 5 || Math.abs(e.clientY - nodeDrag.sy) > 5)) {
+          nodeDrag.moved = true;
+        }
+        refreshLinksVisuals(linkEls, nodeEls, width);
+        return;
+      }
+      if (!panDrag) return;
+      const p2 = svgPoint(e);
+      vb.x = panDrag.x + (panDrag.p.x - p2.x);
+      vb.y = panDrag.y + (panDrag.p.y - p2.y);
+      setVb();
+    }
+
+    function onWindowUp() {
+      if (nodeDrag) {
+        if (nodeDrag.moved) nodeDrag.g.dataset.suppressClick = "1";
+        nodeDrag.g.style.cursor = "grab";
+        nodeDrag = null;
+      }
+      panDrag = null;
+    }
+
+    svg.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".net-graph-node")) return;
+      panDrag = { p: svgPoint(e), x: vb.x, y: vb.y };
+    });
+
+    window.addEventListener("mousemove", onWindowMove);
+    window.addEventListener("mouseup", onWindowUp);
+    elLinkGraphOut._csGraphCleanup = () => {
+      window.removeEventListener("mousemove", onWindowMove);
+      window.removeEventListener("mouseup", onWindowUp);
+    };
+
+    setVb();
+
     let ticks = 0;
     function tick() {
       layout.step();
-      linkEls.forEach(({ line, l }) => {
-        line.setAttribute("x1", String(l.a.x));
-        line.setAttribute("y1", String(l.a.y));
-        line.setAttribute("x2", String(l.b.x));
-        line.setAttribute("y2", String(l.b.y));
-      });
-      nodeEls.forEach(({ g, n }) => {
-        const label = g.querySelector(".net-graph-node__label");
-        if (label) {
-          if (n.x > width - 210) {
-            label.setAttribute("x", "-18");
-            label.setAttribute("text-anchor", "end");
-          } else {
-            label.setAttribute("x", "18");
-            label.setAttribute("text-anchor", "start");
-          }
-        }
-        g.setAttribute("transform", `translate(${n.x},${n.y})`);
-      });
+      refreshLinksVisuals(linkEls, nodeEls, width);
       ticks += 1;
       if (ticks < 340) requestAnimationFrame(tick);
     }
@@ -554,7 +617,13 @@
     const days = Math.max(1, Math.min(365, Number((elLinkDays && elLinkDays.value) || 14)));
     const adv = elLinkAdvanced && elLinkAdvanced.checked ? 1 : 0;
     if (elLinkInfo) elLinkInfo.textContent = "Завантаження графа…";
-    if (elLinkGraphOut) elLinkGraphOut.innerHTML = `<div class="small" style="opacity:.85">Завантаження…</div>`;
+    if (elLinkGraphOut) {
+      if (typeof elLinkGraphOut._csGraphCleanup === "function") {
+        elLinkGraphOut._csGraphCleanup();
+        elLinkGraphOut._csGraphCleanup = null;
+      }
+      elLinkGraphOut.innerHTML = `<div class="small" style="opacity:.85">Завантаження…</div>`;
+    }
     try {
       const resp = await fetch(`/api/callsigns/${encodeURIComponent(cid)}/graph?days=${encodeURIComponent(days)}&advanced=${encodeURIComponent(adv)}`);
       const data = await resp.json();
@@ -601,6 +670,22 @@
       } catch (e) {
         // ignore
       }
+    }
+  }
+
+  async function applyFreqQueryParams() {
+    const qs = new URLSearchParams(window.location.search);
+    const tab = (qs.get("tab") || "").trim().toLowerCase();
+    const freq = (qs.get("frequency") || "").trim();
+    const days = Number(qs.get("days") || "7") || 7;
+    if (tab !== "freq" && !freq) return;
+
+    setTab("freq");
+    if (elFreq && freq) elFreq.value = freq;
+    if (elDays) elDays.value = String(Math.max(1, Math.min(365, days)));
+
+    if (elFreq && (elFreq.value || "").trim()) {
+      await runQuery();
     }
   }
 
@@ -703,10 +788,37 @@
     if (elLinkShow) elLinkShow.addEventListener("click", runLinks);
 
     applyLinksQueryParams();
+    applyFreqQueryParams();
   });
 
   window.addEventListener("callsignModalDeleted", function () {
-    // Easiest safe approach: reload to avoid stale UI state.
-    window.location.reload();
+    // Keep current UI filters and refresh only the active pane.
+    // Reloading the whole page clears freq/search inputs and shows an empty form.
+    try {
+      const isFreq = paneFreq && !paneFreq.classList.contains("hidden");
+      const isSearch = paneSearch && !paneSearch.classList.contains("hidden");
+      const isLinks = paneLinks && !paneLinks.classList.contains("hidden");
+
+      if (isFreq) {
+        if (elFreq && (elFreq.value || "").trim()) runQuery();
+        return;
+      }
+      if (isSearch) {
+        if (elQuery && (elQuery.value || "").trim()) runSearch();
+        return;
+      }
+      if (isLinks) {
+        if (elLinkCallsignId && (elLinkCallsignId.value || "").trim()) runLinks();
+        return;
+      }
+
+      // Fallback: if we cannot detect active pane, do not reload hard.
+      // Just try to refresh freq table if we have a value.
+      if (elFreq && (elFreq.value || "").trim()) runQuery();
+    } catch (e) {
+      // As a last resort, keep previous behavior.
+      console.error(e);
+      window.location.reload();
+    }
   });
 })();

@@ -10,7 +10,7 @@ $health = "http://$Host`:$Port/health"
 $home = "http://$Host`:$Port/home"
 
 Write-Host "Starting server..."
-Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList @("-m","uvicorn","app.main:app","--host",$Host,"--port",$Port) -WorkingDirectory $PSScriptRoot | Out-Null
+Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList @("-m","uvicorn","app.main:app","--host",$Host,"--port",$Port,"--log-config","uvicorn_log_config.json") -WorkingDirectory $PSScriptRoot | Out-Null
 
 Write-Host "Waiting for $health ..."
 $deadline = (Get-Date).AddSeconds($TimeoutSec)

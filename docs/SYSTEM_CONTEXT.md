@@ -35,12 +35,14 @@ Frontend uses Jinja2 templates and vanilla JavaScript.
 4. Format is detected.
 5. Message goes through either:
    - structured alias pipeline, or
-   - template intercept parser.
-6. Network is resolved.
-7. Duplicate is checked.
-8. Parsed message is inserted into `messages`.
-9. Callsigns are linked into `message_callsigns`.
-10. Callsign relationships are updated in `callsign_edges`.
+   - template intercept parser, or
+   - peleng parser (`peleng_type`).
+6. For template/structured intercepts: network is resolved.
+7. For template/structured intercepts: duplicate is checked.
+8. For template/structured intercepts: parsed message is inserted into `messages`.
+9. For template/structured intercepts: callsigns are linked into `message_callsigns`.
+10. For template/structured intercepts: callsign relationships are updated in `callsign_edges`.
+11. For `peleng_type`: a row is inserted into `peleng_batches`, and `37...` rows are inserted into `peleng_points`.
 
 ## Supported message formats
 
@@ -66,6 +68,15 @@ Typical structure:
 
 Parser:
 - `app/core/structured_intercept_parser.py`
+
+### Peleng intercept (`peleng_type`)
+Typical structure:
+- `frequency / datetime` in the first line
+- optional descriptive lines
+- one or more coordinate lines starting with `37`
+
+Parser:
+- `app/core/peleng_intercept_parser.py`
 
 ## Core database tables
 

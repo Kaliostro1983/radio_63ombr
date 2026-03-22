@@ -1,75 +1,143 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set active_tab = (request.query_params.get("tab") or "view")|lower %}
 <section class="intercepts-page">
-  <h2>Intercepts Explorer</h2>
+  <h2>Перехоплення</h2>
 
-  <form id="interceptsFilterForm" class="intercepts-filter-form" autocomplete="off">
-    <div class="field">
-      <label for="periodStart">Початок періоду</label>
-      <input id="periodStart" name="period_start" type="datetime-local">
-    </div>
-
-    <div class="field">
-      <label for="periodEnd">Завершення періоду</label>
-      <input id="periodEnd" name="period_end" type="datetime-local">
-    </div>
-
-    <div class="field">
-      <label for="networkQuery">Частота</label>
-      <input
-        id="networkQuery"
-        name="network"
-        type="text"
-        placeholder="Усі р/м"
-        autocomplete="off"
+  <section class="tabs-shell">
+    <div class="tabs-nav" role="tablist" aria-label="Вкладки сторінки Перехоплення">
+      <button
+        id="itTabSearch"
+        type="button"
+        class="tab-btn {% if active_tab == 'search' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'search' %}true{% else %}false{% endif %}"
+        aria-controls="itPaneSearch"
       >
-    </div>
-
-    <div class="field">
-      <label for="callsignQuery">Позивний</label>
-      <input
-        id="callsignQuery"
-        name="callsign"
-        type="text"
-        placeholder="Усі позивні"
-        autocomplete="off"
+        Пошук
+      </button>
+      <button
+        id="itTabView"
+        type="button"
+        class="tab-btn {% if active_tab == 'view' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'view' %}true{% else %}false{% endif %}"
+        aria-controls="itPaneView"
       >
+        Перегляд
+      </button>
+      <button
+        id="itTabLm"
+        type="button"
+        class="tab-btn {% if active_tab == 'landmarks' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'landmarks' %}true{% else %}false{% endif %}"
+        aria-controls="itPaneLm"
+      >
+        Орієнтири
+      </button>
     </div>
 
-    <div class="field field-btn">
-      <label>&nbsp;</label>
-      <div class="action-buttons">
-        <button type="submit">Показати</button>
-        <button type="button" id="importXlsxBtn" class="secondary">Імпорт XLSX</button>
-        <div id="interceptsFoundCount" class="intercepts-found-pill" title="Кількість знайдених перехоплень">—</div>
-      </div>
-      <input id="xlsxFileInput" type="file" accept=".xlsx" hidden>
+    <div class="tab-panel-wrap">
+      <section
+        id="itPaneSearch"
+        class="tab-panel {% if active_tab != 'search' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="itTabSearch"
+      >
+        <iframe
+          src="/intercepts?embed=1"
+          style="width:100%; height: calc(100vh - 220px); min-height: 760px; border:0; border-radius:12px; background:var(--bg);"
+        ></iframe>
+      </section>
+
+      <section
+        id="itPaneView"
+        class="tab-panel {% if active_tab != 'view' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="itTabView"
+      >
+        <form id="interceptsFilterForm" class="intercepts-filter-form" autocomplete="off">
+          <div class="field">
+            <label for="periodStart">Початок періоду</label>
+            <input id="periodStart" name="period_start" type="datetime-local">
+          </div>
+
+          <div class="field">
+            <label for="periodEnd">Завершення періоду</label>
+            <input id="periodEnd" name="period_end" type="datetime-local">
+          </div>
+
+          <div class="field">
+            <label for="networkQuery">Частота</label>
+            <input
+              id="networkQuery"
+              name="network"
+              type="text"
+              placeholder="Усі р/м"
+              autocomplete="off"
+            >
+          </div>
+
+          <div class="field">
+            <label for="callsignQuery">Позивний</label>
+            <input
+              id="callsignQuery"
+              name="callsign"
+              type="text"
+              placeholder="Усі позивні"
+              autocomplete="off"
+            >
+          </div>
+
+          <div class="field field-btn">
+            <label>&nbsp;</label>
+            <div class="action-buttons">
+              <button type="submit">Показати</button>
+              <button type="button" id="importXlsxBtn" class="secondary">Імпорт XLSX</button>
+              <div id="interceptsFoundCount" class="intercepts-found-pill" title="Кількість знайдених перехоплень">—</div>
+            </div>
+            <input id="xlsxFileInput" type="file" accept=".xlsx" hidden>
+          </div>
+        </form>
+
+        <div id="interceptsWarning" class="warning" style="display:none;"></div>
+
+        <div id="xlsxImportModal" class="modal-backdrop" hidden aria-hidden="true">
+          <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="xlsxImportModalTitle">
+            <div class="modal-header">
+              <h3 id="xlsxImportModalTitle">Результат імпорту XLSX</h3>
+              <button type="button" id="closeXlsxModalBtn" class="secondary xlsx-modal-close-btn" aria-label="Закрити">X</button>
+            </div>
+
+            <div id="xlsxImportModalBody" class="modal-body"></div>
+          </div>
+        </div>
+
+        <section class="intercepts-workspace">
+          <article class="intercepts-main-card">
+            <div class="intercepts-main-card__empty">
+              Завантаження...
+            </div>
+          </article>
+        </section>
+      </section>
+
+      <section
+        id="itPaneLm"
+        class="tab-panel {% if active_tab != 'landmarks' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="itTabLm"
+      >
+        <iframe
+          id="itLandmarksIframe"
+          src="/landmarks?embed=1"
+          title="Орієнтири"
+          style="width:100%; height: calc(100vh - 220px); min-height: 760px; border:0; border-radius:12px; background:var(--bg);"
+        ></iframe>
+      </section>
     </div>
-  </form>
-
-  <div id="interceptsWarning" class="warning" style="display:none;"></div>
-
-  <div id="xlsxImportModal" class="modal-backdrop" hidden aria-hidden="true">
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="xlsxImportModalTitle">
-      <div class="modal-header">
-        <h3 id="xlsxImportModalTitle">Результат імпорту XLSX</h3>
-      </div>
-
-      <div id="xlsxImportModalBody" class="modal-body"></div>
-
-      <div class="modal-footer">
-        <button type="button" id="closeXlsxModalBtnFooter" class="secondary">Закрити</button>
-      </div>
-    </div>
-  </div>
-
-  <section class="intercepts-workspace">
-    <article class="intercepts-main-card">
-      <div class="intercepts-main-card__empty">
-        Завантаження...
-      </div>
-    </article>
   </section>
 </section>
 {% endblock %}
@@ -115,6 +183,52 @@
     if (callsignInput && qsCs) callsignInput.value = qsCs;
   })();
 </script>
-<script src="/static/intercepts_explorer.js?v=13"></script>
+<script>
+  (function () {
+    const tabSearch = document.getElementById("itTabSearch");
+    const tabView = document.getElementById("itTabView");
+    const tabLm = document.getElementById("itTabLm");
+    const paneSearch = document.getElementById("itPaneSearch");
+    const paneView = document.getElementById("itPaneView");
+    const paneLm = document.getElementById("itPaneLm");
+    if (!tabSearch || !tabView || !tabLm || !paneSearch || !paneView || !paneLm) return;
+
+    function setTab(which) {
+      const isSearch = which === "search";
+      const isView = which === "view";
+      const isLm = which === "landmarks";
+
+      tabSearch.classList.toggle("active", isSearch);
+      tabView.classList.toggle("active", isView);
+      tabLm.classList.toggle("active", isLm);
+
+      tabSearch.setAttribute("aria-selected", isSearch ? "true" : "false");
+      tabView.setAttribute("aria-selected", isView ? "true" : "false");
+      tabLm.setAttribute("aria-selected", isLm ? "true" : "false");
+
+      paneSearch.classList.toggle("hidden", !isSearch);
+      paneView.classList.toggle("hidden", !isView);
+      paneLm.classList.toggle("hidden", !isLm);
+    }
+
+    tabSearch.addEventListener("click", () => setTab("search"));
+    tabView.addEventListener("click", () => setTab("view"));
+    tabLm.addEventListener("click", () => setTab("landmarks"));
+
+    window.interceptsExplorerFocusLandmarksTab = function (nameQuery) {
+      setTab("landmarks");
+      const iframe = document.getElementById("itLandmarksIframe");
+      if (!iframe) return;
+      const q = String(nameQuery || "").trim();
+      const url = q
+        ? `/landmarks?embed=1&name=${encodeURIComponent(q)}`
+        : "/landmarks?embed=1";
+      iframe.src = url;
+    };
+  })();
+</script>
+<script src="/static/intercepts_explorer.js?v=18"></script>
+<script src="/static/landmarks.js?v=10" defer></script>
 <script src="/static/intercepts_import.js"></script>
 {% endblock %}
+

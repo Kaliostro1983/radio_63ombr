@@ -3,8 +3,10 @@
 
   const tabOverview = $("homeTabOverview");
   const tabActivity = $("homeTabActivity");
+  const tabReports = $("homeTabReports");
   const paneOverview = $("homePaneOverview");
   const paneActivity = $("homePaneActivity");
+  const paneReports = $("homePaneReports");
 
   const freqInput = $("homeFreqInput");
   const chipsWrap = $("homeFreqChips");
@@ -15,7 +17,7 @@
   const info = $("homeActivityInfo");
   const tables = $("homeActivityTables");
 
-  if (!tabOverview || !tabActivity) return;
+  if (!tabOverview || !tabActivity || !tabReports || !paneReports) return;
 
   const state = {
     freqs: [], // list of frequency strings
@@ -24,18 +26,42 @@
     acIndex: -1,
   };
 
-  function setTab(which) {
-    const isOverview = which === "overview";
-    tabOverview.classList.toggle("active", isOverview);
-    tabOverview.setAttribute("aria-selected", isOverview ? "true" : "false");
-    tabActivity.classList.toggle("active", !isOverview);
-    tabActivity.setAttribute("aria-selected", isOverview ? "false" : "true");
-    paneOverview.classList.toggle("hidden", !isOverview);
-    paneActivity.classList.toggle("hidden", isOverview);
+  const tabMap = {
+    activity: { btn: tabActivity, pane: paneActivity },
+    overview: { btn: tabOverview, pane: paneOverview },
+    reports: { btn: tabReports, pane: paneReports },
+  };
+
+  function setTab(which, opts) {
+    const skipHistory = opts && opts.skipHistory;
+    if (!tabMap[which]) which = "activity";
+    Object.keys(tabMap).forEach((key) => {
+      const on = key === which;
+      const { btn, pane } = tabMap[key];
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      pane.classList.toggle("hidden", !on);
+    });
+    if (!skipHistory) {
+      const u = new URL(location.href);
+      if (which === "activity") u.searchParams.delete("tab");
+      else u.searchParams.set("tab", which);
+      const qs = u.searchParams.toString();
+      history.replaceState(null, "", u.pathname + (qs ? `?${qs}` : "") + u.hash);
+    }
   }
+
+  function initialTabFromUrl() {
+    const t = (new URLSearchParams(location.search).get("tab") || "").toLowerCase();
+    if (t === "overview" || t === "reports") return t;
+    return "activity";
+  }
+
+  setTab(initialTabFromUrl(), { skipHistory: true });
 
   tabOverview.addEventListener("click", () => setTab("overview"));
   tabActivity.addEventListener("click", () => setTab("activity"));
+  tabReports.addEventListener("click", () => setTab("reports"));
 
   function escapeHtml(value) {
     return String(value || "")
@@ -367,7 +393,6 @@
     loadActivity();
   });
 
-  // default load when opening Activity tab
   tabActivity.addEventListener("click", () => {
     setTimeout(loadActivity, 0);
   });

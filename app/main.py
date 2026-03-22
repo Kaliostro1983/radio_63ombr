@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
 
+from app.core.http_request_log_middleware import HttpRequestLogMiddleware
 from app.core.config import settings
 from app.core.backup import maybe_backup_db
 from app.core.db import init_db
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name)
 
     app.add_middleware(SessionMiddleware, secret_key="change_me_please", same_site="lax")
+    app.add_middleware(HttpRequestLogMiddleware)
 
     templates_dir = Path(__file__).parent / "templates"
     app.state.templates = Jinja2Templates(directory=str(templates_dir))

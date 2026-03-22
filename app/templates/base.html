@@ -15,35 +15,34 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=3"/>
+  <link rel="stylesheet" href="/static/app.css?v=6"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
 <div class="layout">
+  {% if request.query_params.get("embed") != "1" %}
   <aside class="sidebar">
-    <div class="brand-avatar-wrap" aria-hidden="true">
-      <img
-        class="brand-avatar brand-avatar--light"
-        src="/static/branding/service_light.webp"
-        alt=""
-      />
-      <img
-        class="brand-avatar brand-avatar--dark"
-        src="/static/branding/service_dark.webp"
-        alt=""
-      />
-    </div>
-    <div class="brand">{{ app_name }}</div>
+    <a href="/home" class="brand-avatar-link" aria-label="Головна">
+      <div class="brand-avatar-wrap" aria-hidden="true">
+        <img
+          class="brand-avatar brand-avatar--light"
+          src="/static/branding/service_light.webp"
+          alt=""
+        />
+        <img
+          class="brand-avatar brand-avatar--dark"
+          src="/static/branding/service_dark.webp"
+          alt=""
+        />
+      </div>
+    </a>
     <div class="nav">
       <a href="/home" class="{% if request.url.path.startswith('/home') %}active{% endif %}">Головна</a>
       <a href="/networks" class="{% if request.url.path.startswith('/networks') %}active{% endif %}">Радіомережі</a>
-      <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
-      <a href="/etalons" class="{% if request.url.path.startswith('/etalons') %}active{% endif %}">Еталонки</a>
-      <a href="/landmarks" class="{% if request.url.path.startswith('/landmarks') %}active{% endif %}">Орієнтири</a>
-      <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
-      <a href="/intercepts" class="{% if request.url.path == '/intercepts' %}active{% endif %}">Пошук</a>
       <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}">Перехоплення</a>
-      <a href="/reports" class="{% if request.url.path.startswith('/reports') %}active{% endif %}">Звіти</a>
+      <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
+      <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
     </div>
 
     <div style="margin-top:16px" class="card">
@@ -55,6 +54,7 @@
       </a>
     </div>
   </aside>
+  {% endif %}
 
   <main class="main">
     {% block content %}{% endblock %}
@@ -157,6 +157,94 @@
   </div>
 </div>
 
+<!-- Shared landmark edit modal (/landmarks, /intercepts-explorer) -->
+<div id="lmModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card lm-modal-card" role="dialog" aria-modal="true" aria-labelledby="lmModalTitle">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Редагування орієнтира</div>
+        <div id="lmModalTitle" style="font-weight:700">—</div>
+      </div>
+      <button class="secondary" type="button" data-close="1">Закрити</button>
+    </div>
+
+    <div class="modal-body lm-modal-body">
+      <input id="lmEditId" type="hidden" />
+
+      <div class="lm-modal-grid">
+        <div class="lm-modal-form">
+          <div class="lm-modal-row lm-modal-row--top">
+            <div class="field lm-modal-field--grow">
+              <label for="lmEditName">Назва</label>
+              <input id="lmEditName" type="text" autocomplete="off" />
+            </div>
+            <div class="field lm-modal-field--active">
+              <label class="small lm-active-label" style="cursor:pointer; white-space:nowrap">
+                <input id="lmEditIsActive" type="checkbox" checked />
+                <span>Активний</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="lm-modal-row">
+            <div class="field">
+              <label for="lmEditGeomId">Тип геометрії</label>
+              <select id="lmEditGeomId"></select>
+            </div>
+            <div class="field">
+              <label for="lmEditTypeId">Тип</label>
+              <select id="lmEditTypeId"></select>
+            </div>
+          </div>
+
+          <div class="lm-modal-row">
+            <div class="field lm-modal-field--full">
+              <label for="lmEditGroupId">Підрозділ</label>
+              <select id="lmEditGroupId"></select>
+            </div>
+          </div>
+
+          <div class="field" id="lmEditMgrsWrap">
+            <label for="lmEditLocationMgrs">Координати (MGRS)</label>
+            <input id="lmEditLocationMgrs" type="text" autocomplete="off" placeholder="напр. 37UDQ3296626558" />
+          </div>
+
+          <div class="field hidden" id="lmEditWktWrap">
+            <label for="lmEditLocationWkt">Геометрія (WKT)</label>
+            <textarea id="lmEditLocationWkt" rows="2" class="lm-modal-textarea"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="lmEditComment">Коментар</label>
+            <textarea id="lmEditComment" rows="2" class="lm-modal-textarea"></textarea>
+          </div>
+        </div>
+
+        <div class="lm-modal-map-col">
+          <label>Мапа</label>
+          <div id="lmEditMap" class="landmark-modal-map"></div>
+          <p class="small lm-modal-map-hint">Перегляд геометрії (WGS84). Для «точки» введіть MGRS зліва.</p>
+        </div>
+      </div>
+
+      <div id="lmEditErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+    </div>
+
+    <div class="modal-foot">
+      <button
+        id="lmEditDeleteBtn"
+        type="button"
+        class="secondary"
+        style="color: var(--danger); border-color: color-mix(in srgb, var(--danger) 65%, var(--border));"
+      >Видалити</button>
+      <button id="lmEditSaveBtn" type="button">Зберегти</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
 <script src="/static/callsign_modal.js?v=9" defer></script>
 {% block scripts %}{% endblock %}
 </body>

@@ -1,5 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <circle cx="12" cy="12" r="12" fill="#F57C00"/>
-  <path d="M12 6.2v8.4" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round"/>
-  <circle cx="12" cy="17.8" r="1.7" fill="#FFFFFF"/>
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!-- Круглий фон -->
+  <circle cx="12" cy="12" r="12" fill="#D32F2F"></circle>
+
+  <!-- Паличка (розширена догори) -->
+  <polygon fill="white" points="
+      10.2,15
+      13.8,15
+      15.0,5
+      9.0,5
+    "></polygon>
+
+  <!-- Крапка -->
+  <circle cx="12" cy="18" r="1.65" fill="white"></circle>
 </svg>

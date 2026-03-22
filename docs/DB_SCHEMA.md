@@ -362,7 +362,8 @@ layer має бути `UNIQUE(network_id, a_callsign_id, b_callsign_id)` (чер
 Поля: - `id` --- PK - `event_dt` - `network_id` --- FK → `networks.id`
 
 Ключі та обмеження: - `PRIMARY KEY(id)` -
-`FOREIGN KEY(network_id) REFERENCES networks(id)`
+`FOREIGN KEY(network_id) REFERENCES networks(id)` -
+`UNIQUE(event_dt, network_id)`
 
 ------------------------------------------------------------------------
 
@@ -424,6 +425,20 @@ lifecycle.
 
 ------------------------------------------------------------------------
 
+## landmark_geoms
+
+Призначення: довідник типу геометрії орієнтира (точка / зона / крива).
+
+Поля:
+- `id` --- PK
+- `name` --- унікальна назва (наприклад, «точка», «зона», «крива»)
+
+Початкові рядки: `id` 1–3 з фіксованими назвами.
+
+Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(name)`
+
+------------------------------------------------------------------------
+
 ## landmarks
 
 Призначення: словник ключових слів-орієнтирів та їх геометрії для
@@ -434,7 +449,9 @@ lifecycle.
 - `name` --- назва орієнтиру
 - `key_word` --- ключове слово (нормалізоване, lower-case)
 - `location_wkt` --- геометрія у форматі WKT (`POINT(...)`, `POLYGON(...)`, ...)
-- `location_kind` --- тип геометрії (опційно)
+- `location_kind` --- legacy-текст; для нових записів дублює `str(id_geom)` (ідентифікатор типу геометрії)
+- `location_mgrs` --- координати MGRS для точки (як введено/збережено; конвертація POINT↔MGRS у UI)
+- `id_geom` --- FK → `landmark_geoms.id` (тип геометрії: точка / зона / крива)
 - `comment` --- коментар
 - `date_creation` --- дата/час створення
 - `updated_at` --- дата/час останнього оновлення
@@ -447,6 +464,7 @@ lifecycle.
 - `CHECK(key_word = lower(trim(key_word)))`
 - `FOREIGN KEY(id_group) REFERENCES groups(id)`
 - `FOREIGN KEY(id_type) REFERENCES landmark_types(id)`
+- `FOREIGN KEY(id_geom) REFERENCES landmark_geoms(id)`
 
 Критично:
 - у БД `key_word` зберігається вже нормалізованим у lower-case;

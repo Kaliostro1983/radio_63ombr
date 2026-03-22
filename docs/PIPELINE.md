@@ -75,6 +75,7 @@ Possible formats:
 
 template
 structured_alias
+peleng_type
 nonstandard_type_1
 unknown
 
@@ -116,7 +117,26 @@ body
 
 ---
 
-### 6. Network resolution
+### 6. Peleng processing (`peleng_type`)
+
+Parser:
+
+core/peleng_intercept_parser.py
+
+Steps:
+
+1 normalize first line (`frequency / DD.MM.YYYY HH.MM`)
+2 resolve `network_id` by frequency
+3 insert `peleng_batches` row
+4 insert every `37...` line into `peleng_points`
+
+Note:
+
+- `peleng_type` does not create rows in `messages`.
+
+---
+
+### 7. Network resolution
 
 Function:
 
@@ -126,7 +146,7 @@ If network not found → intercept skipped
 
 ---
 
-### 7. Duplicate detection
+### 8. Duplicate detection
 
 Function:
 
@@ -138,7 +158,7 @@ network_id + created_at + body_text
 
 ---
 
-### 8. Insert parsed message
+### 9. Insert parsed message
 
 Function:
 
@@ -150,7 +170,7 @@ messages
 
 ---
 
-### 9. Link callsigns
+### 10. Link callsigns
 
 Function:
 
@@ -163,7 +183,7 @@ callsign_edges relationships
 
 ---
 
-### 10. Message becomes visible
+### 11. Message becomes visible
 
 UI routes:
 

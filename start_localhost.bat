@@ -22,6 +22,6 @@ python -m scripts.import_from_excel
 
 REM ---- Run server on localhost only ----
 set APP_CONFIG=config.env
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-config uvicorn_log_config.json
 
 endlocal

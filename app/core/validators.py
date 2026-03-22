@@ -8,14 +8,15 @@ and ingestion/search flows:
 - detect intercept message format (template vs nonstandard vs unknown).
 
 The ingest pipeline uses `detect_message_format` to decide whether to run
-the template parser, normalize a nonstandard format, or skip a message as
-unknown.
+the template parser, structured parser, peleng parser, normalize a
+nonstandard format, or skip a message as unknown.
 """
 
 import re
 
 from app.core.intercept_parser import is_template_intercept
 from app.core.normalize import is_mask_candidate
+from app.core.peleng_intercept_parser import is_peleng_intercept
 
 
 def is_valid_freq(value: str | None) -> bool:
@@ -67,6 +68,7 @@ def detect_message_format(text: str) -> str:
     """Detect intercept message format based on lightweight heuristics.
 
     The decision is intentionally conservative:
+    - if the message matches peleng layout => `peleng_type`;
     - if the message matches the strict template header => `template`;
     - if it contains typical markers but is not template => `nonstandard_type_1`;
     - otherwise => `unknown`.
@@ -75,7 +77,8 @@ def detect_message_format(text: str) -> str:
         text: raw intercept text.
 
     Returns:
-        str: one of `template`, `nonstandard_type_1`, `unknown`.
+        str: one of `peleng_type`, `template`, `structured_alias`,
+        `nonstandard_type_1`, `unknown`.
     """
 
     text_l = (text or "").lower()
@@ -83,6 +86,9 @@ def detect_message_format(text: str) -> str:
     # and do NOT rely on any other markers like '$'.
     has_rec = bool(re.search(r"отримувач\s*\(\s*і\s*\)\s*:", text_l, flags=re.IGNORECASE))
     has_send = bool(re.search(r"відправник\s*:", text_l, flags=re.IGNORECASE))
+
+    if is_peleng_intercept(text):
+        return "peleng_type"
 
     if is_template_intercept(text):
         return "template"

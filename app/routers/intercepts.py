@@ -544,7 +544,8 @@ def intercepts_explorer_list(
             n.frequency,
             n.mask,
             n.unit,
-            n.zone
+            n.zone,
+            n.group_id AS network_group_id
         FROM messages m
         LEFT JOIN networks n ON n.id = m.network_id
         WHERE {where_sql}
@@ -570,6 +571,9 @@ def intercepts_explorer_list(
                     "mask": row["mask"] or "",
                     "unit": row["unit"] or "",
                     "zone": row["zone"] or "",
+                    "group_id": int(row["network_group_id"])
+                    if row["network_group_id"] is not None
+                    else None,
                 },
             }
             for row in rows

@@ -254,6 +254,7 @@ CREATE TABLE IF NOT EXISTS peleng_batches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_dt TEXT NOT NULL,
     network_id INTEGER,
+    UNIQUE(event_dt, network_id),
     FOREIGN KEY (network_id) REFERENCES networks(id)
 );
 
@@ -278,12 +279,24 @@ CREATE TABLE IF NOT EXISTS landmark_types (
     name TEXT NOT NULL UNIQUE
 );
 
+CREATE TABLE IF NOT EXISTS landmark_geoms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
+INSERT OR IGNORE INTO landmark_geoms (id, name) VALUES
+  (1, 'точка'),
+  (2, 'зона'),
+  (3, 'крива');
+
 CREATE TABLE IF NOT EXISTS landmarks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     key_word TEXT NOT NULL,
     location_wkt TEXT NOT NULL,
     location_kind TEXT,
+    location_mgrs TEXT,
+    id_geom INTEGER,
     comment TEXT,
     date_creation TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -292,7 +305,8 @@ CREATE TABLE IF NOT EXISTS landmarks (
     is_active INTEGER NOT NULL DEFAULT 1,
     CHECK (key_word = lower(trim(key_word))),
     FOREIGN KEY (id_group) REFERENCES groups(id),
-    FOREIGN KEY (id_type) REFERENCES landmark_types(id)
+    FOREIGN KEY (id_type) REFERENCES landmark_types(id),
+    FOREIGN KEY (id_geom) REFERENCES landmark_geoms(id)
 );
 
 CREATE TABLE IF NOT EXISTS message_landmark_matches (
@@ -347,6 +361,7 @@ def init_db() -> None:
     - commits all changes before closing the connection.
     """
     with sqlite3.connect(db_path()) as conn:
+        conn.row_factory = sqlite3.Row
         safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="init_db")
         conn.executescript(SCHEMA_SQL)
         _run_lightweight_migrations(conn)
@@ -566,6 +581,66 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "landmarks", "location_kind", "location_kind TEXT")
     _ensure_column(conn, "landmarks", "updated_at", "updated_at TEXT")
     _ensure_column(conn, "landmarks", "is_active", "is_active INTEGER NOT NULL DEFAULT 1")
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS landmark_geoms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:landmark_geoms",
+    )
+    row_cnt = safe_execute(
+        conn,
+        "SELECT COUNT(*) AS c FROM landmark_geoms",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="count:landmark_geoms",
+    ).fetchone()
+    # init_db() uses a plain connection (no Row factory); use index [0].
+    if row_cnt is not None and int(row_cnt[0] or 0) == 0:
+        safe_execute(
+            conn,
+            """
+            INSERT INTO landmark_geoms (id, name) VALUES
+              (1, 'точка'),
+              (2, 'зона'),
+              (3, 'крива')
+            """,
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="seed:landmark_geoms",
+        )
+    _ensure_column(conn, "landmarks", "location_mgrs", "location_mgrs TEXT")
+    _ensure_column(conn, "landmarks", "id_geom", "id_geom INTEGER REFERENCES landmark_geoms(id)")
+    safe_execute(
+        conn,
+        """
+        UPDATE landmarks
+        SET id_geom = CASE
+            WHEN lower(trim(coalesce(location_kind, ''))) IN ('point', 'multipoint') THEN 1
+            WHEN lower(trim(coalesce(location_kind, ''))) IN ('polygon', 'multipolygon') THEN 2
+            WHEN lower(trim(coalesce(location_kind, ''))) IN ('linestring', 'multilinestring') THEN 3
+            ELSE NULL
+        END
+        WHERE id_geom IS NULL
+          AND location_kind IS NOT NULL
+          AND trim(location_kind) <> ''
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="migrate:id_geom_from_location_kind",
+    )
+    safe_execute(
+        conn,
+        "UPDATE landmarks SET id_geom = 1 WHERE id_geom IS NULL",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="default:id_geom",
+    )
     _ensure_column(conn, "message_landmark_matches", "matched_text", "matched_text TEXT")
     _ensure_column(conn, "message_landmark_matches", "start_pos", "start_pos INTEGER NOT NULL DEFAULT -1")
     _ensure_column(conn, "message_landmark_matches", "end_pos", "end_pos INTEGER NOT NULL DEFAULT -1")
@@ -741,6 +816,80 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         module="app.core.db",
         function="_run_lightweight_migrations",
         stage="create_index:idx_peleng_batches_network_id",
+    )
+    # Enforce logical uniqueness for peleng batches:
+    # one batch per (event_dt, network_id).
+    # Existing duplicates are compacted by re-linking points to the oldest
+    # batch id and deleting duplicate batch headers.
+    safe_execute(
+        conn,
+        "CREATE TEMP TABLE IF NOT EXISTS _peleng_batch_dedup_map (dup_id INTEGER PRIMARY KEY, keep_id INTEGER NOT NULL)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_temp_table:_peleng_batch_dedup_map",
+    )
+    safe_execute(
+        conn,
+        "DELETE FROM _peleng_batch_dedup_map",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="clear_temp_table:_peleng_batch_dedup_map",
+    )
+    safe_execute(
+        conn,
+        """
+        INSERT INTO _peleng_batch_dedup_map (dup_id, keep_id)
+        SELECT id, keep_id
+        FROM (
+            SELECT
+                id,
+                MIN(id) OVER (PARTITION BY event_dt, network_id) AS keep_id,
+                ROW_NUMBER() OVER (PARTITION BY event_dt, network_id ORDER BY id ASC) AS rn
+            FROM peleng_batches
+            WHERE network_id IS NOT NULL
+        )
+        WHERE rn > 1
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="fill_temp_table:_peleng_batch_dedup_map",
+    )
+    safe_execute(
+        conn,
+        """
+        UPDATE peleng_points
+        SET batch_id = (
+            SELECT m.keep_id
+            FROM _peleng_batch_dedup_map m
+            WHERE m.dup_id = peleng_points.batch_id
+        )
+        WHERE batch_id IN (SELECT dup_id FROM _peleng_batch_dedup_map)
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="relink:peleng_points_to_kept_batches",
+    )
+    safe_execute(
+        conn,
+        "DELETE FROM peleng_batches WHERE id IN (SELECT dup_id FROM _peleng_batch_dedup_map)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="delete:duplicate_peleng_batches",
+    )
+    safe_execute(
+        conn,
+        "DROP TABLE IF EXISTS _peleng_batch_dedup_map",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="drop_temp_table:_peleng_batch_dedup_map",
+    )
+    safe_execute(
+        conn,
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_peleng_batches_event_network "
+        "ON peleng_batches(event_dt, network_id)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:ux_peleng_batches_event_network",
     )
 
     # Required for upsert in callsign_service.upsert_callsign_edge()

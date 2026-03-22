@@ -426,6 +426,46 @@ def _ensure_etalon(conn, network_id: int):
     )
     
 
+def _etalon_row_has_content(conn, network_id: int) -> bool:
+    """True if the etalon row has any saved text, callsigns blob, import text, or dates."""
+    row = _fetchone(
+        conn,
+        """
+        SELECT purpose, correspondents, operation_mode, traffic_type, callsigns, raw_import_text,
+               start_date, end_date
+        FROM etalons
+        WHERE network_id = ?
+        """,
+        (int(network_id),),
+    )
+    if not row:
+        return False
+
+    def nz(col: str) -> bool:
+        try:
+            v = row[col]
+        except Exception:
+            return False
+        return bool(v is not None and str(v).strip())
+
+    for col in (
+        "purpose",
+        "correspondents",
+        "operation_mode",
+        "traffic_type",
+        "callsigns",
+        "raw_import_text",
+    ):
+        if nz(col):
+            return True
+    try:
+        if row["start_date"] or row["end_date"]:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _get_etalon_dates(conn, network_id: int) -> tuple[Optional[date], Optional[date]]:
     """Return (start_date, end_date) for a network, if set and parseable."""
     row = _fetchone(conn, "SELECT start_date, end_date FROM etalons WHERE network_id=?", (network_id,))
@@ -480,6 +520,7 @@ def _build_networks_context(
     all_selected_chats=None,
     all_selected_groups=None,
     active_tab: str = "card",
+    etalon_exists: bool = False,
 ):
     """Build Jinja template context for the networks page."""
     return dict(
@@ -504,10 +545,11 @@ def _build_networks_context(
         end_date=end_date_val,
         message=message,
         all_rows=all_rows or [],
-        all_selected_statuses=all_selected_statuses or [0],
-        all_selected_chats=all_selected_chats or [0],
-        all_selected_groups=all_selected_groups or [0],
+        all_selected_statuses=all_selected_statuses or [],
+        all_selected_chats=all_selected_chats or [],
+        all_selected_groups=all_selected_groups or [],
         active_tab=active_tab or "card",
+        etalon_exists=bool(etalon_exists),
     )
 
 
@@ -548,12 +590,8 @@ def networks_page(
     with get_conn() as conn:
         statuses, chats, groups, tags, status_map, chat_map, group_map, tag_map = _lookup(conn)
         all_selected_statuses = _default_all_status_ids(conn)
-        all_selected_chats = [0]
-        all_selected_groups = [0]
-        all_rows = _all_networks_list(conn, all_selected_statuses, all_selected_chats, all_selected_groups)
-        all_selected_statuses = _default_all_status_ids(conn)
-        all_selected_chats = [0]
-        all_selected_groups = [0]
+        all_selected_chats = [c["id"] for c in chats]
+        all_selected_groups = [g["id"] for g in groups]
         all_rows = _all_networks_list(conn, all_selected_statuses, all_selected_chats, all_selected_groups)
 
         current = None
@@ -564,12 +602,14 @@ def networks_page(
         message = request.query_params.get("msg", "")
         draft = request.session.pop("network_save_draft", None)
 
+        etalon_exists = False
         if network_id:
             current, selected_tags, dates = _load_network_card(conn, int(network_id))
             if dates:
                 start_date_val, end_date_val = dates
             if current:
                 q_query = current["frequency"] or current["mask"] or ""
+                etalon_exists = _etalon_row_has_content(conn, int(current["id"]))
         elif draft:
             q_query = draft.get("frequency", "") or draft.get("mask", "")
             start_date_raw = draft.get("start_date_str", "")
@@ -585,6 +625,10 @@ def networks_page(
                 except Exception:
                     end_date_val = None
             selected_tags = draft.get("tag_ids") or []
+
+    tab_raw = (request.query_params.get("tab") or "card").lower()
+    if tab_raw not in ("card", "all", "etalons"):
+        tab_raw = "card"
 
     context = _build_networks_context(
         request,
@@ -608,7 +652,8 @@ def networks_page(
         all_selected_statuses=all_selected_statuses,
         all_selected_chats=all_selected_chats,
         all_selected_groups=all_selected_groups,
-        active_tab=(request.query_params.get("tab") or "card"),
+        active_tab=tab_raw,
+        etalon_exists=etalon_exists,
     )
     if draft and not current:
         context["draft"] = draft
@@ -637,6 +682,7 @@ def networks_search(
         start_date_val: Optional[date] = None
         end_date_val: Optional[date] = None
         message = ""
+        etalon_exists = False
 
         if not q_query:
             message = "Введи маску або частоту."
@@ -647,6 +693,8 @@ def networks_search(
                 current, selected_tags, dates = _load_network_card(conn, int(matches[0]["id"]))
                 if dates:
                     start_date_val, end_date_val = dates
+                if current:
+                    etalon_exists = _etalon_row_has_content(conn, int(current["id"]))
             elif len(matches) == 0:
                 message = "Не знайдено. Заповни картку і тисни “Зберегти”."
 
@@ -683,6 +731,7 @@ def networks_search(
             all_selected_chats=all_selected_chats,
             all_selected_groups=all_selected_groups,
             active_tab="card",
+            etalon_exists=etalon_exists,
         )
         return request.app.state.templates.TemplateResponse("networks.html", context)
 

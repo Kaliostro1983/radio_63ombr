@@ -246,12 +246,13 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             created_at = to_sql_dt(published_at_text) or received_at
             set_published_at_text(cur, ingest_id, published_at_text)
 
-            frequency = str(peleng["frequency"])
+            frequency = str(peleng.get("frequency") or "")
+            mask = str(peleng.get("mask") or "")
             try:
                 network_id = ensure_network(
                     cur,
-                    frequency=frequency,
-                    mask=None,
+                    frequency=frequency or None,
+                    mask=mask or None,
                     now_dt=received_at,
                     unit=None,
                     zone=None,
@@ -263,7 +264,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     "ingest_id": ingest_id,
                     "skipped": True,
                     "reason": "network_not_found",
-                    "details": {"frequency": frequency},
+                    "details": {"frequency": frequency, "mask": mask},
                     "actions": actions,
                 }
 
@@ -285,6 +286,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     "message_format": "peleng_type",
                     "network_id": network_id,
                     "frequency": frequency,
+                    "mask": mask,
                     "points_count": len(points),
                 },
                 "actions": actions,

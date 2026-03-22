@@ -4,14 +4,14 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-<section class="tabs-shell">
+<section class="tabs-shell" {% if current %}data-network-pick="{{ current.id }}"{% endif %}>
   <div class="tabs-nav" role="tablist" aria-label="Вкладки сторінки Радіомережі">
     <button
       id="netTabCard"
       type="button"
-      class="tab-btn {% if active_tab != 'all' %}active{% endif %}"
+      class="tab-btn {% if active_tab == 'card' %}active{% endif %}"
       role="tab"
-      aria-selected="{% if active_tab != 'all' %}true{% else %}false{% endif %}"
+      aria-selected="{% if active_tab == 'card' %}true{% else %}false{% endif %}"
       aria-controls="netPaneCard"
     >
       Картка р/м
@@ -26,12 +26,22 @@
     >
       Усі р/м
     </button>
+    <button
+      id="netTabEtalons"
+      type="button"
+      class="tab-btn {% if active_tab == 'etalons' %}active{% endif %}"
+      role="tab"
+      aria-selected="{% if active_tab == 'etalons' %}true{% else %}false{% endif %}"
+      aria-controls="netPaneEtalons"
+    >
+      Еталонки
+    </button>
   </div>
 
   <div class="tab-panel-wrap">
     <section
       id="netPaneCard"
-      class="tab-panel {% if active_tab == 'all' %}hidden{% endif %}"
+      class="tab-panel {% if active_tab != 'card' %}hidden{% endif %}"
       role="tabpanel"
       aria-labelledby="netTabCard"
     >
@@ -41,8 +51,8 @@
 
       <div class="card">
         <form method="post" action="/networks/search">
-          <div class="row">
-            <div class="field">
+          <div class="row" style="align-items:flex-end; justify-content:space-between; gap:10px;">
+            <div class="field" style="max-width:320px; flex:0 0 320px;">
               <label>Маска/частота</label>
               <div class="home-freq-input-wrap">
                 <input
@@ -54,9 +64,12 @@
                 />
               </div>
             </div>
-            <div class="field" style="min-width:160px; flex:0">
+            <div class="field" style="min-width:140px; flex:0 0 140px;">
               <label>&nbsp;</label>
               <button type="submit">Пошук</button>
+            </div>
+            <div class="field" style="min-width:220px; flex:1 1 auto; display:flex; justify-content:flex-end;">
+              <label>&nbsp;</label>
             </div>
           </div>
         </form>
@@ -114,7 +127,7 @@
       <div style="font-weight:800">Картка радіомережі</div>
       <div class="small">Знайшов — відредагував — зберіг. Якщо не знайдено — заповни і тисни “Зберегти”.</div>
     </div>
-    <div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end">
       {% if current %}
         {% set st = status_map.get(current.status_id, "") %}
         {% set ch = chat_map.get(current.chat_id, "") %}
@@ -126,6 +139,13 @@
         {% elif st == "Малоінформативна" %}{% set cls = "purple" %}
         {% endif %}
         <span class="badge {{ cls }}">{{ st }} • {{ ch }}</span>
+        {% if etalon_exists %}
+          <button type="button" class="secondary" style="width:220px" onclick="window.open('/networks?tab=etalons&pick={{ current.id }}','_blank')">Еталонка</button>
+        {% else %}
+          <button type="button" class="secondary" style="width:220px" onclick="window.open('/networks?tab=etalons&pick={{ current.id }}','_blank')">Додати еталонку</button>
+        {% endif %}
+      {% else %}
+        <button type="button" class="secondary" style="width:220px" disabled>Додати еталонку</button>
       {% endif %}
     </div>
   </div>
@@ -216,14 +236,6 @@
 
     <div class="btnrow" style="margin-top:12px">
       <button type="submit">Зберегти</button>
-
-      {% if current %}
-        {% if etalon_exists %}
-          <a href="/etalons" style="align-self:center; margin-left:6px">Еталонний опис</a>
-        {% else %}
-          <a href="/etalons" style="align-self:center; margin-left:6px">Додати опис</a>
-        {% endif %}
-      {% endif %}
     </div>
   </form>
 
@@ -260,7 +272,7 @@
       </div>
 
       {% if current %}
-      <div class="card" id="netCallsignGraph" data-network-id="{{ current.id }}">
+      <div class="card" id="netCallsignGraph" data-network-id="{{ current.id }}" data-frequency="{{ current.frequency }}">
   <div style="font-weight:800; margin-bottom:10px">Позивні радіомережі</div>
   <div class="row" style="align-items:flex-end">
     <div class="field" style="max-width:220px; flex:0 0 220px">
@@ -270,6 +282,10 @@
     <div class="field" style="flex:0">
       <label>&nbsp;</label>
       <button id="netGraphShow" type="button">Показати зв'язки</button>
+    </div>
+    <div class="field" style="flex:0">
+      <label>&nbsp;</label>
+      <button id="netGraphCallsignList" type="button" class="secondary">Список позивних</button>
     </div>
   </div>
   <div id="netGraphOut" class="net-graph-out" style="margin-top:12px"></div>
@@ -307,35 +323,41 @@
     >
       <div class="card">
         <form method="post" action="/networks/all">
-          <div class="row" style="align-items:flex-end;">
-            <div class="field" style="max-width:420px;">
+          <div class="row" style="align-items:flex-start;">
+            <div class="field" style="min-width:300px;">
               <label>Статус</label>
-              <select name="status_ids" multiple size="6">
-                <option value="0" {% if not all_selected_statuses or 0 in all_selected_statuses %}selected{% endif %}>Усі</option>
+              <div class="filter-toggle-row">
                 {% for s in statuses %}
-                  <option value="{{ s.id }}" {% if s.id in all_selected_statuses %}selected{% endif %}>{{ s.name }}</option>
+                  <label class="filter-toggle-btn">
+                    <input type="checkbox" name="status_ids" value="{{ s.id }}" {% if s.id in all_selected_statuses %}checked{% endif %} />
+                    <span>{{ s.name }}</span>
+                  </label>
                 {% endfor %}
-              </select>
+              </div>
             </div>
 
-            <div class="field" style="max-width:320px;">
+            <div class="field" style="min-width:300px;">
               <label>Чат</label>
-              <select name="chat_ids" multiple size="6">
-                <option value="0" {% if not all_selected_chats or 0 in all_selected_chats %}selected{% endif %}>Усі</option>
+              <div class="filter-toggle-row">
                 {% for c in chats %}
-                  <option value="{{ c.id }}" {% if c.id in all_selected_chats %}selected{% endif %}>{{ c.name }}</option>
+                  <label class="filter-toggle-btn">
+                    <input type="checkbox" name="chat_ids" value="{{ c.id }}" {% if c.id in all_selected_chats %}checked{% endif %} />
+                    <span>{{ c.name }}</span>
+                  </label>
                 {% endfor %}
-              </select>
+              </div>
             </div>
 
-            <div class="field" style="max-width:420px;">
+            <div class="field" style="min-width:300px;">
               <label>Група</label>
-              <select name="group_ids" multiple size="6">
-                <option value="0" {% if not all_selected_groups or 0 in all_selected_groups %}selected{% endif %}>Усі</option>
+              <div class="filter-toggle-row">
                 {% for g in groups %}
-                  <option value="{{ g.id }}" {% if g.id in all_selected_groups %}selected{% endif %}>{{ g.name }}</option>
+                  <label class="filter-toggle-btn">
+                    <input type="checkbox" name="group_ids" value="{{ g.id }}" {% if g.id in all_selected_groups %}checked{% endif %} />
+                    <span>{{ g.name }}</span>
+                  </label>
                 {% endfor %}
-              </select>
+              </div>
             </div>
 
             <div class="field" style="min-width:160px; flex:0">
@@ -361,7 +383,10 @@
           </thead>
           <tbody>
             {% for r in all_rows %}
-              <tr style="{% if r['bg_color'] %}background: {{ r['bg_color'] }}; border-left: 4px solid {{ r['border_color'] }};{% endif %}">
+              <tr
+                style="cursor:pointer;{% if r['bg_color'] %}background: {{ r['bg_color'] }}; border-left: 4px solid {{ r['border_color'] }};{% endif %}"
+                onclick="window.open('/networks?pick={{ r['id'] }}', '_blank')"
+              >
                 <td>{{ loop.index }}</td>
                 <td>{{ r['frequency'] }}</td>
                 <td>{{ r['mask'] }}</td>
@@ -373,6 +398,19 @@
         </table>
       </div>
     </section>
+
+    <section
+      id="netPaneEtalons"
+      class="tab-panel {% if active_tab != 'etalons' %}hidden{% endif %}"
+      role="tabpanel"
+      aria-labelledby="netTabEtalons"
+    >
+      <iframe
+        id="netEtalonsIframe"
+        src="{% if current %}/etalons/panel?pick={{ current.id }}{% else %}/etalons/panel{% endif %}"
+        style="width:100%; height: calc(100vh - 260px); border:0; border-radius:12px; background:var(--bg);"
+      ></iframe>
+    </section>
   </div>
 </section>
 
@@ -383,26 +421,70 @@
   (function () {
     const tabCard = document.getElementById("netTabCard");
     const tabAll = document.getElementById("netTabAll");
+    const tabEtalons = document.getElementById("netTabEtalons");
     const paneCard = document.getElementById("netPaneCard");
     const paneAll = document.getElementById("netPaneAll");
-    if (!tabCard || !tabAll || !paneCard || !paneAll) return;
+    const paneEtalons = document.getElementById("netPaneEtalons");
+    if (!tabCard || !tabAll || !tabEtalons || !paneCard || !paneAll || !paneEtalons) return;
 
     function setTab(which) {
       const isCard = which === "card";
+      const isAll = which === "all";
+      const isEtalons = which === "etalons";
+
       tabCard.classList.toggle("active", isCard);
-      tabAll.classList.toggle("active", !isCard);
+      tabAll.classList.toggle("active", isAll);
+      tabEtalons.classList.toggle("active", isEtalons);
+
       tabCard.setAttribute("aria-selected", isCard ? "true" : "false");
-      tabAll.setAttribute("aria-selected", isCard ? "false" : "true");
+      tabAll.setAttribute("aria-selected", isAll ? "true" : "false");
+      tabEtalons.setAttribute("aria-selected", isEtalons ? "true" : "false");
+
       paneCard.classList.toggle("hidden", !isCard);
-      paneAll.classList.toggle("hidden", isCard);
+      paneAll.classList.toggle("hidden", !isAll);
+      paneEtalons.classList.toggle("hidden", !isEtalons);
     }
 
-    tabCard.addEventListener("click", () => setTab("card"));
-    tabAll.addEventListener("click", () => setTab("all"));
+    function currentNetworkPick() {
+      const shell = document.querySelector("section.tabs-shell[data-network-pick]");
+      return shell ? String(shell.getAttribute("data-network-pick") || "").trim() : "";
+    }
+
+    function syncUrlTab(tab, pick) {
+      const u = new URL(window.location.href);
+      u.searchParams.set("tab", tab);
+      if (pick) u.searchParams.set("pick", pick);
+      const qs = u.searchParams.toString();
+      history.replaceState(null, "", qs ? u.pathname + "?" + qs : u.pathname);
+    }
+
+    tabCard.addEventListener("click", () => {
+      setTab("card");
+      syncUrlTab("card", currentNetworkPick());
+    });
+    tabAll.addEventListener("click", () => {
+      setTab("all");
+      syncUrlTab("all", currentNetworkPick());
+    });
+    tabEtalons.addEventListener("click", () => {
+      setTab("etalons");
+      const pick = currentNetworkPick();
+      const iframe = document.getElementById("netEtalonsIframe");
+      if (iframe && pick) {
+        const next = "/etalons/panel?pick=" + encodeURIComponent(pick);
+        try {
+          const cur = new URL(iframe.getAttribute("src") || "", window.location.origin);
+          if (cur.searchParams.get("pick") !== pick) iframe.src = next;
+        } catch (e) {
+          iframe.src = next;
+        }
+      }
+      syncUrlTab("etalons", pick);
+    });
   })();
 </script>
-<script src="/static/networks_autocomplete.js?v=1" defer></script>
-<script src="/static/networks_graph.js?v=3" defer></script>
+<script src="/static/networks_autocomplete.js?v=2" defer></script>
+<script src="/static/networks_graph.js?v=5" defer></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
 <script src="/static/networks_peleng.js?v=2" defer></script>

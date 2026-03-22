@@ -3,6 +3,7 @@
   const warningBox = document.getElementById("interceptsWarning");
   const mainCard = document.querySelector(".intercepts-main-card");
   const foundCountPill = document.getElementById("interceptsFoundCount");
+  const paneView = document.getElementById("itPaneView");
 
   if (!form || !mainCard) {
     return;
@@ -15,6 +16,7 @@
     items: [],
     selectedId: null,
     loadingList: false,
+    loadingMore: false,
     loadingDetail: false,
     savingComment: false,
     detailById: {},
@@ -371,35 +373,54 @@
     `;
   }
 
-  function renderList() {
-  if (!state.items.length) {
-    renderEmpty();
-    return;
+  function listHasMore() {
+    return state.total > 0 && state.items.length < state.total;
   }
 
-  const itemsHtml = state.items
-    .map((item) => {
-      const header = getHeaderParts(item);
-      const detail = state.detailById[item.id] || {
-        id: item.id,
-        network_id: item.network_id,
-        text: item.text || "",
-        comment: item.comment || "",
-        callsigns: [],
-      };
-      const matches = state.landmarkMatchesByMessageId[item.id] || [];
-      const highlightedText = renderTextWithLandmarkHighlights(
-        item.id,
-        detail.text || item.text || "",
-        matches
-      );
+  function renderListFooterHtml() {
+    if (!state.items.length) return "";
+    const shown = state.items.length;
+    const total = state.total;
+    if (shown >= total) {
+      return `<div class="intercepts-list-footer"><p class="intercepts-list-footer__done small">Усі перехоплення показано (${total}).</p></div>`;
+    }
+    return `<div class="intercepts-list-footer">
+      <button type="button" class="secondary" id="interceptsLoadMoreBtn">Завантажити ще</button>
+      <p class="intercepts-list-footer__hint small">Показано ${shown} з ${total}</p>
+    </div>`;
+  }
 
-      const callsigns = Array.isArray(detail.callsigns) ? detail.callsigns : [];
-      const caller = callsigns.filter((x) => x.role === "caller");
-      const callee = callsigns.filter((x) => x.role === "callee");
-      const mentioned = callsigns.filter((x) => x.role === "mentioned");
+  function replaceListFooter() {
+    const prev = mainCard.querySelector(".intercepts-list-footer");
+    if (prev) prev.remove();
+    if (!state.items.length) return;
+    const listEl = mainCard.querySelector(".intercepts-list");
+    if (!listEl) return;
+    listEl.insertAdjacentHTML("afterend", renderListFooterHtml());
+  }
 
-      return `
+  function renderInterceptCardHtml(item) {
+    const header = getHeaderParts(item);
+    const detail = state.detailById[item.id] || {
+      id: item.id,
+      network_id: item.network_id,
+      text: item.text || "",
+      comment: item.comment || "",
+      callsigns: [],
+    };
+    const matches = state.landmarkMatchesByMessageId[item.id] || [];
+    const highlightedText = renderTextWithLandmarkHighlights(
+      item.id,
+      detail.text || item.text || "",
+      matches
+    );
+
+    const callsigns = Array.isArray(detail.callsigns) ? detail.callsigns : [];
+    const caller = callsigns.filter((x) => x.role === "caller");
+    const callee = callsigns.filter((x) => x.role === "callee");
+    const mentioned = callsigns.filter((x) => x.role === "mentioned");
+
+    return `
         <article class="intercept-card" data-id="${item.id}">
           <div class="intercept-card__body intercept-card__body--compact">
             <section class="intercept-card__main">
@@ -450,16 +471,58 @@
                   ${renderCallsignField("Кого викликають", "callee", callee, detail.id)}
                   ${renderCallsignField("Згадувані", "mentioned", mentioned, detail.id)}
                 </div>
+
+                <section class="intercepts-lm-panel intercepts-lm-panel--inside" aria-label="Орієнтири">
+                  <div class="intercepts-lm-panel__row">
+                    <div class="field intercepts-lm-panel__field">
+                      <label for="ieLmName-${detail.id}">Орієнтири</label>
+                      <input
+                        id="ieLmName-${detail.id}"
+                        class="ie-lm-name-input"
+                        type="text"
+                        placeholder="пошук за назвою..."
+                        autocomplete="off"
+                        data-message-id="${detail.id}"
+                      />
+                    </div>
+                    <div class="intercepts-lm-panel__actions">
+                      <button
+                        type="button"
+                        class="icon-btn ie-lm-search-btn"
+                        title="Шукати орієнтири"
+                        aria-label="Шукати орієнтири"
+                        data-message-id="${detail.id}"
+                      >
+                        <img src="/static/icons/ui/search.svg" alt="" width="20" height="20" />
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-btn icon-btn--accent ie-lm-create-btn"
+                        title="Додати орієнтир"
+                        aria-label="Додати орієнтир"
+                      >
+                        <img src="/static/icons/ui/plus.svg" alt="" width="20" height="20" />
+                      </button>
+                    </div>
+                  </div>
+                  <div class="intercepts-lm-panel__result" data-message-id="${detail.id}"></div>
+                </section>
               </div>
             </aside>
           </div>
         </article>
       `;
-    })
-    .join("");
+  }
 
-  mainCard.innerHTML = `<div class="intercepts-list">${itemsHtml}</div>`;
-}
+  function renderList() {
+    if (!state.items.length) {
+      renderEmpty();
+      return;
+    }
+
+    const itemsHtml = state.items.map((item) => renderInterceptCardHtml(item)).join("");
+    mainCard.innerHTML = `<div class="intercepts-list">${itemsHtml}</div>${renderListFooterHtml()}`;
+  }
 
   async function loadDetail(messageId) {
     if (!messageId || state.loadingDetail) {
@@ -806,6 +869,7 @@
       const data = await response.json();
       state.total = Number(data.total || 0);
       state.items = Array.isArray(data.items) ? data.items : [];
+      state.offset = state.items.length;
       setFoundCount(state.total);
 
       renderList();
@@ -825,6 +889,68 @@
       setFoundCount("—");
     } finally {
       state.loadingList = false;
+    }
+  }
+
+  async function loadMoreIntercepts() {
+    if (state.loadingMore || state.loadingList || !listHasMore()) {
+      return;
+    }
+
+    state.loadingMore = true;
+    const prevBtn = document.getElementById("interceptsLoadMoreBtn");
+    if (prevBtn) {
+      prevBtn.disabled = true;
+      prevBtn.textContent = "Завантаження…";
+    }
+
+    state.offset = state.items.length;
+    closeAutocomplete();
+    renderWarning("");
+
+    try {
+      const query = buildQuery();
+      const response = await fetch(`/api/intercepts-explorer?${query}`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text}`);
+      }
+
+      const data = await response.json();
+      state.total = Number(data.total || state.total);
+      const newItems = Array.isArray(data.items) ? data.items : [];
+
+      if (!newItems.length) {
+        state.total = state.items.length;
+        replaceListFooter();
+        return;
+      }
+
+      state.items.push(...newItems);
+      state.offset = state.items.length;
+
+      const listEl = mainCard.querySelector(".intercepts-list");
+      if (listEl) {
+        listEl.insertAdjacentHTML("beforeend", newItems.map((item) => renderInterceptCardHtml(item)).join(""));
+        replaceListFooter();
+      } else {
+        renderList();
+      }
+    } catch (error) {
+      console.error(error);
+      renderWarning("Не вдалося дозавантажити перехоплення.");
+      replaceListFooter();
+    } finally {
+      state.loadingMore = false;
+      const btn = document.getElementById("interceptsLoadMoreBtn");
+      if (btn && listHasMore()) {
+        btn.disabled = false;
+        btn.textContent = "Завантажити ще";
+      }
     }
   }
 
@@ -897,6 +1023,111 @@
   });
 
   mainCard.addEventListener("click", async function (event) {
+    const loadMoreHit = event.target.closest("#interceptsLoadMoreBtn");
+    if (loadMoreHit) {
+      event.preventDefault();
+      loadMoreIntercepts();
+      return;
+    }
+
+    async function runLandmarkSearch(panel) {
+      if (!panel) return;
+      const input = panel.querySelector(".ie-lm-name-input");
+      const out = panel.querySelector(".intercepts-lm-panel__result");
+      if (!input || !out) return;
+
+      const query = String(input.value || "").trim();
+      if (!query) {
+        out.innerHTML = `<div class="intercepts-lm-panel__hint">Введіть слово для пошуку</div>`;
+        return;
+      }
+
+      out.innerHTML = `<div class="intercepts-lm-panel__hint">Пошук...</div>`;
+      try {
+        const card = panel.closest(".intercept-card");
+        const messageId = card ? Number(card.dataset.id || 0) : 0;
+        const row = messageId
+          ? state.items.find((x) => Number(x.id) === messageId)
+          : null;
+        const netGroupId =
+          row && row.network && row.network.group_id != null
+            ? Number(row.network.group_id)
+            : null;
+
+        const url = `/api/landmarks/search?name=${encodeURIComponent(query)}&limit=20&offset=0`;
+        const response = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const qNorm = query.toLocaleLowerCase();
+        const sortedItems = items
+          .slice()
+          .sort((a, b) => {
+            const an = String(a?.name || "").trim();
+            const bn = String(b?.name || "").trim();
+            const al = an.toLocaleLowerCase();
+            const bl = bn.toLocaleLowerCase();
+
+            const ai = al.indexOf(qNorm);
+            const bi = bl.indexOf(qNorm);
+
+            const aExact = ai === 0 && al.length === qNorm.length;
+            const bExact = bi === 0 && bl.length === qNorm.length;
+            if (aExact !== bExact) return aExact ? -1 : 1;
+
+            const aPrefix = ai === 0;
+            const bPrefix = bi === 0;
+            if (aPrefix !== bPrefix) return aPrefix ? -1 : 1;
+
+            const aHas = ai >= 0;
+            const bHas = bi >= 0;
+            if (aHas !== bHas) return aHas ? -1 : 1;
+
+            if (aHas && bHas && ai !== bi) return ai - bi;
+
+            return an.localeCompare(bn, "uk");
+          });
+        if (!sortedItems.length) {
+          out.innerHTML = `<div class="intercepts-lm-panel__hint">Нічого не знайдено</div>`;
+          return;
+        }
+
+        function highlightMatch(name, queryText) {
+          const raw = String(name || "");
+          const q = String(queryText || "");
+          if (!raw || !q) return escapeHtml(raw);
+
+          const lower = raw.toLocaleLowerCase();
+          const qLower = q.toLocaleLowerCase();
+          const idx = lower.indexOf(qLower);
+          if (idx < 0) return escapeHtml(raw);
+
+          const before = escapeHtml(raw.slice(0, idx));
+          const match = escapeHtml(raw.slice(idx, idx + q.length));
+          const after = escapeHtml(raw.slice(idx + q.length));
+          return `${before}<span class="intercepts-lm-chip__hl">${match}</span>${after}`;
+        }
+
+        out.innerHTML = sortedItems
+          .map((item) => {
+            const id = Number(item.id || 0);
+            const rawName = String(item.name || "").trim();
+            const name = highlightMatch(rawName, query);
+            const gId = item.group_id != null ? Number(item.group_id) : null;
+            const sameGroup =
+              netGroupId != null && gId != null && Number(netGroupId) === Number(gId);
+            const cls = sameGroup
+              ? "intercepts-lm-chip intercepts-lm-chip--same-group"
+              : "intercepts-lm-chip";
+            return `<button type="button" class="${cls}" data-lm-id="${id}" title="Відкрити орієнтир">${name}</button>`;
+          })
+          .join("");
+      } catch (error) {
+        console.error(error);
+        out.innerHTML = `<div class="intercepts-lm-panel__hint">Помилка пошуку</div>`;
+      }
+    }
+
     const copyBtn = event.target.closest(".intercepts-copy-btn");
     if (copyBtn) {
       const messageId = Number(copyBtn.dataset.messageId || 0);
@@ -974,6 +1205,35 @@
       }
     }
 
+    const lmSearchBtn = event.target.closest(".ie-lm-search-btn");
+    if (lmSearchBtn) {
+      const panel = lmSearchBtn.closest(".intercepts-lm-panel");
+      await runLandmarkSearch(panel);
+      return;
+    }
+
+    const lmCreateBtn = event.target.closest(".ie-lm-create-btn");
+    if (lmCreateBtn) {
+      if (typeof window.openLandmarkCreateModal === "function") {
+        window.openLandmarkCreateModal();
+      }
+      return;
+    }
+
+    const lmChip = event.target.closest(".intercepts-lm-chip");
+    if (lmChip) {
+      const landmarkId = Number(lmChip.dataset.lmId || 0);
+      if (landmarkId && typeof window.openLandmarkEditModalById === "function") {
+        try {
+          await window.openLandmarkEditModalById(landmarkId);
+        } catch (error) {
+          console.error(error);
+          renderWarning(String(error?.message || "Не вдалося відкрити орієнтир."));
+        }
+      }
+      return;
+    }
+
     const landmarkHit = event.target.closest(".intercepts-landmark-hit");
     if (landmarkHit) {
       const messageId = Number(landmarkHit.dataset.messageId || 0);
@@ -1041,6 +1301,15 @@
   });
 
   mainCard.addEventListener("keydown", async function (event) {
+    const lmInput = event.target.closest(".ie-lm-name-input");
+    if (lmInput && event.key === "Enter") {
+      event.preventDefault();
+      const panel = lmInput.closest(".intercepts-lm-panel");
+      const lmSearchBtn = panel ? panel.querySelector(".ie-lm-search-btn") : null;
+      if (lmSearchBtn) lmSearchBtn.click();
+      return;
+    }
+
     const input = event.target.closest(".callsign-input");
     if (!input) {
       return;
@@ -1110,6 +1379,23 @@
       closeAutocomplete();
     }
   });
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!paneView || paneView.classList.contains("hidden")) return;
+      if (state.loadingMore || state.loadingList || !listHasMore()) return;
+      const doc = document.documentElement;
+      // Avoid firing when the first page is shorter than the viewport (scroll "bottom" is always "near end").
+      if (doc.scrollHeight <= window.innerHeight + 120) return;
+      const scrollBottom = window.scrollY + window.innerHeight;
+      const threshold = doc.scrollHeight - 400;
+      if (scrollBottom >= threshold) {
+        loadMoreIntercepts();
+      }
+    },
+    { passive: true }
+  );
 
   loadIntercepts();
 })();

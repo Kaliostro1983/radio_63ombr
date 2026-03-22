@@ -7,8 +7,8 @@ import urllib.request
 import logging
 from urllib.parse import quote
 
-from fastapi import APIRouter, Request, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import RedirectResponse, StreamingResponse
 
 from app.core.db import get_conn
 from app.core.normalize import normalize_freq_or_mask
@@ -47,12 +47,10 @@ def _content_disposition_attachment(filename: str) -> str:
     return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{utf8}"
 
 
-@router.get("/reports", response_class=HTMLResponse)
-def reports_page(request: Request):
-    return request.app.state.templates.TemplateResponse(
-        "reports.html",
-        {"request": request},
-    )
+@router.get("/reports")
+def reports_page_redirect():
+    """Звіти перенесено на Головну → вкладка «Звіти»."""
+    return RedirectResponse(url="/home?tab=reports", status_code=302)
 
 def _load_moves_from_xlsx_bytes(content: bytes) -> list[tuple[str, str]]:
     """Return list of (freq_or_mask, move_text) from the first worksheet."""

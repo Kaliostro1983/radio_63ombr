@@ -1,14 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <!-- Круглий фон -->
+  <circle cx="12" cy="12" r="12" fill="#00ABC7"></circle>
+
   <!-- Бінокль -->
-  <circle cx="7" cy="11" r="3" fill="#374151"></circle>
-  <circle cx="13" cy="11" r="3" fill="#374151"></circle>
-  <rect x="7" y="9.5" width="6" height="3" fill="#374151"></rect>
+  <circle cx="8" cy="15" r="5" fill="white"></circle>
+  <circle cx="16" cy="15" r="5" fill="white"></circle>
 
-  <!-- Лінзи -->
-  <circle cx="7" cy="11" r="1.2" fill="#9ca3af"></circle>
-  <circle cx="13" cy="11" r="1.2" fill="#9ca3af"></circle>
+  <!-- Прямокутник (ще +5%, центр збережено) -->
+  <rect x="8" y="11.535" width="8" height="6.93" fill="white"></rect>
 
-  <!-- Повітряна ціль (літак) -->
-  <polygon points="10,3 11,6 10,5.5 9,6" fill="#ef4444"></polygon>
-  <rect x="9.6" y="6" width="0.8" height="2.5" fill="#ef4444"></rect>
+  <circle cx="8" cy="15" r="3" fill="black"></circle>
+  <circle cx="16" cy="15" r="3" fill="black"></circle>
+
+  <!-- Дрон -->
+  <circle cx="10.5" cy="4" r="1.82" fill="black"></circle>
+  <circle cx="13.5" cy="4" r="1.82" fill="black"></circle>
+  <circle cx="10.5" cy="7" r="1.82" fill="black"></circle>
+  <circle cx="13.5" cy="7" r="1.82" fill="black"></circle>
 </svg>

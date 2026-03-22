@@ -8,7 +8,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.core.config import settings
 from app.core.db import get_conn
-
 router = APIRouter()
 
 
@@ -21,24 +20,6 @@ def _normalize_keyword(value: str) -> str:
     return " ".join(parts).lower()
 
 
-def _location_kind_from_wkt(wkt: str) -> str:
-    """Infer geometry kind from WKT prefix (used for UI + storage)."""
-    s = (wkt or "").strip().upper()
-    if s.startswith("POINT"):
-        return "point"
-    if s.startswith("POLYGON"):
-        return "polygon"
-    if s.startswith("MULTIPOINT"):
-        return "multipoint"
-    if s.startswith("MULTIPOLYGON"):
-        return "multipolygon"
-    if s.startswith("LINESTRING"):
-        return "linestring"
-    if s.startswith("MULTILINESTRING"):
-        return "multilinestring"
-    return "other"
-
-
 def _parse_int_opt(v: Any) -> int | None:
     if v is None:
         return None
@@ -49,6 +30,38 @@ def _parse_int_opt(v: Any) -> int | None:
         return int(vv)
     except Exception:
         return None
+
+
+def _resolve_landmark_geometry(
+    *,
+    id_geom: int,
+    location_mgrs: str,
+    location_wkt: str,
+) -> tuple[str, str, str]:
+    """Build canonical WKT, stored MGRS (точка), and legacy `location_kind` (= str(id_geom)).
+
+    MGRS → POINT(WKT) is done in the browser (same stack as «Показати пеленги»); сервер лише валідує WKT.
+    """
+    mgrs_s = (location_mgrs or "").strip()
+    wkt_s = (location_wkt or "").strip()
+
+    if id_geom == 1:
+        if not wkt_s.upper().startswith("POINT"):
+            raise HTTPException(
+                status_code=400,
+                detail="Для точки потрібен POINT у WKT (MGRS конвертується у формі перед збереженням)",
+            )
+        return wkt_s, mgrs_s, str(id_geom)
+
+    if id_geom in (2, 3):
+        if not wkt_s:
+            raise HTTPException(
+                status_code=400,
+                detail="Для зони або кривої вкажіть геометрію у форматі WKT",
+            )
+        return wkt_s, mgrs_s, str(id_geom)
+
+    raise HTTPException(status_code=400, detail="Невірний тип геометрії")
 
 
 def _unknown_landmark_type_id(conn) -> int:
@@ -89,10 +102,11 @@ def landmarks_page(request: Request):
 
 @router.get("/api/landmarks/reference")
 def api_landmarks_reference():
-    """Fetch reference lists (groups, landmark types)."""
+    """Fetch reference lists (groups, landmark types, geometry kinds)."""
     with get_conn() as conn:
         groups = conn.execute("SELECT id, name FROM groups ORDER BY name").fetchall()
         types = conn.execute("SELECT id, name FROM landmark_types ORDER BY name").fetchall()
+        geoms = conn.execute("SELECT id, name FROM landmark_geoms ORDER BY id").fetchall()
         unknown_type_id = _unknown_landmark_type_id(conn)
 
     return JSONResponse(
@@ -104,6 +118,9 @@ def api_landmarks_reference():
             ],
             "types": [
                 {"id": int(r["id"]), "name": str(r["name"])} for r in types if r and r["id"] is not None
+            ],
+            "geom_types": [
+                {"id": int(r["id"]), "name": str(r["name"])} for r in geoms if r and r["id"] is not None
             ],
         }
     )
@@ -194,10 +211,13 @@ def api_landmarks_search(
                 l.id_type,
                 lt.name AS type_name,
                 l.id_group,
-                g.name AS group_name
+                g.name AS group_name,
+                l.id_geom,
+                lg.name AS geom_type_name
             FROM landmarks l
             JOIN landmark_types lt ON lt.id = l.id_type
             LEFT JOIN groups g ON g.id = l.id_group
+            LEFT JOIN landmark_geoms lg ON lg.id = l.id_geom
             WHERE {where_sql}
             ORDER BY lt.name, l.name
             LIMIT ? OFFSET ?
@@ -219,6 +239,8 @@ def api_landmarks_search(
                 "group_name": str(r["group_name"] or "") if r["id_group"] is not None else None,
                 "group_id": int(r["id_group"]) if r["id_group"] is not None else None,
                 "type_id": int(r["id_type"]),
+                "id_geom": int(r["id_geom"]) if r["id_geom"] is not None else None,
+                "geom_type_name": str(r["geom_type_name"] or "") if r["geom_type_name"] else None,
             }
         )
 
@@ -248,13 +270,17 @@ def api_landmark_get(landmark_id: int):
                 l.id_type,
                 l.location_wkt,
                 l.location_kind,
+                l.location_mgrs,
+                l.id_geom,
                 l.comment,
                 l.is_active,
                 lt.name AS type_name,
-                g.name AS group_name
+                g.name AS group_name,
+                lg.name AS geom_type_name
             FROM landmarks l
             JOIN landmark_types lt ON lt.id = l.id_type
             LEFT JOIN groups g ON g.id = l.id_group
+            LEFT JOIN landmark_geoms lg ON lg.id = l.id_geom
             WHERE l.id = ? AND l.is_active = 1
             LIMIT 1
             """,
@@ -268,6 +294,10 @@ def api_landmark_get(landmark_id: int):
     if int(row["id_type"]) == unknown_type_id:
         type_name = "—"
 
+    wkt = str(row["location_wkt"] or "")
+    mgrs_stored = str(row["location_mgrs"] or "").strip()
+    id_geom = int(row["id_geom"]) if row["id_geom"] is not None else 1
+
     return {
         "ok": True,
         "landmark": {
@@ -277,8 +307,11 @@ def api_landmark_get(landmark_id: int):
             "group_name": str(row["group_name"]) if row["group_name"] is not None else None,
             "id_type": int(row["id_type"]),
             "type_name": type_name,
-            "location_wkt": str(row["location_wkt"] or ""),
+            "location_wkt": wkt,
+            "location_mgrs": mgrs_stored,
             "location_kind": str(row["location_kind"] or ""),
+            "id_geom": id_geom,
+            "geom_type_name": str(row["geom_type_name"] or ""),
             "comment": str(row["comment"] or ""),
             "is_active": int(row["is_active"]) if row["is_active"] is not None else 1,
         },
@@ -300,19 +333,17 @@ async def api_landmark_update(request: Request, landmark_id: int):
     except Exception:
         is_active = 1
 
-    location_wkt = str(payload.get("location_wkt") or "").strip()
-    if not location_wkt:
-        raise HTTPException(status_code=400, detail="Координати (WKT) обов'язкові")
-
     id_type = _parse_int_opt(payload.get("id_type"))
     id_group = _parse_int_opt(payload.get("id_group"))
+    id_geom = _parse_int_opt(payload.get("id_geom"))
+    if id_geom is None:
+        id_geom = 1
     comment = str(payload.get("comment") or "").strip()
 
     key_word = _normalize_keyword(name)
     if not key_word:
         raise HTTPException(status_code=400, detail="Некоректна назва")
 
-    location_kind = _location_kind_from_wkt(location_wkt)
     now_iso = _now_iso()
 
     with get_conn() as conn:
@@ -324,6 +355,21 @@ async def api_landmark_update(request: Request, landmark_id: int):
         type_row = conn.execute("SELECT id FROM landmark_types WHERE id = ? LIMIT 1", (id_type,)).fetchone()
         if not type_row:
             raise HTTPException(status_code=400, detail="Невірний тип орієнтира")
+
+        geom_row = conn.execute(
+            "SELECT id FROM landmark_geoms WHERE id = ? LIMIT 1",
+            (id_geom,),
+        ).fetchone()
+        if not geom_row:
+            raise HTTPException(status_code=400, detail="Невірний тип геометрії")
+
+        location_mgrs = str(payload.get("location_mgrs") or "").strip()
+        location_wkt_in = str(payload.get("location_wkt") or "").strip()
+        location_wkt, location_mgrs_out, location_kind = _resolve_landmark_geometry(
+            id_geom=id_geom,
+            location_mgrs=location_mgrs,
+            location_wkt=location_wkt_in,
+        )
 
         # Validate group if provided.
         if id_group is not None:
@@ -348,6 +394,8 @@ async def api_landmark_update(request: Request, landmark_id: int):
                 key_word = ?,
                 location_wkt = ?,
                 location_kind = ?,
+                location_mgrs = ?,
+                id_geom = ?,
                 id_group = ?,
                 id_type = ?,
                 comment = ?,
@@ -360,6 +408,8 @@ async def api_landmark_update(request: Request, landmark_id: int):
                 key_word,
                 location_wkt,
                 location_kind,
+                location_mgrs_out,
+                id_geom,
                 id_group,
                 id_type,
                 comment,
@@ -405,19 +455,17 @@ async def api_landmark_create(request: Request):
     except Exception:
         is_active = 1
 
-    location_wkt = str(payload.get("location_wkt") or "").strip()
-    # For creation only `name` is mandatory.
-    # location_wkt can be empty (stored as empty string).
-
     id_type = _parse_int_opt(payload.get("id_type"))
     id_group = _parse_int_opt(payload.get("id_group"))
+    id_geom = _parse_int_opt(payload.get("id_geom"))
+    if id_geom is None:
+        id_geom = 1
     comment = str(payload.get("comment") or "").strip()
 
     key_word = _normalize_keyword(name)
     if not key_word:
         raise HTTPException(status_code=400, detail="Некоректна назва")
 
-    location_kind = _location_kind_from_wkt(location_wkt)
     now_iso = _now_iso()
 
     with get_conn() as conn:
@@ -432,6 +480,21 @@ async def api_landmark_create(request: Request):
         if not type_row:
             raise HTTPException(status_code=400, detail="Невірний тип орієнтира")
 
+        geom_row = conn.execute(
+            "SELECT id FROM landmark_geoms WHERE id = ? LIMIT 1",
+            (id_geom,),
+        ).fetchone()
+        if not geom_row:
+            raise HTTPException(status_code=400, detail="Невірний тип геометрії")
+
+        location_mgrs = str(payload.get("location_mgrs") or "").strip()
+        location_wkt_in = str(payload.get("location_wkt") or "").strip()
+        location_wkt, location_mgrs_out, location_kind = _resolve_landmark_geometry(
+            id_geom=id_geom,
+            location_mgrs=location_mgrs,
+            location_wkt=location_wkt_in,
+        )
+
         if id_group is not None:
             g_row = conn.execute("SELECT id FROM groups WHERE id = ? LIMIT 1", (id_group,)).fetchone()
             if not g_row:
@@ -440,12 +503,25 @@ async def api_landmark_create(request: Request):
         cur = conn.execute(
             """
             INSERT INTO landmarks (
-                name, key_word, location_wkt, location_kind, comment,
+                name, key_word, location_wkt, location_kind, location_mgrs, id_geom, comment,
                 date_creation, updated_at, id_group, id_type, is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, key_word, location_wkt, location_kind, comment, now_iso, now_iso, id_group, id_type, is_active),
+            (
+                name,
+                key_word,
+                location_wkt,
+                location_kind,
+                location_mgrs_out,
+                id_geom,
+                comment,
+                now_iso,
+                now_iso,
+                id_group,
+                id_type,
+                is_active,
+            ),
         )
 
         # After creation, optionally enqueue ALL valid messages for background matching

@@ -24,7 +24,10 @@ intercepts.py
 ingest.py  
 xlsx_import.py  
 peleng.py
-landmarks.py
+landmarks.py  
+home.py  
+reports.py (HTML `/reports` → редірект на `/home?tab=reports`; POST `/reports/enemy-moves` без змін)  
+etalons.py (`/etalons/panel` — еталонка для iframe на `/networks`, без залежності від `?embed=1` після POST)
 
 Routers must remain thin and contain only request/response logic.
 
@@ -70,7 +73,9 @@ validators.py
 time_utils.py  
 callsign_normalizer.py  
 config.py (including `LANDMARK_AUTO_MATCH` for optional landmark matching)  
-db.py
+db.py  
+http_request_log_middleware.py (middleware: лог кожного HTTP-запиту на вході)  
+logging.py
 
 ---
 
@@ -104,7 +109,8 @@ tables.py
 
 Templates:
 
-app/templates
+app/templates  
+(`etalons_inner.html` — вміст еталонок; `etalons_embed.html` + `embed_shell.html` — варіант без сайдбару для iframe)
 
 Static files:
 
@@ -115,7 +121,7 @@ JS modules:
 intercepts_explorer.js  
 intercepts_search.js  
 callsigns.js  
-home.js  
+home.js (вкладки Головної: активність, огляд, звіти)  
 peleng.js
 landmarks.js
 

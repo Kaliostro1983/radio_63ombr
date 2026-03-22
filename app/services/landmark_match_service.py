@@ -244,6 +244,8 @@ def get_message_landmark_matches(message_id: int) -> list[dict[str, Any]]:
                 l.key_word,
                 l.location_wkt,
                 l.location_kind,
+                l.id_geom,
+                l.id_group,
                 l.comment AS landmark_comment,
                 l.id_type,
                 lt.name AS landmark_type_name
@@ -274,6 +276,8 @@ def get_message_landmark_matches(message_id: int) -> list[dict[str, Any]]:
                     "key_word": row["key_word"] or "",
                     "location_wkt": row["location_wkt"] or "",
                     "location_kind": row["location_kind"] or "",
+                    "id_geom": int(row["id_geom"]) if row["id_geom"] is not None else None,
+                    "id_group": int(row["id_group"]) if row["id_group"] is not None else None,
                     "comment": row["landmark_comment"] or "",
                     "id_type": row["id_type"],
                     "type_name": row["landmark_type_name"] or "",

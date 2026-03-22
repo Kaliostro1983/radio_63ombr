@@ -26,11 +26,21 @@ def normalize_network_alias(text: str) -> str:
     if not text:
         return ""
 
+    text = str(text)
+    text = text.replace("\u00a0", " ")
+    text = text.replace("\u200b", "")
+
     text = text.lower().strip()
 
     text = text.replace('"', '')
     text = text.replace("'", "")
 
+    # OCR / export: en-dash, em-dash → hyphen (must match DB-stored alias_text)
+    text = text.replace("\u2013", "-").replace("\u2014", "-").replace("\u2011", "-")
+
+    # WhatsApp/XLSX export line prefix like "$ 83" before the real header (not in DB alias).
+    text = re.sub(r"^\s*\$\s*\d*\s*", "", text)
+
     text = re.sub(r"\s+", " ", text)
 
-    return text
+    return text.strip()

@@ -154,6 +154,10 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
                 summary["inserted"] += 1
                 continue
 
+            if result.get("peleng_batch_id"):
+                summary["inserted"] += 1
+                continue
+
             summary["skipped"] += 1
             reason = str(result.get("reason") or "skipped")
             skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
@@ -184,14 +188,15 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
 
     if skip_reasons:
         # Use NOTICE so it shows up even when INFO is filtered out.
-        parts = []
+        log.notice(
+            "XLSX import skip reasons breakdown (%d kinds):",
+            len(skip_reasons),
+        )
         for k, v in sorted(skip_reasons.items(), key=lambda kv: (-kv[1], kv[0])):
             samples = sorted(reason_samples.get(k, set()))
-            if samples:
-                parts.append(f"{k}={v} (samples: " + " | ".join(samples) + ")")
-            else:
-                parts.append(f"{k}={v}")
-        log.notice("XLSX import skip reasons breakdown: %s", "; ".join(parts))
+            log.notice("  • %s: count=%d", k, v)
+            for i, s in enumerate(samples[:5], start=1):
+                log.notice("      sample %d: %s", i, s)
 
     log.notice(
         "XLSX import done: total=%d processed=%d inserted=%d duplicates=%d skipped=%d failed=%d",

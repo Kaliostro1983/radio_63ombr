@@ -198,23 +198,9 @@
 
     try {
       await navigator.clipboard.writeText(txt);
+      showToast("Скопійовано", 1500);
     } catch {
       alert("Не вдалося скопіювати в буфер.");
-      return;
-    }
-
-    const payload = {
-      date: getVal("event_date"),
-      time: getVal("event_time"),
-      freq_or_mask: getVal("frequency"),
-      mgrs_text: $("mgrs_text")?.value || "",
-    };
-
-    try {
-      const res = await apiPost("/peleng/save", payload);
-      showToast(`Скопійовано + збережено (batch ${res.batch_id})`, 1700);
-    } catch (e) {
-      showToast(`Скопійовано, але не збережено: ${e.message}`, 2200);
     }
   }
 

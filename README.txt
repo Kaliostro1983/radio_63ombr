@@ -19,6 +19,7 @@ Backups:
 
 Notes:
 - Light/Dark toggle is in the left menu and stored in the browser (localStorage).
+- On Windows cmd, use `--log-config uvicorn_log_config.json` with manual `uvicorn` so HTTP access lines print in the same console as server startup (see CHANGELOG 0.6.5).
 
 
 

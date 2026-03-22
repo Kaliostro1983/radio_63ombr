@@ -280,6 +280,14 @@ class LandmarkType(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
 
 
+class LandmarkGeom(SQLModel, table=True):
+    """Geometry kind: точка / зона / крива."""
+    __tablename__ = "landmark_geoms"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+
+
 class Landmark(SQLModel, table=True):
     """Landmark dictionary row with keyword and geometry in WKT."""
     __tablename__ = "landmarks"
@@ -289,6 +297,8 @@ class Landmark(SQLModel, table=True):
     key_word: str = Field(index=True)
     location_wkt: str
     location_kind: Optional[str] = None
+    location_mgrs: Optional[str] = None
+    id_geom: Optional[int] = Field(default=None, foreign_key="landmark_geoms.id", index=True)
     comment: Optional[str] = None
     date_creation: str
     updated_at: str

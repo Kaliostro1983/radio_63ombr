@@ -351,6 +351,7 @@ UI for landmarks management:
 routers/landmarks.py  
 templates/landmarks.html  
 static/landmarks.js  
+(shared edit/create modal in `templates/base.html`: Leaflet + MGRS/WKT, dictionary `landmark_geoms`)
 
 Landmark keyword matching worker:
 services/landmark_match_service.py  
