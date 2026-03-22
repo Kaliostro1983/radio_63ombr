@@ -10,6 +10,25 @@
 
 ---
 
+## [0.9.0] - 2026-03-21
+
+### Added
+- Документація контракту бота ↔ **`POST /api/ingest/whatsapp`**: **`docs/BOT_INGEST_API.md`** (тіло запиту, масив **`actions`**, тип **`send_message`**); посилання в **`docs/FILE_MAP.md`** та **`docs/ARCHITECTURE.md`**.
+- Модальне вікно орієнтира: кнопка **«Копіювати»** біля полів **MGRS** та **WKT** (копіювання в буфер обміну).
+
+### Changed
+- **Орієнтир**: збереження без координат (порожні MGRS/WKT) узгоджено між **`landmarks.js`** та **`landmarks.py`** (`_resolve_landmark_geometry`).
+- **Перегляд перехоплень** (`intercepts_explorer.js`): дозавантаження через **`IntersectionObserver`** і сентинел замість постійної перевірки на **`scroll`**; **`content-visibility: auto`** для карток; перепідключення observer при поверненні на вкладку «Перегляд»; fallback на **`scroll`** + **`requestAnimationFrame`** без `IntersectionObserver`.
+- Кеш статичних ресурсів: версії **`app.css`**, **`landmarks.js`**, **`intercepts_explorer.js`**.
+
+### Fixed
+- **Пошук перехоплень** (`intercepts_search.js`): подвоєння карток через гонку **submit** і **scroll** (два паралельні запити з **`offset=0`**); єдиний прапор **`loading`** на весь **`loadData`**.
+
+### Notes
+- Поле **«Коментар»** у модалці орієнтира: збільшена висота (**`rows`** та **`min-height`**).
+
+---
+
 ## [0.8.0] - 2026-03-21
 
 ### Added

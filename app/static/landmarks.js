@@ -39,6 +39,8 @@
   const editErr = $("lmEditErr");
   const editDeleteBtn = $("lmEditDeleteBtn");
   const editSaveBtn = $("lmEditSaveBtn");
+  const copyMgrsBtn = $("lmEditCopyMgrs");
+  const copyWktBtn = $("lmEditCopyWkt");
 
   const mapState = {
     map: null,
@@ -87,6 +89,31 @@
     if (editTypeSelect) editTypeSelect.value = "";
     if (editGeomSelect && state.geomTypes.length) editGeomSelect.value = String(state.geomTypes[0].id);
     syncGeomFields();
+  }
+
+  async function copyTextToClipboard(text) {
+    const t = String(text ?? "");
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(t);
+        return;
+      }
+    } catch {
+      /* fallback */
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = t;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch {
+      /* ignore */
+    }
   }
 
   function escapeHtml(value) {
@@ -624,12 +651,13 @@
       if (!name) throw new Error("Назва не може бути порожньою");
 
       if (id_geom === 1) {
-        if (!location_mgrs) throw new Error("Вкажіть координати MGRS (точка)");
-        const ll = mgrsToLatLonBrowser(location_mgrs);
-        if (!ll) throw new Error("Некоректний MGRS");
-        location_wkt = `POINT (${ll.lon} ${ll.lat})`;
-      } else {
-        if (!location_wkt) throw new Error("Вкажіть геометрію WKT (зона / крива)");
+        if (location_mgrs) {
+          const ll = mgrsToLatLonBrowser(location_mgrs);
+          if (!ll) throw new Error("Некоректний MGRS");
+          location_wkt = `POINT (${ll.lon} ${ll.lat})`;
+        } else {
+          location_wkt = "";
+        }
       }
 
       const payload = {
@@ -709,6 +737,17 @@
     });
 
     if (editSaveBtn) editSaveBtn.addEventListener("click", saveEdit);
+
+    if (copyMgrsBtn && editLocationMgrsInput) {
+      copyMgrsBtn.addEventListener("click", () => {
+        copyTextToClipboard(editLocationMgrsInput.value);
+      });
+    }
+    if (copyWktBtn && editLocationWktInput) {
+      copyWktBtn.addEventListener("click", () => {
+        copyTextToClipboard(editLocationWktInput.value);
+      });
+    }
 
     if (editGeomSelect) editGeomSelect.addEventListener("change", syncGeomFields);
     if (editLocationMgrsInput) {

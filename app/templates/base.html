@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=6"/>
+  <link rel="stylesheet" href="/static/app.css?v=10"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="/static/app.js" defer></script>
 </head>
@@ -207,17 +207,27 @@
 
           <div class="field" id="lmEditMgrsWrap">
             <label for="lmEditLocationMgrs">Координати (MGRS)</label>
-            <input id="lmEditLocationMgrs" type="text" autocomplete="off" placeholder="напр. 37UDQ3296626558" />
+            <div class="lm-coord-input-row">
+              <input id="lmEditLocationMgrs" type="text" autocomplete="off" placeholder="напр. 37UDQ3296626558" />
+              <button type="button" id="lmEditCopyMgrs" class="secondary lm-coord-copy-btn" aria-label="Копіювати координати">
+                Копіювати
+              </button>
+            </div>
           </div>
 
           <div class="field hidden" id="lmEditWktWrap">
             <label for="lmEditLocationWkt">Геометрія (WKT)</label>
-            <textarea id="lmEditLocationWkt" rows="2" class="lm-modal-textarea"></textarea>
+            <div class="lm-coord-input-row lm-coord-input-row--wkt">
+              <textarea id="lmEditLocationWkt" rows="2" class="lm-modal-textarea"></textarea>
+              <button type="button" id="lmEditCopyWkt" class="secondary lm-coord-copy-btn" aria-label="Копіювати геометрію WKT">
+                Копіювати
+              </button>
+            </div>
           </div>
 
           <div class="field">
             <label for="lmEditComment">Коментар</label>
-            <textarea id="lmEditComment" rows="2" class="lm-modal-textarea"></textarea>
+            <textarea id="lmEditComment" rows="4" class="lm-modal-textarea lm-modal-textarea--comment"></textarea>
           </div>
         </div>
 

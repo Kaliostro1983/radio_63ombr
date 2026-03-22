@@ -45,21 +45,25 @@ def _resolve_landmark_geometry(
     mgrs_s = (location_mgrs or "").strip()
     wkt_s = (location_wkt or "").strip()
 
+    # Дозволити збереження лише з назвою / коментарем без координат.
+    if not wkt_s and not mgrs_s:
+        return "", "", str(id_geom)
+
     if id_geom == 1:
-        if not wkt_s.upper().startswith("POINT"):
-            raise HTTPException(
-                status_code=400,
-                detail="Для точки потрібен POINT у WKT (MGRS конвертується у формі перед збереженням)",
-            )
-        return wkt_s, mgrs_s, str(id_geom)
+        if wkt_s.upper().startswith("POINT"):
+            return wkt_s, mgrs_s, str(id_geom)
+        raise HTTPException(
+            status_code=400,
+            detail="Для точки потрібен коректний POINT (WGS84) або залиште поля координат порожніми",
+        )
 
     if id_geom in (2, 3):
-        if not wkt_s:
-            raise HTTPException(
-                status_code=400,
-                detail="Для зони або кривої вкажіть геометрію у форматі WKT",
-            )
-        return wkt_s, mgrs_s, str(id_geom)
+        if wkt_s:
+            return wkt_s, mgrs_s, str(id_geom)
+        raise HTTPException(
+            status_code=400,
+            detail="Для зони або кривої вкажіть WKT або очистіть поля координат",
+        )
 
     raise HTTPException(status_code=400, detail="Невірний тип геометрії")
 

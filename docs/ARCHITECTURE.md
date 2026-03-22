@@ -82,6 +82,8 @@ POST /api/ingest/whatsapp
 
 Receives payload and forwards it to the ingest service.
 
+JSON contract for external bots (request body, `actions` in response): **docs/BOT_INGEST_API.md**.
+
 ---
 
 # Service Layer

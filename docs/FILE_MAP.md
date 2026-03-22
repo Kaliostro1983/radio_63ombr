@@ -1,5 +1,11 @@
 # FILE_MAP.md
 
+## Bot ↔ HTTP ingest
+
+docs/BOT_INGEST_API.md — JSON-контракт `POST /api/ingest/whatsapp` (тіло запиту, масив `actions` у відповіді).
+
+---
+
 ## Entry Point
 
 app/main.py

@@ -27,6 +27,8 @@
     autocompleteIndex: -1,
     hoverRefreshByMessageId: {},
     hoverRefreshInFlight: {},
+    infiniteObserver: null,
+    paneWasHidden: true,
   };
 
   function escapeHtml(value) {
@@ -231,13 +233,46 @@
     state.autocompleteIndex = -1;
   }
 
+  function disconnectInfiniteScrollObserver() {
+    if (state.infiniteObserver) {
+      state.infiniteObserver.disconnect();
+      state.infiniteObserver = null;
+    }
+  }
+
+  function setupInfiniteScrollObserver() {
+    disconnectInfiniteScrollObserver();
+    if (!paneView || paneView.classList.contains("hidden")) return;
+    if (!listHasMore()) return;
+    const sentinel = document.getElementById("interceptsInfiniteSentinel");
+    if (!sentinel) return;
+
+    if (!("IntersectionObserver" in window)) {
+      return;
+    }
+
+    state.infiniteObserver = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          if (paneView.classList.contains("hidden")) return;
+          loadMoreIntercepts();
+        }
+      },
+      { root: null, rootMargin: "0px 0px 480px 0px", threshold: 0 }
+    );
+    state.infiniteObserver.observe(sentinel);
+  }
+
   function renderLoading() {
+    disconnectInfiniteScrollObserver();
     mainCard.innerHTML = `
       <div class="intercepts-main-card__empty">Завантаження...</div>
     `;
   }
 
   function renderEmpty() {
+    disconnectInfiniteScrollObserver();
     mainCard.innerHTML = `
       <div class="intercepts-main-card__empty">
         За вибраними фільтрами нічого не знайдено.
@@ -521,7 +556,8 @@
     }
 
     const itemsHtml = state.items.map((item) => renderInterceptCardHtml(item)).join("");
-    mainCard.innerHTML = `<div class="intercepts-list">${itemsHtml}</div>${renderListFooterHtml()}`;
+    mainCard.innerHTML = `<div class="intercepts-list">${itemsHtml}<div class="intercepts-infinite-sentinel" id="interceptsInfiniteSentinel" aria-hidden="true"></div></div>${renderListFooterHtml()}`;
+    setupInfiniteScrollObserver();
   }
 
   async function loadDetail(messageId) {
@@ -927,6 +963,7 @@
       if (!newItems.length) {
         state.total = state.items.length;
         replaceListFooter();
+        if (!listHasMore()) disconnectInfiniteScrollObserver();
         return;
       }
 
@@ -935,8 +972,19 @@
 
       const listEl = mainCard.querySelector(".intercepts-list");
       if (listEl) {
-        listEl.insertAdjacentHTML("beforeend", newItems.map((item) => renderInterceptCardHtml(item)).join(""));
+        const sentinel = document.getElementById("interceptsInfiniteSentinel");
+        const chunk = newItems.map((item) => renderInterceptCardHtml(item)).join("");
+        if (sentinel) {
+          sentinel.insertAdjacentHTML("beforebegin", chunk);
+        } else {
+          listEl.insertAdjacentHTML("beforeend", chunk);
+        }
         replaceListFooter();
+        if (listHasMore()) {
+          setupInfiniteScrollObserver();
+        } else {
+          disconnectInfiniteScrollObserver();
+        }
       } else {
         renderList();
       }
@@ -1380,22 +1428,44 @@
     }
   });
 
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (!paneView || paneView.classList.contains("hidden")) return;
-      if (state.loadingMore || state.loadingList || !listHasMore()) return;
-      const doc = document.documentElement;
-      // Avoid firing when the first page is shorter than the viewport (scroll "bottom" is always "near end").
-      if (doc.scrollHeight <= window.innerHeight + 120) return;
-      const scrollBottom = window.scrollY + window.innerHeight;
-      const threshold = doc.scrollHeight - 400;
-      if (scrollBottom >= threshold) {
-        loadMoreIntercepts();
+  function onWindowScrollLoadMore() {
+    if (!paneView || paneView.classList.contains("hidden")) return;
+    if (state.loadingMore || state.loadingList || !listHasMore()) return;
+    const doc = document.documentElement;
+    if (doc.scrollHeight <= window.innerHeight + 120) return;
+    const scrollBottom = window.scrollY + window.innerHeight;
+    const threshold = doc.scrollHeight - 400;
+    if (scrollBottom >= threshold) {
+      loadMoreIntercepts();
+    }
+  }
+
+  let scrollLoadMoreRaf = 0;
+  function scheduleScrollLoadMore() {
+    if (scrollLoadMoreRaf) return;
+    scrollLoadMoreRaf = requestAnimationFrame(() => {
+      scrollLoadMoreRaf = 0;
+      onWindowScrollLoadMore();
+    });
+  }
+
+  if (!("IntersectionObserver" in window)) {
+    window.addEventListener("scroll", scheduleScrollLoadMore, { passive: true });
+  }
+
+  if (paneView && "MutationObserver" in window) {
+    new MutationObserver(() => {
+      const hidden = paneView.classList.contains("hidden");
+      if (hidden) {
+        state.paneWasHidden = true;
+        return;
       }
-    },
-    { passive: true }
-  );
+      if (state.paneWasHidden) {
+        state.paneWasHidden = false;
+        setupInfiniteScrollObserver();
+      }
+    }).observe(paneView, { attributes: true, attributeFilter: ["class"] });
+  }
 
   loadIntercepts();
 })();

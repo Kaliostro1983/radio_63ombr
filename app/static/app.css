@@ -1485,10 +1485,47 @@ button.secondary{
   min-width: 0;
 }
 
+.lm-coord-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.lm-coord-input-row > input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lm-coord-input-row--wkt {
+  align-items: flex-start;
+}
+
+.lm-coord-input-row--wkt > .lm-modal-textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lm-coord-copy-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.lm-coord-input-row--wkt .lm-coord-copy-btn {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
 .lm-modal-textarea {
   width: 100%;
   resize: vertical;
   min-height: 52px;
+}
+
+.lm-modal-textarea--comment {
+  min-height: 104px;
 }
 
 .lm-modal-map-col label {
@@ -1533,6 +1570,19 @@ button.secondary{
   border-radius: 20px;
   background: rgba(17, 24, 39, 0.68);
   overflow: hidden;
+  /* Поза екраном: браузер пропускає layout/paint — менше навантаження при довгому списку */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}
+
+.intercepts-infinite-sentinel {
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .intercept-card.is-active {

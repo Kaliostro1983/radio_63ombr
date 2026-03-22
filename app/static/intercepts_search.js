@@ -203,6 +203,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadData(reset = false) {
+    /* Один активний запит: інакше scroll «догрузка» може стартувати паралельно з submit і двічі взяти offset=0. */
+    if (loading) {
+      return;
+    }
+
     const phrase = phraseInput?.value?.trim() || "";
     const frequency = frequencyInput?.value?.trim() || "";
     const days = daysInput?.value || "70";
@@ -218,48 +223,55 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    setWarning("");
+    loading = true;
+    loadingEl.style.display = "block";
 
-    const params = new URLSearchParams({
-      phrase,
-      frequency,
-      days: String(days),
-      limit: String(limit),
-      offset: String(offset),
-    });
+    try {
+      setWarning("");
 
-    const response = await fetch(`/api/intercepts/search?${params.toString()}`);
-    const data = await response.json().catch(() => null);
+      const params = new URLSearchParams({
+        phrase,
+        frequency,
+        days: String(days),
+        limit: String(limit),
+        offset: String(offset),
+      });
 
-    if (!response.ok) {
-      throw new Error(data?.detail || `HTTP ${response.status}`);
+      const response = await fetch(`/api/intercepts/search?${params.toString()}`);
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || `HTTP ${response.status}`);
+      }
+
+      if (data?.warning) {
+        setWarning(data.warning);
+      }
+
+      const items = Array.isArray(data?.items) ? data.items : [];
+      items.forEach((item) => results.appendChild(renderItem(item, phrase)));
+
+      offset += items.length;
+      reachedEnd = items.length < limit;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    } finally {
+      loading = false;
+      loadingEl.style.display = "none";
     }
-
-    if (data?.warning) {
-      setWarning(data.warning);
-    }
-
-    const items = Array.isArray(data?.items) ? data.items : [];
-    items.forEach((item) => results.appendChild(renderItem(item, phrase)));
-
-    offset += items.length;
-    reachedEnd = items.length < limit;
   }
 
   async function loadMore() {
-    if (loading || reachedEnd) return;
-
-    loading = true;
-    loadingEl.style.display = "block";
+    if (loading || reachedEnd) {
+      return;
+    }
 
     try {
       await loadData(false);
     } catch (error) {
       console.error(error);
       setWarning(error.message || "Помилка дозавантаження.");
-    } finally {
-      loadingEl.style.display = "none";
-      loading = false;
     }
   }
 
@@ -274,15 +286,11 @@ document.addEventListener("DOMContentLoaded", () => {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    loadingEl.style.display = "block";
-
     try {
       await loadData(true);
     } catch (error) {
       console.error(error);
       setWarning(error.message || "Помилка пошуку.");
-    } finally {
-      loadingEl.style.display = "none";
     }
   });
 
