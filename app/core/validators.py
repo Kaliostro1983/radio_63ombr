@@ -14,6 +14,7 @@ nonstandard format, or skip a message as unknown.
 
 import re
 
+from app.core.analytical_intercept_parser import is_analytical_intercept
 from app.core.intercept_parser import is_template_intercept
 from app.core.normalize import is_mask_candidate
 from app.core.peleng_intercept_parser import is_peleng_intercept
@@ -77,7 +78,7 @@ def detect_message_format(text: str) -> str:
         text: raw intercept text.
 
     Returns:
-        str: one of `peleng_type`, `template`, `structured_alias`,
+        str: one of `peleng_type`, `template`, `analytical_type`, `structured_alias`,
         `nonstandard_type_1`, `unknown`.
     """
 
@@ -92,6 +93,9 @@ def detect_message_format(text: str) -> str:
 
     if is_template_intercept(text):
         return "template"
+
+    if is_analytical_intercept(text):
+        return "analytical_type"
 
     # Structured alias layout detection:
     # these messages always contain both blocks, so this is the most reliable

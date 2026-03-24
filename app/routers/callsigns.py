@@ -278,6 +278,20 @@ def api_callsigns_search(q: str):
         return {"ok": True, "rows": []}
 
     like = f"%{query}%"
+    prefix_like = f"{query}%"
+    # Canonical form for callsign matching: remove separators and normalize case.
+    q_canon = (
+        query.upper()
+        .replace("-", "")
+        .replace(" ", "")
+        .replace("—", "")
+        .replace("–", "")
+    )
+    q_canon_prefix = f"{q_canon}%"
+
+    canon_sql = (
+        "replace(replace(replace(replace(replace(upper(c.name), '-', ''), ' ', ''), '—', ''), '–', ''), '_', '')"
+    )
     with get_conn() as conn:
         rows = conn.execute(
             """
@@ -291,7 +305,16 @@ def api_callsigns_search(q: str):
                 s.name AS status_label,
                 src.name AS source_label,
                 COALESCE(n.frequency, 'Невідомо') AS frequency,
-                COALESCE(n.unit, 'Невідомо') AS unit
+                COALESCE(n.unit, 'Невідомо') AS unit,
+                CASE
+                  WHEN upper(c.name) = upper(?) THEN 0
+                  WHEN """ + canon_sql + """ = ? THEN 1
+                  WHEN """ + canon_sql + """ LIKE ? THEN 2
+                  WHEN c.name LIKE ? COLLATE NOCASE THEN 3
+                  WHEN c.name LIKE ? COLLATE NOCASE THEN 4
+                  WHEN (c.comment IS NOT NULL AND c.comment LIKE ? COLLATE NOCASE) THEN 8
+                  ELSE 9
+                END AS rank_score
             FROM callsigns c
             LEFT JOIN callsign_statuses s ON s.id = c.callsign_status_id
             LEFT JOIN callsign_sources src ON src.id = c.source_id
@@ -299,12 +322,13 @@ def api_callsigns_search(q: str):
             WHERE c.name LIKE ? COLLATE NOCASE
                OR (c.comment IS NOT NULL AND c.comment LIKE ? COLLATE NOCASE)
             ORDER BY
+              rank_score ASC,
               CASE WHEN c.last_seen_dt IS NULL THEN 1 ELSE 0 END,
               c.last_seen_dt DESC,
               c.name COLLATE NOCASE
             LIMIT 200
             """,
-            (like, like),
+            (query, q_canon, q_canon_prefix, prefix_like, like, like, like, like),
         ).fetchall()
 
     out_rows: List[Dict[str, Any]] = []

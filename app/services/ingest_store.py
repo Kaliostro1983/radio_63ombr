@@ -221,6 +221,7 @@ def insert_message(
     created_at: str,
     received_at: str,
     body_text: str,
+    content_type: str = "intercept",
     parse_confidence: float,
     delay_sec: Optional[int],
     net_description: Optional[str] = None,
@@ -238,6 +239,7 @@ def insert_message(
         created_at: message datetime (ISO TEXT).
         received_at: ingest receive datetime (ISO TEXT).
         body_text: message body.
+        content_type: logical message type (`intercept`, `analytical`, `peleng`).
         parse_confidence: parse confidence score.
         delay_sec: delay between platform timestamp and message timestamp.
         net_description: optional network description line for UI display.
@@ -275,6 +277,10 @@ def insert_message(
     if "delay_sec" in message_cols:
         insert_cols.append("delay_sec")
         insert_vals.append(delay_sec)
+
+    if "content_type" in message_cols:
+        insert_cols.insert(6, "content_type")
+        insert_vals.insert(6, (content_type or "intercept").strip().lower() or "intercept")
 
     placeholders = ", ".join(["?"] * len(insert_cols))
     sql = f"""

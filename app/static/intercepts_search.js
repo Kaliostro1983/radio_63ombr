@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const results = document.getElementById("results");
   const warning = document.getElementById("warning");
   const loadingEl = document.getElementById("loading");
+  const submitBtn = form?.querySelector('button[type="submit"]');
 
   if (!form || !results || !warning || !loadingEl) {
     return;
@@ -202,6 +203,11 @@ document.addEventListener("DOMContentLoaded", () => {
     warning.style.display = value ? "block" : "none";
   }
 
+  function renderResultsState(kind, message) {
+    const cls = kind === "error" ? "app-state app-state--error" : "app-state";
+    results.innerHTML = `<div class="${cls}">${String(message || "").trim()}</div>`;
+  }
+
   async function loadData(reset = false) {
     /* Один активний запит: інакше scroll «догрузка» може стартувати паралельно з submit і двічі взяти offset=0. */
     if (loading) {
@@ -220,11 +226,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!phrase && !frequency) {
       setWarning("Вкажи слово або частоту/маску для пошуку.");
+      renderResultsState("info", "Введіть параметри пошуку, щоб побачити результати.");
       return;
     }
 
     loading = true;
     loadingEl.style.display = "block";
+    const submitText = submitBtn ? submitBtn.textContent : "";
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Завантаження…";
+    }
 
     try {
       setWarning("");
@@ -249,6 +261,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const items = Array.isArray(data?.items) ? data.items : [];
+      if (reset && items.length === 0) {
+        renderResultsState("info", "За вибраними фільтрами нічого не знайдено.");
+      }
       items.forEach((item) => results.appendChild(renderItem(item, phrase)));
 
       offset += items.length;
@@ -259,6 +274,10 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       loading = false;
       loadingEl.style.display = "none";
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = submitText || "Пошук";
+      }
     }
   }
 
@@ -291,6 +310,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       console.error(error);
       setWarning(error.message || "Помилка пошуку.");
+      renderResultsState("error", "Помилка пошуку. Спробуйте ще раз.");
     }
   });
 

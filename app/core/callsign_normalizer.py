@@ -17,6 +17,9 @@ The special callsign "НВ" is treated as a technical placeholder meaning
 import re
 
 
+_RE_NUMERIC_CALLSIGN = re.compile(r"^\s*(\d+)\s*(?:-?\s*[Йй])?\s*$")
+
+
 def normalize_callsign(value: str | None) -> str:
     """Normalize a single callsign token.
 
@@ -38,7 +41,15 @@ def normalize_callsign(value: str | None) -> str:
     if not s:
         return "НВ"
 
-    return s.upper()
+    s = s.upper()
+
+    # Canonicalize numeric callsigns to "<digits>-Й":
+    # "14", "14Й", "14 Й", "14-Й" -> "14-Й"
+    m_num = _RE_NUMERIC_CALLSIGN.fullmatch(s)
+    if m_num:
+        return f"{m_num.group(1)}-Й"
+
+    return s
 
 
 def normalize_callsigns(values: list[str] | None) -> list[str]:

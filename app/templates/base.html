@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=10"/>
+  <link rel="stylesheet" href="/static/app.css?v=16"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="/static/app.js" defer></script>
 </head>
@@ -23,7 +23,13 @@
 <div class="layout">
   {% if request.query_params.get("embed") != "1" %}
   <aside class="sidebar">
-    <a href="/home" class="brand-avatar-link" aria-label="Головна">
+    <a
+      href="/home"
+      class="brand-avatar-link"
+      aria-label="Перемкнути тему"
+      title="Клік: День / Ніч"
+      onclick="toggleTheme(); return false;"
+    >
       <div class="brand-avatar-wrap" aria-hidden="true">
         <img
           class="brand-avatar brand-avatar--light"
@@ -45,10 +51,7 @@
       <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
     </div>
 
-    <div style="margin-top:16px" class="card">
-      <div class="small" style="margin-bottom:8px">Дизайн</div>
-      <button type="button" class="secondary" onclick="toggleTheme()">День / Ніч</button>
-      <div class="small" style="margin-top:10px">Доступ лише через TailScale (serve).</div>
+    <div style="margin-top:16px" class="card sidebar-bottom-card">
       <a href="/changelog" target="_blank" class="app-version-link">
         v{{ app_version }}
       </a>
@@ -57,9 +60,18 @@
   {% endif %}
 
   <main class="main">
+    <div class="app-statusbar" role="status" aria-live="polite">
+      <span class="app-statusbar__dot" aria-hidden="true"></span>
+      <span class="app-statusbar__text">Система активна</span>
+      <span class="app-statusbar__sep">•</span>
+      <a href="/changelog" target="_blank" class="app-statusbar__version">v{{ app_version }}</a>
+      <span class="app-statusbar__sep">•</span>
+      <span id="appLastUpdate" class="app-statusbar__text">Оновлено щойно</span>
+    </div>
     {% block content %}{% endblock %}
   </main>
 </div>
+<div id="appToastStack" class="app-toast-stack" aria-live="polite" aria-atomic="true"></div>
 
 <!-- Shared callsign edit modal (used on /callsigns and /intercepts-explorer) -->
 <div id="csModal" class="modal hidden" aria-hidden="true">

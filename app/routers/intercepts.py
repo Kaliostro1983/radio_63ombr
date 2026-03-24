@@ -287,7 +287,7 @@ def intercepts_search(
     try:
         since = (datetime.utcnow() - timedelta(days=days)).isoformat()
 
-        where = ["m.created_at >= ?", "m.is_valid = 1"]
+        where = ["m.created_at >= ?", "m.is_valid = 1", "coalesce(m.content_type, 'intercept') = 'intercept'"]
         params: list[object] = [since]
         warning = None
 
@@ -456,7 +456,7 @@ def intercepts_explorer_list(
         )
         """
 
-        where = ["COALESCE(m.is_valid, 1) = 1"]
+        where = ["COALESCE(m.is_valid, 1) = 1", "coalesce(m.content_type, 'intercept') = 'intercept'"]
         params: list[object] = []
 
         if start_dt_norm:
@@ -642,7 +642,7 @@ def intercepts_explorer_detail(message_id: int):
                 n.zone
             FROM messages m
             JOIN networks n ON n.id = m.network_id
-            WHERE m.id = ? AND m.is_valid = 1
+            WHERE m.id = ? AND m.is_valid = 1 AND coalesce(m.content_type, 'intercept') = 'intercept'
             """,
             (message_id,),
         ).fetchone()

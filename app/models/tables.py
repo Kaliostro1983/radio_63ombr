@@ -164,6 +164,7 @@ class Message(SQLModel, table=True):
     received_at: str
     net_description: Optional[str] = None
     body_text: str
+    content_type: str = "intercept"
     comment: Optional[str] = None
     parse_confidence: float = 1.0
     is_valid: int = 1

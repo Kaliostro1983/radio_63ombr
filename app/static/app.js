@@ -10,6 +10,36 @@
     root.setAttribute("data-theme", next);
     localStorage.setItem("theme", next);
   }
+
+  window.appToast = function(message, type = "info", ms = 2400){
+    const text = String(message || "").trim();
+    if(!text) return;
+    const stack = document.getElementById("appToastStack");
+    if(!stack) return;
+    const el = document.createElement("div");
+    el.className = `app-toast app-toast--${type}`;
+    el.textContent = text;
+    stack.appendChild(el);
+    requestAnimationFrame(() => el.classList.add("show"));
+    setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(() => el.remove(), 180);
+    }, Math.max(1000, Number(ms) || 2400));
+  };
+
+  window.appTouchStatus = function(label){
+    const el = document.getElementById("appLastUpdate");
+    if(!el) return;
+    if(label){
+      el.textContent = String(label);
+      return;
+    }
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    el.textContent = `Оновлено ${hh}:${mm}:${ss}`;
+  };
 })();
 
 function makeAllExclusive(selectEl) {
@@ -68,4 +98,5 @@ document.addEventListener("DOMContentLoaded", () => {
   makeAllExclusive(document.querySelector('select[name="status_ids"]'));
   makeAllExclusive(document.querySelector('select[name="chat_ids"]'));
   makeAllExclusive(document.querySelector('select[name="group_ids"]'));
+  if (window.appTouchStatus) window.appTouchStatus();
 });

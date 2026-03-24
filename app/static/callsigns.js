@@ -386,6 +386,11 @@
     if (elSearchInfo) elSearchInfo.textContent = text || "";
   }
 
+  function renderStateRow(kind, text, colspan = 5) {
+    const cls = kind === "error" ? "app-state app-state--error app-state-row" : "app-state app-state-row";
+    return `<tr><td colspan="${colspan}"><div class="${cls}">${escapeHtml(text || "")}</div></td></tr>`;
+  }
+
   function escapeHtml(s) {
     return (s || "").replace(
       /[&<>"']/g,
@@ -442,8 +447,7 @@
 
   function renderTable(rows) {
     if (!rows || rows.length === 0) {
-      elTbody.innerHTML =
-        '<tr><td colspan="5" class="small" style="opacity:.8">Нічого не знайдено.</td></tr>';
+      elTbody.innerHTML = renderStateRow("info", "Нічого не знайдено.");
       return;
     }
 
@@ -475,8 +479,7 @@
 
   function renderSearchTable(rows) {
     if (!rows || rows.length === 0) {
-      elSearchTbody.innerHTML =
-        '<tr><td colspan="5" class="small" style="opacity:.8">Нічого не знайдено.</td></tr>';
+      elSearchTbody.innerHTML = renderStateRow("info", "Нічого не знайдено.");
       return;
     }
 
@@ -514,6 +517,11 @@
     }
 
     setInfo("Завантаження...");
+    const showBtnText = elShow ? elShow.textContent : "";
+    if (elShow) {
+      elShow.disabled = true;
+      elShow.textContent = "Завантаження…";
+    }
 
     try {
       const url = `/api/callsigns/by-frequency?frequency=${encodeURIComponent(frequency)}&days=${encodeURIComponent(days)}`;
@@ -525,14 +533,14 @@
 
       if (!data.ok) {
         setInfo("Помилка");
-        elTbody.innerHTML = `<tr><td colspan="5" class="small" style="color:var(--danger)">${escapeHtml(data.error || "Помилка")}</td></tr>`;
+        elTbody.innerHTML = renderStateRow("error", data.error || "Помилка");
         return;
       }
 
       const rows = data.rows || [];
       if (rows.length === 0 && data.message) {
         setInfo(data.message);
-        elTbody.innerHTML = `<tr><td colspan="5" class="small" style="opacity:.85">${escapeHtml(data.message)}</td></tr>`;
+        elTbody.innerHTML = renderStateRow("info", data.message);
         return;
       }
 
@@ -541,7 +549,12 @@
     } catch (e) {
       console.error(e);
       setInfo("Помилка запиту");
-      elTbody.innerHTML = `<tr><td colspan="5" class="small" style="color:var(--danger)">Помилка запиту. Перевірте лог сервера.</td></tr>`;
+      elTbody.innerHTML = renderStateRow("error", "Помилка запиту. Перевірте лог сервера.");
+    } finally {
+      if (elShow) {
+        elShow.disabled = false;
+        elShow.textContent = showBtnText || "Показати";
+      }
     }
   }
 
@@ -556,6 +569,11 @@
     }
 
     setSearchInfo("Завантаження...");
+    const searchBtnText = elSearch ? elSearch.textContent : "";
+    if (elSearch) {
+      elSearch.disabled = true;
+      elSearch.textContent = "Завантаження…";
+    }
 
     try {
       const url = `/api/callsigns/search?q=${encodeURIComponent(q)}`;
@@ -567,7 +585,7 @@
 
       if (!data.ok) {
         setSearchInfo("Помилка");
-        elSearchTbody.innerHTML = `<tr><td colspan="5" class="small" style="color:var(--danger)">${escapeHtml(data.error || "Помилка")}</td></tr>`;
+        elSearchTbody.innerHTML = renderStateRow("error", data.error || "Помилка");
         return;
       }
 
@@ -577,7 +595,12 @@
     } catch (e) {
       console.error(e);
       setSearchInfo("Помилка запиту");
-      elSearchTbody.innerHTML = `<tr><td colspan="5" class="small" style="color:var(--danger)">Помилка запиту. Перевірте лог сервера.</td></tr>`;
+      elSearchTbody.innerHTML = renderStateRow("error", "Помилка запиту. Перевірте лог сервера.");
+    } finally {
+      if (elSearch) {
+        elSearch.disabled = false;
+        elSearch.textContent = searchBtnText || "Пошук";
+      }
     }
   }
 

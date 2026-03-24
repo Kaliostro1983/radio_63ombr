@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS messages (
     received_at TEXT NOT NULL,
     net_description TEXT,
     body_text TEXT NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'intercept',
     comment TEXT,
     parse_confidence REAL DEFAULT 1.0,
     is_valid INTEGER DEFAULT 1,
@@ -450,6 +451,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "tags", "template", "template TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "networks", "net_key", "net_key TEXT")
     _ensure_column(conn, "messages", "net_description", "net_description TEXT")
+    _ensure_column(conn, "messages", "content_type", "content_type TEXT NOT NULL DEFAULT 'intercept'")
     _ensure_column(conn, "messages", "need_approve", "need_approve INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "messages", "tags_json", "tags_json TEXT DEFAULT '[]'")
     _ensure_column(conn, "callsign_statuses", "icon", "icon TEXT")
@@ -800,6 +802,42 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         module="app.core.db",
         function="_run_lightweight_migrations",
         stage="create_index:idx_messages_network_created",
+    )
+    safe_execute(
+        conn,
+        """
+        UPDATE messages
+        SET content_type = CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM ingest_messages im
+                WHERE im.id = messages.ingest_id
+                  AND lower(trim(coalesce(im.message_format, ''))) = 'analytical_type'
+            ) THEN 'analytical'
+            ELSE 'intercept'
+        END
+        WHERE coalesce(trim(content_type), '') = ''
+           OR lower(trim(content_type)) NOT IN ('intercept', 'analytical', 'peleng')
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="backfill:messages.content_type",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_messages_content_type_created "
+        "ON messages(content_type, created_at)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_messages_content_type_created",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_messages_network_content_type_created "
+        "ON messages(network_id, content_type, created_at)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:idx_messages_network_content_type_created",
     )
     safe_execute(
         conn,

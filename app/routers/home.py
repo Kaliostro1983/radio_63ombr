@@ -137,6 +137,7 @@ def api_home_activity(
                         SELECT DISTINCT m.network_id
                         FROM messages m
                         WHERE m.is_valid = 1
+                          AND coalesce(m.content_type, 'intercept') = 'intercept'
                           AND m.created_at >= ?
                           AND m.created_at <= ?
                     )
@@ -201,6 +202,7 @@ def api_home_activity(
                 COUNT(1) AS cnt
             FROM messages m
             WHERE m.is_valid = 1
+              AND coalesce(m.content_type, 'intercept') = 'intercept'
               AND m.created_at >= ?
               AND m.created_at <= ?
               AND m.network_id IN ({placeholders})
@@ -261,5 +263,132 @@ def api_home_activity(
             "end_human": end_dt_obj.strftime("%d.%m.%Y %H:%M"),
             "networks": len(network_ids),
         },
+    }
+
+
+@router.get("/api/home/analytical-summary")
+def api_home_analytical_summary(
+    start_dt: str | None = None,
+    end_dt: str | None = None,
+    frequency: str = "",
+):
+    """Return analytical messages stats with period/frequency filters."""
+
+    def _parse_dt_opt(value: str | None) -> str | None:
+        if not value:
+            return None
+        raw = str(value).strip()
+        if not raw:
+            return None
+        try:
+            dt = datetime.fromisoformat(raw)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid datetime: {value}")
+        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+    start_norm = _parse_dt_opt(start_dt)
+    end_norm = _parse_dt_opt(end_dt)
+    freq_raw = str(frequency or "").strip()
+    exact_freq, freq_mask = normalize_freq_or_mask(freq_raw)
+
+    where = [
+        "COALESCE(m.is_valid, 1) = 1",
+        "coalesce(m.content_type, 'intercept') = 'analytical'",
+    ]
+    params: list[object] = []
+
+    if start_norm:
+        where.append("m.created_at >= ?")
+        params.append(start_norm)
+    if end_norm:
+        where.append("m.created_at <= ?")
+        params.append(end_norm)
+
+    if freq_raw:
+        if exact_freq:
+            where.append("(COALESCE(n.frequency, '') = ? OR COALESCE(n.mask, '') = ?)")
+            params.extend([exact_freq, exact_freq])
+        elif freq_mask:
+            where.append("(COALESCE(n.frequency, '') LIKE ? OR COALESCE(n.mask, '') LIKE ?)")
+            params.extend([freq_mask, freq_mask])
+        else:
+            like_value = f"%{freq_raw}%"
+            where.append(
+                """
+                (
+                    COALESCE(n.frequency, '') LIKE ?
+                    OR COALESCE(n.mask, '') LIKE ?
+                    OR COALESCE(n.unit, '') LIKE ?
+                    OR COALESCE(n.zone, '') LIKE ?
+                    OR COALESCE(m.net_description, '') LIKE ?
+                )
+                """
+            )
+            params.extend([like_value, like_value, like_value, like_value, like_value])
+
+    where_sql = " AND ".join(where)
+
+    with get_conn() as conn:
+        total_row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM messages m
+            LEFT JOIN networks n ON n.id = m.network_id
+            WHERE {where_sql}
+            """,
+            params,
+        ).fetchone()
+
+        by_day_rows = conn.execute(
+            f"""
+            SELECT substr(m.created_at, 1, 10) AS day, COUNT(*) AS cnt
+            FROM messages m
+            LEFT JOIN networks n ON n.id = m.network_id
+            WHERE {where_sql}
+            GROUP BY substr(m.created_at, 1, 10)
+            ORDER BY day ASC
+            """,
+            params,
+        ).fetchall()
+
+        by_network_rows = conn.execute(
+            f"""
+            SELECT
+                m.network_id,
+                COALESCE(n.frequency, '') AS frequency,
+                COALESCE(n.mask, '') AS mask,
+                COALESCE(n.unit, '') AS unit,
+                COUNT(*) AS cnt
+            FROM messages m
+            LEFT JOIN networks n ON n.id = m.network_id
+            WHERE {where_sql}
+            GROUP BY m.network_id, n.frequency, n.mask, n.unit
+            ORDER BY cnt DESC, n.frequency ASC
+            """,
+            params,
+        ).fetchall()
+
+    return {
+        "ok": True,
+        "filters": {
+            "start_dt": start_norm,
+            "end_dt": end_norm,
+            "frequency": freq_raw,
+        },
+        "total": int((total_row["total"] if total_row else 0) or 0),
+        "by_day": [
+            {"day": str(r["day"] or ""), "count": int(r["cnt"] or 0)}
+            for r in by_day_rows
+        ],
+        "by_network": [
+            {
+                "network_id": int(r["network_id"]) if r["network_id"] is not None else None,
+                "frequency": str(r["frequency"] or ""),
+                "mask": str(r["mask"] or ""),
+                "unit": str(r["unit"] or ""),
+                "count": int(r["cnt"] or 0),
+            }
+            for r in by_network_rows
+        ],
     }
 

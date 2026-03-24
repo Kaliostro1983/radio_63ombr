@@ -14,15 +14,13 @@
   }
 
   function showModal() {
-    modal.hidden = false;
-    modal.classList.add("is-open");
+    modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
   }
 
   function hideModal() {
-    modal.hidden = true;
-    modal.classList.remove("is-open");
+    modal.classList.add("hidden");
     modal.setAttribute("aria-hidden", "true");
     modalBody.innerHTML = "";
     if (modalTitle) modalTitle.textContent = "Результат імпорту XLSX";
@@ -147,13 +145,14 @@
   closeBtnFooter?.addEventListener("click", hideModal);
 
   modal.addEventListener("click", (event) => {
-    if (event.target === modal) {
+    const t = event.target;
+    if (t && t.getAttribute && t.getAttribute("data-close") === "1") {
       hideModal();
     }
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !modal.hidden) {
+    if (event.key === "Escape" && !modal.classList.contains("hidden")) {
       hideModal();
     }
   });

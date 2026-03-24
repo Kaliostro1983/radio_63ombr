@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from app.core.callsign_normalizer import normalize_callsign
+
 
 def upsert_callsign(
     cur,
@@ -154,7 +156,11 @@ def link_message_callsigns(
     TECH_UNKNOWN = "НВ"
 
     def norm_name(value: Optional[str]) -> Optional[str]:
-        s = (value or "").strip()
+        if value is None:
+            return None
+        if not str(value).strip():
+            return None
+        s = normalize_callsign(value)
         return s or None
 
     caller_name = norm_name(caller)

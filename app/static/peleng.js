@@ -28,6 +28,10 @@
   }
 
   function showToast(text, ms = 1400) {
+    if (window.appToast) {
+      window.appToast(text, "success", ms);
+      return;
+    }
     const t = $("toast");
     if (!t) return;
     t.textContent = text;
@@ -145,7 +149,7 @@
   async function acceptFreq() {
     const raw = getVal("frequency");
     if (!raw) {
-      alert("Введи частоту або маску.");
+      if (window.appToast) window.appToast("Введи частоту або маску.", "error");
       return;
     }
 
@@ -156,7 +160,7 @@
       if (data.location) setVal("location", data.location);
       showToast("Прийнято");
     } catch (e) {
-      alert(e.message);
+      if (window.appToast) window.appToast(e.message || "Помилка", "error");
     }
   }
 
@@ -185,14 +189,14 @@
         }
       }
     } catch (e) {
-      alert(e.message);
+      if (window.appToast) window.appToast(e.message || "Помилка", "error");
     }
   }
 
   async function copyOutput() {
     const txt = getVal("output");
     if (!txt) {
-      alert("Спершу згенеруй повідомлення.");
+      if (window.appToast) window.appToast("Спершу згенеруй повідомлення.", "info");
       return;
     }
 
@@ -200,7 +204,7 @@
       await navigator.clipboard.writeText(txt);
       showToast("Скопійовано", 1500);
     } catch {
-      alert("Не вдалося скопіювати в буфер.");
+      if (window.appToast) window.appToast("Не вдалося скопіювати в буфер.", "error");
     }
   }
 
@@ -354,7 +358,7 @@
       const toDt = localInputToSql($("report_to_dt")?.value || "");
 
       if (!fromDt || !toDt) {
-        alert("Заповни початковий і кінцевий дата/час.");
+        if (window.appToast) window.appToast("Заповни початковий і кінцевий дата/час.", "error");
         return;
       }
 
@@ -362,7 +366,7 @@
       await downloadBlob(`/peleng/report/by-period?${qs.toString()}`, {}, "report_from_db.docx");
       showToast("Звіт сформовано з БД", 1700);
     } catch (e) {
-      alert(e.message);
+      if (window.appToast) window.appToast(e.message || "Помилка", "error");
     }
   }
 
@@ -417,7 +421,7 @@
       postsState = Array.isArray(data.posts) ? data.posts : [];
       renderPostsTable();
     } catch (e) {
-      alert(e.message);
+      if (window.appToast) window.appToast(e.message || "Помилка", "error");
     }
   }
 
@@ -454,7 +458,7 @@
       showToast(data.detail || "Пости збережено", 1700);
       await loadPosts();
     } catch (e) {
-      alert(e.message);
+      if (window.appToast) window.appToast(e.message || "Помилка", "error");
     }
   }
 

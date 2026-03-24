@@ -367,8 +367,11 @@
   function setLoading(isLoading) {
     state.isLoading = !!isLoading;
     if (loadingEl) loadingEl.style.display = isLoading ? "block" : "none";
-    if (searchBtn && isLoading) searchBtn.disabled = true;
-    if (loadMoreBtn && isLoading) loadMoreBtn.disabled = true;
+    if (searchBtn) {
+      searchBtn.disabled = !!isLoading;
+      searchBtn.textContent = isLoading ? "Завантаження…" : "Шукати";
+    }
+    if (loadMoreBtn) loadMoreBtn.disabled = !!isLoading;
   }
 
   function setLoadMoreVisible() {
@@ -718,7 +721,7 @@
         if (!tr || !tr.dataset || !tr.dataset.id) return;
         const id = tr.dataset.id;
         openEditModal(id).catch((e) => {
-          alert(e.message || "Помилка");
+          if (window.appToast) window.appToast(e.message || "Помилка", "error");
         });
       });
     }

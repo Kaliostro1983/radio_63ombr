@@ -77,6 +77,7 @@ a:hover{
 .layout{
   display:flex;
   min-height:100vh;
+  align-items:flex-start;
 }
 
 .sidebar{
@@ -85,6 +86,12 @@ a:hover{
   border-right:1px solid var(--border);
   background:var(--card);
   text-align:center;
+  display:flex;
+  flex-direction:column;
+  position:sticky;
+  top:0;
+  height:100vh;
+  overflow:auto;
 }
 
 .brand{
@@ -140,9 +147,92 @@ a:hover{
   border:1px solid var(--border);
 }
 
+.sidebar-bottom-card{
+  margin-top:auto !important;
+}
+
 .main{
   flex:1;
   padding:20px;
+}
+
+.app-statusbar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:color-mix(in srgb, var(--card) 75%, var(--bg) 25%);
+  margin-bottom:12px;
+}
+
+.app-statusbar__dot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:#22c55e;
+  box-shadow:0 0 0 4px color-mix(in srgb, #22c55e 20%, transparent);
+}
+
+.app-statusbar__text{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.app-statusbar__sep{
+  font-size:12px;
+  color:var(--muted);
+  opacity:.8;
+}
+
+.app-statusbar__version{
+  font-size:12px;
+  font-weight:700;
+  text-decoration:none;
+}
+
+.app-toast-stack{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  z-index:90;
+  pointer-events:none;
+}
+
+.app-toast{
+  min-width:240px;
+  max-width:420px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--fg);
+  box-shadow:0 10px 30px rgba(0,0,0,.22);
+  font-size:13px;
+  transform:translateY(8px);
+  opacity:0;
+  transition:transform .16s ease, opacity .16s ease;
+}
+
+.app-toast.show{
+  transform:translateY(0);
+  opacity:1;
+}
+
+.app-toast--success{
+  border-color:color-mix(in srgb, #22c55e 60%, var(--border));
+}
+
+.app-toast--error{
+  border-color:color-mix(in srgb, #ef4444 65%, var(--border));
+}
+
+.app-toast--info{
+  border-color:color-mix(in srgb, #60a5fa 60%, var(--border));
 }
 
 /* =========================
@@ -164,6 +254,28 @@ a:hover{
   border-radius:16px;
   padding:16px;
   margin-bottom:16px;
+}
+
+.app-state{
+  border:1px dashed var(--border);
+  border-radius:12px;
+  padding:12px 14px;
+  background:color-mix(in srgb, var(--card) 78%, var(--bg) 22%);
+  color:var(--muted);
+  font-size:13px;
+}
+
+.app-state--error{
+  border-color:color-mix(in srgb, #ef4444 55%, var(--border));
+  color:color-mix(in srgb, var(--danger) 80%, var(--fg));
+}
+
+.app-state--loading{
+  border-style:solid;
+}
+
+.app-state-row{
+  padding:10px 8px !important;
 }
 
 .row{
@@ -1570,9 +1682,6 @@ button.secondary{
   border-radius: 20px;
   background: rgba(17, 24, 39, 0.68);
   overflow: hidden;
-  /* Поза екраном: браузер пропускає layout/paint — менше навантаження при довгому списку */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 420px;
 }
 
 .intercepts-infinite-sentinel {
@@ -2102,6 +2211,10 @@ button.secondary{
 
 #xlsxImportModal .modal-body {
   padding: 20px;
+}
+
+#xlsxImportModal {
+  z-index: 70;
 }
 
 #xlsxImportModal .modal-card {

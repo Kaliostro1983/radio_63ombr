@@ -104,17 +104,6 @@
 
         <div id="interceptsWarning" class="warning" style="display:none;"></div>
 
-        <div id="xlsxImportModal" class="modal-backdrop" hidden aria-hidden="true">
-          <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="xlsxImportModalTitle">
-            <div class="modal-header">
-              <h3 id="xlsxImportModalTitle">Результат імпорту XLSX</h3>
-              <button type="button" id="closeXlsxModalBtn" class="secondary xlsx-modal-close-btn" aria-label="Закрити">X</button>
-            </div>
-
-            <div id="xlsxImportModalBody" class="modal-body"></div>
-          </div>
-        </div>
-
         <section class="intercepts-workspace">
           <article class="intercepts-main-card">
             <div class="intercepts-main-card__empty">
@@ -140,6 +129,18 @@
     </div>
   </section>
 </section>
+
+<div id="xlsxImportModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="xlsxImportModalTitle">
+    <div class="modal-header">
+      <h3 id="xlsxImportModalTitle">Результат імпорту XLSX</h3>
+      <button type="button" id="closeXlsxModalBtn" class="secondary xlsx-modal-close-btn" aria-label="Закрити">X</button>
+    </div>
+
+    <div id="xlsxImportModalBody" class="modal-body"></div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -229,6 +230,6 @@
 </script>
 <script src="/static/intercepts_explorer.js?v=19"></script>
 <script src="/static/landmarks.js?v=12" defer></script>
-<script src="/static/intercepts_import.js"></script>
+<script src="/static/intercepts_import.js?v=2"></script>
 {% endblock %}
 

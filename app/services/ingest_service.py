@@ -25,6 +25,7 @@ from typing import Any, Dict, List
 import sqlite3
 
 from app.core.db import get_conn
+from app.core.analytical_intercept_parser import parse_analytical_intercept
 from app.core.intercept_parser import parse_template_intercept
 from app.core.logging import get_logger
 from app.core.normalize import normalize_nonstandard_type_1
@@ -47,6 +48,15 @@ from app.services.network_service import ensure_network, NetworkNotFoundError
 from app.services.structured_intercept_service import process_structured_intercept
 
 log = get_logger("ingest_service")
+
+
+def _content_type_from_format(message_format: str) -> str:
+    fmt = str(message_format or "").strip().lower()
+    if fmt == "analytical_type":
+        return "analytical"
+    if fmt == "peleng_type":
+        return "peleng"
+    return "intercept"
 
 
 def _intercept_log_ctx(parsed: dict | None, raw_text: str | None = None) -> str:
@@ -364,6 +374,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     created_at=created_at,
                     received_at=received_at,
                     body_text=body_text,
+                    content_type=_content_type_from_format(message_format),
                     parse_confidence=parse_confidence,
                     delay_sec=delay_sec,
                     net_description=net_description,
@@ -462,7 +473,10 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             raw_text = normalized
 
         try:
-            parsed = parse_template_intercept(raw_text)
+            if message_format == "analytical_type":
+                parsed = parse_analytical_intercept(raw_text)
+            else:
+                parsed = parse_template_intercept(raw_text)
         except Exception as e:
             log.warning(
                 "Template parse failed",
@@ -587,6 +601,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             created_at=created_at,
             received_at=received_at,
             body_text=body_text,
+            content_type=_content_type_from_format(message_format),
             parse_confidence=parse_confidence,
             delay_sec=delay_sec,
             net_description=net_description,
