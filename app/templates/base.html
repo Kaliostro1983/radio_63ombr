@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=18"/>
+  <link rel="stylesheet" href="/static/app.css?v=22"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="/static/app.js" defer></script>
 </head>
@@ -49,6 +49,7 @@
       <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}">Перехоплення</a>
       <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
       <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
+      <a href="/settings" class="{% if request.url.path.startswith('/settings') %}active{% endif %}">Налаштування</a>
     </div>
 
     <div style="margin-top:16px" class="card sidebar-bottom-card">

@@ -272,7 +272,11 @@ def api_callsigns_by_frequency(frequency: str, days: int = 7):
 
 @router.get("/api/callsigns/search")
 def api_callsigns_search(q: str):
-    """Search callsigns by name or comment (case-insensitive LIKE)."""
+    """Search callsigns by callsign name (case-insensitive LIKE).
+
+    Note: we intentionally do NOT search by comment here, because it causes
+    confusing matches where the callsign name doesn't contain the query.
+    """
     query = (q or "").strip()
     if not query:
         return {"ok": True, "rows": []}
@@ -312,7 +316,6 @@ def api_callsigns_search(q: str):
                   WHEN """ + canon_sql + """ LIKE ? THEN 2
                   WHEN c.name LIKE ? COLLATE NOCASE THEN 3
                   WHEN c.name LIKE ? COLLATE NOCASE THEN 4
-                  WHEN (c.comment IS NOT NULL AND c.comment LIKE ? COLLATE NOCASE) THEN 8
                   ELSE 9
                 END AS rank_score
             FROM callsigns c
@@ -320,7 +323,6 @@ def api_callsigns_search(q: str):
             LEFT JOIN callsign_sources src ON src.id = c.source_id
             LEFT JOIN networks n ON n.id = c.network_id
             WHERE c.name LIKE ? COLLATE NOCASE
-               OR (c.comment IS NOT NULL AND c.comment LIKE ? COLLATE NOCASE)
             ORDER BY
               rank_score ASC,
               CASE WHEN c.last_seen_dt IS NULL THEN 1 ELSE 0 END,
@@ -328,7 +330,7 @@ def api_callsigns_search(q: str):
               c.name COLLATE NOCASE
             LIMIT 200
             """,
-            (query, q_canon, q_canon_prefix, prefix_like, like, like, like, like),
+            (query, q_canon, q_canon_prefix, prefix_like, like, like),
         ).fetchall()
 
     out_rows: List[Dict[str, Any]] = []

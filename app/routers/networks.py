@@ -203,31 +203,10 @@ def api_network_callsign_graph(network_id: int, days: int = 14):
 def api_network_peleng(network_id: int, days: int = 7):
     """Return peleng batches/points for a given network.
 
-    `peleng_batches` stores only `frequency` (not network_id). On the networks
-    page a "network value" can live either in `networks.frequency` or in
-    `networks.mask`, so we try to match peleng data by both fields.
+    Current DB schema stores `network_id` in `peleng_batches`, so we load
+    batches directly by `network_id` and join frequency from `networks`.
     """
 
-    def _norm_peleng_number(value: object) -> str | None:
-        """Normalize to 4-decimal string like `DDD.DDDD`.
-
-        Peleng UI stores whatever numeric user enters (often mask-like numbers)
-        into `peleng_batches.frequency`, so we need a permissive normalizer here.
-        """
-        s = str(value or "").strip()
-        if not s:
-            return None
-        s = s.replace(",", ".")
-        s = "".join(s.split())  # remove all whitespace
-        if s.endswith("%"):
-            s = s[:-1]
-        if not s:
-            return None
-        try:
-            f = float(s)
-        except Exception:
-            return None
-        return f"{f:.4f}"
     try:
         nid = int(network_id)
     except Exception:
@@ -255,31 +234,18 @@ def api_network_peleng(network_id: int, days: int = 7):
         if not net_row:
             return {"ok": False, "error": "network not found"}
 
-        cand_freqs: set[str] = set()
-        nf = _norm_peleng_number(net_row["frequency"])
-        nm = _norm_peleng_number(net_row["mask"])
-        if nf:
-            cand_freqs.add(nf)
-        if nm:
-            cand_freqs.add(nm)
-
-        if not cand_freqs:
-            return {"ok": True, "batches": [], "meta": {"days": days_n, "points_total": 0}}
-
-        cand_list = sorted(cand_freqs)
-
-        freq_placeholders = ",".join(["?"] * len(cand_list))
         batch_rows = conn.execute(
-            f"""
-            SELECT id, event_dt, frequency
-            FROM peleng_batches
-            WHERE frequency IN ({freq_placeholders})
-              AND event_dt >= ?
-              AND event_dt <= ?
-            ORDER BY event_dt DESC, id DESC
+            """
+            SELECT pb.id, pb.event_dt, n.frequency
+            FROM peleng_batches pb
+            JOIN networks n ON n.id = pb.network_id
+            WHERE pb.network_id = ?
+              AND pb.event_dt >= ?
+              AND pb.event_dt <= ?
+            ORDER BY pb.event_dt DESC, pb.id DESC
             LIMIT 80
             """,
-            tuple(cand_list) + (from_dt, to_dt),
+            (nid, from_dt, to_dt),
         ).fetchall()
 
         batch_ids = [int(r["id"]) for r in batch_rows]

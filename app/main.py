@@ -38,6 +38,7 @@ from app.routers.reports import router as reports_router
 from app.routers.home import router as home_router
 from app.routers.health import router as health_router
 from app.routers.landmarks import router as landmarks_router
+from app.routers.settings import router as settings_router
 
 from app.routers.ingest import router as ingest_router
 from app.services.landmark_match_service import start_landmark_match_worker
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(xlsx_import_router)
     app.include_router(reports_router)
     app.include_router(landmarks_router)
+    app.include_router(settings_router)
 
 
     @app.on_event("startup")

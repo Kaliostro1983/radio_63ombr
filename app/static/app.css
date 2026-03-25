@@ -14,6 +14,7 @@
   --inputbg:#ffffff;
   --inputfg:#111111;
   --danger:#b3261e;
+  --graph-line-thickness-factor: 1;
 }
 
 [data-theme="dark"]{
@@ -381,7 +382,7 @@ input[type="radio"]{
 
 .net-graph-link{
   stroke: color-mix(in srgb, var(--border) 70%, transparent);
-  stroke-width:1.2;
+  stroke-width: calc(1.2px * var(--graph-line-thickness-factor, 1));
 }
 
 .net-graph-node{
@@ -1788,7 +1789,7 @@ button.secondary{
   margin-bottom: 8px;
   font-size: 15px;
   font-weight: 600;
-  color: #f3f7ff;
+  color: var(--fg);
 }
 
 .callsign-input-wrap {
@@ -1799,15 +1800,15 @@ button.secondary{
   width: 100%;
   height: 42px;
   border-radius: 12px;
-  border: 1px solid rgba(90, 110, 145, 0.45);
-  background: #0c111a;
-  color: #eef4ff;
+  border: 1px solid var(--border);
+  background: var(--inputbg);
+  color: var(--inputfg);
   padding: 0 12px;
 }
 
 .callsign-input::placeholder,
 .intercepts-comment-textarea::placeholder {
-  color: #8ea1c4;
+  color: color-mix(in srgb, var(--muted) 85%, transparent);
 }
 
 .callsign-list {
@@ -1824,8 +1825,9 @@ button.secondary{
   min-height: 30px;
   padding: 4px 8px 4px 10px;
   border-radius: 999px;
-  background: #f2f5fa;
-  color: #0f1726;
+  background: color-mix(in srgb, var(--card) 72%, var(--bg) 28%);
+  color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .callsign-chip__name {
@@ -1839,7 +1841,7 @@ button.secondary{
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #334155;
+  color: color-mix(in srgb, var(--muted) 80%, var(--fg) 20%);
   font-size: 11px;
   line-height: 1;
   font-weight: 700;
@@ -1848,7 +1850,7 @@ button.secondary{
 }
 
 .callsign-chip__remove:hover {
-  background: rgba(51, 65, 85, 0.12);
+  background: color-mix(in srgb, var(--border) 40%, transparent);
 }
 
 .callsign-chip__icon {
@@ -1876,9 +1878,9 @@ button.secondary{
   left: 0;
   right: 0;
   z-index: 40;
-  border: 1px solid rgba(90, 110, 145, 0.45);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: #0f1623;
+  background: var(--card);
   overflow: hidden;
 }
 
@@ -1888,14 +1890,14 @@ button.secondary{
   text-align: left;
   border: 0;
   background: transparent;
-  color: #eef4ff;
+  color: var(--fg);
   padding: 10px 12px;
   cursor: pointer;
 }
 
 .callsign-autocomplete__item:hover,
 .callsign-autocomplete__item.is-selected {
-  background: rgba(64, 132, 255, 0.16);
+  background: color-mix(in srgb, var(--link) 18%, transparent);
 }
 
 .intercepts-comment-textarea {
@@ -2025,8 +2027,9 @@ button.secondary{
   min-height: 24px;
   padding: 2px 8px 2px 8px;
   border-radius: 999px;
-  background: #f2f5fa;
-  color: #0f1726;
+  background: color-mix(in srgb, var(--card) 72%, var(--bg) 28%);
+  color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .callsign-chip__name {
@@ -2040,7 +2043,7 @@ button.secondary{
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #475569;
+  color: color-mix(in srgb, var(--muted) 80%, var(--fg) 20%);
   font-size: 10px;
   line-height: 1;
   font-weight: 700;
@@ -2150,8 +2153,9 @@ button.secondary{
   min-height: 24px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #f2f5fa;
-  color: #0f1726;
+  background: color-mix(in srgb, var(--card) 72%, var(--bg) 28%);
+  color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   flex: 0 0 auto;
 }
 

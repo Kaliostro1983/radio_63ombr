@@ -3,6 +3,18 @@
     return document.getElementById(id);
   }
 
+  function getGraphLineThicknessFactor() {
+    try {
+      const raw = localStorage.getItem("graphLineThicknessFactor");
+      if (raw === null || raw === undefined || raw === "") return 1.0;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return 1.0;
+      return Math.max(1.0, Math.min(1.6, n));
+    } catch (e) {
+      return 1.0;
+    }
+  }
+
   const elFreq = $("csFreq");
   const elDays = $("csDays");
   const elShow = $("csShow");
@@ -264,7 +276,9 @@
     const linkEls = layout.links.map((l) => {
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       line.classList.add("net-graph-link");
-      const w = Math.min(6, 1 + Math.log10(1 + (l.w || 1)) * 2);
+      const baseW = Math.min(6, 1 + Math.log10(1 + (l.w || 1)) * 2);
+      const factor = getGraphLineThicknessFactor();
+      const w = Math.min(6, baseW * factor);
       line.style.strokeWidth = String(w);
       gLinks.appendChild(line);
       return { line, l };
