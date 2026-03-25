@@ -111,6 +111,7 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
     skip_reasons: dict[str, int] = {}
     reason_samples: dict[str, set[str]] = {}
     missing_network_samples: set[str] = set()
+    net_line_invalid_count: int = 0
 
     filename = Path(file_path).name
 
@@ -161,7 +162,9 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
             summary["skipped"] += 1
             reason = str(result.get("reason") or "skipped")
             skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
-            if len(reason_samples.get(reason, set())) < 5:
+            if reason == "net_line_invalid":
+                net_line_invalid_count += 1
+            elif len(reason_samples.get(reason, set())) < 5:
                 s = reason_samples.setdefault(reason, set())
                 # Keep the sample compact and single-line.
                 s.add(text.replace("\n", " ")[:120])
@@ -186,6 +189,14 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
             ", ".join(sample),
         )
 
+    # net_line_invalid is a parsing-quality signal; don't spam sample lines.
+    # Print exactly one INFO message at the end (if present).
+    if net_line_invalid_count > 0:
+        log.info(
+            "XLSX import: net_line_invalid occurred %d times (parsing degraded, frequency matching was still attempted).",
+            net_line_invalid_count,
+        )
+
     if skip_reasons:
         # Use NOTICE so it shows up even when INFO is filtered out.
         log.notice(
@@ -193,6 +204,11 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
             len(skip_reasons),
         )
         for k, v in sorted(skip_reasons.items(), key=lambda kv: (-kv[1], kv[0])):
+            if k == "net_line_invalid":
+                # Already reported once as INFO above.
+                log.notice("  • %s: count=%d", k, v)
+                continue
+
             samples = sorted(reason_samples.get(k, set()))
             log.notice("  • %s: count=%d", k, v)
             for i, s in enumerate(samples[:5], start=1):

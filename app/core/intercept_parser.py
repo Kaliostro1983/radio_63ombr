@@ -63,8 +63,10 @@ RE_DT = re.compile(r"^\s*\d{2}\.\d{2}\.\d{4}[,\s]+\d{2}:\d{2}:\d{2}\s*$")
 # 166.8000 / 300.3010 / 200.2720
 RE_FREQ = re.compile(r"^\s*\d{2,3}\.\d{4}\s*$")
 
-# net line must contain "укх" and "р/м" (case-insensitive)
-RE_NETLINE = re.compile(r"(?i)\bукх\b.*\bр/м\b")
+# net line must contain "укх" (case-insensitive).
+# Some XLSX/OCR variants drop the exact "р/м" token, but frequency matching
+# can still succeed; unit extraction will gracefully degrade.
+RE_NETLINE = re.compile(r"(?i)\bукх\b")
 
 # everything inside first (...) is zone candidate
 RE_ZONE_IN_PARENS = re.compile(r"\(([^)]*?)\)")
@@ -302,9 +304,11 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
     canonical_freq = norm_freq
     canonical_mask = norm_mask
 
-    if not RE_NETLINE.search(net_line):
-        return {"ok": False, "error": "net_line_invalid"}
-
+    # IMPORTANT: network identification should rely on frequency primarily.
+    # Some XLSX/OCR variants mangle the "net line" (3rd line) so strict
+    # validation may cause false negatives. We keep parsing and let
+    # `ensure_network()` resolve by frequency (and only then by mask).
+    # Unit/zone extraction is still attempted but may return None.
     unit, zone = extract_unit_zone(net_line)
 
     tail = nonempty[3:]
