@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 style="margin-top:0">Радіомережі</h2>
+<h2 style="margin-top:0">Радіомережа (Академік)</h2>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -35,6 +35,16 @@
       aria-controls="netPaneEtalons"
     >
       Еталонки
+    </button>
+    <button
+      id="netTabAkademik"
+      type="button"
+      class="tab-btn {% if active_tab == 'akademik' %}active{% endif %}"
+      role="tab"
+      aria-selected="{% if active_tab == 'akademik' %}true{% else %}false{% endif %}"
+      aria-controls="netPaneAkademik"
+    >
+      Академік
     </button>
   </div>
 
@@ -411,8 +421,103 @@
         style="width:100%; height: calc(100vh - 260px); border:0; border-radius:12px; background:var(--bg);"
       ></iframe>
     </section>
+
+    <section
+      id="netPaneAkademik"
+      class="tab-panel {% if active_tab != 'akademik' %}hidden{% endif %}"
+      role="tabpanel"
+      aria-labelledby="netTabAkademik"
+    >
+      <div class="card">
+        <div class="net-alias-toolbar">
+          <div class="small" style="opacity:.85; margin-right:auto">Аліаси радіомереж (structured alias)</div>
+          <button
+            type="button"
+            id="netAliasAddOpen"
+            class="icon-btn icon-btn--accent"
+            title="Додати аліас"
+            aria-label="Додати аліас"
+          >
+            <img src="/static/icons/ui/plus.svg" alt="" width="20" height="20" />
+          </button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:56px">#</th>
+              <th style="width:120px">Частота</th>
+              <th>Назва</th>
+            </tr>
+          </thead>
+          <tbody id="netAliasTableBody">
+            <tr>
+              <td colspan="3" class="small" style="opacity:.75">Завантаження…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </section>
+
+<div id="netAliasAddModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card net-alias-modal-card" role="dialog" aria-modal="true" aria-labelledby="netAliasAddTitle">
+    <div class="modal-head">
+      <div id="netAliasAddTitle" style="font-weight:700">Новий аліас</div>
+      <button type="button" class="secondary" data-close="1">Закрити</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="netAliasAddNetworkId" value="" />
+      <div class="field">
+        <label for="netAliasAddFreq">Частота</label>
+        <div class="home-freq-input-wrap">
+          <input id="netAliasAddFreq" type="text" placeholder="050.6250 або 050.62" autocomplete="off" />
+        </div>
+        <div class="small" style="opacity:.75; margin-top:6px">Обери радіомережу з підказок</div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label for="netAliasAddText">Аліас</label>
+        <input id="netAliasAddText" type="text" placeholder="Текст як у заголовку перехоплення" autocomplete="off" />
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="secondary" data-close="1">Скасувати</button>
+      <button type="button" id="netAliasAddSave">Зберегти</button>
+    </div>
+  </div>
+</div>
+
+<div id="netAliasEditModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card net-alias-modal-card" role="dialog" aria-modal="true" aria-labelledby="netAliasEditTitle">
+    <div class="modal-head">
+      <div id="netAliasEditTitle" style="font-weight:700">Редагувати аліас</div>
+      <button type="button" class="secondary" data-close="1">Закрити</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="netAliasEditId" value="" />
+      <input type="hidden" id="netAliasEditNetworkId" value="" />
+      <div class="field">
+        <label for="netAliasEditFreq">Частота</label>
+        <div class="home-freq-input-wrap">
+          <input id="netAliasEditFreq" type="text" placeholder="050.6250 або 050.62" autocomplete="off" />
+        </div>
+        <div class="small" style="opacity:.75; margin-top:6px">
+          <a id="netAliasEditFreqLink" href="#" class="net-alias-freq-link">Відкрити картку радіомережі</a>
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label for="netAliasEditText">Аліас</label>
+        <input id="netAliasEditText" type="text" autocomplete="off" />
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="secondary" data-close="1">Скасувати</button>
+      <button type="button" id="netAliasEditSave">Зберегти</button>
+    </div>
+  </div>
+</div>
 
 {% endblock %}
 
@@ -422,27 +527,33 @@
     const tabCard = document.getElementById("netTabCard");
     const tabAll = document.getElementById("netTabAll");
     const tabEtalons = document.getElementById("netTabEtalons");
+    const tabAkademik = document.getElementById("netTabAkademik");
     const paneCard = document.getElementById("netPaneCard");
     const paneAll = document.getElementById("netPaneAll");
     const paneEtalons = document.getElementById("netPaneEtalons");
-    if (!tabCard || !tabAll || !tabEtalons || !paneCard || !paneAll || !paneEtalons) return;
+    const paneAkademik = document.getElementById("netPaneAkademik");
+    if (!tabCard || !tabAll || !tabEtalons || !tabAkademik || !paneCard || !paneAll || !paneEtalons || !paneAkademik) return;
 
     function setTab(which) {
       const isCard = which === "card";
       const isAll = which === "all";
       const isEtalons = which === "etalons";
+      const isAkademik = which === "akademik";
 
       tabCard.classList.toggle("active", isCard);
       tabAll.classList.toggle("active", isAll);
       tabEtalons.classList.toggle("active", isEtalons);
+      tabAkademik.classList.toggle("active", isAkademik);
 
       tabCard.setAttribute("aria-selected", isCard ? "true" : "false");
       tabAll.setAttribute("aria-selected", isAll ? "true" : "false");
       tabEtalons.setAttribute("aria-selected", isEtalons ? "true" : "false");
+      tabAkademik.setAttribute("aria-selected", isAkademik ? "true" : "false");
 
       paneCard.classList.toggle("hidden", !isCard);
       paneAll.classList.toggle("hidden", !isAll);
       paneEtalons.classList.toggle("hidden", !isEtalons);
+      paneAkademik.classList.toggle("hidden", !isAkademik);
     }
 
     function currentNetworkPick() {
@@ -481,6 +592,10 @@
       }
       syncUrlTab("etalons", pick);
     });
+    tabAkademik.addEventListener("click", () => {
+      setTab("akademik");
+      syncUrlTab("akademik", currentNetworkPick());
+    });
   })();
 </script>
 <script src="/static/networks_autocomplete.js?v=2" defer></script>
@@ -488,4 +603,5 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
 <script src="/static/networks_peleng.js?v=2" defer></script>
+<script src="/static/networks_aliases.js?v=1" defer></script>
 {% endblock %}

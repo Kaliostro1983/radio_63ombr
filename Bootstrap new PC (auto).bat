@@ -1,76 +1,73 @@
 @echo off
 setlocal
 
-echo ============================================
-echo   63ombr - Bootstrap (auto mode)
-echo ============================================
+title Bootstrap new PC (auto)
+
+echo ========================================
+echo   BOOTSTRAP RADIO_63OMBR
+echo ========================================
 echo.
 
+where git >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] Git not found. Install Git first.
+    pause
+    exit /b 1
+)
+
+where py >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] Python launcher "py" not found. Install Python first.
+    pause
+    exit /b 1
+)
+
+set "BASE_DIR=%~dp0РЕР_ГОІ"
+set "PROJECT_DIR=%BASE_DIR%\radio_63ombr"
 set "REPO_URL=https://github.com/Kaliostro1983/radio_63ombr.git"
-set "TARGET_DIR=%USERPROFILE%\radio_63ombr"
 
-where git >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] Git not found in PATH.
-  echo Install Git for Windows and run this script again.
-  pause
-  exit /b 1
-)
-
-where py >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] Python launcher 'py' not found.
-  echo Install Python 3.10+ and run this script again.
-  pause
-  exit /b 1
-)
-
-echo Repo:   %REPO_URL%
-echo Target: %TARGET_DIR%
+echo [INFO] Base folder: %BASE_DIR%
+echo [INFO] Project folder: %PROJECT_DIR%
 echo.
 
-if exist "%TARGET_DIR%\.git" (
-  echo [1/4] Repository already exists, pulling latest changes...
-  cd /d "%TARGET_DIR%"
-  git pull
-  if errorlevel 1 (
-    echo [ERROR] git pull failed.
-    pause
-    exit /b 1
-  )
+if not exist "%BASE_DIR%" (
+    echo [INFO] Creating folder %BASE_DIR%
+    mkdir "%BASE_DIR%"
+    if errorlevel 1 (
+        echo [ERROR] Failed to create folder %BASE_DIR%
+        pause
+        exit /b 1
+    )
+)
+
+if exist "%PROJECT_DIR%\.git" (
+    echo [INFO] Existing repository found. Updating...
+    cd /d "%PROJECT_DIR%"
+    git pull
+    if errorlevel 1 (
+        echo [ERROR] git pull failed
+        pause
+        exit /b 1
+    )
 ) else (
-  echo [1/4] Cloning repository...
-  git clone "%REPO_URL%" "%TARGET_DIR%"
-  if errorlevel 1 (
-    echo [ERROR] git clone failed.
+    echo [INFO] Cloning repository...
+    cd /d "%BASE_DIR%"
+    git clone "%REPO_URL%" "radio_63ombr"
+    if errorlevel 1 (
+        echo [ERROR] git clone failed
+        pause
+        exit /b 1
+    )
+)
+
+echo.
+echo [INFO] Running first setup...
+if exist "%PROJECT_DIR%\First run.bat" (
+    call "%PROJECT_DIR%\First run.bat"
+) else (
+    echo [ERROR] First run.bat not found in %PROJECT_DIR%
     pause
     exit /b 1
-  )
-  cd /d "%TARGET_DIR%"
 )
 
-echo [2/4] Checking setup scripts...
-if not exist "First run.bat" (
-  echo [ERROR] First run.bat is missing in repository root.
-  pause
-  exit /b 1
-)
-
-echo [3/4] Running initial project setup...
-call "First run.bat"
-if errorlevel 1 (
-  echo [ERROR] First run setup failed.
-  pause
-  exit /b 1
-)
-
-echo [4/4] Bootstrap completed.
-echo.
-echo Required local/private files (if needed):
-echo   - config.env (created from config.env.example if missing)
-echo   - reports_config.json (not tracked)
-echo   - peleng_report_config.json (not tracked)
-echo   - Frequencies_63.xlsx (optional import source)
-echo.
-pause
 endlocal

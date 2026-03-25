@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
+from fastapi.responses import Response
 
 from app.core.http_request_log_middleware import HttpRequestLogMiddleware
 from app.core.config import settings
@@ -110,6 +111,11 @@ def create_app() -> FastAPI:
         """
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/home", status_code=302)
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        """Avoid noisy 404 logs when browser requests the favicon."""
+        return Response(status_code=204)
 
     return app
 

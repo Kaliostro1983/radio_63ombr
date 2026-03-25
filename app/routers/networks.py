@@ -13,19 +13,36 @@ handled in service modules (see `app.services.network_service`).
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
 from app.services.network_search import search_network_rows
 
 from fastapi import APIRouter, Depends, Request, Form
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from pydantic import BaseModel
 
 from app.core.db import get_conn
 from app.core.normalize import normalize_freq, normalize_freq_or_mask
 from app.core.auth_context import get_actor
 
 router = APIRouter()
+
+
+class NetworkAliasCreateIn(BaseModel):
+    network_id: int
+    alias_text: str
+
+
+class NetworkAliasUpdateIn(BaseModel):
+    alias_text: str
+    network_id: Optional[int] = None
+
+
+def _clean_alias_text(raw: str) -> str:
+    """Trim trailing whitespace from user-entered alias (preserve leading for rare cases)."""
+    return (raw or "").rstrip()
 
 
 def _status_has_colors(conn) -> bool:
@@ -381,6 +398,140 @@ def api_network_by_id(id: int):
         }
 
 
+@router.get("/api/network-aliases")
+def api_network_aliases_list(actor=Depends(get_actor)):
+    """List active (non-archived) network aliases with linked network frequency."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT na.id, na.network_id, na.alias_text, n.frequency
+            FROM network_aliases na
+            JOIN networks n ON n.id = na.network_id
+            WHERE COALESCE(na.is_archived, 0) = 0
+            ORDER BY n.frequency COLLATE NOCASE, na.alias_text COLLATE NOCASE
+            """
+        ).fetchall()
+
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "id": int(r["id"]),
+                "network_id": int(r["network_id"]),
+                "alias_text": r["alias_text"] or "",
+                "frequency": r["frequency"] or "",
+            }
+        )
+    return {"ok": True, "rows": out}
+
+
+@router.post("/api/network-aliases")
+def api_network_aliases_create(body: NetworkAliasCreateIn, actor=Depends(get_actor)):
+    """Create a new network alias row."""
+    alias_text = _clean_alias_text(body.alias_text)
+    if not alias_text.strip():
+        return JSONResponse(
+            {"ok": False, "error": "Аліас не може бути порожнім."},
+            status_code=400,
+        )
+
+    try:
+        nid = int(body.network_id)
+    except Exception:
+        return JSONResponse(
+            {"ok": False, "error": "Некоректна радіомережа."},
+            status_code=400,
+        )
+
+    new_id: Optional[int] = None
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM networks WHERE id=? LIMIT 1", (nid,)).fetchone()
+        if not row:
+            return JSONResponse(
+                {"ok": False, "error": "Радіомережу не знайдено."},
+                status_code=404,
+            )
+        try:
+            cur = conn.execute(
+                "INSERT INTO network_aliases (network_id, alias_text, is_archived) VALUES (?,?,0)",
+                (nid, alias_text),
+            )
+            new_id = int(cur.lastrowid)
+        except sqlite3.IntegrityError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": "Такий аліас уже існує або дублюється для цієї мережі.",
+                },
+                status_code=400,
+            )
+
+    return {"ok": True, "id": new_id}
+
+
+@router.patch("/api/network-aliases/{alias_id}")
+def api_network_aliases_update(
+    alias_id: int,
+    body: NetworkAliasUpdateIn,
+    actor=Depends(get_actor),
+):
+    """Update alias text for an active alias row."""
+    alias_text = _clean_alias_text(body.alias_text)
+    if not alias_text.strip():
+        return JSONResponse(
+            {"ok": False, "error": "Аліас не може бути порожнім."},
+            status_code=400,
+        )
+
+    try:
+        aid = int(alias_id)
+    except Exception:
+        return JSONResponse(
+            {"ok": False, "error": "Некоректний ідентифікатор."},
+            status_code=400,
+        )
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM network_aliases WHERE id=? AND COALESCE(is_archived,0)=0",
+            (aid,),
+        ).fetchone()
+        if not row:
+            return JSONResponse(
+                {"ok": False, "error": "Запис не знайдено."},
+                status_code=404,
+            )
+        target_network_id = body.network_id
+        if target_network_id is not None:
+            net_row = conn.execute(
+                "SELECT id FROM networks WHERE id=? LIMIT 1",
+                (int(target_network_id),),
+            ).fetchone()
+            if not net_row:
+                return JSONResponse(
+                    {"ok": False, "error": "Радіомережу не знайдено."},
+                    status_code=404,
+                )
+        try:
+            if target_network_id is None:
+                conn.execute(
+                    "UPDATE network_aliases SET alias_text=? WHERE id=?",
+                    (alias_text, aid),
+                )
+            else:
+                conn.execute(
+                    "UPDATE network_aliases SET alias_text=?, network_id=? WHERE id=?",
+                    (alias_text, int(target_network_id), aid),
+                )
+        except sqlite3.IntegrityError:
+            return JSONResponse(
+                {"ok": False, "error": "Такий аліас уже існує."},
+                status_code=400,
+            )
+
+    return {"ok": True}
+
+
 def _fetchall(conn, sql: str, params=()):
     """Fetch all rows for a query (small helper for this router)."""
     cur = conn.execute(sql, params)
@@ -627,7 +778,7 @@ def networks_page(
             selected_tags = draft.get("tag_ids") or []
 
     tab_raw = (request.query_params.get("tab") or "card").lower()
-    if tab_raw not in ("card", "all", "etalons"):
+    if tab_raw not in ("card", "all", "etalons", "akademik"):
         tab_raw = "card"
 
     context = _build_networks_context(
