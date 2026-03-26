@@ -2215,6 +2215,8 @@ button.secondary{
 
 #xlsxImportModal .modal-body {
   padding: 20px;
+  max-height: calc(100vh - 180px);
+  overflow: auto;
 }
 
 #xlsxImportModal {
@@ -2223,7 +2225,41 @@ button.secondary{
 
 #xlsxImportModal .modal-card {
   width: calc(100% - 32px);
-  max-width: 492px;
+  max-width: 970px;
+  max-height: calc(100vh - 120px);
+}
+
+.import-skip-list{
+  margin: 0;
+  padding-left: 18px;
+}
+
+.import-skip-samples{
+  margin-top: 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.import-skip-sample-group{
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+}
+
+.import-skip-sample-list{
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+}
+
+.import-skip-pre{
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: .95;
 }
 
 #xlsxImportModal .modal-header {

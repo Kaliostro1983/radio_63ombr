@@ -31,6 +31,10 @@ def get_network_by_alias_text(conn, alias_text: str):
     """
     norm_input = normalize_network_alias(alias_text)
 
+    # Primary match: exact normalized equality.
+    # Fallback: some XLSX/OCR exports append extra tail after the alias
+    # (e.g., zone fragments like "р-н ..."). In that case we allow the
+    # stored alias to be a prefix of the incoming header line.
     sql = """
     SELECT
         na.network_id,
@@ -42,13 +46,16 @@ def get_network_by_alias_text(conn, alias_text: str):
     FROM network_aliases na
     JOIN networks n
       ON n.id = na.network_id
-    WHERE norm_alias(na.alias_text) = ?
+    WHERE (
+        norm_alias(na.alias_text) = ?
+        OR ? LIKE (norm_alias(na.alias_text) || '%')
+    )
       AND COALESCE(na.is_archived, 0) = 0
     LIMIT 1
     """
 
     cur = conn.cursor()
-    cur.execute(sql, (norm_input,))
+    cur.execute(sql, (norm_input, norm_input))
     row = cur.fetchone()
     if not row:
         return None

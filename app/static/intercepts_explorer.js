@@ -675,6 +675,7 @@
       }
 
       renderWarning("Коментар збережено.");
+      if (window.appToast) window.appToast("Збережено.", "info", 1400);
       renderList();
     } catch (error) {
       console.error(error);

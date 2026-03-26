@@ -45,6 +45,57 @@
   }
 
   function renderSuccess(filename, result) {
+    const reasons = (result && typeof result === "object" && result.reasons && typeof result.reasons === "object")
+      ? result.reasons
+      : {};
+    const reasonEntries = Object.entries(reasons || {})
+      .map(([k, v]) => ({ k: String(k || ""), v: Number(v || 0) }))
+      .filter((it) => it.k && Number.isFinite(it.v) && it.v > 0)
+      .filter((it) => it.k !== "duplicate_message" && it.k !== "duplicate" && it.k !== "duplicates");
+    const reasonSamples = (result && typeof result === "object" && result.reason_samples && typeof result.reason_samples === "object")
+      ? result.reason_samples
+      : {};
+
+    const reasonsHtml = reasonEntries.length
+      ? `
+        <div class="import-skip-block" style="margin-top:14px">
+          <div style="font-weight:800; margin-bottom:8px">Пропущені повідомлення: причини</div>
+          <div class="small" style="opacity:.85; margin-bottom:8px">
+            Дублікати не показуємо (це нормально). Нижче — підсумок по пропусках.
+          </div>
+          <ul class="import-skip-list">
+            ${reasonEntries
+              .sort((a, b) => (b.v - a.v) || a.k.localeCompare(b.k))
+              .map((it) => `<li><code>${escapeHtml(it.k)}</code> — <strong>${it.v}</strong></li>`)
+              .join("")}
+          </ul>
+          <div style="font-weight:700; margin-top:12px; margin-bottom:6px">Приклади пропущених</div>
+          <div class="import-skip-samples">
+            ${reasonEntries
+              .sort((a, b) => (b.v - a.v) || a.k.localeCompare(b.k))
+              .map((it) => {
+                const samples = Array.isArray(reasonSamples[it.k]) ? reasonSamples[it.k] : [];
+                if (!samples.length) {
+                  return `<div class="import-skip-sample-group"><div><code>${escapeHtml(it.k)}</code></div><div class="small" style="opacity:.8">Немає прикладів.</div></div>`;
+                }
+                return `
+                  <div class="import-skip-sample-group">
+                    <div><code>${escapeHtml(it.k)}</code></div>
+                    <ul class="import-skip-sample-list">
+                      ${samples.map((s) => `<li><pre class="import-skip-pre">${escapeHtml(String(s || ""))}</pre></li>`).join("")}
+                    </ul>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+          <div class="small" style="opacity:.75; margin-top:10px">
+            Порада: якщо бачиш <code>alias_not_found</code> — перевір аліаси у вкладці «Академік». Якщо <code>network_not_found</code> — перевір наявність р/м у таблиці «Радіомережі».
+          </div>
+        </div>
+      `
+      : "";
+
     return `
       <div class="import-result-layout">
         <div class="import-result-left">
@@ -63,6 +114,7 @@
             <div class="import-result-row"><strong>Пропущено:</strong> ${result.skipped ?? 0}</div>
             <div class="import-result-row"><strong>Помилок:</strong> ${result.failed ?? 0}</div>
           </div>
+          ${reasonsHtml}
         </div>
       </div>
     `;

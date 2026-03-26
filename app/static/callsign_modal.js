@@ -502,6 +502,7 @@
 
       const context = OPEN_CONTEXT;
       closeModal();
+      if (window.appToast) window.appToast("Збережено.", "info", 1400);
       if (typeof onSaveCallback === "function") {
         onSaveCallback(data, context);
       }

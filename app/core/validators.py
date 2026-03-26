@@ -85,7 +85,8 @@ def detect_message_format(text: str) -> str:
     text_l = (text or "").lower()
     # Use regex-based prefix detection (more tolerant to spacing/OCR quirks)
     # and do NOT rely on any other markers like '$'.
-    has_rec = bool(re.search(r"отримувач\s*\(\s*і\s*\)\s*:", text_l, flags=re.IGNORECASE))
+    # Support both "Отримувач(і):" and simplified "Отримувач:" variants.
+    has_rec = bool(re.search(r"отримувач(?:\s*\(\s*і\s*\))?\s*:", text_l, flags=re.IGNORECASE))
     has_send = bool(re.search(r"відправник\s*:", text_l, flags=re.IGNORECASE))
 
     if is_peleng_intercept(text):

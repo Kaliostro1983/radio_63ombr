@@ -29,11 +29,11 @@ SENDER_PREFIX = "Відправник:"
 # Tolerant regexes for OCR/spacing variations:
 # - allow spaces inside parentheses: (і)
 # - allow optional spaces before ':'.
-RECIPIENTS_PREFIX_RE = re.compile(r"^отримувач\s*\(\s*і\s*\)\s*:", flags=re.IGNORECASE)
+RECIPIENTS_PREFIX_RE = re.compile(r"^отримувач(?:\s*\(\s*і\s*\))?\s*:", flags=re.IGNORECASE)
 SENDER_PREFIX_RE = re.compile(r"^відправник\s*:", flags=re.IGNORECASE)
 
 # Marker search inside header lines (not anchored), used to trim OCR noise.
-RECIPIENTS_IN_HEADER_RE = re.compile(r"отримувач\s*\(\s*і\s*\)?\s*:?", flags=re.IGNORECASE)
+RECIPIENTS_IN_HEADER_RE = re.compile(r"отримувач(?:\s*\(\s*і\s*\))?\s*:?", flags=re.IGNORECASE)
 SENDER_IN_HEADER_RE = re.compile(r"відправник\s*:?", flags=re.IGNORECASE)
 
 

@@ -106,6 +106,7 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
         "failed": 0,
         "skipped": 0,
         "reasons": {},
+        "reason_samples": {},
     }
 
     skip_reasons: dict[str, int] = {}
@@ -114,6 +115,19 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
     net_line_invalid_count: int = 0
 
     filename = Path(file_path).name
+
+    def _sample_text(row_no: int, text: str) -> str:
+        # Keep row number so user can locate it in XLSX.
+        raw = str(text or "")
+        # Keep newlines (do not glue), but cap size.
+        lines = raw.splitlines()
+        head = lines[:8]
+        clipped = "\n".join(head)
+        if len(lines) > 8:
+            clipped += "\n…"
+        if len(clipped) > 500:
+            clipped = clipped[:500].rstrip() + "…"
+        return f"рядок {row_no}:\n{clipped}"
 
     for row_number, row in enumerate(rows, start=2):
         summary["total_rows"] += 1
@@ -166,8 +180,7 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
                 net_line_invalid_count += 1
             elif len(reason_samples.get(reason, set())) < 5:
                 s = reason_samples.setdefault(reason, set())
-                # Keep the sample compact and single-line.
-                s.add(text.replace("\n", " ")[:120])
+                s.add(_sample_text(row_number, text))
             if reason == "network_not_found":
                 details = result.get("details") or {}
                 freq = str(details.get("frequency") or "").strip()
@@ -180,6 +193,11 @@ def import_xlsx(file_path: str) -> Dict[str, Any]:
             summary["failed"] += 1
 
     summary["reasons"] = skip_reasons
+    summary["reason_samples"] = {
+        k: sorted(v)[:5]
+        for k, v in reason_samples.items()
+        if k not in ("duplicate_message", "duplicate", "duplicates")
+    }
 
     if missing_network_samples:
         sample = sorted(missing_network_samples)[:50]

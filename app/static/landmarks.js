@@ -680,6 +680,7 @@
         await apiPost(`/api/landmarks`, payload);
       }
       closeModal();
+      if (window.appToast) window.appToast("Збережено.", "info", 1400);
       if (searchForm) {
         await loadSearchPage(true);
       } else {

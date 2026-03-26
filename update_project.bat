@@ -3,7 +3,7 @@ setlocal
 
 title Update radio_63ombr
 
-set "PROJECT_DIR=%~dp0РЕР_ГОІ\radio_63ombr"
+set "PROJECT_DIR=%~dp0"
 
 echo ========================================
 echo   UPDATE RADIO_63OMBR
