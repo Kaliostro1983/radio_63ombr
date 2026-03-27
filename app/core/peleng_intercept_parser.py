@@ -25,7 +25,7 @@ HEADER_AT_START_RE = re.compile(
     (?P<freq>\d{2,3}(?:[.,]\d{1,4})?)
     \s*[/\\|,:;]\s*
     (?P<date>\d{2}[./-]\d{2}[./-]\d{4})
-    \s+
+    \s*,?\s*
     (?P<time>\d{1,2}[.:]\d{2})
     \b
     """,

@@ -45,6 +45,18 @@
   }
 
   function renderSuccess(filename, result) {
+    const reasonLabels = {
+      dt_invalid: "Некоректна або неочікувана дата/час у шапці повідомлення",
+      unknown_format: "Формат повідомлення не вдалося класифікувати",
+      alias_not_found: "Не знайдено аліас радіомережі у вкладці «Академік»",
+      network_not_found: "Не знайдено відповідну радіомережу у таблиці «Радіомережі»",
+      published_at_missing: "У структурованому повідомленні відсутня дата/час",
+      sender_missing: "У структурованому повідомленні відсутній «Відправник»",
+      body_missing: "Порожнє тіло повідомлення",
+      xlsx_empty_cell: "Порожня комірка в колонці «р/обмін»",
+      xlsx_row_missing_target_column: "У рядку відсутня цільова колонка «р/обмін»",
+    };
+
     const reasons = (result && typeof result === "object" && result.reasons && typeof result.reasons === "object")
       ? result.reasons
       : {};
@@ -66,9 +78,15 @@
           <ul class="import-skip-list">
             ${reasonEntries
               .sort((a, b) => (b.v - a.v) || a.k.localeCompare(b.k))
-              .map((it) => `<li><code>${escapeHtml(it.k)}</code> — <strong>${it.v}</strong></li>`)
+              .map((it) => {
+                const label = reasonLabels[it.k] || "Технічна причина (див. код)";
+                return `<li><code>${escapeHtml(it.k)}</code> — <strong>${it.v}</strong><br><span class="small" style="opacity:.82">${escapeHtml(label)}</span></li>`;
+              })
               .join("")}
           </ul>
+          <div class="small" style="opacity:.9; margin-top:8px">
+            Разом пропущено: <strong>${reasonEntries.reduce((acc, it) => acc + it.v, 0)}</strong>
+          </div>
           <div style="font-weight:700; margin-top:12px; margin-bottom:6px">Приклади пропущених</div>
           <div class="import-skip-samples">
             ${reasonEntries
