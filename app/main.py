@@ -70,9 +70,8 @@ def create_app() -> FastAPI:
     templates_dir = Path(__file__).parent / "templates"
     app.state.templates = Jinja2Templates(directory=str(templates_dir))
     app.state.templates.env.globals["app_version"] = peleng.read_version()
-    _git_rev, _git_rev_full = read_git_revision()
-    app.state.templates.env.globals["app_git_revision"] = _git_rev
-    app.state.templates.env.globals["app_git_revision_full"] = _git_rev_full
+    # Callable: revision is read on each render so local commits show without restarting uvicorn.
+    app.state.templates.env.globals["get_app_git_revision"] = read_git_revision
     app.state.app_name = settings.app_name
 
     static_dir = Path(__file__).parent / "static"

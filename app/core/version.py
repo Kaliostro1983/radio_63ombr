@@ -4,9 +4,10 @@ This module reads the runtime version from `docs/VERSION`. The value is
 exposed in the UI (templates) and can be used by endpoints/pages to show
 the currently deployed build.
 
-Git revision (short hash, dirty marker) is read once at process start for
-the status bar so deployments can be distinguished even when `docs/VERSION`
-matches another checkout.
+Git revision for the status bar is resolved via :func:`read_git_revision`
+(typically on each HTML render): HEAD is read from ``.git`` on disk so a new
+local commit shows up without restarting the server; ``APP_GIT_REVISION``
+still overrides for container/CI builds.
 """
 
 from __future__ import annotations
@@ -87,6 +88,21 @@ def _revision_from_git_files(root: Path) -> tuple[str, str]:
     return (short, full)
 
 
+def _git_worktree_dirty(root: Path) -> bool:
+    try:
+        r = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        return r.returncode == 0 and bool((r.stdout or "").strip())
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def read_git_revision() -> tuple[str, str]:
     """Return ``(short_display, full_hash)`` for the repository HEAD.
 
@@ -94,8 +110,11 @@ def read_git_revision() -> tuple[str, str]:
 
     1. Environment ``APP_GIT_REVISION`` (and optional ``APP_GIT_REVISION_FULL``)
        for CI/containers or copies without ``.git``.
-    2. ``git rev-parse`` if ``git`` is on ``PATH`` (includes dirty ``+``).
-    3. Parse ``.git/HEAD`` under the repo root (no ``git`` binary; no dirty flag).
+    2. Parse ``.git/HEAD`` on disk (no ``git`` binary required). Reflects the
+       current checkout immediately after ``git commit`` without restarting
+       the app. A trailing ``+`` is added when ``git status --porcelain`` is
+       non-empty (requires ``git`` on ``PATH``).
+    3. If step 2 fails, fall back to ``git rev-parse`` / ``git status``.
 
     Both strings are empty if nothing can be resolved.
     """
@@ -105,6 +124,11 @@ def read_git_revision() -> tuple[str, str]:
     if env_short:
         env_full = (os.environ.get("APP_GIT_REVISION_FULL") or "").strip()
         return (env_short, env_full or env_short)
+
+    short, full = _revision_from_git_files(root)
+    if short and full:
+        display = f"{short}+" if _git_worktree_dirty(root) else short
+        return (display, full)
 
     try:
         r_short = subprocess.run(
@@ -128,15 +152,7 @@ def read_git_revision() -> tuple[str, str]:
                 )
                 full = (r_full.stdout or "").strip() if r_full.returncode == 0 else ""
 
-                r_dirty = subprocess.run(
-                    ["git", "status", "--porcelain"],
-                    cwd=str(root),
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                    check=False,
-                )
-                dirty = bool((r_dirty.stdout or "").strip())
+                dirty = _git_worktree_dirty(root)
                 display = f"{short}+" if dirty else short
                 return (display, full)
     except FileNotFoundError:
@@ -144,4 +160,4 @@ def read_git_revision() -> tuple[str, str]:
     except (OSError, subprocess.TimeoutExpired):
         pass
 
-    return _revision_from_git_files(root)
+    return ("", "")
