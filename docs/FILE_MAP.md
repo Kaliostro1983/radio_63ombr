@@ -81,7 +81,8 @@ callsign_normalizer.py
 config.py (including `LANDMARK_AUTO_MATCH` for optional landmark matching)  
 db.py  
 http_request_log_middleware.py (middleware: лог кожного HTTP-запиту на вході)  
-logging.py
+logging.py  
+version.py (`read_version`, `read_git_revision` — версія з `docs/VERSION` і Git для UI)
 
 ---
 
@@ -116,7 +117,7 @@ tables.py
 Templates:
 
 app/templates  
-(`etalons_inner.html` — вміст еталонок; `etalons_embed.html` + `embed_shell.html` — варіант без сайдбару для iframe)
+(`etalons_inner.html` — вміст еталонок; дати початку/кінця еталону лише з картки р/м; `etalons_embed.html` + `embed_shell.html` — варіант без сайдбару для iframe; `base.html` — статус-бар з версією та Git, без дубля при `embed=1`)
 
 Static files:
 

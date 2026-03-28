@@ -385,7 +385,6 @@ def search(
 
 def _etalons_run_save(
     request: Request,
-    start_date_str: str,
     purpose: str,
     correspondents: str,
     operation_mode: str,
@@ -408,14 +407,6 @@ def _etalons_run_save(
             url = f"{etalons_base}?msg={qm}"
         return RedirectResponse(url=url, status_code=303)
 
-    sd = None
-    if start_date_str:
-        try:
-            sd = date.fromisoformat(start_date_str)
-        except Exception:
-            sd = None
-
-    sd_str = sd.isoformat() if sd else None
     now = datetime.utcnow().isoformat(timespec="seconds")
 
     with get_conn() as conn:
@@ -435,7 +426,6 @@ def _etalons_run_save(
             conn.execute(
                 """
                 UPDATE etalons SET
-                    start_date=?,
                     purpose=?,
                     correspondents=?,
                     operation_mode=?,
@@ -444,7 +434,6 @@ def _etalons_run_save(
                 WHERE network_id=?
                 """,
                 (
-                    sd_str,
                     purpose.strip() or None,
                     correspondents.strip() or None,
                     operation_mode.strip() or None,
@@ -457,12 +446,11 @@ def _etalons_run_save(
             conn.execute(
                 """
                 INSERT INTO etalons
-                    (network_id, start_date, purpose, correspondents, operation_mode, traffic_type, updated_at)
-                VALUES (?,?,?,?,?,?,?)
+                    (network_id, purpose, correspondents, operation_mode, traffic_type, updated_at)
+                VALUES (?,?,?,?,?,?)
                 """,
                 (
                     int(net["id"]),
-                    sd_str,
                     purpose.strip() or None,
                     correspondents.strip() or None,
                     operation_mode.strip() or None,
@@ -486,7 +474,6 @@ def _etalons_run_save(
 @router.post("/etalons/panel/save")
 def save_panel(
     request: Request,
-    start_date_str: str = Form(default=""),
     purpose: str = Form(default=""),
     correspondents: str = Form(default=""),
     operation_mode: str = Form(default=""),
@@ -496,7 +483,6 @@ def save_panel(
     """Збереження еталонки з iframe (/networks)."""
     return _etalons_run_save(
         request,
-        start_date_str,
         purpose,
         correspondents,
         operation_mode,
@@ -509,7 +495,6 @@ def save_panel(
 @router.post("/etalons/save")
 def save(
     request: Request,
-    start_date_str: str = Form(default=""),
     purpose: str = Form(default=""),
     correspondents: str = Form(default=""),
     operation_mode: str = Form(default=""),
@@ -519,7 +504,6 @@ def save(
     """Persist etalon fields for the last-selected network."""
     return _etalons_run_save(
         request,
-        start_date_str,
         purpose,
         correspondents,
         operation_mode,

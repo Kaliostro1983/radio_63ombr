@@ -306,6 +306,7 @@ app/static
 
 Templates render pages:
 
+- `base.html` — спільний макет: сайдбар і стрічка статусу (версія з `docs/VERSION`, ревізія Git через `get_app_git_revision()`); при **`?embed=1`** сайдбар і статус-бар приховані, щоб не дублюватися в iframe.
 - intercepts_search.html
 - intercepts_explorer.html
 - callsigns.html

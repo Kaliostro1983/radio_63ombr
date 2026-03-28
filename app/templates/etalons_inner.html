@@ -119,13 +119,6 @@
       {% if is_embed %}
         <input type="hidden" name="etalon_embed" value="1" />
       {% endif %}
-      <div class="row">
-        <div class="field">
-          <label>Дата початку (якщо порожньо — “невідомо”)</label>
-          <input type="date" name="start_date_str" value="{{ et.start_date if et and et.start_date else '' }}"/>
-        </div>
-      </div>
-
       <div class="row" style="margin-top:10px">
         <div class="field">
           <label>Призначення</label>

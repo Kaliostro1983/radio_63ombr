@@ -60,6 +60,7 @@
   {% endif %}
 
   <main class="main">
+    {% if request.query_params.get("embed") != "1" %}
     <div class="app-statusbar" role="status" aria-live="polite">
       <span class="app-statusbar__dot" aria-hidden="true"></span>
       <span class="app-statusbar__text">Система активна</span>
@@ -73,6 +74,7 @@
       <span class="app-statusbar__sep">•</span>
       <span id="appLastUpdate" class="app-statusbar__text">Оновлено щойно</span>
     </div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 </div>
