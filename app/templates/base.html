@@ -65,6 +65,10 @@
       <span class="app-statusbar__text">Система активна</span>
       <span class="app-statusbar__sep">•</span>
       <a href="/changelog" target="_blank" class="app-statusbar__version">v{{ app_version }}</a>
+      {% if app_git_revision %}
+      <span class="app-statusbar__sep">•</span>
+      <span class="app-statusbar__rev"{% if app_git_revision_full %} title="Git {{ app_git_revision_full }}"{% endif %}>{{ app_git_revision }}</span>
+      {% endif %}
       <span class="app-statusbar__sep">•</span>
       <span id="appLastUpdate" class="app-statusbar__text">Оновлено щойно</span>
     </div>

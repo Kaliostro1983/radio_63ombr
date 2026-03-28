@@ -193,6 +193,13 @@ a:hover{
   text-decoration:none;
 }
 
+.app-statusbar__rev{
+  font-size:12px;
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color:var(--muted);
+  letter-spacing:0.02em;
+}
+
 .app-toast-stack{
   position:fixed;
   right:18px;

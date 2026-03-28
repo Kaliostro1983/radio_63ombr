@@ -23,6 +23,7 @@ from fastapi.responses import Response, FileResponse
 
 from app.core.http_request_log_middleware import HttpRequestLogMiddleware
 from app.core.config import settings
+from app.core.version import read_git_revision
 from app.core.backup import maybe_backup_db
 from app.core.db import init_db
 from app.routers.networks import router as networks_router
@@ -69,6 +70,9 @@ def create_app() -> FastAPI:
     templates_dir = Path(__file__).parent / "templates"
     app.state.templates = Jinja2Templates(directory=str(templates_dir))
     app.state.templates.env.globals["app_version"] = peleng.read_version()
+    _git_rev, _git_rev_full = read_git_revision()
+    app.state.templates.env.globals["app_git_revision"] = _git_rev
+    app.state.templates.env.globals["app_git_revision_full"] = _git_rev_full
     app.state.app_name = settings.app_name
 
     static_dir = Path(__file__).parent / "static"
