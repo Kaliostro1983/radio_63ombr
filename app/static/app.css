@@ -716,6 +716,69 @@ button.secondary{
 }
 
 /* =========================
+   ETALON DOCUMENT PREVIEW
+========================= */
+
+.etalon-doc{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+
+.etalon-point{
+  display:flex;
+  flex-direction:row;
+  align-items:baseline;
+  gap:8px;
+  padding:12px 4px;
+  border-bottom:1px solid var(--border);
+  line-height:1.6;
+}
+
+.etalon-point:last-child{
+  border-bottom:none;
+}
+
+.etalon-point-edit{
+  align-items:flex-start;
+  padding-top:14px;
+  padding-bottom:14px;
+}
+
+.etalon-n{
+  flex:0 0 30px;
+  font-weight:800;
+  font-size:.95em;
+  padding-top:1px;
+}
+
+.etalon-body{
+  display:flex;
+  flex-direction:row;
+  flex-wrap:wrap;
+  gap:4px 8px;
+  flex:1;
+  align-items:baseline;
+}
+
+.etalon-lbl{
+  font-weight:800;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+
+.etalon-ro{
+  cursor:help;
+  border-bottom:1px dashed var(--border);
+  padding-bottom:1px;
+}
+
+.etalon-ro:hover{
+  border-bottom-color:var(--accent);
+  color:var(--accent);
+}
+
+/* =========================
    HOME PAGE
 ========================= */
 

@@ -51,7 +51,7 @@ def _parse_etalon_sheet(wb, sheet_name: str) -> Dict[str, Any]:
         if parts:
             lines.append(" | ".join(parts))
     raw = "\n".join(lines)
-    extracted: Dict[str, Any] = {"raw_import_text": raw}
+    extracted: Dict[str, Any] = {}
 
     def find_item(n: int) -> Optional[str]:
         pat = re.compile(rf"^(?:{n}[\.|\)|:])\s*(.*)$")
@@ -78,10 +78,10 @@ def _parse_etalon_sheet(wb, sheet_name: str) -> Dict[str, Any]:
     def get_item(n: int) -> Optional[str]:
         return find_item(n) or find_item_table(n)
 
-    for key, n in [("purpose",3),("correspondents",4),("callsigns",5),("operation_mode",8),("traffic_type",9)]:
-        val = get_item(n)
-        if val:
-            extracted[key] = val
+    # Point 4 — correspondents (point 3 purpose and 5 callsigns are now auto-generated)
+    val = get_item(4)
+    if val:
+        extracted["correspondents"] = val
 
     period = get_item(10)
     if period:
@@ -142,28 +142,17 @@ def _upsert_etalon(conn, network_id: int, et: Dict[str, Any]):
         conn.execute("""UPDATE etalons SET
             start_date=COALESCE(?, start_date),
             correspondents=COALESCE(?, correspondents),
-            callsigns=COALESCE(?, callsigns),
-            purpose=COALESCE(?, purpose),
-            operation_mode=COALESCE(?, operation_mode),
-            traffic_type=COALESCE(?, traffic_type),
-            raw_import_text=COALESCE(?, raw_import_text),
             updated_at=?
             WHERE id=?""",
             (start_date_str,
              et.get("correspondents"),
-             et.get("callsigns"),
-             et.get("purpose"),
-             et.get("operation_mode"),
-             et.get("traffic_type"),
-             et.get("raw_import_text"),
              now, eid)
         )
         return
     conn.execute("""INSERT INTO etalons
-        (network_id, start_date, correspondents, callsigns, purpose, operation_mode, traffic_type, raw_import_text, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?)""",
-        (network_id, start_date_str, et.get("correspondents"), et.get("callsigns"), et.get("purpose"),
-         et.get("operation_mode"), et.get("traffic_type"), et.get("raw_import_text"), now)
+        (network_id, start_date, correspondents, updated_at)
+        VALUES (?,?,?,?)""",
+        (network_id, start_date_str, et.get("correspondents"), now)
     )
 
 def import_freq_table(xlsx_path: str):

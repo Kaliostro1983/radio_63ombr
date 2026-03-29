@@ -121,7 +121,7 @@ def all_networks_get(request: Request):
 
         default_statuses = conn.execute("""
             SELECT id FROM statuses
-            WHERE name IN ('Спостерігається нами', 'Спостерігається сусідами')
+            WHERE name = 'Спостерігається'
         """).fetchall()
 
         status_ids = [r[0] for r in default_statuses]

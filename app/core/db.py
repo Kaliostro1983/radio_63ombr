@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS tags(
 -- Network-only tags (UI labels for radio networks; unrelated to `tags` used in text tagging).
 CREATE TABLE IF NOT EXISTS network_tags(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE,
+    conclusions TEXT
 );
 
 CREATE TABLE IF NOT EXISTS networks(
@@ -118,11 +119,6 @@ CREATE TABLE IF NOT EXISTS etalons(
     start_date TEXT,
     end_date TEXT,
     correspondents TEXT,
-    callsigns TEXT,
-    purpose TEXT,
-    operation_mode TEXT,
-    traffic_type TEXT,
-    raw_import_text TEXT,
     updated_at TEXT NOT NULL,
     FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
 );
@@ -448,6 +444,60 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     """
     _ensure_column(conn, "statuses", "bg_color", "bg_color TEXT")
     _ensure_column(conn, "statuses", "border_color", "border_color TEXT")
+
+    # --- Status consolidation migrations ---
+    # 1. Merge "Спостерігається нами" / "Спостерігається сусідами" → "Спостерігається".
+    #    Idempotent: safe to run when old statuses no longer exist.
+    for _old_name in ("Спостерігається нами", "Спостерігається сусідами"):
+        safe_execute(
+            conn,
+            """
+            UPDATE networks
+            SET status_id = (SELECT id FROM statuses WHERE name = 'Спостерігається' LIMIT 1)
+            WHERE status_id IN (SELECT id FROM statuses WHERE name = ?)
+              AND EXISTS (SELECT 1 FROM statuses WHERE name = 'Спостерігається')
+            """,
+            (_old_name,),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"merge_status:{_old_name}",
+        )
+        safe_execute(
+            conn,
+            "DELETE FROM statuses WHERE name = ?",
+            (_old_name,),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"delete_status:{_old_name}",
+        )
+
+    # 2. Ensure "Не інформативна" exists, then migrate "Малоінформативна" references.
+    safe_execute(
+        conn,
+        "INSERT OR IGNORE INTO statuses(name) VALUES ('Не інформативна')",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="seed_status:Не інформативна",
+    )
+    safe_execute(
+        conn,
+        """
+        UPDATE networks
+        SET status_id = (SELECT id FROM statuses WHERE name = 'Не інформативна' LIMIT 1)
+        WHERE status_id IN (SELECT id FROM statuses WHERE name = 'Малоінформативна')
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="merge_status:Малоінформативна",
+    )
+    safe_execute(
+        conn,
+        "DELETE FROM statuses WHERE name = 'Малоінформативна'",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="delete_status:Малоінформативна",
+    )
+
     _ensure_column(conn, "tags", "template", "template TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "networks", "net_key", "net_key TEXT")
     _ensure_column(conn, "messages", "net_description", "net_description TEXT")
@@ -459,6 +509,36 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
     _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
+    _ensure_column(conn, "network_tags", "conclusions", "conclusions TEXT")
+
+    # --- Populate status colours (idempotent: only updates NULLs so manual overrides survive). ---
+    _STATUS_COLORS = [
+        ("Спостерігається",  "#1e8e3e20", "#1e8e3e80"),
+        ("За межами",        "#ea433520", "#ea433580"),
+        ("Мертва",           "#9aa0a620", "#9aa0a680"),
+        ("Досліджується",    "#fbbc0420", "#fbbc0480"),
+        ("Не інформативна",  "#a142f420", "#a142f480"),
+    ]
+    for _sname, _bg, _bd in _STATUS_COLORS:
+        safe_execute(
+            conn,
+            "UPDATE statuses SET bg_color=?, border_color=? WHERE name=? AND bg_color IS NULL",
+            (_bg, _bd, _sname),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"status_color:{_sname}",
+        )
+
+    # Drop deprecated etalons columns (idempotent: skipped if column does not exist).
+    for _col in ("callsigns", "operation_mode", "traffic_type", "purpose", "raw_import_text"):
+        if _has_column(conn, "etalons", _col):
+            safe_execute(
+                conn,
+                f"ALTER TABLE etalons DROP COLUMN {_col}",
+                module="app.core.db",
+                function="_run_lightweight_migrations",
+                stage=f"drop_column:etalons.{_col}",
+            )
     _ensure_column(conn, "peleng_batches", "network_id", "network_id INTEGER")
     # Rebuild legacy peleng_batches(event_dt, frequency) into
     # peleng_batches(event_dt, network_id), preserving ids and points links.
@@ -748,6 +828,14 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             module="app.core.db",
             function="_run_lightweight_migrations",
             stage="migrate:network_tag_links_old",
+        )
+        # Drop the legacy table after data has been migrated.
+        safe_execute(
+            conn,
+            "DROP TABLE IF EXISTS network_tag_links_old",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="drop_table:network_tag_links_old",
         )
 
     # network_aliases lookup is by alias_text (no alias_norm)

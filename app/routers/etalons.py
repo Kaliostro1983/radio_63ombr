@@ -16,19 +16,17 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Request, Form, Depends
+from fastapi import APIRouter, Request, Form, Depends, Query
 from fastapi.responses import RedirectResponse, HTMLResponse, StreamingResponse
 from io import BytesIO
 from urllib.parse import quote
 
 from app.core.db import get_conn
 from app.core.auth_context import get_actor
+from app.core.etalon_defaults import STANDARD_ETALON_OPERATION_MODE
 from app.services.network_search import search_network_rows
 from app.reports.etalons_report import build_etalons_docx_bytes
 
-DEFAULT_PURPOSE = "Для безперебійного управління підпорядкованими підрозділами."
-DEFAULT_OPERATION_MODE = "Цілодобово, з використанням дуплексного режиму організації зв’язку."
-DEFAULT_TRAFFIC_TYPE = "Службовий радіообмін"
 DEFAULT_MODULATION = "NFM"
 
 def _ascii_filename_fallback(filename: str) -> str:
@@ -136,19 +134,38 @@ def _load_callsigns_for_network(conn, network_id: int) -> list[str]:
     return [row[0] for row in cur.fetchall() if row[0]]
 
 
+def _load_conclusions_for_network(conn, network_id: int) -> str:
+    """Return comma-separated conclusions from active network_tags for the given network."""
+    rows = conn.execute(
+        """
+        SELECT nt.conclusions
+        FROM network_tag_links ntl
+        JOIN network_tags nt ON nt.id = ntl.tag_id
+        WHERE ntl.network_id = ?
+          AND nt.conclusions IS NOT NULL
+          AND trim(nt.conclusions) != ''
+        ORDER BY nt.name ASC
+        """,
+        (int(network_id),),
+    ).fetchall()
+    parts = [(r["conclusions"] or "").strip() for r in rows if (r["conclusions"] or "").strip()]
+    return ", ".join(parts)
+
+
 def _load_page_state(conn, network_id: Optional[int]):
-    """Load current network + etalon + generated fields + callsigns from DB for rendering."""
+    """Load current network + etalon + generated fields + callsigns + conclusions from DB."""
     if not network_id:
-        return None, None, None, []
+        return None, None, None, [], ""
 
     net = _fetchone(conn, "SELECT * FROM networks WHERE id=?", (int(network_id),))
     if not net:
-        return None, None, None, []
+        return None, None, None, [], ""
 
     et = _ensure_etalon(conn, int(net["id"]))
     gen = _build_generated(net, et)
     callsigns_from_db = _load_callsigns_for_network(conn, int(net["id"]))
-    return net, et, gen, callsigns_from_db
+    conclusions = _load_conclusions_for_network(conn, int(net["id"]))
+    return net, et, gen, callsigns_from_db, conclusions
 
 
 def _build_context(
@@ -162,6 +179,7 @@ def _build_context(
     et=None,
     gen=None,
     callsigns_from_db=None,
+    conclusions: str = "",
     is_embed: bool = False,
     etalons_base: str = "/etalons",
 ):
@@ -183,11 +201,8 @@ def _build_context(
             "period": "",
         },
         "callsigns_from_db": callsigns_from_db or [],
-        "defaults": {
-            "purpose": DEFAULT_PURPOSE,
-            "operation_mode": DEFAULT_OPERATION_MODE,
-            "traffic_type": DEFAULT_TRAFFIC_TYPE,
-        },
+        "conclusions": conclusions,
+        "operation_mode": STANDARD_ETALON_OPERATION_MODE,
         "is_embed": is_embed,
         "etalons_base": (etalons_base or "/etalons").rstrip("/") or "/etalons",
     }
@@ -229,7 +244,7 @@ def _etalons_page_get(
     last_id = request.session.get("last_network_id")
 
     with get_conn() as conn:
-        net, et, gen, callsigns_from_db = _load_page_state(conn, last_id)
+        net, et, gen, callsigns_from_db, conclusions = _load_page_state(conn, last_id)
 
     context = _build_context(
         request,
@@ -241,6 +256,7 @@ def _etalons_page_get(
         et=et,
         gen=gen,
         callsigns_from_db=callsigns_from_db,
+        conclusions=conclusions,
         is_embed=is_embed,
         etalons_base=etalons_base,
     )
@@ -284,14 +300,15 @@ def page(
 @router.get("/etalons/download")
 def download_etalons_report(
     query: str = "",
+    status_ids: list[int] = Query(default=[1, 3, 7, 13, 14]),
     actor=Depends(get_actor),
 ):
-    """Download DOCX report with etalon descriptions for eligible networks."""
-    del actor, query  # auth side-effect only; report is based on DB statuses filter
+    """Download DOCX report with etalon descriptions for networks with selected statuses."""
+    del actor, query  # auth side-effect only
     with get_conn() as conn:
         content, filename = build_etalons_docx_bytes(
             conn=conn,
-            query="",
+            status_ids=status_ids or [1, 3, 7, 13, 14],
             report_date=datetime.now().date(),
         )
 
@@ -318,7 +335,7 @@ def _etalons_run_search(
     current_id = request.session.get("last_network_id")
 
     with get_conn() as conn:
-        net, et, gen, callsigns_from_db = _load_page_state(conn, current_id)
+        net, et, gen, callsigns_from_db, conclusions = _load_page_state(conn, current_id)
 
         if not q_query:
             context = _build_context(
@@ -331,6 +348,7 @@ def _etalons_run_search(
                 et=et,
                 gen=gen,
                 callsigns_from_db=callsigns_from_db,
+                conclusions=conclusions,
                 is_embed=is_embed,
                 etalons_base=etalons_base,
             )
@@ -354,6 +372,7 @@ def _etalons_run_search(
             et=et,
             gen=gen,
             callsigns_from_db=callsigns_from_db,
+            conclusions=conclusions,
             is_embed=is_embed,
             etalons_base=etalons_base,
         )
@@ -385,10 +404,7 @@ def search(
 
 def _etalons_run_save(
     request: Request,
-    purpose: str,
     correspondents: str,
-    operation_mode: str,
-    traffic_type: str,
     etalon_embed: str,
     *,
     etalons_base: str,
@@ -426,18 +442,12 @@ def _etalons_run_save(
             conn.execute(
                 """
                 UPDATE etalons SET
-                    purpose=?,
                     correspondents=?,
-                    operation_mode=?,
-                    traffic_type=?,
                     updated_at=?
                 WHERE network_id=?
                 """,
                 (
-                    purpose.strip() or None,
                     correspondents.strip() or None,
-                    operation_mode.strip() or None,
-                    traffic_type.strip() or None,
                     now,
                     int(net["id"]),
                 ),
@@ -446,15 +456,12 @@ def _etalons_run_save(
             conn.execute(
                 """
                 INSERT INTO etalons
-                    (network_id, purpose, correspondents, operation_mode, traffic_type, updated_at)
-                VALUES (?,?,?,?,?,?)
+                    (network_id, correspondents, updated_at)
+                VALUES (?,?,?)
                 """,
                 (
                     int(net["id"]),
-                    purpose.strip() or None,
                     correspondents.strip() or None,
-                    operation_mode.strip() or None,
-                    traffic_type.strip() or None,
                     now,
                 ),
             )
@@ -474,19 +481,13 @@ def _etalons_run_save(
 @router.post("/etalons/panel/save")
 def save_panel(
     request: Request,
-    purpose: str = Form(default=""),
     correspondents: str = Form(default=""),
-    operation_mode: str = Form(default=""),
-    traffic_type: str = Form(default=""),
     etalon_embed: str = Form(default=""),
 ):
     """Збереження еталонки з iframe (/networks)."""
     return _etalons_run_save(
         request,
-        purpose,
         correspondents,
-        operation_mode,
-        traffic_type,
         etalon_embed,
         etalons_base=ETALONS_PANEL_BASE,
     )
@@ -495,19 +496,13 @@ def save_panel(
 @router.post("/etalons/save")
 def save(
     request: Request,
-    purpose: str = Form(default=""),
     correspondents: str = Form(default=""),
-    operation_mode: str = Form(default=""),
-    traffic_type: str = Form(default=""),
     etalon_embed: str = Form(default=""),
 ):
     """Persist etalon fields for the last-selected network."""
     return _etalons_run_save(
         request,
-        purpose,
         correspondents,
-        operation_mode,
-        traffic_type,
         etalon_embed,
         etalons_base="/etalons",
     )

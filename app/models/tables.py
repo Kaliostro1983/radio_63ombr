@@ -93,6 +93,7 @@ class NetworkTagDef(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
+    conclusions: Optional[str] = None
 
 
 class NetworkTagLink(SQLModel, table=True):
@@ -112,11 +113,6 @@ class Etalon(SQLModel, table=True):
     start_date: Optional[date] = Field(default=None)
     end_date: Optional[date] = Field(default=None)
     correspondents: Optional[str] = None
-    callsigns: Optional[str] = None
-    purpose: Optional[str] = None
-    operation_mode: Optional[str] = None
-    traffic_type: Optional[str] = None
-    raw_import_text: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 

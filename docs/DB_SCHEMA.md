@@ -200,6 +200,7 @@
 Поля:
 - `id` — PK
 - `name` — унікальна назва тегу
+- `conclusions` — висновок про призначення мережі з цим тегом (TEXT, NULL); використовується для автоматичної генерації пункту 3 ("Призначення") у DOCX-звіті еталонок
 
 Ключі та обмеження:
 - `PRIMARY KEY(id)`
@@ -226,12 +227,25 @@
 
 Призначення: еталонний опис мережі.
 
-Поля: - `id` --- PK - `network_id` --- FK → `networks.id`, унікальний -
-`start_date` - `end_date` - `correspondents` - `callsigns` - `purpose` -
-`operation_mode` - `traffic_type` - `raw_import_text` - `updated_at`
+Поля:
+- `id` — PK
+- `network_id` — FK → `networks.id`, унікальний
+- `start_date` — дата початку функціонування (TEXT, ISO або dd.mm.yyyy)
+- `end_date` — дата завершення (TEXT, NULL → підставляється поточна дата у звіті)
+- `correspondents` — склад кореспондентів (TEXT, NULL)
+- `updated_at` — час останнього оновлення (TEXT NOT NULL)
 
-Ключі та обмеження: - `PRIMARY KEY(id)` - `UNIQUE(network_id)` -
-`FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE`
+Видалені поля (міграція):
+- ~~`callsigns`~~ — список позивних береться з таблиці `callsigns`
+- ~~`operation_mode`~~ — режим роботи є константою; виведення у звіті захардкоджено
+- ~~`traffic_type`~~ — замінено автогенерацією з `network_tags.conclusions`
+- ~~`purpose`~~ — пункт 3 "Призначення" у звіті генерується автоматично з `network_tags.conclusions`
+- ~~`raw_import_text`~~ — сирий текст імпорту; більше не зберігається
+
+Ключі та обмеження:
+- `PRIMARY KEY(id)`
+- `UNIQUE(network_id)`
+- `FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE`
 
 ------------------------------------------------------------------------
 

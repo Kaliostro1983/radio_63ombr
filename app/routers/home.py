@@ -32,9 +32,16 @@ def _date_list(end_day: date, days: int) -> list[date]:
 
 @router.get("/home", response_class=HTMLResponse)
 def home_page(request: Request):
+    with get_conn() as conn:
+        statuses = conn.execute(
+            "SELECT id, name FROM statuses ORDER BY id ASC"
+        ).fetchall()
     return request.app.state.templates.TemplateResponse(
         "home.html",
-        {"request": request},
+        {
+            "request": request,
+            "statuses": [{"id": int(s["id"]), "name": s["name"]} for s in statuses],
+        },
     )
 
 

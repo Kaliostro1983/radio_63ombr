@@ -71,11 +71,13 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
         c.name AS chat_name,
         g.name AS group_name,
         s.name AS status_name,
-        {select_colors}
+        {select_colors},
+        e.updated_at AS etalon_updated_at
     FROM networks n
     JOIN chats c    ON c.id = n.chat_id
     JOIN groups g   ON g.id = n.group_id
     JOIN statuses s ON s.id = n.status_id
+    LEFT JOIN etalons e ON e.network_id = n.id
     """
 
     clauses = []
@@ -107,7 +109,7 @@ def _default_all_status_ids(conn) -> list[int]:
         """
         SELECT id
         FROM statuses
-        WHERE name IN ('Спостерігається нами', 'Спостерігається сусідами')
+        WHERE name = 'Спостерігається'
         """
     ).fetchall()
     return [int(r[0]) for r in rows] if rows else [0]
@@ -544,12 +546,11 @@ def _ensure_etalon(conn, network_id: int):
     
 
 def _etalon_row_has_content(conn, network_id: int) -> bool:
-    """True if the etalon row has any saved text, callsigns blob, import text, or dates."""
+    """True if the etalon row has any saved text or dates."""
     row = _fetchone(
         conn,
         """
-        SELECT purpose, correspondents, operation_mode, traffic_type, callsigns, raw_import_text,
-               start_date, end_date
+        SELECT correspondents, start_date, end_date
         FROM etalons
         WHERE network_id = ?
         """,
@@ -565,16 +566,8 @@ def _etalon_row_has_content(conn, network_id: int) -> bool:
             return False
         return bool(v is not None and str(v).strip())
 
-    for col in (
-        "purpose",
-        "correspondents",
-        "operation_mode",
-        "traffic_type",
-        "callsigns",
-        "raw_import_text",
-    ):
-        if nz(col):
-            return True
+    if nz("correspondents"):
+        return True
     try:
         if row["start_date"] or row["end_date"]:
             return True

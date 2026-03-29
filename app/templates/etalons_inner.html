@@ -5,6 +5,7 @@
   <div class="notice" style="margin-bottom:12px">{{ msg }}</div>
 {% endif %}
 
+{# ── Search ── #}
 <div class="card">
   <form method="post" action="{{ eb }}/search{% if is_embed and eb == '/etalons' %}?embed=1{% endif %}">
     {% if is_embed %}
@@ -13,35 +14,23 @@
     <div class="row">
       <div class="field">
         <label>Маска/частота</label>
-        <div class="home-freq-input-wrap">
-          <input
-            id="etalonsFreqQuery"
-            name="query"
-            value="{{ q_query }}"
-            placeholder="050.6250 або 050.62"
-            autocomplete="off"
-          />
-        </div>
+        <input
+          id="etalonsFreqQuery"
+          name="query"
+          value="{{ q_query }}"
+          placeholder="050.6250 або 050.62"
+          autocomplete="off"
+        />
       </div>
       <div class="field" style="min-width:160px; flex:0">
         <label>&nbsp;</label>
         <button type="submit">Пошук</button>
       </div>
-      <div class="field" style="min-width:200px; flex:0">
-        <label>&nbsp;</label>
-        <button
-          type="submit"
-          class="secondary"
-          formaction="/etalons/download"
-          formmethod="get"
-        >
-          Скачати еталонки
-        </button>
-      </div>
     </div>
   </form>
 </div>
 
+{# ── Matches list ── #}
 {% if matches %}
   <div class="card">
     <div style="font-weight:800; margin-bottom:10px">Варіанти</div>
@@ -65,85 +54,140 @@
   </div>
 {% endif %}
 
+{# ── Document preview ── #}
 {% if net %}
   <div class="card">
-    <div style="font-weight:800; margin-bottom:6px">
+    <div style="font-weight:800; margin-bottom:2px">
       Поточна радіомережа: {{ net.frequency }}{% if net.mask %} / {{ net.mask }}{% endif %}
     </div>
-    <div class="small">Вкладка запам’ятовує останню відкриту р/м.</div>
-  </div>
-
-  <div class="card">
-    <div style="font-weight:800; margin-bottom:10px">Згенеровані поля (не зберігаються)</div>
-    <div class="row">
-      <div class="field">
-        <label>Назва</label>
-        <input value="{{ gen.name }}" readonly/>
-      </div>
-      <div class="field">
-        <label>Район</label>
-        <input value="{{ gen.area }}" readonly/>
-      </div>
-    </div>
-
-    <div class="row" style="margin-top:10px">
-      <div class="field">
-        <label>Частота</label>
-        <input value="{{ gen.frequency }}" readonly/>
-      </div>
-      <div class="field">
-        <label>Вид передачі</label>
-        <input value="{{ gen.modulation }}" readonly/>
-      </div>
-      <div class="field">
-        <label>Період функціонування</label>
-        <input value="{{ gen.period }}" readonly/>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div style="font-weight:800; margin-bottom:10px">Позивні (з БД)</div>
-    <div class="small" style="margin-bottom:8px">Позивні, виявлені по цій радіомережі (таблиця <code>callsigns</code>).</div>
-    {% if callsigns_from_db %}
-      <textarea readonly rows="6" style="width:100%; font-family:inherit; resize:vertical">{{ callsigns_from_db | join(', ') }}</textarea>
-    {% else %}
-      <div class="small" style="color:var(--muted)">По цій мережі позивних у БД поки немає.</div>
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <div style="font-weight:800; margin-bottom:10px">Поля еталонки (зберігаються)</div>
+    <div class="small" style="opacity:.65; margin-bottom:16px">Вкладка запам'ятовує останню відкриту р/м.</div>
 
     <form method="post" action="{{ eb }}/save{% if is_embed and eb == '/etalons' %}?embed=1{% endif %}">
       {% if is_embed %}
         <input type="hidden" name="etalon_embed" value="1" />
       {% endif %}
-      <div class="row" style="margin-top:10px">
-        <div class="field">
-          <label>Призначення</label>
-          <textarea name="purpose" placeholder="{{ defaults.purpose }}">{{ et.purpose if et and et.purpose else '' }}</textarea>
-        </div>
-        <div class="field">
-          <label>Склад кореспондентів</label>
-          <textarea name="correspondents" placeholder="Вкажи склад кореспондентів...">{{ et.correspondents if et and et.correspondents else '' }}</textarea>
-        </div>
-      </div>
 
-      <div class="row" style="margin-top:10px">
-        <div class="field">
-          <label>Режим роботи</label>
-          <textarea name="operation_mode" placeholder="{{ defaults.operation_mode }}">{{ et.operation_mode if et and et.operation_mode else '' }}</textarea>
-        </div>
-        <div class="field">
-          <label>Характер радіообміну</label>
-          <textarea name="traffic_type" placeholder="{{ defaults.traffic_type }}">{{ et.traffic_type if et and et.traffic_type else '' }}</textarea>
-        </div>
-      </div>
+      <div class="etalon-doc">
 
-      <div class="btnrow" style="margin-top:12px">
+        {# 1. Назва #}
+        <div class="etalon-point">
+          <span class="etalon-n">1.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Назва радіомережі:</span>
+            <span class="etalon-ro" title="Редагується в картці р/м (поля «Підрозділ» та «Зона функціонування»)">{{ gen.name }}</span>
+          </span>
+        </div>
+
+        {# 2. Район #}
+        <div class="etalon-point">
+          <span class="etalon-n">2.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Район функціонування/розгортання:</span>
+            <span class="etalon-ro" title="Редагується в картці р/м (поле «Зона функціонування»)">{{ gen.area }}</span>
+          </span>
+        </div>
+
+        {# 3. Призначення #}
+        <div class="etalon-point">
+          <span class="etalon-n">3.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Призначення:</span>
+            <span class="etalon-ro" title="Генерується з поля «Висновки» тегів мережі (картка р/м → вкладка «Теги»)">
+              {%- if conclusions -%}
+                керування {{ conclusions }}.
+              {%- else -%}
+                <span style="opacity:.45">— (теги без висновків)</span>
+              {%- endif -%}
+            </span>
+          </span>
+        </div>
+
+        {# 4. Склад кореспондентів (editable) #}
+        <div class="etalon-point etalon-point-edit">
+          <span class="etalon-n">4.</span>
+          <span class="etalon-body" style="flex-direction:column; align-items:stretch; gap:6px">
+            <span class="etalon-lbl">Склад кореспондентів:</span>
+            <textarea
+              name="correspondents"
+              rows="4"
+              style="width:100%; resize:vertical"
+              placeholder="Вкажи склад кореспондентів..."
+            >{{ et.correspondents if et and et.correspondents else '' }}</textarea>
+          </span>
+        </div>
+
+        {# 5. Позивні #}
+        <div class="etalon-point">
+          <span class="etalon-n">5.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Позивні:</span>
+            <span class="etalon-ro" title="Редагуються у розділі «Позивні» (сторінка «Позивні»)">
+              {%- if callsigns_from_db -%}
+                {{ callsigns_from_db | join(', ') }}
+              {%- else -%}
+                <span style="opacity:.45">— (немає позивних у БД)</span>
+              {%- endif -%}
+            </span>
+          </span>
+        </div>
+
+        {# 6. Частоти #}
+        <div class="etalon-point">
+          <span class="etalon-n">6.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Частоти:</span>
+            <span class="etalon-ro" title="Редагується в картці р/м (поле «Частота»)">{{ gen.frequency }}</span>
+          </span>
+        </div>
+
+        {# 7. Вид передачі #}
+        <div class="etalon-point">
+          <span class="etalon-n">7.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Вид передачі:</span>
+            <span class="etalon-ro" title="Стандартне значення, не редагується">{{ gen.modulation }}</span>
+          </span>
+        </div>
+
+        {# 8. Режим роботи #}
+        <div class="etalon-point">
+          <span class="etalon-n">8.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Режим роботи:</span>
+            <span class="etalon-ro" title="Стандартна фраза, не редагується">{{ operation_mode }}</span>
+          </span>
+        </div>
+
+        {# 9. Характер роботи #}
+        <div class="etalon-point">
+          <span class="etalon-n">9.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Характер роботи:</span>
+            <span class="etalon-ro" title="Генерується з поля «Висновки» тегів мережі (картка р/м → вкладка «Теги»)">
+              {%- if conclusions -%}
+                Службовий радіообмін для управління {{ conclusions }}.
+              {%- else -%}
+                Службовий радіообмін.
+              {%- endif -%}
+            </span>
+          </span>
+        </div>
+
+        {# 10. Період функціонування #}
+        <div class="etalon-point">
+          <span class="etalon-n">10.</span>
+          <span class="etalon-body">
+            <span class="etalon-lbl">Період функціонування:</span>
+            <span class="etalon-ro" title="Дата початку задається при імпорті даних; дата кінця — поточна якщо не вказана">{{ gen.period }}</span>
+          </span>
+        </div>
+
+      </div>{# /.etalon-doc #}
+
+      <div class="btnrow" style="margin-top:16px">
         <button type="submit">Зберегти</button>
       </div>
+
     </form>
   </div>
 {% endif %}

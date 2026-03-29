@@ -146,7 +146,7 @@
         {% elif st == "Спостерігається" and ch != "Очерет" %}{% set cls = "yellow" %}
         {% elif st == "За межами" %}{% set cls = "red" %}
         {% elif st == "Мертва" %}{% set cls = "gray" %}
-        {% elif st == "Малоінформативна" %}{% set cls = "purple" %}
+        {% elif st == "Не інформативна" %}{% set cls = "purple" %}
         {% endif %}
         <span class="badge {{ cls }}">{{ st }} • {{ ch }}</span>
         {% if etalon_exists %}
@@ -389,6 +389,7 @@
               <th style="width:140px">Маска</th>
               <th>Назва р/м</th>
               <th style="width:220px">Чат</th>
+              <th style="width:110px">Еталонка</th>
             </tr>
           </thead>
           <tbody>
@@ -402,6 +403,14 @@
                 <td>{{ r['mask'] }}</td>
                 <td>УКХ р/м {{ r['unit'] }}, н.п. {{ r['zone'] }}</td>
                 <td>{{ r['chat_name'] }}</td>
+                <td class="small" style="white-space:nowrap; color:#fff">
+                  {%- if r['etalon_updated_at'] -%}
+                    {%- set d = r['etalon_updated_at'][:10].split('-') -%}
+                    {{ d[2] }}.{{ d[1] }}.{{ d[0] }}
+                  {%- else -%}
+                    —
+                  {%- endif -%}
+                </td>
               </tr>
             {% endfor %}
           </tbody>

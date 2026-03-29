@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from app.core.db import init_db, get_conn
 
-STATUSES = ["Спостерігається", "За межами", "Мертва", "Досліджується", "Малоінформативна"]
+STATUSES = ["Спостерігається", "За межами", "Мертва", "Досліджується", "Не інформативна"]
 CHATS = ["Очерет", "Галявина", "ЦВО", "ОРК-ФМ", "Каменярі"]
 GROUPS = [
     "31 мсп 67 мсд 25 ЗА",
