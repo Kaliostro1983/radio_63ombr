@@ -833,60 +833,58 @@ async def api_callsign_delete(request: Request):
             )
 
             # Rebuild graph edges for this network from scratch.
+            # NOTE: always rebuild unconditionally — even if affected_ids is empty,
+            # skipping the rebuild would leave the network with zero edges.
             conn.execute("DELETE FROM callsign_edges WHERE network_id = ?", (network_id,))
+            cur = conn.cursor()
+            message_rows = conn.execute(
+                """
+                SELECT id, created_at, received_at
+                FROM messages
+                WHERE network_id = ?
+                """,
+                (network_id,),
+            ).fetchall()
 
-            if affected_ids:
-                cur = conn.cursor()
-                # We can rebuild only for affected messages, but safe approach is to replay all messages in network.
-                # Since networks are typically manageable, we replay all for correctness.
-                message_rows = conn.execute(
+            for mr in message_rows:
+                mid = int(mr["id"])
+                created_at = mr["created_at"]
+                received_at = mr["received_at"]
+
+                caller_row = conn.execute(
                     """
-                    SELECT id, created_at, received_at
-                    FROM messages
-                    WHERE network_id = ?
+                    SELECT c.name
+                    FROM message_callsigns mc
+                    JOIN callsigns c ON c.id = mc.callsign_id
+                    WHERE mc.message_id = ?
+                      AND mc.role = 'caller'
+                    LIMIT 1
                     """,
-                    (network_id,),
+                    (mid,),
+                ).fetchone()
+                caller_name = caller_row["name"] if caller_row else None
+
+                callee_rows = conn.execute(
+                    """
+                    SELECT c.name
+                    FROM message_callsigns mc
+                    JOIN callsigns c ON c.id = mc.callsign_id
+                    WHERE mc.message_id = ?
+                      AND mc.role = 'callee'
+                    """,
+                    (mid,),
                 ).fetchall()
+                callee_names = [r["name"] for r in callee_rows if r and r["name"]]
 
-                for mr in message_rows:
-                    mid = int(mr["id"])
-                    created_at = mr["created_at"]
-                    received_at = mr["received_at"]
-
-                    caller_row = conn.execute(
-                        """
-                        SELECT c.name
-                        FROM message_callsigns mc
-                        JOIN callsigns c ON c.id = mc.callsign_id
-                        WHERE mc.message_id = ?
-                          AND mc.role = 'caller'
-                        LIMIT 1
-                        """,
-                        (mid,),
-                    ).fetchone()
-                    caller_name = caller_row["name"] if caller_row else None
-
-                    callee_rows = conn.execute(
-                        """
-                        SELECT c.name
-                        FROM message_callsigns mc
-                        JOIN callsigns c ON c.id = mc.callsign_id
-                        WHERE mc.message_id = ?
-                          AND mc.role = 'callee'
-                        """,
-                        (mid,),
-                    ).fetchall()
-                    callee_names = [r["name"] for r in callee_rows if r and r["name"]]
-
-                    link_message_callsigns(
-                        cur=cur,
-                        network_id=network_id,
-                        message_id=mid,
-                        caller=caller_name,
-                        callees=callee_names,
-                        created_at=created_at,
-                        received_at=received_at,
-                    )
+                link_message_callsigns(
+                    cur=cur,
+                    network_id=network_id,
+                    message_id=mid,
+                    caller=caller_name,
+                    callees=callee_names,
+                    created_at=created_at,
+                    received_at=received_at,
+                )
 
             # Finally remove old callsign row (no longer referenced by message_callsigns).
             conn.execute("DELETE FROM callsign_status_map WHERE callsign_id = ?", (callsign_id,))
@@ -902,3 +900,156 @@ async def api_callsign_delete(request: Request):
         "deleted": True,
         "replaced_with": tech_name,
     }
+
+
+def _rebuild_edges_for_network(conn, network_id: int) -> int:
+    """Delete and fully rebuild callsign_edges for a network. Returns edge count."""
+    conn.execute("DELETE FROM callsign_edges WHERE network_id = ?", (network_id,))
+    cur = conn.cursor()
+    message_rows = conn.execute(
+        "SELECT id, created_at, received_at FROM messages WHERE network_id = ?",
+        (network_id,),
+    ).fetchall()
+    for mr in message_rows:
+        mid = int(mr["id"])
+        caller_row = conn.execute(
+            """SELECT c.name FROM message_callsigns mc
+               JOIN callsigns c ON c.id = mc.callsign_id
+               WHERE mc.message_id = ? AND mc.role = 'caller' LIMIT 1""",
+            (mid,),
+        ).fetchone()
+        callee_rows = conn.execute(
+            """SELECT c.name FROM message_callsigns mc
+               JOIN callsigns c ON c.id = mc.callsign_id
+               WHERE mc.message_id = ? AND mc.role = 'callee'""",
+            (mid,),
+        ).fetchall()
+        link_message_callsigns(
+            cur=cur,
+            network_id=network_id,
+            message_id=mid,
+            caller=caller_row["name"] if caller_row else None,
+            callees=[r["name"] for r in callee_rows if r and r["name"]],
+            created_at=mr["created_at"],
+            received_at=mr["received_at"],
+        )
+    edge_count = conn.execute(
+        "SELECT COUNT(*) FROM callsign_edges WHERE network_id = ?", (network_id,)
+    ).fetchone()[0]
+    return int(edge_count)
+
+
+@router.post("/api/callsigns/merge")
+async def api_callsign_merge(request: Request):
+    """Merge a wrong callsign into a correct one, preserving all connections.
+
+    Reassigns all message_callsigns from ``source_id`` to ``target_id``,
+    rebuilds callsign_edges for the network, then deletes the source callsign.
+
+    Body JSON:
+        source_id: int  — wrong callsign to remove
+        target_id: int  — correct callsign to keep
+    """
+    payload: Dict[str, Any] = await request.json()
+    source_id = _as_int(payload.get("source_id"), 0)
+    target_id = _as_int(payload.get("target_id"), 0)
+
+    if not source_id or not target_id:
+        return JSONResponse({"ok": False, "error": "source_id and target_id required"}, status_code=400)
+    if source_id == target_id:
+        return JSONResponse({"ok": False, "error": "source and target are the same"}, status_code=400)
+
+    with get_conn() as conn:
+        src = conn.execute("SELECT id, name, network_id FROM callsigns WHERE id = ?", (source_id,)).fetchone()
+        tgt = conn.execute("SELECT id, name, network_id FROM callsigns WHERE id = ?", (target_id,)).fetchone()
+        if not src:
+            return JSONResponse({"ok": False, "error": "source callsign not found"}, status_code=404)
+        if not tgt:
+            return JSONResponse({"ok": False, "error": "target callsign not found"}, status_code=404)
+        if src["network_id"] != tgt["network_id"]:
+            return JSONResponse({"ok": False, "error": "callsigns belong to different networks"}, status_code=400)
+
+        network_id = int(src["network_id"])
+        src_name = src["name"]
+        tgt_name = tgt["name"]
+
+        try:
+            # Remove duplicate (message_id, role) pairs where target already exists.
+            duplicates = conn.execute(
+                """SELECT mc_src.message_id, mc_src.role
+                   FROM message_callsigns mc_src
+                   JOIN message_callsigns mc_tgt
+                     ON mc_tgt.message_id = mc_src.message_id
+                    AND mc_tgt.role = mc_src.role
+                   WHERE mc_src.callsign_id = ? AND mc_tgt.callsign_id = ?""",
+                (source_id, target_id),
+            ).fetchall()
+            for d in duplicates:
+                conn.execute(
+                    "DELETE FROM message_callsigns WHERE message_id = ? AND callsign_id = ? AND role = ?",
+                    (int(d["message_id"]), source_id, d["role"]),
+                )
+
+            # Reassign remaining source references to target.
+            conn.execute(
+                "UPDATE message_callsigns SET callsign_id = ? WHERE callsign_id = ?",
+                (target_id, source_id),
+            )
+
+            # Remove source from other tables.
+            conn.execute("DELETE FROM callsign_status_map WHERE callsign_id = ?", (source_id,))
+            conn.execute("DELETE FROM callsigns WHERE id = ?", (source_id,))
+
+            # Register wrong→correct pair for future ingest auto-correction.
+            # ON CONFLICT: update correct_name in case a previous merge mapped
+            # this wrong name to a different target.
+            from datetime import datetime as _dt
+            conn.execute(
+                """
+                INSERT INTO callsign_corrections (network_id, wrong_name, correct_name, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(network_id, wrong_name)
+                DO UPDATE SET correct_name = excluded.correct_name,
+                              created_at   = excluded.created_at
+                """,
+                (network_id, src_name, tgt_name, _dt.now().isoformat(timespec="seconds")),
+            )
+
+            # Rebuild edges.
+            edge_count = _rebuild_edges_for_network(conn, network_id)
+            conn.commit()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    return {
+        "ok": True,
+        "merged": src_name,
+        "into": tgt_name,
+        "network_id": network_id,
+        "edges_rebuilt": edge_count,
+    }
+
+
+@router.post("/api/callsigns/rebuild-edges")
+async def api_rebuild_edges(request: Request):
+    """Rebuild callsign_edges for a network from scratch.
+
+    Body JSON:
+        network_id: int
+    """
+    payload: Dict[str, Any] = await request.json()
+    network_id = _as_int(payload.get("network_id"), 0)
+    if not network_id:
+        return JSONResponse({"ok": False, "error": "network_id required"}, status_code=400)
+
+    with get_conn() as conn:
+        net = conn.execute("SELECT id FROM networks WHERE id = ?", (network_id,)).fetchone()
+        if not net:
+            return JSONResponse({"ok": False, "error": "network not found"}, status_code=404)
+        try:
+            edge_count = _rebuild_edges_for_network(conn, network_id)
+            conn.commit()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    return {"ok": True, "network_id": network_id, "edges_rebuilt": edge_count}

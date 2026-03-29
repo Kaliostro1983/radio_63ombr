@@ -51,6 +51,19 @@ def upsert_callsign(
     if not name:
         return None
 
+    # Check if there is a registered correction for this callsign name within
+    # this network (e.g. created by a previous MERGE operation).  If so,
+    # redirect silently to the correct name so that re-ingested messages
+    # automatically use the canonical callsign.
+    corr_row = cur.execute(
+        "SELECT correct_name FROM callsign_corrections WHERE network_id = ? AND wrong_name = ? COLLATE NOCASE LIMIT 1",
+        (network_id, name),
+    ).fetchone()
+    if corr_row:
+        corrected = (corr_row[0] if not isinstance(corr_row, dict) else corr_row["correct_name"]) or name
+        if corrected and corrected != name:
+            name = corrected
+
     row = cur.execute(
         "SELECT id FROM callsigns WHERE network_id=? AND name=?",
         (network_id, name),

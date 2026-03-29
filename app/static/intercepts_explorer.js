@@ -1189,7 +1189,11 @@
       }
 
       const ok = await copyTextToClipboard(text);
-      renderWarning(ok ? "Скопійовано в буфер." : "Не вдалося скопіювати.");
+      if (window.appToast) {
+        window.appToast(ok ? "Скопійовано в буфер." : "Не вдалося скопіювати.", ok ? "success" : "error", 1600);
+      } else {
+        renderWarning(ok ? "Скопійовано в буфер." : "Не вдалося скопіювати.");
+      }
       return;
     }
 

@@ -21,6 +21,15 @@
   const modalErr = $("csModalErr");
   const btnSave = $("csSave");
   const btnDelete = $("csDelete");
+  const btnMerge = $("csMerge");
+  const mergePanel = $("csMergePanel");
+  const mergeQuery = $("csMergeQuery");
+  const mergeSuggestions = $("csMergeSuggestions");
+  const mergeTargetName = $("csMergeTargetName");
+  const mergeTargetId = $("csMergeTargetId");
+  const mergeErr = $("csMergeErr");
+  const mergeConfirm = $("csMergeConfirm");
+  const mergeCancel = $("csMergeCancel");
   const btnOpenIntercepts = $("csOpenIntercepts");
   const btnOpenLinks = $("csOpenLinks");
   const quickWrap = $("csQuickId");
@@ -326,6 +335,7 @@
       modalErr.style.display = "none";
       modalErr.textContent = "";
     }
+    hideMergePanel();
   }
 
   function showError(msg) {
@@ -561,6 +571,53 @@
     }
   }
 
+  function hideMergePanel() {
+    if (mergePanel) mergePanel.style.display = "none";
+    if (mergeQuery) mergeQuery.value = "";
+    if (mergeSuggestions) { mergeSuggestions.style.display = "none"; mergeSuggestions.innerHTML = ""; }
+    if (mergeTargetId) mergeTargetId.value = "";
+    if (mergeTargetName) mergeTargetName.textContent = "—";
+    if (mergeErr) mergeErr.style.display = "none";
+  }
+
+  async function mergeCallsign() {
+    const source_id = parseInt(modalId && modalId.value ? modalId.value : "0", 10);
+    const target_id = parseInt(mergeTargetId && mergeTargetId.value ? mergeTargetId.value : "0", 10);
+    const sourceName = (modalName && modalName.value ? modalName.value : "").trim();
+    const targetName = (mergeTargetName ? mergeTargetName.textContent : "").trim();
+
+    if (!source_id || !target_id) {
+      if (mergeErr) { mergeErr.textContent = "Обери правильний позивний зі списку."; mergeErr.style.display = ""; }
+      return;
+    }
+    if (!window.confirm(`Злити "${sourceName}" → "${targetName}"?\n\nВсі перехоплення будуть переписані на "${targetName}", а "${sourceName}" видалено.`)) return;
+
+    if (mergeConfirm) mergeConfirm.disabled = true;
+
+    try {
+      const r = await fetch("/api/callsigns/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_id, target_id }),
+      });
+      const data = await r.json();
+      if (!data.ok) {
+        if (mergeErr) { mergeErr.textContent = data.error || "Помилка злиття"; mergeErr.style.display = ""; }
+        return;
+      }
+      const context = OPEN_CONTEXT;
+      closeModal();
+      if (window.appToast) window.appToast(`"${sourceName}" злито в "${targetName}".`, "success", 2500);
+      try {
+        window.dispatchEvent(new CustomEvent("callsignModalDeleted", { detail: { data, context: context || {} } }));
+      } catch (e) {}
+    } catch (e) {
+      if (mergeErr) { mergeErr.textContent = "Помилка запиту"; mergeErr.style.display = ""; }
+    } finally {
+      if (mergeConfirm) mergeConfirm.disabled = false;
+    }
+  }
+
   function setCallsignModalOnSave(fn) {
     onSaveCallback = typeof fn === "function" ? fn : null;
   }
@@ -579,6 +636,60 @@
     btnSave.addEventListener("click", saveModal);
     if (btnDelete) {
       btnDelete.addEventListener("click", deleteModalCallsign);
+    }
+    if (btnMerge) {
+      btnMerge.addEventListener("click", function () {
+        if (!mergePanel) return;
+        const isVisible = mergePanel.style.display !== "none";
+        if (isVisible) {
+          hideMergePanel();
+        } else {
+          mergePanel.style.display = "";
+          if (mergeQuery) mergeQuery.focus();
+        }
+      });
+    }
+    if (mergeCancel) mergeCancel.addEventListener("click", hideMergePanel);
+    if (mergeConfirm) mergeConfirm.addEventListener("click", mergeCallsign);
+    if (mergeQuery) {
+      mergeQuery.addEventListener("input", async function () {
+        const q = mergeQuery.value.trim();
+        if (mergeSuggestions) { mergeSuggestions.innerHTML = ""; mergeSuggestions.style.display = "none"; }
+        if (mergeTargetId) mergeTargetId.value = "";
+        if (mergeTargetName) mergeTargetName.textContent = "—";
+        if (!q || q.length < 2) return;
+
+        // Get current network_id from modal network select
+        const networkSelect = $("csModalNetwork");
+        const networkId = networkSelect ? parseInt(networkSelect.value || "0", 10) : 0;
+
+        try {
+          const params = new URLSearchParams({ q, limit: 12 });
+          if (networkId) params.set("network_id", networkId);
+          const r = await fetch(`/api/callsigns/search?${params}`);
+          const data = await r.json();
+          const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+          const items = Array.isArray(data) ? data : (data.rows || data.items || []);
+          const sourceId = parseInt(modalId && modalId.value ? modalId.value : "0", 10);
+          const filtered = items.filter(it => it.id !== sourceId);
+          if (!filtered.length || !mergeSuggestions) return;
+          mergeSuggestions.style.display = "";
+          mergeSuggestions.innerHTML = filtered.map(it =>
+            `<div class="cs-merge-suggestion" data-id="${esc(it.id)}" data-name="${esc(it.name)}" style="padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border)">
+              <strong>${esc(it.name)}</strong>
+              <span class="small" style="opacity:.6; margin-left:6px">${esc(it.frequency || "")}</span>
+            </div>`
+          ).join("");
+          mergeSuggestions.querySelectorAll(".cs-merge-suggestion").forEach(el => {
+            el.addEventListener("click", function () {
+              if (mergeTargetId) mergeTargetId.value = this.dataset.id;
+              if (mergeTargetName) mergeTargetName.textContent = this.dataset.name;
+              if (mergeQuery) mergeQuery.value = this.dataset.name;
+              mergeSuggestions.style.display = "none";
+            });
+          });
+        } catch (e) { /* ignore */ }
+      });
     }
     if (btnOpenIntercepts) {
       btnOpenIntercepts.addEventListener("click", openInterceptsForCurrent);

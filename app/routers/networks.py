@@ -1077,6 +1077,18 @@ def networks_save(
         if start_date_str or end_date_str:
             _set_etalon_dates(conn, network_id, start_date_str, end_date_str)
 
+        # When a network is marked "Мертва" it will no longer receive new
+        # intercepts, so the callsign correction map becomes irrelevant.
+        # Clean it up to avoid stale data.
+        dead_status = conn.execute(
+            "SELECT id FROM statuses WHERE name = 'Мертва' LIMIT 1"
+        ).fetchone()
+        if dead_status and int(status_id) == int(dead_status["id"]):
+            conn.execute(
+                "DELETE FROM callsign_corrections WHERE network_id = ?",
+                (network_id,),
+            )
+
         conn.commit()
 
     request.session.pop("network_save_draft", None)

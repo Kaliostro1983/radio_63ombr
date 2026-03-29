@@ -330,6 +330,19 @@ CREATE TABLE IF NOT EXISTS message_landmark_queue (
     updated_at TEXT NOT NULL,
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
+
+-- Maps wrong callsign names to their correct counterparts within a network.
+-- Populated automatically when a callsign merge is performed.
+-- Used during ingest to redirect wrong callsign tokens before creating records.
+CREATE TABLE IF NOT EXISTS callsign_corrections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id INTEGER NOT NULL,
+    wrong_name TEXT NOT NULL COLLATE NOCASE,
+    correct_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(network_id, wrong_name),
+    FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
+);
 """
 
 
@@ -528,6 +541,26 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             function="_run_lightweight_migrations",
             stage=f"status_color:{_sname}",
         )
+
+    # --- callsign_corrections table (created via SCHEMA_SQL for fresh installs;
+    #     this CREATE ensures existing DBs get the table without a full rebuild). ---
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS callsign_corrections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            network_id INTEGER NOT NULL,
+            wrong_name TEXT NOT NULL COLLATE NOCASE,
+            correct_name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(network_id, wrong_name),
+            FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:callsign_corrections",
+    )
 
     # Drop deprecated etalons columns (idempotent: skipped if column does not exist).
     for _col in ("callsigns", "operation_mode", "traffic_type", "purpose", "raw_import_text"):
