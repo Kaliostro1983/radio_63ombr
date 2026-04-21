@@ -2414,3 +2414,294 @@ button.secondary{
 .net-alias-modal-card {
   max-width: 492px;
 }
+
+/* =========================
+   ВИСНОВКИ PAGE
+   ========================= */
+
+.cn-type-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: var(--card);
+}
+
+.cn-type-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.cn-type-card__name {
+  font-weight: 700;
+  font-size: 15px;
+  flex: 1;
+}
+
+.cn-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 15%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* =========================
+   ВИСНОВКИ — FILTER BAR
+   ========================= */
+
+.cn-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+/* datetime-local fields */
+.cn-filter-field--dt {
+  flex: 1;
+  min-width: 170px;
+}
+
+/* R/M network autocomplete — 4× smaller */
+.cn-filter-field--net {
+  flex: 0 0 auto;
+  width: 120px;
+}
+
+/* Type select — 2× smaller */
+.cn-filter-field--type {
+  flex: 0 0 auto;
+  width: 120px;
+}
+
+/* Actions group (buttons + count + pin) */
+.cn-filter-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cn-filter-btns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Count display field */
+.cn-count-field {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--card);
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+/* Pin (geo) button */
+.cn-pin-btn {
+  font-size: 17px;
+  padding: 4px 8px;
+  line-height: 1;
+}
+.cn-pin-btn.active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--card));
+  border-color: var(--accent);
+}
+
+/* =========================
+   NETWORK AUTOCOMPLETE
+   ========================= */
+
+.cn-ac-wrap {
+  position: relative;
+}
+
+.cn-ac-drop {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18);
+}
+
+.cn-ac-item {
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cn-ac-item:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+}
+
+/* =========================
+   GEO PANEL
+   ========================= */
+
+.cn-geo-panel {
+  display: flex;
+  gap: 10px;
+  height: 400px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.cn-geo-map {
+  flex: 3;
+  min-width: 0;
+}
+
+.cn-geo-info {
+  flex: 1;
+  min-width: 160px;
+  padding: 14px 12px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--card);
+}
+
+.cn-geo-info__dt {
+  opacity: .6;
+  margin-bottom: 3px;
+}
+
+.cn-geo-info__net {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.cn-geo-info__mgrs {
+  margin: 6px 0;
+}
+
+.cn-geo-info__text {
+  font-size: 13px;
+  line-height: 1.55;
+  margin-top: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* =========================
+   MGRS code inline
+   ========================= */
+
+.cn-mgrs-code {
+  font-size: 11px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+/* =========================
+   ВИСНОВКИ — CARD TABLE (v3)
+   ========================= */
+
+.cn-results-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+
+.cn-results-table thead th {
+  padding: 4px 12px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  opacity: .65;
+  white-space: nowrap;
+}
+
+.cn-results-table thead th:nth-child(3) {
+  text-align: left;
+}
+
+.cn-results-table tbody tr td {
+  padding: 10px 12px;
+  vertical-align: middle;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.cn-results-table tbody tr td:first-child {
+  border-left: 1px solid var(--border);
+  border-radius: 8px 0 0 8px;
+}
+
+.cn-results-table tbody tr td:last-child {
+  border-right: 1px solid var(--border);
+  border-radius: 0 8px 8px 0;
+}
+
+.cn-results-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+}
+
+/* =========================
+   TYPE CARD — colour swatch + picker
+   ========================= */
+
+.cn-type-card__swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.cn-type-color-inp {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.cn-type-card__head {
+  gap: 8px;
+}
+
+/* =========================
+   GEO INFO — full body text
+   ========================= */
+
+.cn-geo-info__body {
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}

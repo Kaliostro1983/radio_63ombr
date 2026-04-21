@@ -19,6 +19,7 @@ service layer coordinates the pipeline order.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 from app.core.config import settings
@@ -314,3 +315,42 @@ def insert_message(
         )
 
     return message_id
+
+
+def insert_analytical_conclusion(
+    cur,
+    *,
+    message_id: int,
+    network_id: int,
+    created_at: str,
+    conclusion_text: str,
+    mgrs_list: List[str],
+) -> int:
+    """Persist an analytical conclusion linked to a message.
+
+    Uses INSERT OR IGNORE so re-ingesting the same message (e.g. after a
+    pipeline fix) is safe — the existing row is kept unchanged.
+
+    Args:
+        cur: SQLite cursor.
+        message_id: FK to messages.id.
+        network_id: denormalized FK to networks.id for fast filtering.
+        created_at: message datetime (ISO TEXT), denormalized for queries.
+        conclusion_text: extracted analytical conclusion text.
+        mgrs_list: list of normalized MGRS coordinate strings.
+
+    Returns:
+        int: inserted analytical_conclusions.id, or 0 if already existed.
+    """
+    safe_execute(
+        cur,
+        """
+        INSERT OR IGNORE INTO analytical_conclusions
+            (message_id, network_id, created_at, conclusion_text, mgrs_json, type_id)
+        VALUES (?, ?, ?, ?, ?, 0)
+        """,
+        (message_id, network_id, created_at, conclusion_text, json.dumps(mgrs_list, ensure_ascii=False)),
+        module="app.services.ingest_store",
+        function="insert_analytical_conclusion",
+    )
+    return int(cur.lastrowid or 0)

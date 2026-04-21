@@ -49,6 +49,7 @@
       <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}">Перехоплення</a>
       <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
       <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
+      <a href="/conclusions" class="{% if request.url.path.startswith('/conclusions') %}active{% endif %}">Висновки</a>
     </div>
 
   </aside>
@@ -138,9 +139,8 @@
       </div>
 
       <div id="csModalErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
-    </div>
 
-      <!-- Merge panel (hidden by default) -->
+      <!-- Merge panel (hidden by default, inside modal-body so it scrolls into view) -->
       <div id="csMergePanel" style="display:none; margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:8px; background:color-mix(in srgb, #facc15 6%, var(--card))">
         <div class="small" style="font-weight:700; margin-bottom:6px">Злити з правильним позивним</div>
         <div class="small" style="opacity:.75; margin-bottom:8px">
@@ -159,6 +159,7 @@
           <button id="csMergeCancel" type="button" class="secondary">Скасувати</button>
         </div>
       </div>
+    </div>
 
     <div class="modal-foot">
       <button id="csDelete" type="button" class="secondary" style="border-color:#7f1d1d;color:#fecaca">Видалити</button>

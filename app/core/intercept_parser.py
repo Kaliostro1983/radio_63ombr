@@ -57,6 +57,34 @@ def strip_received_from_post_header_noise(text: str) -> str:
 
     return text
 
+# Invisible Unicode formatting/directional characters that XLSX exporters inject
+# anywhere inside a line (e.g. U+2068 LTR First Strong Isolate, U+2069 Pop Directional).
+# Strip these globally before any pattern matching.
+RE_INVISIBLE_CHARS = re.compile(
+    r"[\u2060-\u206F"   # Invisible formatting chars (includes BIDI isolates U+2068/2069)
+    r"\u200B-\u200F"    # Zero-width space/non-joiner/joiner, LTR/RTL marks
+    r"\u202A-\u202E"    # LTR/RTL embedding, override characters
+    r"\uFEFF]"          # BOM / zero-width no-break space
+)
+
+# Leading emoji/icon characters injected by some XLSX exporters (e.g. 🔊, 🧍, 🪵)
+# before the datetime or network line.  Applied after invisible-char stripping.
+RE_LEADING_ICON = re.compile(
+    r"^[\U0001F000-\U0001FFFF"   # Emoji (Mahjong … Supplemental Symbols)
+    r"\U00002600-\U000027FF"     # Misc symbols, Dingbats
+    r"\U00002B00-\U00002BFF"     # Misc symbols and arrows
+    r"\uFE00-\uFE0F"             # Variation selectors
+    r"\u200D]+"                  # ZWJ
+    r"\s*"                       # optional space that follows the icon
+)
+
+
+def _strip_leading_icon(line: str) -> str:
+    """Strip invisible Unicode chars and a leading emoji/icon from a line."""
+    line = RE_INVISIBLE_CHARS.sub("", line)
+    return RE_LEADING_ICON.sub("", line)
+
+
 # 27.02.2026, 16:43:47  або  27.02.2026 16:00:21
 RE_DT = re.compile(r"^\s*\d{2}\.\d{2}\.\d{4}[,\s]+\d{2}:\d{2}:\d{2}\s*$")
 
@@ -87,7 +115,7 @@ def first_nonempty_lines(text: str, n: int = 2) -> List[str]:
     """
     out: List[str] = []
     for line in (text or "").splitlines():
-        s = line.strip()
+        s = _strip_leading_icon(line.strip())
         if s:
             out.append(s)
         if len(out) >= n:
@@ -284,7 +312,7 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
     """
 
     text = strip_received_from_post_header_noise(text)
-    lines = [ln.strip() for ln in (text or "").splitlines()]
+    lines = [_strip_leading_icon(ln.strip()) for ln in (text or "").splitlines()]
     nonempty = [ln for ln in lines if ln]
 
     if len(nonempty) < 3:

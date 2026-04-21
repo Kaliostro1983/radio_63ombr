@@ -35,6 +35,7 @@ from app.core.validators import detect_message_format
 from app.services.callsign_service import link_message_callsigns
 from app.services.ingest_store import (
     find_duplicate_message,
+    insert_analytical_conclusion,
     insert_ingest_message,
     insert_message,
     mark_duplicate_content,
@@ -617,6 +618,20 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             created_at=created_at,
             received_at=received_at,
         )
+
+        # Persist analytical conclusion if this is an analytical-type message.
+        if message_format == "analytical_type":
+            conclusion_text = parsed.get("analytical_conclusion") or ""
+            mgrs_list = list(parsed.get("analytical_mgrs") or [])
+            if conclusion_text:
+                insert_analytical_conclusion(
+                    cur,
+                    message_id=message_id,
+                    network_id=network_id,
+                    created_at=created_at,
+                    conclusion_text=conclusion_text,
+                    mgrs_list=mgrs_list,
+                )
 
         return {
             "ok": True,

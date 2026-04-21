@@ -645,6 +645,7 @@
           hideMergePanel();
         } else {
           mergePanel.style.display = "";
+          mergePanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
           if (mergeQuery) mergeQuery.focus();
         }
       });

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% set active_tab = (request.query_params.get("tab") or "view")|lower %}
+{% if active_tab not in ["view", "settings"] %}
+  {% set active_tab = "view" %}
+{% endif %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1>Висновки</h1>
+    <div class="small">Аналітичні висновки з перехоплень.</div>
+  </div>
+
+  <section class="tabs-shell">
+    <div class="tabs-nav" role="tablist" aria-label="Вкладки Висновки">
+      <button
+        id="cnTabView"
+        type="button"
+        class="tab-btn {% if active_tab == 'view' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'view' %}true{% else %}false{% endif %}"
+        aria-controls="cnPaneView"
+        data-tab="view"
+      >Перегляд</button>
+
+      <button
+        id="cnTabSettings"
+        type="button"
+        class="tab-btn {% if active_tab == 'settings' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'settings' %}true{% else %}false{% endif %}"
+        aria-controls="cnPaneSettings"
+        data-tab="settings"
+      >Налаштування</button>
+    </div>
+
+    <div class="tab-panel-wrap">
+
+      <!-- ===== ПЕРЕГЛЯД TAB ===== -->
+      <section
+        id="cnPaneView"
+        class="tab-panel {% if active_tab != 'view' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="cnTabView"
+      >
+        <div class="tab-panel-section">
+
+          <!-- Filter bar -->
+          <form id="cnFilterForm" class="cn-filter-bar" autocomplete="off">
+
+            <!-- Від -->
+            <div class="field cn-filter-field--dt">
+              <label for="cnDateFrom">Від</label>
+              <input id="cnDateFrom" type="datetime-local" />
+            </div>
+
+            <!-- До -->
+            <div class="field cn-filter-field--dt">
+              <label for="cnDateTo">До</label>
+              <input id="cnDateTo" type="datetime-local" />
+            </div>
+
+            <!-- Р/М autocomplete -->
+            <div class="field cn-filter-field--net">
+              <label for="cnNetworkInput">Р/М</label>
+              <div class="cn-ac-wrap">
+                <input
+                  id="cnNetworkInput"
+                  type="text"
+                  placeholder="— всі —"
+                  autocomplete="off"
+                />
+                <div id="cnNetworkDrop" class="cn-ac-drop hidden"></div>
+                <input type="hidden" id="cnNetworkId" value="" />
+              </div>
+            </div>
+
+            <!-- Тип -->
+            <div class="field cn-filter-field--type">
+              <label for="cnTypeSel">Тип</label>
+              <select id="cnTypeSel">
+                <option value="-1">— всі —</option>
+              </select>
+            </div>
+
+            <!-- Buttons + count + pin — all vertically aligned to bottom -->
+            <div class="cn-filter-actions">
+              <label>&nbsp;</label>
+              <div class="cn-filter-btns">
+                <button type="submit" id="cnShowBtn">Показати</button>
+                <button type="button" id="cnLoadBtn" class="secondary">Завантажити</button>
+                <div class="cn-count-field" title="Кількість вибраних перехоплень">
+                  <span id="cnCountVal">—</span>
+                </div>
+                <button
+                  type="button"
+                  id="cnMapToggleBtn"
+                  class="cn-pin-btn secondary"
+                  title="Геолокації висновків"
+                  aria-pressed="false"
+                >📍</button>
+              </div>
+            </div>
+
+          </form>
+
+          <!-- Geo panel (hidden by default) -->
+          <div id="cnGeoPanel" class="cn-geo-panel hidden">
+            <div id="cnGeoMap" class="cn-geo-map"></div>
+            <div id="cnGeoInfo" class="cn-geo-info">
+              <div class="small" style="opacity:.55; line-height:1.5">
+                Клікніть на точку на карті, щоб побачити пов'язаний висновок.
+              </div>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="cnLoader"    class="small" style="opacity:.6; display:none">Завантаження…</div>
+          <div id="cnEmptyMsg"  class="small" style="opacity:.6; display:none">Висновків не знайдено.</div>
+
+          <div id="cnTableWrap" style="overflow-x:auto">
+            <table id="cnTable" class="cn-results-table" style="display:none">
+              <thead>
+                <tr>
+                  <th style="width:140px">Час / Мережа</th>
+                  <th style="width:110px">Тип</th>
+                  <th style="text-align:left">Висновок</th>
+                  <th style="width:170px">Координати</th>
+                </tr>
+              </thead>
+              <tbody id="cnTableBody"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===== НАЛАШТУВАННЯ TAB ===== -->
+      <section
+        id="cnPaneSettings"
+        class="tab-panel {% if active_tab != 'settings' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="cnTabSettings"
+      >
+        <div class="tab-panel-section">
+
+          <!-- Add new type -->
+          <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:22px; flex-wrap:wrap">
+            <div class="field" style="flex:1; min-width:200px">
+              <label for="cnNewTypeName">Новий тип</label>
+              <input id="cnNewTypeName" type="text" placeholder="Назва типу…" autocomplete="off" />
+            </div>
+            <button id="cnAddTypeBtn" type="button">Додати тип</button>
+          </div>
+          <div id="cnAddTypeErr" class="small" style="color:var(--danger); display:none; margin-bottom:12px"></div>
+
+          <!-- Types list -->
+          <div id="cnTypesLoader" class="small" style="opacity:.6">Завантаження…</div>
+          <div id="cnTypesList"></div>
+
+        </div>
+      </section>
+
+    </div><!-- /tab-panel-wrap -->
+  </section>
+</div>
+
+<!-- Delete type confirm modal -->
+<div id="cnDeleteModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" id="cnDeleteBackdrop"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:420px">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Підтвердження</div>
+        <div style="font-weight:700">Видалити тип?</div>
+      </div>
+      <button class="secondary" type="button" id="cnDeleteCancelBtn">Закрити</button>
+    </div>
+    <div class="modal-body">
+      <p class="small">Тип буде видалено. Усі висновки цього типу отримають статус <strong>«невідомо»</strong>.</p>
+      <div id="cnDeleteTypeName" style="font-weight:700; margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="cnDeleteConfirmBtn" type="button" style="background:#991b1b; border-color:#991b1b; color:#fff">Видалити</button>
+      <button class="secondary" type="button" id="cnDeleteCancelBtn2">Скасувати</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/conclusions.js?v=4" defer></script>
+{% endblock %}

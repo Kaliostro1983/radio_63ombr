@@ -399,3 +399,61 @@ def api_home_analytical_summary(
         ],
     }
 
+
+@router.get("/api/home/movement-count")
+def api_movement_count(period: str = "day", words: str = "мот,квадр,короб,вел"):
+    """Count intercept messages on 144.8250 matching movement keywords.
+
+    Args:
+        period: "day"   → today    08:00–16:00
+                "night" → yesterday 08:00 – today 08:00
+        words:  comma-separated stems to search in lower(body_text).
+    """
+    now = datetime.now()
+    today = now.date()
+
+    if period == "night":
+        start_dt = datetime.combine(today - timedelta(days=1), datetime.min.time().replace(hour=8))
+        end_dt   = datetime.combine(today, datetime.min.time().replace(hour=8))
+    else:  # day
+        start_dt = datetime.combine(today, datetime.min.time().replace(hour=8))
+        end_dt   = datetime.combine(today, datetime.min.time().replace(hour=16))
+
+    stem_list = [w.strip().lower() for w in (words or "").split(",") if w.strip()]
+    if not stem_list:
+        return {"ok": True, "count": 0, "period_start": start_dt.isoformat(), "period_end": end_dt.isoformat()}
+
+    with get_conn() as conn:
+        # Resolve network id for frequency 144.8250
+        net_row = conn.execute(
+            "SELECT id FROM networks WHERE frequency = '144.8250' LIMIT 1"
+        ).fetchone()
+        if not net_row:
+            return {"ok": False, "error": "Мережу 144.8250 не знайдено"}
+
+        network_id = int(net_row["id"])
+
+        # Build LIKE conditions on lowercased body_text
+        like_clauses = " OR ".join(["lower(m.body_text) LIKE ?" for _ in stem_list])
+        like_params  = [f"%{s}%" for s in stem_list]
+
+        row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS cnt
+            FROM messages m
+            WHERE m.network_id = ?
+              AND m.is_valid = 1
+              AND m.created_at >= ?
+              AND m.created_at < ?
+              AND ({like_clauses})
+            """,
+            (network_id, start_dt.isoformat(timespec="seconds"), end_dt.isoformat(timespec="seconds"), *like_params),
+        ).fetchone()
+
+    return {
+        "ok": True,
+        "count": int(row["cnt"] or 0),
+        "period_start": start_dt.strftime("%d.%m %H:%M"),
+        "period_end":   end_dt.strftime("%d.%m %H:%M"),
+    }
+

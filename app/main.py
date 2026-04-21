@@ -41,6 +41,7 @@ from app.routers.health import router as health_router
 from app.routers.landmarks import router as landmarks_router
 
 from app.routers.ingest import router as ingest_router
+from app.routers.conclusions import router as conclusions_router
 from app.services.landmark_match_service import start_landmark_match_worker
 
 from fastapi.templating import Jinja2Templates
@@ -89,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(xlsx_import_router)
     app.include_router(reports_router)
     app.include_router(landmarks_router)
+    app.include_router(conclusions_router)
 
 
     @app.on_event("startup")

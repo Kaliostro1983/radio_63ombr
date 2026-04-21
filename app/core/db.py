@@ -343,6 +343,39 @@ CREATE TABLE IF NOT EXISTS callsign_corrections (
     UNIQUE(network_id, wrong_name),
     FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
 );
+
+-- Typology for analytical conclusions (filled manually via UI or migration).
+-- id=0 is reserved as the "невідомо" default.
+-- keywords_json holds a JSON array of keyword stems used for auto-classification.
+CREATE TABLE IF NOT EXISTS conclusion_types (
+    id            INTEGER PRIMARY KEY,
+    type          TEXT NOT NULL UNIQUE,
+    keywords_json TEXT NOT NULL DEFAULT '[]',
+    color         TEXT
+);
+
+INSERT OR IGNORE INTO conclusion_types (id, type) VALUES (0, 'невідомо');
+
+-- Analytical conclusions extracted from analytical-type intercept messages.
+-- One row per message (1:1 via UNIQUE on message_id).
+-- network_id and created_at are denormalized from messages for fast queries.
+-- mgrs_json stores a JSON array of normalized MGRS coordinate strings.
+-- type_id defaults to 0 ("невідомо") until typology algorithm assigns a real type.
+CREATE TABLE IF NOT EXISTS analytical_conclusions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id  INTEGER NOT NULL UNIQUE,
+    network_id  INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    conclusion_text TEXT NOT NULL,
+    mgrs_json   TEXT NOT NULL DEFAULT '[]',
+    type_id     INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
+    FOREIGN KEY(type_id)    REFERENCES conclusion_types(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytical_conclusions_network_dt
+    ON analytical_conclusions(network_id, created_at DESC);
 """
 
 
@@ -560,6 +593,78 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         module="app.core.db",
         function="_run_lightweight_migrations",
         stage="create_table:callsign_corrections",
+    )
+
+    # --- conclusion_types + analytical_conclusions tables (idempotent). ---
+    safe_execute(
+        conn,
+        "CREATE TABLE IF NOT EXISTS conclusion_types (id INTEGER PRIMARY KEY, type TEXT NOT NULL UNIQUE)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:conclusion_types",
+    )
+    # Add keywords_json BEFORE the seed INSERT so it exists on old databases.
+    _ensure_column(conn, "conclusion_types", "keywords_json", "keywords_json TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "conclusion_types", "color", "color TEXT")
+    safe_execute(
+        conn,
+        "INSERT OR IGNORE INTO conclusion_types (id, type) VALUES (0, 'невідомо')",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="seed:conclusion_types:невідомо",
+    )
+    # Seed default marker colours (idempotent: only fills NULL rows).
+    for _ct_name, _ct_color in [
+        ("невідомо", "#6b7280"),
+        ("БпЛА",     "#3b82f6"),
+        ("піхота",   "#22c55e"),
+        ("арта",     "#ef4444"),
+    ]:
+        safe_execute(
+            conn,
+            "UPDATE conclusion_types SET color = ? WHERE lower(type) = lower(?) AND color IS NULL",
+            (_ct_color, _ct_name),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"seed_color:conclusion_types:{_ct_name}",
+        )
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS analytical_conclusions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id  INTEGER NOT NULL UNIQUE,
+            network_id  INTEGER NOT NULL,
+            created_at  TEXT NOT NULL,
+            conclusion_text TEXT NOT NULL,
+            mgrs_json   TEXT NOT NULL DEFAULT '[]',
+            type_id     INTEGER,
+            FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE,
+            FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE,
+            FOREIGN KEY(type_id)    REFERENCES conclusion_types(id) ON DELETE SET NULL
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:analytical_conclusions",
+    )
+    # Add type_id to existing analytical_conclusions tables created before this migration.
+    _ensure_column(conn, "analytical_conclusions", "type_id", "type_id INTEGER NOT NULL DEFAULT 0 REFERENCES conclusion_types(id) ON DELETE SET NULL")
+    # Backfill any rows that were inserted before type_id existed.
+    safe_execute(
+        conn,
+        "UPDATE analytical_conclusions SET type_id = 0 WHERE type_id IS NULL",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="backfill:analytical_conclusions.type_id",
+    )
+    safe_execute(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_analytical_conclusions_network_dt"
+        " ON analytical_conclusions(network_id, created_at DESC)",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_index:analytical_conclusions_network_dt",
     )
 
     # Drop deprecated etalons columns (idempotent: skipped if column does not exist).

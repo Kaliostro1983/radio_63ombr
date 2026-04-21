@@ -396,5 +396,69 @@
   tabActivity.addEventListener("click", () => {
     setTimeout(loadActivity, 0);
   });
+
+  // --- Переміщення 36 мсп ---
+  (function () {
+    const btnDay      = $("movBtnDay");
+    const btnNight    = $("movBtnNight");
+    const loader      = $("movLoader");
+    const wordsEl     = $("movWords");
+    const modal       = $("movModal");
+    const modalText   = $("movModalText");
+    const modalCopy   = $("movModalCopy");
+    const modalClose  = $("movModalClose");
+    const modalClose2 = $("movModalClose2");
+    const backdrop    = $("movModalBackdrop");
+    if (!btnDay || !btnNight || !modal) return;
+
+    function openModal(text) {
+      modalText.textContent = text;
+      modal.classList.remove("hidden");
+      modal.removeAttribute("aria-hidden");
+    }
+
+    function closeModal() {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
+    [modalClose, modalClose2, backdrop].forEach(el => {
+      if (el) el.addEventListener("click", closeModal);
+    });
+
+    if (modalCopy) {
+      modalCopy.addEventListener("click", async () => {
+        const text = modalText.textContent || "";
+        try {
+          await navigator.clipboard.writeText(text);
+          if (window.appToast) window.appToast("Скопійовано в буфер.", "success", 1600);
+        } catch {
+          if (window.appToast) window.appToast("Не вдалося скопіювати.", "error", 1600);
+        }
+      });
+    }
+
+    async function fetchCount(p) {
+      const words = (wordsEl ? wordsEl.value : "мот,квадр,короб,вел").trim();
+      if (loader) loader.style.display = "";
+      try {
+        const res  = await fetch(`/api/home/movement-count?period=${p}&words=${encodeURIComponent(words)}`);
+        const data = await res.json();
+        if (loader) loader.style.display = "none";
+        if (!data.ok) {
+          openModal(data.error || "Помилка запиту");
+        } else {
+          const text = `З ${data.period_start} по ${data.period_end} виявлено перехоплень щодо:\nпереміщення т/з - ${data.count}`;
+          openModal(text);
+        }
+      } catch (e) {
+        if (loader) loader.style.display = "none";
+        openModal("Помилка запиту до сервера.");
+      }
+    }
+
+    btnDay.addEventListener("click",   () => fetchCount("day"));
+    btnNight.addEventListener("click", () => fetchCount("night"));
+  })();
 })();
 
