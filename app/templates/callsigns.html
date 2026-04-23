@@ -41,6 +41,17 @@
       >
         Зв'язки
       </button>
+
+      <button
+        id="csTabWanted"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="csPaneWanted"
+      >
+        Розшук
+      </button>
     </div>
 
     <div class="tab-panel-wrap">
@@ -187,9 +198,68 @@
           <div id="csLinkGraphOut" class="net-graph-out"></div>
         </div>
       </section>
+      <!-- TAB: wanted (callsigns without status) -->
+      <section
+        id="csPaneWanted"
+        class="tab-panel callsigns-tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="csTabWanted"
+      >
+        <div class="tab-panel-section callsigns-toolbar">
+          <div class="row callsigns-form-row">
+
+            <div class="callsigns-field callsigns-field-days">
+              <label class="small">Днів</label>
+              <input id="csWantedDays" type="number" min="1" max="365" value="10" />
+            </div>
+
+            <div class="callsigns-field" style="flex:0">
+              <label class="small">&nbsp;</label>
+              <label class="small cs-links-check">
+                <input id="csWantedToday" type="checkbox" checked />
+                <span>Сьогодні</span>
+              </label>
+            </div>
+
+            <div class="callsigns-field" style="max-width:240px">
+              <label class="small">Не менше повідомлень</label>
+              <input id="csWantedMinMsg" type="number" min="1" value="5" />
+            </div>
+
+            <div class="callsigns-actions">
+              <button id="csWantedShow" type="button">Показати</button>
+            </div>
+
+            <div id="csWantedInfo" class="small callsigns-info"></div>
+          </div>
+        </div>
+
+        <div class="tab-panel-section callsigns-results">
+          <div class="table-wrap">
+            <table class="table" id="csWantedTable">
+              <thead>
+                <tr>
+                  <th style="width:50px">№</th>
+                  <th style="min-width:180px">Позивний</th>
+                  <th style="min-width:140px">Частота</th>
+                  <th style="min-width:220px">Підрозділ</th>
+                  <th style="width:170px; text-align:center">К-сть перехоплень</th>
+                </tr>
+              </thead>
+              <tbody id="csWantedTbody">
+                <tr>
+                  <td colspan="5" class="small callsigns-empty-state">
+                    Налаштуйте фільтри та натисніть «Показати».
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
   </section>
 </div>
 
-<script src="/static/callsigns.js?v=7" defer></script>
+<script src="/static/callsigns.js?v=8" defer></script>
 {% endblock %}

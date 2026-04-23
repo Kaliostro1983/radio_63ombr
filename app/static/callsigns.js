@@ -24,9 +24,19 @@
   const tabFreq = $("csTabFreq");
   const tabSearch = $("csTabSearch");
   const tabLinks = $("csTabLinks");
+  const tabWanted = $("csTabWanted");
   const paneFreq = $("csPaneFreq");
   const paneSearch = $("csPaneSearch");
   const paneLinks = $("csPaneLinks");
+  const paneWanted = $("csPaneWanted");
+
+  // Wanted tab
+  const elWantedDays   = $("csWantedDays");
+  const elWantedToday  = $("csWantedToday");
+  const elWantedMinMsg = $("csWantedMinMsg");
+  const elWantedShow   = $("csWantedShow");
+  const elWantedTbody  = $("csWantedTbody");
+  const elWantedInfo   = $("csWantedInfo");
 
   const elQuery = $("csQuery");
   const elSearch = $("csSearch");
@@ -454,9 +464,26 @@
     tr.dataset.row = JSON.stringify(updated);
   }
 
+  function updateRowInWantedTable(updated) {
+    if (!elWantedTbody) return;
+    const tr = elWantedTbody.querySelector(`tr[data-callsign-id="${updated.callsign_id}"]`);
+    if (!tr) return;
+    // Callsign now has a status → remove from "Розшук" list
+    if (updated.status_id) {
+      tr.remove();
+      if (!elWantedTbody.querySelector("tr[data-callsign-id]")) {
+        elWantedTbody.innerHTML = renderStateRow("info", "Нічого не знайдено.");
+      }
+      return;
+    }
+    // Still no status — just refresh the name cell
+    tr.children[1].innerHTML = renderCallsignNameCell(updated);
+  }
+
   function updateRowInTables(updated) {
     updateRowInFreqTable(updated);
     updateRowInSearchTable(updated);
+    updateRowInWantedTable(updated);
   }
 
   function renderTable(rows) {
@@ -618,31 +645,84 @@
     }
   }
 
+  function renderWantedTable(rows) {
+    if (!elWantedTbody) return;
+    if (!rows || rows.length === 0) {
+      elWantedTbody.innerHTML = renderStateRow("info", "Нічого не знайдено.");
+      return;
+    }
+    elWantedTbody.innerHTML = "";
+    rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.dataset.callsignId = row.callsign_id;
+      tr.style.cursor = "pointer";
+      tr.innerHTML = `
+        <td>${row.n}</td>
+        <td>${renderCallsignNameCell(row)}</td>
+        <td>${escapeHtml(row.frequency || "—")}</td>
+        <td>${escapeHtml(row.unit || "—")}</td>
+        <td style="text-align:center">${row.intercept_count}</td>
+      `;
+      tr.addEventListener("click", () => {
+        if (window.openCallsignEditModalById) {
+          window.openCallsignEditModalById(row.callsign_id);
+        }
+      });
+      elWantedTbody.appendChild(tr);
+    });
+  }
+
+  async function runWanted() {
+    if (!elWantedTbody) return;
+    const days    = Math.max(1, Math.min(365, Number((elWantedDays   && elWantedDays.value)   || 10)));
+    const minMsg  = Math.max(1,              Number((elWantedMinMsg  && elWantedMinMsg.value)  || 5));
+    const today   = (elWantedToday && elWantedToday.checked) ? 1 : 0;
+    if (elWantedDays)   elWantedDays.value   = String(days);
+    if (elWantedMinMsg) elWantedMinMsg.value  = String(minMsg);
+    if (elWantedInfo)   elWantedInfo.textContent = "Завантаження…";
+    if (elWantedShow) { elWantedShow.disabled = true; elWantedShow.textContent = "Завантаження…"; }
+    try {
+      const url = `/api/callsigns/wanted?days=${days}&include_today=${today}&min_messages=${minMsg}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+      if (!data.ok) {
+        if (elWantedInfo) elWantedInfo.textContent = "Помилка";
+        elWantedTbody.innerHTML = renderStateRow("error", data.error || "Помилка");
+        return;
+      }
+      const rows = data.rows || [];
+      if (elWantedInfo) elWantedInfo.textContent = `Знайдено: ${rows.length}`;
+      renderWantedTable(rows);
+    } catch (e) {
+      console.error(e);
+      if (elWantedInfo) elWantedInfo.textContent = "Помилка запиту";
+      elWantedTbody.innerHTML = renderStateRow("error", "Помилка запиту. Перевірте лог сервера.");
+    } finally {
+      if (elWantedShow) { elWantedShow.disabled = false; elWantedShow.textContent = "Показати"; }
+    }
+  }
+
   function setTab(which) {
-    const isFreq = which === "freq";
+    const isFreq   = which === "freq";
     const isSearch = which === "search";
-    const isLinks = which === "links";
+    const isLinks  = which === "links";
+    const isWanted = which === "wanted";
 
-    if (tabFreq) {
-      tabFreq.classList.toggle("active", isFreq);
-      tabFreq.setAttribute("aria-selected", isFreq ? "true" : "false");
-    }
-    if (tabSearch) {
-      tabSearch.classList.toggle("active", isSearch);
-      tabSearch.setAttribute("aria-selected", isSearch ? "true" : "false");
-    }
-    if (tabLinks) {
-      tabLinks.classList.toggle("active", isLinks);
-      tabLinks.setAttribute("aria-selected", isLinks ? "true" : "false");
-    }
+    if (tabFreq)   { tabFreq.classList.toggle("active",   isFreq);   tabFreq.setAttribute("aria-selected",   isFreq   ? "true" : "false"); }
+    if (tabSearch) { tabSearch.classList.toggle("active", isSearch); tabSearch.setAttribute("aria-selected", isSearch ? "true" : "false"); }
+    if (tabLinks)  { tabLinks.classList.toggle("active",  isLinks);  tabLinks.setAttribute("aria-selected",  isLinks  ? "true" : "false"); }
+    if (tabWanted) { tabWanted.classList.toggle("active", isWanted); tabWanted.setAttribute("aria-selected", isWanted ? "true" : "false"); }
 
-    if (paneFreq) paneFreq.classList.toggle("hidden", !isFreq);
+    if (paneFreq)   paneFreq.classList.toggle("hidden",   !isFreq);
     if (paneSearch) paneSearch.classList.toggle("hidden", !isSearch);
-    if (paneLinks) paneLinks.classList.toggle("hidden", !isLinks);
+    if (paneLinks)  paneLinks.classList.toggle("hidden",  !isLinks);
+    if (paneWanted) paneWanted.classList.toggle("hidden", !isWanted);
 
-    if (!isFreq) setInfo("");
+    if (!isFreq)   setInfo("");
     if (!isSearch) setSearchInfo("");
-    if (!isLinks && elLinkInfo) elLinkInfo.textContent = "";
+    if (!isLinks  && elLinkInfo)   elLinkInfo.textContent = "";
+    if (!isWanted && elWantedInfo) elWantedInfo.textContent = "";
   }
 
   async function runLinks() {
@@ -733,9 +813,11 @@
       window.setCallsignModalOnSave(updateRowInTables);
     }
 
-    if (tabFreq) tabFreq.addEventListener("click", () => setTab("freq"));
+    if (tabFreq)   tabFreq.addEventListener("click",   () => setTab("freq"));
     if (tabSearch) tabSearch.addEventListener("click", () => setTab("search"));
-    if (tabLinks) tabLinks.addEventListener("click", () => setTab("links"));
+    if (tabLinks)  tabLinks.addEventListener("click",  () => setTab("links"));
+    if (tabWanted) tabWanted.addEventListener("click", () => setTab("wanted"));
+    if (elWantedShow) elWantedShow.addEventListener("click", runWanted);
 
     elShow.addEventListener("click", runQuery);
     if (elFreq) elFreq.addEventListener("keydown", (e) => { if (e.key === "Enter") runQuery(); });
@@ -846,6 +928,11 @@
       }
       if (isLinks) {
         if (elLinkCallsignId && (elLinkCallsignId.value || "").trim()) runLinks();
+        return;
+      }
+      const isWanted = paneWanted && !paneWanted.classList.contains("hidden");
+      if (isWanted) {
+        runWanted();
         return;
       }
 

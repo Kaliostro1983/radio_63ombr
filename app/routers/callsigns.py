@@ -354,6 +354,74 @@ def api_callsigns_search(q: str):
     return {"ok": True, "rows": out_rows}
 
 
+@router.get("/api/callsigns/wanted")
+def api_callsigns_wanted(
+    days: int = 10,
+    include_today: int = 1,
+    min_messages: int = 5,
+):
+    """Return callsigns without an assigned status that were seen within the last N days.
+
+    Args:
+        days: how many calendar days back to search.
+        include_today: 1 = include today's messages; 0 = up to yesterday 23:59.
+        min_messages: minimum number of intercepts for a callsign to appear.
+
+    Returns:
+        dict: ``{"ok": True, "rows": [...], "total": N}`` sorted by
+        ``intercept_count`` descending.
+    """
+    days = max(1, min(_as_int(days, 10), 365))
+    min_messages = max(1, _as_int(min_messages, 5))
+
+    now = datetime.now()
+    start_dt = (now - timedelta(days=days)).strftime("%Y-%m-%d") + "T00:00:00"
+    if include_today:
+        end_dt = now.strftime("%Y-%m-%d") + "T23:59:59"
+    else:
+        yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        end_dt = yesterday + "T23:59:59"
+
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                c.id          AS callsign_id,
+                c.name,
+                c.network_id,
+                n.frequency,
+                n.unit,
+                COUNT(DISTINCT mc.message_id) AS intercept_count
+            FROM callsigns c
+            LEFT JOIN networks n           ON n.id  = c.network_id
+            JOIN message_callsigns mc      ON mc.callsign_id = c.id
+            JOIN messages m                ON m.id  = mc.message_id
+            WHERE COALESCE(c.callsign_status_id, c.status_id) IS NULL
+              AND c.name <> 'НВ'
+              AND m.created_at >= ?
+              AND m.created_at <= ?
+            GROUP BY c.id
+            HAVING COUNT(DISTINCT mc.message_id) >= ?
+            ORDER BY intercept_count DESC
+            """,
+            (start_dt, end_dt, min_messages),
+        ).fetchall()
+
+    out: List[Dict[str, Any]] = []
+    for idx, r in enumerate(rows, start=1):
+        out.append({
+            "n":               idx,
+            "callsign_id":     int(r["callsign_id"]),
+            "name":            r["name"] or "",
+            "network_id":      int(r["network_id"]) if r["network_id"] else None,
+            "frequency":       r["frequency"] or "",
+            "unit":            r["unit"] or "",
+            "intercept_count": int(r["intercept_count"]),
+        })
+
+    return {"ok": True, "rows": out, "total": len(out)}
+
+
 @router.get("/api/callsigns/by-id")
 def api_callsign_by_id(id: int):
     """Fetch a callsign row by id with related network/status/source info."""
