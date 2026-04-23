@@ -7,11 +7,14 @@
   const daysInput = $("netGraphDays");
   const btn = $("netGraphShow");
   const btnCallsignList = $("netGraphCallsignList");
+  const chkHideIsolated = $("netGraphHideIsolated");
   const out = $("netGraphOut");
 
   const networkId = Number(root.getAttribute("data-network-id") || 0);
   const networkFrequency = String(root.getAttribute("data-frequency") || "").trim();
   if (!networkId || !btn || !daysInput || !out) return;
+
+  let _lastGraphData = null;
 
   function escapeHtml(value) {
     return String(value || "")
@@ -147,8 +150,15 @@
   }
 
   function drawGraph(data) {
-    const nodes = Array.isArray(data.nodes) ? data.nodes.slice(0) : [];
-    const edges = Array.isArray(data.edges) ? data.edges.slice(0) : [];
+    let nodes = Array.isArray(data.nodes) ? data.nodes.slice(0) : [];
+    let edges = Array.isArray(data.edges) ? data.edges.slice(0) : [];
+
+    // Hide nodes with no connections when checkbox is checked.
+    if (chkHideIsolated && chkHideIsolated.checked && edges.length > 0) {
+      const connected = new Set();
+      edges.forEach((e) => { connected.add(e.source); connected.add(e.target); });
+      nodes = nodes.filter((n) => connected.has(n.id));
+    }
 
     if (!nodes.length) {
       if (typeof out._netGraphCleanup === "function") {
@@ -336,6 +346,7 @@
         renderEmpty("Не вдалося завантажити дані графа.");
         return;
       }
+      _lastGraphData = data;
       drawGraph(data);
     } catch (e) {
       renderEmpty("Помилка завантаження графа.");
@@ -343,6 +354,12 @@
   }
 
   btn.addEventListener("click", loadGraph);
+
+  if (chkHideIsolated) {
+    chkHideIsolated.addEventListener("change", () => {
+      if (_lastGraphData) drawGraph(_lastGraphData);
+    });
+  }
 
   if (btnCallsignList) {
     btnCallsignList.addEventListener("click", () => {
