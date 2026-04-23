@@ -679,11 +679,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     # Add type_id to existing analytical_conclusions tables created before this migration.
     _ensure_column(conn, "analytical_conclusions", "type_id", "type_id INTEGER NOT NULL DEFAULT 0 REFERENCES conclusion_types(id) ON DELETE SET NULL")
     # Backfill any rows that were inserted before type_id existed.
-    safe_execute(
+    _try_ddl(
         conn,
         "UPDATE analytical_conclusions SET type_id = 0 WHERE type_id IS NULL",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="backfill:analytical_conclusions.type_id",
     )
     _try_ddl(
@@ -862,7 +860,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         )
     _ensure_column(conn, "landmarks", "location_mgrs", "location_mgrs TEXT")
     _ensure_column(conn, "landmarks", "id_geom", "id_geom INTEGER REFERENCES landmark_geoms(id)")
-    safe_execute(
+    _try_ddl(
         conn,
         """
         UPDATE landmarks
@@ -876,15 +874,11 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
           AND location_kind IS NOT NULL
           AND trim(location_kind) <> ''
         """,
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="migrate:id_geom_from_location_kind",
     )
-    safe_execute(
+    _try_ddl(
         conn,
         "UPDATE landmarks SET id_geom = 1 WHERE id_geom IS NULL",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="default:id_geom",
     )
     _ensure_column(conn, "message_landmark_matches", "matched_text", "matched_text TEXT")
@@ -980,7 +974,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
 
     # Migrate old selections by matching tag names, if we have the old table.
     if _table_exists(conn, "network_tag_links_old"):
-        safe_execute(
+        _try_ddl(
             conn,
             """
             INSERT OR IGNORE INTO network_tag_links(network_id, tag_id)
@@ -989,8 +983,6 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             JOIN tags t ON t.id = l.tag_id
             JOIN network_tags nt ON nt.name = t.name
             """,
-            module="app.core.db",
-            function="_run_lightweight_migrations",
             stage="migrate:network_tag_links_old",
         )
         # Drop the legacy table after data has been migrated.
@@ -1038,7 +1030,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_messages_network_created "
              "ON messages(network_id, created_at)",
              stage="create_index:idx_messages_network_created")
-    safe_execute(
+    _try_ddl(
         conn,
         """
         UPDATE messages
@@ -1054,8 +1046,6 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         WHERE coalesce(trim(content_type), '') = ''
            OR lower(trim(content_type)) NOT IN ('intercept', 'analytical', 'peleng')
         """,
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="backfill:messages.content_type",
     )
     _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_messages_content_type_created "
@@ -1107,7 +1097,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         function="_run_lightweight_migrations",
         stage="fill_temp_table:_peleng_batch_dedup_map",
     )
-    safe_execute(
+    _try_ddl(
         conn,
         """
         UPDATE peleng_points
@@ -1118,15 +1108,11 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         )
         WHERE batch_id IN (SELECT dup_id FROM _peleng_batch_dedup_map)
         """,
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="relink:peleng_points_to_kept_batches",
     )
-    safe_execute(
+    _try_ddl(
         conn,
         "DELETE FROM peleng_batches WHERE id IN (SELECT dup_id FROM _peleng_batch_dedup_map)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="delete:duplicate_peleng_batches",
     )
     safe_execute(
