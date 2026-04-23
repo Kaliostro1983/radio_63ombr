@@ -671,11 +671,11 @@
           const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
           const items = Array.isArray(data) ? data : (data.rows || data.items || []);
           const sourceId = parseInt(modalId && modalId.value ? modalId.value : "0", 10);
-          const filtered = items.filter(it => it.id !== sourceId);
+          const filtered = items.filter(it => it.callsign_id !== sourceId);
           if (!filtered.length || !mergeSuggestions) return;
           mergeSuggestions.style.display = "";
           mergeSuggestions.innerHTML = filtered.map(it =>
-            `<div class="cs-merge-suggestion" data-id="${esc(it.id)}" data-name="${esc(it.name)}" style="padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border)">
+            `<div class="cs-merge-suggestion" data-id="${esc(it.callsign_id)}" data-name="${esc(it.name)}" style="padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border)">
               <strong>${esc(it.name)}</strong>
               <span class="small" style="opacity:.6; margin-left:6px">${esc(it.frequency || "")}</span>
             </div>`
