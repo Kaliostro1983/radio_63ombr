@@ -1051,8 +1051,16 @@ button.secondary{
 .cs-profile-top{
   display:flex;
   gap:16px;
-  align-items:stretch;
+  align-items:flex-start;
   flex-wrap:nowrap;
+}
+
+.cs-photo-col{
+  flex:0 0 240px;
+  width:240px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
 }
 
 .cs-photo-wrap{
@@ -1063,6 +1071,12 @@ button.secondary{
   border-radius:14px;
   overflow:hidden;
   background:rgba(127,127,127,.06);
+}
+
+.cs-network-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
 }
 
 .cs-photo{

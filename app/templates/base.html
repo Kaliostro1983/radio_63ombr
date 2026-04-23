@@ -96,8 +96,18 @@
       <input id="csModalId" type="hidden" />
 
       <div class="cs-profile-top">
-        <div class="cs-photo-wrap">
-          <img id="csModalPhoto" class="cs-photo" src="/static/photos/callsign_statuses/_default.webp" alt="Фото" />
+
+        <div class="cs-photo-col">
+          <div class="cs-photo-wrap">
+            <img id="csModalPhoto" class="cs-photo" src="/static/photos/callsign_statuses/_default.webp" alt="Фото" />
+          </div>
+          <div class="cs-network-field">
+            <label class="small">Мережа (частота/маска або підрозділ)</label>
+            <input id="csModalNetworkQuery" type="text" placeholder="Пошук: 146.025 або ШТЗ..." />
+            <select id="csModalNetwork" style="width:100%; margin-top:6px">
+              <option value="">Невідомо</option>
+            </select>
+          </div>
         </div>
 
         <div class="cs-profile-fields">
@@ -123,14 +133,7 @@
             <div id="csQuickId" class="cs-quickid-wrap"></div>
           </div>
         </div>
-      </div>
 
-      <div style="margin-top:10px">
-        <label class="small">Мережа (частота/маска або підрозділ)</label>
-        <input id="csModalNetworkQuery" type="text" placeholder="Пошук: 146.025 або ШТЗ..." />
-        <select id="csModalNetwork" style="width:100%; margin-top:6px">
-          <option value="">Невідомо</option>
-        </select>
       </div>
 
       <div style="margin-top:10px">
