@@ -271,8 +271,13 @@ def api_callsigns_by_frequency(frequency: str, days: int = 7):
 
 
 @router.get("/api/callsigns/search")
-def api_callsigns_search(q: str):
+def api_callsigns_search(q: str, network_id: int = 0):
     """Search callsigns by callsign name (case-insensitive LIKE).
+
+    Args:
+        q: callsign name fragment to search.
+        network_id: when > 0, restrict results to that network only
+            (used by the merge autocomplete to prevent cross-network merges).
 
     Note: we intentionally do NOT search by comment here, because it causes
     confusing matches where the callsign name doesn't contain the query.
@@ -296,9 +301,12 @@ def api_callsigns_search(q: str):
     canon_sql = (
         "replace(replace(replace(replace(replace(upper(c.name), '-', ''), ' ', ''), '—', ''), '–', ''), '_', '')"
     )
+    net_filter = "AND c.network_id = ?" if network_id > 0 else ""
+    net_params = (network_id,) if network_id > 0 else ()
+
     with get_conn() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 c.id,
                 c.network_id,
@@ -312,8 +320,8 @@ def api_callsigns_search(q: str):
                 COALESCE(n.unit, 'Невідомо') AS unit,
                 CASE
                   WHEN upper(c.name) = upper(?) THEN 0
-                  WHEN """ + canon_sql + """ = ? THEN 1
-                  WHEN """ + canon_sql + """ LIKE ? THEN 2
+                  WHEN {canon_sql} = ? THEN 1
+                  WHEN {canon_sql} LIKE ? THEN 2
                   WHEN c.name LIKE ? COLLATE NOCASE THEN 3
                   WHEN c.name LIKE ? COLLATE NOCASE THEN 4
                   ELSE 9
@@ -323,6 +331,7 @@ def api_callsigns_search(q: str):
             LEFT JOIN callsign_sources src ON src.id = c.source_id
             LEFT JOIN networks n ON n.id = c.network_id
             WHERE c.name LIKE ? COLLATE NOCASE
+            {net_filter}
             ORDER BY
               rank_score ASC,
               CASE WHEN c.last_seen_dt IS NULL THEN 1 ELSE 0 END,
@@ -330,7 +339,7 @@ def api_callsigns_search(q: str):
               c.name COLLATE NOCASE
             LIMIT 200
             """,
-            (query, q_canon, q_canon_prefix, prefix_like, like, like),
+            (query, q_canon, q_canon_prefix, prefix_like, like, like) + net_params,
         ).fetchall()
 
     out_rows: List[Dict[str, Any]] = []

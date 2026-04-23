@@ -660,9 +660,8 @@
         if (mergeTargetName) mergeTargetName.textContent = "—";
         if (!q || q.length < 2) return;
 
-        // Get current network_id from modal network select
-        const networkSelect = $("csModalNetwork");
-        const networkId = networkSelect ? parseInt(networkSelect.value || "0", 10) : 0;
+        // Always restrict to the same network as the callsign being edited.
+        const networkId = CURRENT_NETWORK_ID || 0;
 
         try {
           const params = new URLSearchParams({ q, limit: 12 });
