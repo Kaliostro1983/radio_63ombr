@@ -393,6 +393,34 @@ def db_path() -> str:
     return settings.db_path
 
 
+def _try_ddl(
+    conn: sqlite3.Connection,
+    sql: str,
+    *,
+    stage: str = "",
+) -> bool:
+    """Execute a non-critical DDL statement (index/table drop or create).
+
+    Unlike `safe_execute`, this helper catches `sqlite3.DatabaseError`
+    (e.g. "database disk image is malformed" on a corrupted index page) and
+    prints a warning instead of crashing.  Use it for migration steps that
+    are purely for performance optimisation and whose failure does not affect
+    data correctness.
+
+    Returns:
+        bool: True on success, False if a DatabaseError was suppressed.
+    """
+    try:
+        conn.execute(sql)
+        return True
+    except sqlite3.DatabaseError as exc:
+        print(
+            f"[DB WARN] Skipping DDL step (possible corruption) — {stage}: {exc}\n"
+            "          Run: sqlite3 your.db \".recover\" | sqlite3 recovered.db"
+        )
+        return False
+
+
 def init_db() -> None:
     """Initialize the SQLite database and run lightweight migrations.
 
@@ -658,12 +686,10 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         function="_run_lightweight_migrations",
         stage="backfill:analytical_conclusions.type_id",
     )
-    safe_execute(
+    _try_ddl(
         conn,
         "CREATE INDEX IF NOT EXISTS idx_analytical_conclusions_network_dt"
         " ON analytical_conclusions(network_id, created_at DESC)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="create_index:analytical_conclusions_network_dt",
     )
 
@@ -977,58 +1003,41 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         )
 
     # network_aliases lookup is by alias_text (no alias_norm)
-    safe_execute(
-        conn,
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_network_aliases_network_alias_text "
-        "ON network_aliases(network_id, alias_text)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_network_aliases_network_alias_text",
-    )
+    _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS idx_network_aliases_network_alias_text "
+             "ON network_aliases(network_id, alias_text)",
+             stage="create_index:idx_network_aliases_network_alias_text")
     # Enforce alias uniqueness across ACTIVE aliases only (archived aliases are allowed to duplicate).
     # This matches structured ingest lookup by alias_text.
-    dup = safe_execute(
-        conn,
-        """
-        SELECT alias_text
-        FROM network_aliases
-        WHERE COALESCE(is_archived, 0) = 0
-        GROUP BY alias_text
-        HAVING COUNT(*) > 1
-        LIMIT 1
-        """,
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="check_active_alias_duplicates",
-    ).fetchone()
-    if dup is None:
-        safe_execute(
+    try:
+        dup = safe_execute(
             conn,
-            "CREATE UNIQUE INDEX IF NOT EXISTS ux_network_aliases_alias_text_active "
-            "ON network_aliases(alias_text) WHERE COALESCE(is_archived, 0) = 0",
+            """
+            SELECT alias_text
+            FROM network_aliases
+            WHERE COALESCE(is_archived, 0) = 0
+            GROUP BY alias_text
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """,
             module="app.core.db",
             function="_run_lightweight_migrations",
-            stage="create_index:ux_network_aliases_alias_text_active",
-        )
+            stage="check_active_alias_duplicates",
+        ).fetchone()
+    except sqlite3.DatabaseError:
+        dup = object()   # treat as "duplicates exist" → skip index creation
+    if dup is None:
+        _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_network_aliases_alias_text_active "
+                 "ON network_aliases(alias_text) WHERE COALESCE(is_archived, 0) = 0",
+                 stage="create_index:ux_network_aliases_alias_text_active")
     # Older DBs may have been created with UNIQUE(network_id, created_at), which
     # contradicts ingest dedup (network_id, created_at, body_text) and causes
     # insert failures when two messages share the same second. Recreate as a
     # non-unique index for search performance only.
-    safe_execute(
-        conn,
-        "DROP INDEX IF EXISTS idx_messages_network_created",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="drop_index:idx_messages_network_created_if_wrong_unique",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_messages_network_created "
-        "ON messages(network_id, created_at)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_messages_network_created",
-    )
+    _try_ddl(conn, "DROP INDEX IF EXISTS idx_messages_network_created",
+             stage="drop_index:idx_messages_network_created_if_wrong_unique")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_messages_network_created "
+             "ON messages(network_id, created_at)",
+             stage="create_index:idx_messages_network_created")
     safe_execute(
         conn,
         """
@@ -1049,38 +1058,18 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         function="_run_lightweight_migrations",
         stage="backfill:messages.content_type",
     )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_messages_content_type_created "
-        "ON messages(content_type, created_at)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_messages_content_type_created",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_messages_network_content_type_created "
-        "ON messages(network_id, content_type, created_at)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_messages_network_content_type_created",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_callsigns_network_name "
-        "ON callsigns(network_id, name)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_callsigns_network_name",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_peleng_batches_network_id "
-        "ON peleng_batches(network_id)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_peleng_batches_network_id",
-    )
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_messages_content_type_created "
+             "ON messages(content_type, created_at)",
+             stage="create_index:idx_messages_content_type_created")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_messages_network_content_type_created "
+             "ON messages(network_id, content_type, created_at)",
+             stage="create_index:idx_messages_network_content_type_created")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_callsigns_network_name "
+             "ON callsigns(network_id, name)",
+             stage="create_index:idx_callsigns_network_name")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_peleng_batches_network_id "
+             "ON peleng_batches(network_id)",
+             stage="create_index:idx_peleng_batches_network_id")
     # Enforce logical uniqueness for peleng batches:
     # one batch per (event_dt, network_id).
     # Existing duplicates are compacted by re-linking points to the oldest
@@ -1147,90 +1136,37 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         function="_run_lightweight_migrations",
         stage="drop_temp_table:_peleng_batch_dedup_map",
     )
-    safe_execute(
-        conn,
-        "CREATE UNIQUE INDEX IF NOT EXISTS ux_peleng_batches_event_network "
-        "ON peleng_batches(event_dt, network_id)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:ux_peleng_batches_event_network",
-    )
+    _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_peleng_batches_event_network "
+             "ON peleng_batches(event_dt, network_id)",
+             stage="create_index:ux_peleng_batches_event_network")
 
     # Required for upsert in callsign_service.upsert_callsign_edge()
-    # Keep name aligned with existing DBs (if present).
-    safe_execute(
-        conn,
-        "CREATE UNIQUE INDEX IF NOT EXISTS ux_callsign_edges_net_pair "
-        "ON callsign_edges(network_id, a_callsign_id, b_callsign_id)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:ux_callsign_edges_net_pair",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_landmarks_keyword ON landmarks(key_word)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_landmarks_keyword",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_landmarks_type ON landmarks(id_type)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_landmarks_type",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_landmarks_group ON landmarks(id_group)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_landmarks_group",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_landmarks_active ON landmarks(is_active)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_landmarks_active",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_matches_message ON message_landmark_matches(id_message)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_matches_message",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_matches_landmark ON message_landmark_matches(id_landmark)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_matches_landmark",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_matches_created ON message_landmark_matches(created_at)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_matches_created",
-    )
-    safe_execute(
-        conn,
-        "CREATE UNIQUE INDEX IF NOT EXISTS ux_matches_message_landmark_pos "
-        "ON message_landmark_matches(id_message, id_landmark, start_pos, end_pos)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:ux_matches_message_landmark_pos",
-    )
-    safe_execute(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_message_landmark_queue_status "
-        "ON message_landmark_queue(status, queued_at)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_index:idx_message_landmark_queue_status",
-    )
+    _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_callsign_edges_net_pair "
+             "ON callsign_edges(network_id, a_callsign_id, b_callsign_id)",
+             stage="create_index:ux_callsign_edges_net_pair")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_landmarks_keyword ON landmarks(key_word)",
+             stage="create_index:idx_landmarks_keyword")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_landmarks_type ON landmarks(id_type)",
+             stage="create_index:idx_landmarks_type")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_landmarks_group ON landmarks(id_group)",
+             stage="create_index:idx_landmarks_group")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_landmarks_active ON landmarks(is_active)",
+             stage="create_index:idx_landmarks_active")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_matches_message "
+             "ON message_landmark_matches(id_message)",
+             stage="create_index:idx_matches_message")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_matches_landmark "
+             "ON message_landmark_matches(id_landmark)",
+             stage="create_index:idx_matches_landmark")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_matches_created "
+             "ON message_landmark_matches(created_at)",
+             stage="create_index:idx_matches_created")
+    _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_matches_message_landmark_pos "
+             "ON message_landmark_matches(id_message, id_landmark, start_pos, end_pos)",
+             stage="create_index:ux_matches_message_landmark_pos")
+    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_message_landmark_queue_status "
+             "ON message_landmark_queue(status, queued_at)",
+             stage="create_index:idx_message_landmark_queue_status")
 
 
 def get_db() -> sqlite3.Connection:
