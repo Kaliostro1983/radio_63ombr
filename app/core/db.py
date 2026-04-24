@@ -15,8 +15,10 @@ resolved via `app.core.config.settings.db_path`.
 from __future__ import annotations
 
 import os
+import shutil
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
 
 from app.db_utils import safe_execute
 from .config import settings
@@ -421,6 +423,59 @@ def _try_ddl(
         return False
 
 
+def _auto_vacuum_recover(path: str) -> bool:
+    """Attempt to recover a corrupted SQLite database via VACUUM INTO.
+
+    Creates a clean copy of the database next to the original, then
+    replaces the original with the clean copy.  The corrupted file is
+    renamed to ``<name>.corrupted.<timestamp>.db`` for inspection.
+
+    Returns:
+        bool: True if recovery succeeded and the new file is in place,
+              False if VACUUM INTO failed (e.g. too badly corrupted).
+    """
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dir_  = os.path.dirname(path)
+    base  = os.path.basename(path)
+    tmp   = os.path.join(dir_, base + ".vacuum_tmp.db")
+    bak   = os.path.join(dir_, base + f".corrupted.{ts}.db")
+
+    print(f"[DB INFO] Attempting automatic VACUUM INTO recovery for: {path}")
+    try:
+        # Remove leftover tmp from a previous failed attempt.
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+        with sqlite3.connect(path) as src:
+            src.execute(f"VACUUM INTO '{tmp}'")
+
+        # Swap files atomically (as close as SQLite allows on Windows).
+        shutil.move(path, bak)
+        shutil.move(tmp, path)
+
+        # Remove WAL / SHM of the corrupted file if they exist.
+        for ext in ("-wal", "-shm"):
+            stale = path + ext
+            if os.path.exists(stale):
+                try:
+                    os.remove(stale)
+                except OSError:
+                    pass
+
+        print(f"[DB INFO] Recovery succeeded. Corrupted file backed up to: {bak}")
+        return True
+
+    except Exception as exc:
+        print(f"[DB ERROR] VACUUM INTO recovery failed: {exc}")
+        # Clean up tmp if it was partially created.
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        return False
+
+
 def init_db() -> None:
     """Initialize the SQLite database and run lightweight migrations.
 
@@ -430,13 +485,29 @@ def init_db() -> None:
     - executes the static schema SQL (`SCHEMA_SQL`) to create missing tables;
     - applies idempotent "lightweight" migrations on top of the schema;
     - commits all changes before closing the connection.
+
+    If a ``sqlite3.DatabaseError`` (page corruption) is raised during
+    migrations, the function automatically attempts to recover the
+    database via ``VACUUM INTO`` and retries the migrations once.
     """
-    with sqlite3.connect(db_path()) as conn:
-        conn.row_factory = sqlite3.Row
-        safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="init_db")
-        conn.executescript(SCHEMA_SQL)
-        _run_lightweight_migrations(conn)
-        conn.commit()
+    def _run(path: str) -> None:
+        with sqlite3.connect(path) as conn:
+            conn.row_factory = sqlite3.Row
+            safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="init_db")
+            conn.executescript(SCHEMA_SQL)
+            _run_lightweight_migrations(conn)
+            conn.commit()
+
+    path = db_path()
+    try:
+        _run(path)
+    except sqlite3.DatabaseError as exc:
+        print(f"[DB WARN] Migration crashed with DatabaseError: {exc}")
+        if _auto_vacuum_recover(path):
+            print("[DB INFO] Retrying migrations on recovered database…")
+            _run(path)
+        else:
+            raise
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
