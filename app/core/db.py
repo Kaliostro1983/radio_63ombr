@@ -1064,64 +1064,76 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     # one batch per (event_dt, network_id).
     # Existing duplicates are compacted by re-linking points to the oldest
     # batch id and deleting duplicate batch headers.
-    safe_execute(
-        conn,
-        "CREATE TEMP TABLE IF NOT EXISTS _peleng_batch_dedup_map (dup_id INTEGER PRIMARY KEY, keep_id INTEGER NOT NULL)",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="create_temp_table:_peleng_batch_dedup_map",
-    )
-    safe_execute(
-        conn,
-        "DELETE FROM _peleng_batch_dedup_map",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="clear_temp_table:_peleng_batch_dedup_map",
-    )
-    safe_execute(
-        conn,
-        """
-        INSERT INTO _peleng_batch_dedup_map (dup_id, keep_id)
-        SELECT id, keep_id
-        FROM (
-            SELECT
-                id,
-                MIN(id) OVER (PARTITION BY event_dt, network_id) AS keep_id,
-                ROW_NUMBER() OVER (PARTITION BY event_dt, network_id ORDER BY id ASC) AS rn
-            FROM peleng_batches
-            WHERE network_id IS NOT NULL
+    # The entire block is wrapped in a try/except so a corrupted page cannot
+    # prevent application startup (deduplication is non-critical).
+    try:
+        safe_execute(
+            conn,
+            "CREATE TEMP TABLE IF NOT EXISTS _peleng_batch_dedup_map (dup_id INTEGER PRIMARY KEY, keep_id INTEGER NOT NULL)",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="create_temp_table:_peleng_batch_dedup_map",
         )
-        WHERE rn > 1
-        """,
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="fill_temp_table:_peleng_batch_dedup_map",
-    )
-    _try_ddl(
-        conn,
-        """
-        UPDATE peleng_points
-        SET batch_id = (
-            SELECT m.keep_id
-            FROM _peleng_batch_dedup_map m
-            WHERE m.dup_id = peleng_points.batch_id
+        safe_execute(
+            conn,
+            "DELETE FROM _peleng_batch_dedup_map",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="clear_temp_table:_peleng_batch_dedup_map",
         )
-        WHERE batch_id IN (SELECT dup_id FROM _peleng_batch_dedup_map)
-        """,
-        stage="relink:peleng_points_to_kept_batches",
-    )
-    _try_ddl(
-        conn,
-        "DELETE FROM peleng_batches WHERE id IN (SELECT dup_id FROM _peleng_batch_dedup_map)",
-        stage="delete:duplicate_peleng_batches",
-    )
-    safe_execute(
-        conn,
-        "DROP TABLE IF EXISTS _peleng_batch_dedup_map",
-        module="app.core.db",
-        function="_run_lightweight_migrations",
-        stage="drop_temp_table:_peleng_batch_dedup_map",
-    )
+        safe_execute(
+            conn,
+            """
+            INSERT INTO _peleng_batch_dedup_map (dup_id, keep_id)
+            SELECT id, keep_id
+            FROM (
+                SELECT
+                    id,
+                    MIN(id) OVER (PARTITION BY event_dt, network_id) AS keep_id,
+                    ROW_NUMBER() OVER (PARTITION BY event_dt, network_id ORDER BY id ASC) AS rn
+                FROM peleng_batches
+                WHERE network_id IS NOT NULL
+            )
+            WHERE rn > 1
+            """,
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="fill_temp_table:_peleng_batch_dedup_map",
+        )
+        _try_ddl(
+            conn,
+            """
+            UPDATE peleng_points
+            SET batch_id = (
+                SELECT m.keep_id
+                FROM _peleng_batch_dedup_map m
+                WHERE m.dup_id = peleng_points.batch_id
+            )
+            WHERE batch_id IN (SELECT dup_id FROM _peleng_batch_dedup_map)
+            """,
+            stage="relink:peleng_points_to_kept_batches",
+        )
+        _try_ddl(
+            conn,
+            "DELETE FROM peleng_batches WHERE id IN (SELECT dup_id FROM _peleng_batch_dedup_map)",
+            stage="delete:duplicate_peleng_batches",
+        )
+        safe_execute(
+            conn,
+            "DROP TABLE IF EXISTS _peleng_batch_dedup_map",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="drop_temp_table:_peleng_batch_dedup_map",
+        )
+    except sqlite3.DatabaseError as _dedup_exc:
+        print(
+            f"[DB WARN] Skipping peleng batch dedup block (possible corruption): {_dedup_exc}\n"
+            "          Run: sqlite3 your.db \".recover\" | sqlite3 recovered.db"
+        )
+        try:
+            conn.execute("DROP TABLE IF EXISTS _peleng_batch_dedup_map")
+        except Exception:
+            pass
     _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_peleng_batches_event_network "
              "ON peleng_batches(event_dt, network_id)",
              stage="create_index:ux_peleng_batches_event_network")
