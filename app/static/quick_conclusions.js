@@ -150,7 +150,7 @@
     qcMarker = window.L.marker([ll.lat, ll.lon], { icon: makeBullseyeIcon() })
       .addTo(qcMap);
 
-    qcMap.flyTo([ll.lat, ll.lon], 10, { animate: false, duration: 0 });
+    qcMap.flyTo([ll.lat, ll.lon], 16, { animate: false, duration: 0 });
   }
 
   function clearMapMarker() {
