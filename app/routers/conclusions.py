@@ -258,7 +258,6 @@ async def api_conclusion_type_update(type_id: int, request: Request):
 
 @router.get("/api/quick-conclusions")
 def api_quick_conclusions():
-    """Return all quick conclusion templates."""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, name, text FROM quick_conclusions ORDER BY id ASC"
@@ -269,9 +268,61 @@ def api_quick_conclusions():
     }
 
 
+@router.post("/api/quick-conclusions")
+async def api_quick_conclusions_create(request: Request):
+    payload = await request.json()
+    name = (payload.get("name") or "").strip()
+    text = (payload.get("text") or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
+    with get_conn() as conn:
+        dup = conn.execute(
+            "SELECT id FROM quick_conclusions WHERE name = ? COLLATE NOCASE LIMIT 1", (name,)
+        ).fetchone()
+        if dup:
+            return JSONResponse({"ok": False, "error": "Така назва вже існує"}, status_code=400)
+        cur = conn.execute(
+            "INSERT INTO quick_conclusions (name, text) VALUES (?, ?)", (name, text)
+        )
+        new_id = int(cur.lastrowid)
+        conn.commit()
+    return {"ok": True, "id": new_id, "name": name, "text": text}
+
+
+@router.patch("/api/quick-conclusions/{item_id}")
+async def api_quick_conclusions_update(item_id: int, request: Request):
+    payload = await request.json()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name, text FROM quick_conclusions WHERE id = ? LIMIT 1", (item_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
+        new_name = (payload.get("name") or "").strip() or row["name"]
+        new_text = payload.get("text", row["text"]) or ""
+        conn.execute(
+            "UPDATE quick_conclusions SET name = ?, text = ? WHERE id = ?",
+            (new_name, new_text, item_id),
+        )
+        conn.commit()
+    return {"ok": True, "id": item_id, "name": new_name, "text": new_text}
+
+
+@router.delete("/api/quick-conclusions/{item_id}")
+def api_quick_conclusions_delete(item_id: int):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM quick_conclusions WHERE id = ? LIMIT 1", (item_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
+        conn.execute("DELETE FROM quick_conclusions WHERE id = ?", (item_id,))
+        conn.commit()
+    return {"ok": True}
+
+
 @router.get("/api/quick-points")
 def api_quick_points():
-    """Return all quick point locations."""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, name, point FROM quick_points ORDER BY id ASC"
@@ -280,6 +331,59 @@ def api_quick_points():
         "ok": True,
         "rows": [{"id": int(r["id"]), "name": r["name"] or "", "point": r["point"] or ""} for r in rows],
     }
+
+
+@router.post("/api/quick-points")
+async def api_quick_points_create(request: Request):
+    payload = await request.json()
+    name  = (payload.get("name")  or "").strip()
+    point = (payload.get("point") or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
+    with get_conn() as conn:
+        dup = conn.execute(
+            "SELECT id FROM quick_points WHERE name = ? COLLATE NOCASE LIMIT 1", (name,)
+        ).fetchone()
+        if dup:
+            return JSONResponse({"ok": False, "error": "Така назва вже існує"}, status_code=400)
+        cur = conn.execute(
+            "INSERT INTO quick_points (name, point) VALUES (?, ?)", (name, point)
+        )
+        new_id = int(cur.lastrowid)
+        conn.commit()
+    return {"ok": True, "id": new_id, "name": name, "point": point}
+
+
+@router.patch("/api/quick-points/{item_id}")
+async def api_quick_points_update(item_id: int, request: Request):
+    payload = await request.json()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name, point FROM quick_points WHERE id = ? LIMIT 1", (item_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
+        new_name  = (payload.get("name")  or "").strip() or row["name"]
+        new_point = payload.get("point", row["point"]) or ""
+        conn.execute(
+            "UPDATE quick_points SET name = ?, point = ? WHERE id = ?",
+            (new_name, new_point, item_id),
+        )
+        conn.commit()
+    return {"ok": True, "id": item_id, "name": new_name, "point": new_point}
+
+
+@router.delete("/api/quick-points/{item_id}")
+def api_quick_points_delete(item_id: int):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM quick_points WHERE id = ? LIMIT 1", (item_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
+        conn.execute("DELETE FROM quick_points WHERE id = ?", (item_id,))
+        conn.commit()
+    return {"ok": True}
 
 
 @router.delete("/api/conclusions/types/{type_id}")

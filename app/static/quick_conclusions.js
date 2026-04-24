@@ -27,24 +27,6 @@
   const quickPanel    = $("cnPaneQuick");
 
   /* ─────────────────────────────────────────────
-   *  DATA LOADING
-   * ───────────────────────────────────────────── */
-  async function loadData() {
-    try {
-      const [cr, pr] = await Promise.all([
-        fetch("/api/quick-conclusions"),
-        fetch("/api/quick-points"),
-      ]);
-      const cd = await cr.json();
-      const pd = await pr.json();
-      renderConclButtons(cd.rows || []);
-      renderPointButtons(pd.rows || []);
-    } catch (e) {
-      console.error("quick_conclusions: load failed", e);
-    }
-  }
-
-  /* ─────────────────────────────────────────────
    *  CONCLUSION BUTTONS — single select
    * ───────────────────────────────────────────── */
   function renderConclButtons(items) {
@@ -316,6 +298,227 @@
   }
 
   /* ─────────────────────────────────────────────
+   *  MANAGEMENT BLOCKS — CRUD
+   * ───────────────────────────────────────────── */
+
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  /** Show/hide an error div */
+  function showMgmtErr(el, msg) {
+    if (!el) return;
+    if (msg) { el.textContent = msg; el.style.display = ""; }
+    else { el.style.display = "none"; el.textContent = ""; }
+  }
+
+  /* ── quick_conclusions management ── */
+
+  function renderConclMgmt(items) {
+    const list = $("qcConclList");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<span class="small" style="opacity:.5">Порожньо</span>';
+      return;
+    }
+    items.forEach(function (item) {
+      list.appendChild(buildConclRow(item));
+    });
+  }
+
+  function buildConclRow(item) {
+    const row = document.createElement("div");
+    row.className = "qc-mgmt-row";
+    row.dataset.id = String(item.id);
+    row.innerHTML =
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" value="' + esc(item.name) + '" placeholder="Назва" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--text" type="text" value="' + esc(item.text) + '" placeholder="Текст шаблону" />' +
+      '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
+      '<button type="button" class="qc-mgmt-del secondary">✕</button>';
+
+    row.querySelector(".qc-mgmt-save").addEventListener("click", async function () {
+      const name = row.querySelector(".qc-mgmt-inp--name").value.trim();
+      const text = row.querySelector(".qc-mgmt-inp--text").value.trim();
+      if (!name) { toast("Назва не може бути порожньою", "error"); return; }
+      const r = await fetch("/api/quick-conclusions/" + item.id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, text }),
+      });
+      const d = await r.json();
+      if (!d.ok) { toast(d.error || "Помилка збереження", "error"); return; }
+      item.name = d.name; item.text = d.text;
+      toast("Збережено", "info", 1200);
+      reloadAll();
+    });
+
+    row.querySelector(".qc-mgmt-del").addEventListener("click", async function () {
+      if (!confirm('Видалити "' + item.name + '"?')) return;
+      const r = await fetch("/api/quick-conclusions/" + item.id, { method: "DELETE" });
+      const d = await r.json();
+      if (!d.ok) { toast(d.error || "Помилка видалення", "error"); return; }
+      reloadAll();
+    });
+
+    return row;
+  }
+
+  function addConclRow() {
+    const list = $("qcConclList");
+    const errEl = $("qcConclErr");
+    if (!list) return;
+    showMgmtErr(errEl, "");
+
+    const row = document.createElement("div");
+    row.className = "qc-mgmt-row qc-mgmt-row--new";
+    row.innerHTML =
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" placeholder="Назва" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--text" type="text" placeholder="Текст шаблону" />' +
+      '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
+      '<button type="button" class="qc-mgmt-del secondary">✕</button>';
+
+    row.querySelector(".qc-mgmt-save").addEventListener("click", async function () {
+      const name = row.querySelector(".qc-mgmt-inp--name").value.trim();
+      const text = row.querySelector(".qc-mgmt-inp--text").value.trim();
+      if (!name) { showMgmtErr(errEl, "Назва не може бути порожньою"); return; }
+      const r = await fetch("/api/quick-conclusions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, text }),
+      });
+      const d = await r.json();
+      if (!d.ok) { showMgmtErr(errEl, d.error || "Помилка"); return; }
+      reloadAll();
+    });
+
+    row.querySelector(".qc-mgmt-del").addEventListener("click", function () {
+      row.remove();
+      showMgmtErr(errEl, "");
+    });
+
+    list.insertBefore(row, list.firstChild);
+    row.querySelector(".qc-mgmt-inp--name").focus();
+  }
+
+  /* ── quick_points management ── */
+
+  function renderPointsMgmt(items) {
+    const list = $("qcPointList");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<span class="small" style="opacity:.5">Порожньо</span>';
+      return;
+    }
+    items.forEach(function (item) {
+      list.appendChild(buildPointRow(item));
+    });
+  }
+
+  function buildPointRow(item) {
+    const row = document.createElement("div");
+    row.className = "qc-mgmt-row";
+    row.dataset.id = String(item.id);
+    row.innerHTML =
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" value="' + esc(item.name) + '" placeholder="Назва" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" value="' + esc(item.point) + '" placeholder="MGRS координата" />' +
+      '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
+      '<button type="button" class="qc-mgmt-del secondary">✕</button>';
+
+    row.querySelector(".qc-mgmt-save").addEventListener("click", async function () {
+      const name  = row.querySelector(".qc-mgmt-inp--name").value.trim();
+      const point = row.querySelector(".qc-mgmt-inp--point").value.trim();
+      if (!name) { toast("Назва не може бути порожньою", "error"); return; }
+      const r = await fetch("/api/quick-points/" + item.id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, point }),
+      });
+      const d = await r.json();
+      if (!d.ok) { toast(d.error || "Помилка збереження", "error"); return; }
+      item.name = d.name; item.point = d.point;
+      toast("Збережено", "info", 1200);
+      reloadAll();
+    });
+
+    row.querySelector(".qc-mgmt-del").addEventListener("click", async function () {
+      if (!confirm('Видалити "' + item.name + '"?')) return;
+      const r = await fetch("/api/quick-points/" + item.id, { method: "DELETE" });
+      const d = await r.json();
+      if (!d.ok) { toast(d.error || "Помилка видалення", "error"); return; }
+      reloadAll();
+    });
+
+    return row;
+  }
+
+  function addPointRow() {
+    const list = $("qcPointList");
+    const errEl = $("qcPointErr");
+    if (!list) return;
+    showMgmtErr(errEl, "");
+
+    const row = document.createElement("div");
+    row.className = "qc-mgmt-row qc-mgmt-row--new";
+    row.innerHTML =
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" placeholder="Назва (напр. 04)" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" placeholder="MGRS (напр. 37U DQ 29050 28377)" />' +
+      '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
+      '<button type="button" class="qc-mgmt-del secondary">✕</button>';
+
+    row.querySelector(".qc-mgmt-save").addEventListener("click", async function () {
+      const name  = row.querySelector(".qc-mgmt-inp--name").value.trim();
+      const point = row.querySelector(".qc-mgmt-inp--point").value.trim();
+      if (!name) { showMgmtErr(errEl, "Назва не може бути порожньою"); return; }
+      const r = await fetch("/api/quick-points", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, point }),
+      });
+      const d = await r.json();
+      if (!d.ok) { showMgmtErr(errEl, d.error || "Помилка"); return; }
+      reloadAll();
+    });
+
+    row.querySelector(".qc-mgmt-del").addEventListener("click", function () {
+      row.remove();
+      showMgmtErr(errEl, "");
+    });
+
+    list.insertBefore(row, list.firstChild);
+    row.querySelector(".qc-mgmt-inp--name").focus();
+  }
+
+  /* ── Reload everything after any mutation ── */
+  async function reloadAll() {
+    showMgmtErr($("qcConclErr"), "");
+    showMgmtErr($("qcPointErr"), "");
+    try {
+      const [cr, pr] = await Promise.all([
+        fetch("/api/quick-conclusions"),
+        fetch("/api/quick-points"),
+      ]);
+      const cd = await cr.json();
+      const pd = await pr.json();
+
+      // Refresh selector buttons (top of tab)
+      renderConclButtons(cd.rows || []);
+      renderPointButtons(pd.rows || []);
+      activeConclusion = null;
+      activePoints = [];
+
+      // Refresh management lists
+      renderConclMgmt(cd.rows || []);
+      renderPointsMgmt(pd.rows || []);
+    } catch (e) {
+      console.error("reloadAll failed", e);
+    }
+  }
+
+  /* ─────────────────────────────────────────────
    *  TAB VISIBILITY HOOK
    * ───────────────────────────────────────────── */
   if (quickPanel && window.MutationObserver) {
@@ -335,19 +538,39 @@
    *  INIT
    * ───────────────────────────────────────────── */
   function init() {
-    loadData();
+    // Load selector buttons + management lists together
+    (async function () {
+      try {
+        const [cr, pr] = await Promise.all([
+          fetch("/api/quick-conclusions"),
+          fetch("/api/quick-points"),
+        ]);
+        const cd = await cr.json();
+        const pd = await pr.json();
+        renderConclButtons(cd.rows || []);
+        renderPointButtons(pd.rows || []);
+        renderConclMgmt(cd.rows || []);
+        renderPointsMgmt(pd.rows || []);
+      } catch (e) {
+        console.error("quick_conclusions: init load failed", e);
+      }
+    })();
 
-    const pasteBtn    = $("qcPasteBtn");
-    const copyBtn     = $("qcCopyBtn");
-    const clearBtn    = $("qcClearBtn");
-    const generateBtn = $("qcGenerateBtn");
-    const copyMapBtn  = $("qcCopyMapBtn");
+    const pasteBtn      = $("qcPasteBtn");
+    const copyBtn       = $("qcCopyBtn");
+    const clearBtn      = $("qcClearBtn");
+    const generateBtn   = $("qcGenerateBtn");
+    const copyMapBtn    = $("qcCopyMapBtn");
+    const addConclBtn   = $("qcAddConclBtn");
+    const addPointBtn   = $("qcAddPointBtn");
 
     if (pasteBtn)    pasteBtn.addEventListener("click", onPaste);
     if (copyBtn)     copyBtn.addEventListener("click", onCopy);
     if (clearBtn)    clearBtn.addEventListener("click", onClear);
     if (generateBtn) generateBtn.addEventListener("click", onGenerate);
     if (copyMapBtn)  copyMapBtn.addEventListener("click", onCopyMap);
+    if (addConclBtn) addConclBtn.addEventListener("click", addConclRow);
+    if (addPointBtn) addPointBtn.addEventListener("click", addPointRow);
 
     if (quickPanel && !quickPanel.classList.contains("hidden") && window.L) {
       setTimeout(initMap, 50);
