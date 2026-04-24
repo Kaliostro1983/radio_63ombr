@@ -476,38 +476,75 @@ def _auto_vacuum_recover(path: str) -> bool:
         return False
 
 
+def _probe_integrity(path: str) -> bool:
+    """Run a quick integrity probe on the SQLite file.
+
+    Uses ``PRAGMA quick_check(1)`` which stops at the first error found and
+    is much faster than a full ``integrity_check``.
+
+    Returns:
+        bool: True if the file looks healthy, False if corruption is detected
+              or the probe itself crashes.
+    """
+    try:
+        with sqlite3.connect(path, timeout=10) as probe:
+            row = probe.execute("PRAGMA quick_check(1)").fetchone()
+            return bool(row and row[0] == "ok")
+    except sqlite3.DatabaseError:
+        return False
+
+
 def init_db() -> None:
     """Initialize the SQLite database and run lightweight migrations.
 
-    This function is typically called once on application startup. It:
-
-    - ensures foreign keys are enabled;
-    - executes the static schema SQL (`SCHEMA_SQL`) to create missing tables;
-    - applies idempotent "lightweight" migrations on top of the schema;
-    - commits all changes before closing the connection.
-
-    If a ``sqlite3.DatabaseError`` (page corruption) is raised during
-    migrations, the function automatically attempts to recover the
-    database via ``VACUUM INTO`` and retries the migrations once.
+    Start-up sequence:
+    1. If the DB file exists, run a fast ``PRAGMA quick_check``.  Any sign
+       of corruption triggers ``VACUUM INTO`` *before* the first migration
+       attempt (proactive recovery).
+    2. Run migrations.
+    3. If migrations still raise ``DatabaseError`` (e.g. VACUUM wasn't
+       enough), attempt one more ``VACUUM INTO`` and retry once.
+    4. If that second attempt also fails, re-raise so the operator is
+       notified with a clear traceback.
     """
-    def _run(path: str) -> None:
-        with sqlite3.connect(path) as conn:
+    def _run(p: str) -> None:
+        with sqlite3.connect(p) as conn:
             conn.row_factory = sqlite3.Row
-            safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="init_db")
+            safe_execute(conn, "PRAGMA foreign_keys = ON;",
+                         module="app.core.db", function="init_db")
             conn.executescript(SCHEMA_SQL)
             _run_lightweight_migrations(conn)
             conn.commit()
 
     path = db_path()
+
+    # ── Step 1: proactive integrity check ──────────────────────────────
+    if os.path.exists(path) and not _probe_integrity(path):
+        print("[DB WARN] quick_check detected corruption. Running proactive VACUUM recovery.")
+        _auto_vacuum_recover(path)
+
+    # ── Step 2: first migration attempt ────────────────────────────────
     try:
         _run(path)
+        return
     except sqlite3.DatabaseError as exc:
-        print(f"[DB WARN] Migration crashed with DatabaseError: {exc}")
-        if _auto_vacuum_recover(path):
-            print("[DB INFO] Retrying migrations on recovered database…")
+        print(f"[DB WARN] Migration run failed: {exc}. Attempting reactive VACUUM recovery.")
+
+    # ── Step 3: reactive recovery + retry ──────────────────────────────
+    if _auto_vacuum_recover(path):
+        print("[DB INFO] Retrying migrations on recovered database…")
+        try:
             _run(path)
-        else:
+            return
+        except sqlite3.DatabaseError as exc2:
+            print(f"[DB ERROR] Migrations failed even after VACUUM recovery: {exc2}")
             raise
+    else:
+        raise sqlite3.DatabaseError(
+            "Database is corrupted and VACUUM INTO recovery failed. "
+            "Please restore from a backup or use: "
+            "sqlite3 your.db \".recover\" | sqlite3 recovered.db"
+        )
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
