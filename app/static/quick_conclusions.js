@@ -13,10 +13,10 @@
   }
 
   /* ── State ── */
-  let activeConclusion = null;  // { id, name, text }
-  let activePoint      = null;  // { id, name, point }
+  let activeConclusion = null;   // { id, name, text }
+  let activePoints     = [];     // ordered array of { id, name, point } — multi-select
   let qcMap            = null;
-  let qcMarker         = null;
+  let qcMarkers        = [];     // array of L.Marker, one per activePoints entry
   let mapReady         = false;
 
   /* ── DOM refs ── */
@@ -45,7 +45,7 @@
   }
 
   /* ─────────────────────────────────────────────
-   *  TOGGLE BUTTON ROWS
+   *  CONCLUSION BUTTONS — single select
    * ───────────────────────────────────────────── */
   function renderConclButtons(items) {
     if (!conclBtnsWrap) return;
@@ -70,6 +70,9 @@
     });
   }
 
+  /* ─────────────────────────────────────────────
+   *  POINT BUTTONS — multi-select with order numbers
+   * ───────────────────────────────────────────── */
   function renderPointButtons(items) {
     if (!pointBtnsWrap) return;
     pointBtnsWrap.innerHTML = "";
@@ -81,15 +84,37 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "qc-toggle-btn";
+      btn.dataset.id = String(item.id);
+      btn.dataset.name = item.name;
       btn.textContent = item.name;
       btn.addEventListener("click", function () {
-        pointBtnsWrap.querySelectorAll(".qc-toggle-btn").forEach(function (b) {
-          b.classList.remove("active");
-        });
-        btn.classList.add("active");
-        activePoint = item;
+        const idx = activePoints.findIndex(function (p) { return p.id === item.id; });
+        if (idx === -1) {
+          // Add to selection
+          activePoints.push(item);
+        } else {
+          // Remove from selection
+          activePoints.splice(idx, 1);
+        }
+        refreshPointButtonLabels();
       });
       pointBtnsWrap.appendChild(btn);
+    });
+  }
+
+  /** Re-draw order numbers on all point buttons after selection change */
+  function refreshPointButtonLabels() {
+    if (!pointBtnsWrap) return;
+    pointBtnsWrap.querySelectorAll(".qc-toggle-btn[data-id]").forEach(function (btn) {
+      const id = parseInt(btn.dataset.id, 10);
+      const idx = activePoints.findIndex(function (p) { return p.id === id; });
+      if (idx === -1) {
+        btn.classList.remove("active");
+        btn.textContent = btn.dataset.name;
+      } else {
+        btn.classList.add("active");
+        btn.textContent = btn.dataset.name + " (" + (idx + 1) + ")";
+      }
     });
   }
 
@@ -112,7 +137,6 @@
       { maxZoom: 18, crossOrigin: "anonymous" }
     ).addTo(qcMap);
 
-    // Small attribution
     window.L.control.attribution({ prefix: false })
       .addAttribution("Tiles &copy; Esri")
       .addTo(qcMap);
@@ -120,7 +144,7 @@
 
   /** Convert MGRS string (with or without spaces) → { lat, lon } or null */
   function mgrsToLatLon(s) {
-    if (!window.mgrs && !window.mgrs?.toPoint) return null;
+    if (!window.mgrs || !window.mgrs.toPoint) return null;
     try {
       const p = window.mgrs.toPoint(String(s).replace(/\s+/g, "").toUpperCase());
       if (!Array.isArray(p) || p.length < 2) return null;
@@ -129,34 +153,46 @@
     } catch (_) { return null; }
   }
 
-  /** Bullseye divIcon matching the screenshot style */
-  function makeBullseyeIcon() {
+  /** Numbered divIcon — red circle with white order number */
+  function makeNumberedIcon(num) {
     return window.L.divIcon({
       className: "",
-      html: '<div class="qc-map-marker"><div class="qc-map-marker__inner"></div></div>',
-      iconSize:   [24, 24],
-      iconAnchor: [12, 12],
+      html: '<div class="qc-map-marker"><span class="qc-map-marker__num">' + num + "</span></div>",
+      iconSize:   [28, 28],
+      iconAnchor: [14, 14],
     });
   }
 
-  function setMapMarker(pointStr) {
+  /** Remove all existing map markers */
+  function clearMapMarkers() {
     if (!qcMap) return;
-    if (qcMarker) { qcMap.removeLayer(qcMarker); qcMarker = null; }
-    if (!pointStr) return;
-
-    const ll = mgrsToLatLon(pointStr);
-    if (!ll) return;
-
-    qcMarker = window.L.marker([ll.lat, ll.lon], { icon: makeBullseyeIcon() })
-      .addTo(qcMap);
-
-    qcMap.flyTo([ll.lat, ll.lon], 12, { animate: false, duration: 0 });
+    qcMarkers.forEach(function (m) { qcMap.removeLayer(m); });
+    qcMarkers = [];
   }
 
-  function clearMapMarker() {
-    if (qcMap && qcMarker) {
-      qcMap.removeLayer(qcMarker);
-      qcMarker = null;
+  /** Place numbered markers for all activePoints; fit map to bounds */
+  function setMapMarkers(points) {
+    if (!qcMap) return;
+    clearMapMarkers();
+    if (!points.length) return;
+
+    const latlngs = [];
+    points.forEach(function (pt, i) {
+      const ll = mgrsToLatLon(pt.point);
+      if (!ll) return;
+      const marker = window.L.marker([ll.lat, ll.lon], {
+        icon: makeNumberedIcon(i + 1),
+      }).addTo(qcMap);
+      qcMarkers.push(marker);
+      latlngs.push([ll.lat, ll.lon]);
+    });
+
+    if (!latlngs.length) return;
+
+    if (latlngs.length === 1) {
+      qcMap.flyTo(latlngs[0], 12, { animate: false, duration: 0 });
+    } else {
+      qcMap.fitBounds(latlngs, { animate: false, padding: [40, 40] });
     }
   }
 
@@ -167,7 +203,7 @@
     if (!textarea) return;
     if (textarea.value.trim()) {
       textarea.value = "";
-      clearMapMarker();
+      clearMapMarkers();
     }
   }
 
@@ -201,17 +237,27 @@
   }
 
   function onGenerate() {
-    if (!activeConclusion) { toast("Оберіть тип висновку", "error"); return; }
-    if (!activePoint)      { toast("Оберіть точку",        "error"); return; }
+    if (!activeConclusion)    { toast("Оберіть тип висновку", "error"); return; }
+    if (!activePoints.length) { toast("Оберіть точку",        "error"); return; }
     if (!textarea) return;
 
+    // Build points block
+    let pointsBlock;
+    if (activePoints.length === 1) {
+      pointsBlock = activePoints[0].point;
+    } else {
+      pointsBlock = activePoints.map(function (pt, i) {
+        return (i + 1) + " - " + pt.point;
+      }).join("\n");
+    }
+
     const prev = textarea.value.trim();
-    let text = "ТОРСЬКЕ\n" + activeConclusion.text + "\n\n" + activePoint.point +
+    let text = "ТОРСЬКЕ\n" + activeConclusion.text + "\n\n" + pointsBlock +
                "\n\n-------  🦁 63 ОМБр 🦁 -------";
     if (prev) text += "\n\n" + prev;
     textarea.value = text;
 
-    setMapMarker(activePoint.point);
+    setMapMarkers(activePoints);
   }
 
   /* ─────────────────────────────────────────────
@@ -239,15 +285,14 @@
       }
     }
 
-    // Force tile re-render with crossOrigin before capturing
     if (qcMap) qcMap.invalidateSize();
 
     try {
       const canvas = await window.html2canvas(mapDiv, {
-        useCORS:       true,
-        allowTaint:    false,
-        logging:       false,
-        imageTimeout:  15000,
+        useCORS:      true,
+        allowTaint:   false,
+        logging:      false,
+        imageTimeout: 15000,
       });
 
       canvas.toBlob(async function (blob) {
@@ -256,7 +301,6 @@
           await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
           toast("Скріншот карти скопійовано!", "success", 1800);
         } catch (e) {
-          // Fallback: offer download
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
@@ -273,16 +317,12 @@
 
   /* ─────────────────────────────────────────────
    *  TAB VISIBILITY HOOK
-   *  Leaflet needs a visible container to init.
-   *  Watch for the hidden class being removed.
    * ───────────────────────────────────────────── */
   if (quickPanel && window.MutationObserver) {
     const obs = new MutationObserver(function () {
       if (!quickPanel.classList.contains("hidden")) {
         if (!mapReady && window.L) {
-          setTimeout(function () {
-            initMap();
-          }, 30);
+          setTimeout(function () { initMap(); }, 30);
         } else if (qcMap) {
           setTimeout(function () { qcMap.invalidateSize(); }, 30);
         }
@@ -309,7 +349,6 @@
     if (generateBtn) generateBtn.addEventListener("click", onGenerate);
     if (copyMapBtn)  copyMapBtn.addEventListener("click", onCopyMap);
 
-    // If the tab is already active on page load (e.g. ?tab=quick), init map now.
     if (quickPanel && !quickPanel.classList.contains("hidden") && window.L) {
       setTimeout(initMap, 50);
     }

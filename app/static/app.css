@@ -2842,25 +2842,27 @@ button.secondary{
   min-height: 450px;
 }
 
-/* Bullseye marker (red ring + gold center) */
+/* Numbered marker — red circle with white order number */
 .qc-map-marker {
-  width: 24px;
-  height: 24px;
-  border: 3px solid #ef4444;
+  width: 28px;
+  height: 28px;
+  border: 2px solid #fff;
   border-radius: 50%;
-  background: rgba(239, 68, 68, 0.12);
+  background: #ef4444;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  box-shadow: 0 1px 4px rgba(0,0,0,.55);
 }
 
-.qc-map-marker__inner {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #facc15;
-  flex-shrink: 0;
+.qc-map-marker__num {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  user-select: none;
 }
 
 @media (max-width: 760px) {
