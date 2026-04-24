@@ -192,7 +192,7 @@
     if (latlngs.length === 1) {
       qcMap.flyTo(latlngs[0], 12, { animate: false, duration: 0 });
     } else {
-      qcMap.fitBounds(latlngs, { animate: false, padding: [40, 40] });
+      qcMap.fitBounds(latlngs, { animate: false, padding: [60, 60], maxZoom: 12 });
     }
   }
 
