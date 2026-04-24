@@ -2793,7 +2793,7 @@ button.secondary{
 }
 
 .qc-map-col {
-  flex: 1 1 0;
+  flex: 2 1 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
