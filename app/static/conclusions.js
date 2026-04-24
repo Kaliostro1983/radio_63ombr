@@ -48,7 +48,7 @@
    *  TAB SWITCHING
    * ────────────────────────────────────────────── */
   const tabBtns = document.querySelectorAll(".tab-btn[data-tab]");
-  const tabPanels = { view: $("cnPaneView"), settings: $("cnPaneSettings") };
+  const tabPanels = { view: $("cnPaneView"), settings: $("cnPaneSettings"), quick: $("cnPaneQuick") };
 
   function activateTab(name) {
     tabBtns.forEach((btn) => {

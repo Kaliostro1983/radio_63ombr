@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% set active_tab = (request.query_params.get("tab") or "view")|lower %}
-{% if active_tab not in ["view", "settings"] %}
+{% if active_tab not in ["view", "settings", "quick"] %}
   {% set active_tab = "view" %}
 {% endif %}
 
@@ -33,6 +33,16 @@
         aria-controls="cnPaneSettings"
         data-tab="settings"
       >Налаштування</button>
+
+      <button
+        id="cnTabQuick"
+        type="button"
+        class="tab-btn {% if active_tab == 'quick' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'quick' %}true{% else %}false{% endif %}"
+        aria-controls="cnPaneQuick"
+        data-tab="quick"
+      >Швидко</button>
     </div>
 
     <div class="tab-panel-wrap">
@@ -162,6 +172,60 @@
         </div>
       </section>
 
+      <!-- ===== ШВИДКО TAB ===== -->
+      <section
+        id="cnPaneQuick"
+        class="tab-panel {% if active_tab != 'quick' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="cnTabQuick"
+      >
+        <div class="tab-panel-section">
+
+          <!-- Row 1: Conclusion type selector -->
+          <div class="field">
+            <label class="small">Тип висновку</label>
+            <div id="qcConclBtns" class="qc-btn-row">
+              <span class="small" style="opacity:.5">Завантаження…</span>
+            </div>
+          </div>
+
+          <!-- Row 2: Point selector -->
+          <div class="field" style="margin-top:10px">
+            <label class="small">Точка</label>
+            <div id="qcPointBtns" class="qc-btn-row">
+              <span class="small" style="opacity:.5">Завантаження…</span>
+            </div>
+          </div>
+
+          <!-- Two-column containers -->
+          <div class="qc-containers">
+
+            <!-- LEFT: text editor -->
+            <div class="qc-editor-col">
+              <div class="qc-action-btns">
+                <button type="button" id="qcPasteBtn"    class="secondary qc-icon-btn" title="Вставити з буферу">📋</button>
+                <button type="button" id="qcCopyBtn"     class="secondary qc-icon-btn" title="Копіювати текст">📄</button>
+                <button type="button" id="qcClearBtn"    class="secondary qc-icon-btn" title="Очистити">🗑</button>
+                <button type="button" id="qcGenerateBtn" title="Згенерувати висновок">⚡ Згенерувати</button>
+              </div>
+              <textarea id="qcTextarea" class="qc-textarea" placeholder="Натисни «Згенерувати» для створення висновку…"></textarea>
+            </div>
+
+            <!-- RIGHT: map -->
+            <div class="qc-map-col">
+              <div>
+                <button type="button" id="qcCopyMapBtn" class="secondary" title="Копіювати скріншот карти в буфер">📸 Копіювати карту</button>
+              </div>
+              <div class="qc-map-container">
+                <div id="qcMapDiv" class="qc-map-div"></div>
+              </div>
+            </div>
+
+          </div><!-- /qc-containers -->
+
+        </div>
+      </section>
+
     </div><!-- /tab-panel-wrap -->
   </section>
 </div>
@@ -190,5 +254,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/conclusions.js?v=4" defer></script>
+<script src="/static/conclusions.js?v=5" defer></script>
+<script src="/static/quick_conclusions.js?v=1" defer></script>
 {% endblock %}

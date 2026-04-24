@@ -1154,6 +1154,61 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
              "ON message_landmark_queue(status, queued_at)",
              stage="create_index:idx_message_landmark_queue_status")
 
+    # --- Quick conclusions and quick points tables ---
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS quick_conclusions (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            text TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:quick_conclusions",
+    )
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS quick_points (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            name  TEXT NOT NULL UNIQUE,
+            point TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:quick_points",
+    )
+    for _qc_name, _qc_text in [
+        ("Квадро", "Ворог повідомляє про рух квадроцикла в районі точки:"),
+        ("Мото",   "Ворог повідомляє про рух мотоцикла в районі точки:"),
+        ("Вело",   "Ворог повідомляє про рух велосипеда в районі точки:"),
+        ("Т\\з",   "Ворог повідомляє про рух Т/З в районі точки:"),
+        ("БпЛА",   "Ворог повідомляє про власний БПЛА перехоплювач в районі точки:"),
+    ]:
+        safe_execute(
+            conn,
+            "INSERT OR IGNORE INTO quick_conclusions (name, text) VALUES (?, ?)",
+            (_qc_name, _qc_text),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"seed:quick_conclusions:{_qc_name}",
+        )
+    for _qp_name, _qp_point in [
+        ("04",  "37U DQ 29050 28377"),
+        ("114", "37U DQ 31342 29470"),
+    ]:
+        safe_execute(
+            conn,
+            "INSERT OR IGNORE INTO quick_points (name, point) VALUES (?, ?)",
+            (_qp_name, _qp_point),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"seed:quick_points:{_qp_name}",
+        )
+
 
 def get_db() -> sqlite3.Connection:
     """Create and return a new low-level SQLite connection.

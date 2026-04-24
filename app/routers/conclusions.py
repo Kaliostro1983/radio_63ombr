@@ -252,6 +252,36 @@ async def api_conclusion_type_update(type_id: int, request: Request):
     return {"ok": True, "id": type_id, "type": new_name, "color": new_color}
 
 
+# ---------------------------------------------------------------------------
+# Quick conclusions + quick points
+# ---------------------------------------------------------------------------
+
+@router.get("/api/quick-conclusions")
+def api_quick_conclusions():
+    """Return all quick conclusion templates."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name, text FROM quick_conclusions ORDER BY id ASC"
+        ).fetchall()
+    return {
+        "ok": True,
+        "rows": [{"id": int(r["id"]), "name": r["name"] or "", "text": r["text"] or ""} for r in rows],
+    }
+
+
+@router.get("/api/quick-points")
+def api_quick_points():
+    """Return all quick point locations."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name, point FROM quick_points ORDER BY id ASC"
+        ).fetchall()
+    return {
+        "ok": True,
+        "rows": [{"id": int(r["id"]), "name": r["name"] or "", "point": r["point"] or ""} for r in rows],
+    }
+
+
 @router.delete("/api/conclusions/types/{type_id}")
 def api_conclusion_type_delete(type_id: int):
     """Delete a conclusion type; reassigns its conclusions to type 0."""
