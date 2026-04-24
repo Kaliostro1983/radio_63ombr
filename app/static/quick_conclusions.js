@@ -102,7 +102,7 @@
 
     qcMap = window.L.map(mapDiv, {
       center: [48.65, 38.15],
-      zoom: 11,
+      zoom: 10,
       zoomControl: true,
       attributionControl: false,
     });
