@@ -1167,7 +1167,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
              stage="create_index:idx_message_landmark_queue_status")
 
     # --- Quick conclusions and quick points tables ---
-    safe_execute(
+    _try_ddl(
         conn,
         """
         CREATE TABLE IF NOT EXISTS quick_conclusions (
@@ -1176,11 +1176,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             text TEXT NOT NULL DEFAULT ''
         )
         """,
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="create_table:quick_conclusions",
     )
-    safe_execute(
+    _try_ddl(
         conn,
         """
         CREATE TABLE IF NOT EXISTS quick_points (
@@ -1189,8 +1187,6 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             point TEXT NOT NULL DEFAULT ''
         )
         """,
-        module="app.core.db",
-        function="_run_lightweight_migrations",
         stage="create_table:quick_points",
     )
     for _qc_name, _qc_text in [
@@ -1200,24 +1196,18 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         ("Т\\з",   "Ворог повідомляє про рух Т/З в районі точки:"),
         ("БпЛА",   "Ворог повідомляє про власний БПЛА перехоплювач в районі точки:"),
     ]:
-        safe_execute(
+        _try_ddl(
             conn,
-            "INSERT OR IGNORE INTO quick_conclusions (name, text) VALUES (?, ?)",
-            (_qc_name, _qc_text),
-            module="app.core.db",
-            function="_run_lightweight_migrations",
+            f"INSERT OR IGNORE INTO quick_conclusions (name, text) VALUES ('{_qc_name}', '{_qc_text}')",
             stage=f"seed:quick_conclusions:{_qc_name}",
         )
     for _qp_name, _qp_point in [
         ("04",  "37U DQ 29050 28377"),
         ("114", "37U DQ 31342 29470"),
     ]:
-        safe_execute(
+        _try_ddl(
             conn,
-            "INSERT OR IGNORE INTO quick_points (name, point) VALUES (?, ?)",
-            (_qp_name, _qp_point),
-            module="app.core.db",
-            function="_run_lightweight_migrations",
+            f"INSERT OR IGNORE INTO quick_points (name, point) VALUES ('{_qp_name}', '{_qp_point}')",
             stage=f"seed:quick_points:{_qp_name}",
         )
 
