@@ -102,7 +102,7 @@
 
     qcMap = window.L.map(mapDiv, {
       center: [48.65, 38.15],
-      zoom: 16,
+      zoom: 15,
       zoomControl: true,
       attributionControl: false,
     });
@@ -150,7 +150,7 @@
     qcMarker = window.L.marker([ll.lat, ll.lon], { icon: makeBullseyeIcon() })
       .addTo(qcMap);
 
-    qcMap.flyTo([ll.lat, ll.lon], 16, { animate: false, duration: 0 });
+    qcMap.flyTo([ll.lat, ll.lon], 15, { animate: false, duration: 0 });
   }
 
   function clearMapMarker() {
