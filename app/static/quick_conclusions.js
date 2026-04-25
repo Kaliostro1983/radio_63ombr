@@ -26,6 +26,29 @@
   const mapDiv        = $("qcMapDiv");
   const quickPanel    = $("cnPaneQuick");
 
+  /* ── Zoom helpers ── */
+  const ZOOM_KEY     = "qcMapZoom";
+  const ZOOM_DEFAULT = 12;
+
+  function getZoom() {
+    const inp = $("qcMapZoom");
+    const v = inp ? parseInt(inp.value, 10) : NaN;
+    return (isFinite(v) && v >= 1 && v <= 18) ? v : ZOOM_DEFAULT;
+  }
+
+  function initZoomInput() {
+    const inp = $("qcMapZoom");
+    if (!inp) return;
+    const saved = parseInt(localStorage.getItem(ZOOM_KEY), 10);
+    if (isFinite(saved) && saved >= 1 && saved <= 18) inp.value = String(saved);
+    inp.addEventListener("change", function () {
+      const v = parseInt(inp.value, 10);
+      if (isFinite(v) && v >= 1 && v <= 18) {
+        localStorage.setItem(ZOOM_KEY, String(v));
+      }
+    });
+  }
+
   /* ─────────────────────────────────────────────
    *  CONCLUSION BUTTONS — single select
    * ───────────────────────────────────────────── */
@@ -171,10 +194,11 @@
 
     if (!latlngs.length) return;
 
+    const zoom = getZoom();
     if (latlngs.length === 1) {
-      qcMap.flyTo(latlngs[0], 12, { animate: false, duration: 0 });
+      qcMap.flyTo(latlngs[0], zoom, { animate: false, duration: 0 });
     } else {
-      qcMap.fitBounds(latlngs, { animate: false, padding: [60, 60], maxZoom: 12 });
+      qcMap.fitBounds(latlngs, { animate: false, padding: [60, 60], maxZoom: zoom });
     }
   }
 
@@ -562,6 +586,8 @@
     const copyMapBtn    = $("qcCopyMapBtn");
     const addConclBtn   = $("qcAddConclBtn");
     const addPointBtn   = $("qcAddPointBtn");
+
+    initZoomInput();
 
     if (pasteBtn)    pasteBtn.addEventListener("click", onPaste);
     if (copyBtn)     copyBtn.addEventListener("click", onCopy);

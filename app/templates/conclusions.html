@@ -213,8 +213,10 @@
 
             <!-- RIGHT: map -->
             <div class="qc-map-col">
-              <div>
+              <div class="qc-map-toolbar">
                 <button type="button" id="qcCopyMapBtn" class="secondary" title="Копіювати скріншот карти в буфер">📸 Копіювати карту</button>
+                <label class="qc-zoom-label" for="qcMapZoom">Зум</label>
+                <input type="number" id="qcMapZoom" class="qc-zoom-inp" min="1" max="18" value="12" title="Масштаб карти після генерування" />
               </div>
               <div class="qc-map-container">
                 <div id="qcMapDiv" class="qc-map-div"></div>
@@ -285,5 +287,5 @@
 
 {% block scripts %}
 <script src="/static/conclusions.js?v=5" defer></script>
-<script src="/static/quick_conclusions.js?v=1" defer></script>
+<script src="/static/quick_conclusions.js?v=2" defer></script>
 {% endblock %}

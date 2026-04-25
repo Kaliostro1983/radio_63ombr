@@ -2827,6 +2827,32 @@ button.secondary{
   padding: 10px 12px;
 }
 
+.qc-map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.qc-zoom-label {
+  font-size: .82rem;
+  opacity: .75;
+  white-space: nowrap;
+}
+.qc-zoom-inp {
+  width: 58px;
+  padding: 4px 6px;
+  font-size: .88rem;
+  text-align: center;
+  background: var(--inputbg);
+  color: var(--inputfg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.qc-zoom-inp:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .qc-map-container {
   flex: 1;
   border: 1px solid var(--border);
