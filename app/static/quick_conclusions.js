@@ -142,6 +142,12 @@
       { maxZoom: 18, crossOrigin: "anonymous" }
     ).addTo(qcMap);
 
+    // Transparent labels overlay (place names, roads, boundaries)
+    window.L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 18, crossOrigin: "anonymous" }
+    ).addTo(qcMap);
+
     window.L.control.attribution({ prefix: false })
       .addAttribution("Tiles &copy; Esri")
       .addTo(qcMap);
