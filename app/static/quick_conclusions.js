@@ -142,11 +142,29 @@
       { maxZoom: 18, crossOrigin: "anonymous" }
     ).addTo(qcMap);
 
-    // Transparent labels overlay (place names, roads, boundaries)
-    window.L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 18, crossOrigin: "anonymous" }
-    ).addTo(qcMap);
+    // Dedicated pane for labels — renders above tile pane (z:200), below markers (z:600)
+    qcMap.createPane("labelsPane");
+    qcMap.getPane("labelsPane").style.zIndex = 450;
+    qcMap.getPane("labelsPane").style.pointerEvents = "none";
+
+    const LABELS_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+
+    // Diagnostic: test one tile to detect network/CORS issues
+    (function () {
+      const img = new window.Image();
+      img.onerror = function () {
+        toast("Підписи карти недоступні у цій мережі", "error", 4000);
+        console.warn("[QC] Labels tile failed:", LABELS_URL);
+      };
+      // No crossOrigin here — avoids CORS pre-flight that may be blocked by proxies
+      img.src = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/10/350/618";
+    })();
+
+    // No crossOrigin on labels — avoids CORS rejection on some networks/proxies
+    window.L.tileLayer(LABELS_URL, {
+      maxZoom: 18,
+      pane: "labelsPane",
+    }).addTo(qcMap);
 
     window.L.control.attribution({ prefix: false })
       .addAttribution("Tiles &copy; Esri")
