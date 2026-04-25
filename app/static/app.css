@@ -2969,3 +2969,111 @@ button.secondary{
     flex-direction: column;
   }
 }
+
+/* ═══════════════════════════════════════
+   FAQ page
+═══════════════════════════════════════ */
+
+.faq-list {
+  max-width: 780px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.faq-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+
+.faq-item[open] {
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.faq-question {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  font-weight: 600;
+  font-size: .97rem;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.4;
+}
+
+.faq-question::-webkit-details-marker { display: none; }
+
+.faq-question::before {
+  content: "▶";
+  font-size: .7rem;
+  opacity: .55;
+  flex-shrink: 0;
+  transition: transform .18s;
+}
+
+.faq-item[open] > .faq-question::before {
+  transform: rotate(90deg);
+}
+
+.faq-question:hover {
+  background: color-mix(in srgb, var(--accent) 6%, var(--card));
+}
+
+.faq-answer {
+  padding: 0 18px 18px 18px;
+  border-top: 1px solid var(--border);
+  font-size: .91rem;
+  line-height: 1.65;
+  color: var(--fg);
+}
+
+.faq-answer p {
+  margin: 12px 0 0;
+}
+
+.faq-answer p:first-child {
+  margin-top: 14px;
+}
+
+.faq-steps {
+  margin: 10px 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.faq-steps li {
+  line-height: 1.55;
+}
+
+.faq-code {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 5px 12px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--inputbg));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: .88rem;
+  word-break: break-all;
+  color: var(--fg);
+}
+
+.faq-note {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, #facc15 8%, var(--card));
+  border-left: 3px solid #ca8a04;
+  border-radius: 0 6px 6px 0;
+  font-size: .87rem;
+  line-height: 1.55;
+  opacity: .9;
+}
