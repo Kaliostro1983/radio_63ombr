@@ -255,6 +255,18 @@
 
           </div><!-- /qc-mgmt-cols -->
 
+          <!-- Написи карти -->
+          <div class="qc-mgmt-block qc-mgmt-block--full">
+            <div class="qc-mgmt-head">
+              <strong>Написи карти</strong>
+              <button type="button" id="qcAddLabelBtn" class="secondary" style="padding:4px 10px; font-size:.82rem">+ Додати</button>
+            </div>
+            <div id="qcLabelErr" class="small" style="color:var(--danger);display:none;margin-bottom:6px"></div>
+            <div id="qcLabelList" class="qc-mgmt-list">
+              <span class="small" style="opacity:.5">Завантаження…</span>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -287,5 +299,5 @@
 
 {% block scripts %}
 <script src="/static/conclusions.js?v=5" defer></script>
-<script src="/static/quick_conclusions.js?v=6" defer></script>
+<script src="/static/quick_conclusions.js?v=7" defer></script>
 {% endblock %}

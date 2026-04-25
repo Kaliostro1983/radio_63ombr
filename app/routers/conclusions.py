@@ -386,6 +386,70 @@ def api_quick_points_delete(item_id: int):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# Map labels CRUD
+# ---------------------------------------------------------------------------
+
+@router.get("/api/map-labels")
+def api_map_labels():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name, mgrs FROM map_labels ORDER BY name ASC"
+        ).fetchall()
+    return {
+        "ok": True,
+        "rows": [{"id": int(r["id"]), "name": r["name"] or "", "mgrs": r["mgrs"] or ""} for r in rows],
+    }
+
+
+@router.post("/api/map-labels")
+async def api_map_labels_create(request: Request):
+    payload = await request.json()
+    name = (payload.get("name") or "").strip()
+    mgrs = (payload.get("mgrs") or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO map_labels (name, mgrs) VALUES (?, ?)", (name, mgrs)
+        )
+        new_id = int(cur.lastrowid)
+        conn.commit()
+    return {"ok": True, "id": new_id, "name": name, "mgrs": mgrs}
+
+
+@router.patch("/api/map-labels/{item_id}")
+async def api_map_labels_update(item_id: int, request: Request):
+    payload = await request.json()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name, mgrs FROM map_labels WHERE id = ? LIMIT 1", (item_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
+        new_name = (payload.get("name") or "").strip() or row["name"]
+        new_mgrs = payload.get("mgrs", row["mgrs"]) or ""
+        conn.execute(
+            "UPDATE map_labels SET name = ?, mgrs = ? WHERE id = ?",
+            (new_name, new_mgrs, item_id),
+        )
+        conn.commit()
+    return {"ok": True, "id": item_id, "name": new_name, "mgrs": new_mgrs}
+
+
+@router.delete("/api/map-labels/{item_id}")
+def api_map_labels_delete(item_id: int):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM map_labels WHERE id = ? LIMIT 1", (item_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
+        conn.execute("DELETE FROM map_labels WHERE id = ?", (item_id,))
+        conn.commit()
+    return {"ok": True}
+
+
 @router.delete("/api/conclusions/types/{type_id}")
 def api_conclusion_type_delete(type_id: int):
     """Delete a conclusion type; reassigns its conclusions to type 0."""

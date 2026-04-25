@@ -17,6 +17,7 @@
   let activePoints     = [];     // ordered array of { id, name, point } — multi-select
   let qcMap            = null;
   let qcMarkers        = [];     // array of L.Marker, one per activePoints entry
+  let qcLabelMarkers   = [];     // array of L.Marker for static map labels
   let mapReady         = false;
 
   /* ── DOM refs ── */
@@ -142,33 +143,12 @@
       { maxZoom: 18, crossOrigin: "anonymous" }
     ).addTo(qcMap);
 
-    // Dedicated pane for labels — renders above tile pane (z:200), below markers (z:600)
-    qcMap.createPane("labelsPane");
-    qcMap.getPane("labelsPane").style.zIndex = 450;
-    qcMap.getPane("labelsPane").style.pointerEvents = "none";
-
-    const LABELS_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
-
-    // Diagnostic: test one tile to detect network/CORS issues
-    (function () {
-      const img = new window.Image();
-      img.onerror = function () {
-        toast("Підписи карти недоступні у цій мережі", "error", 4000);
-        console.warn("[QC] Labels tile failed:", LABELS_URL);
-      };
-      // No crossOrigin here — avoids CORS pre-flight that may be blocked by proxies
-      img.src = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/10/350/618";
-    })();
-
-    // No crossOrigin on labels — avoids CORS rejection on some networks/proxies
-    window.L.tileLayer(LABELS_URL, {
-      maxZoom: 18,
-      pane: "labelsPane",
-    }).addTo(qcMap);
-
     window.L.control.attribution({ prefix: false })
       .addAttribution("Tiles &copy; Esri")
       .addTo(qcMap);
+
+    // Load custom place-name labels from DB
+    loadMapLabels();
   }
 
   /** Convert MGRS string (with or without spaces) → { lat, lon } or null */
@@ -192,11 +172,47 @@
     });
   }
 
-  /** Remove all existing map markers */
+  /** Remove all existing point markers (numbered, per-generate) */
   function clearMapMarkers() {
     if (!qcMap) return;
     qcMarkers.forEach(function (m) { qcMap.removeLayer(m); });
     qcMarkers = [];
+  }
+
+  /** Build a text-only Leaflet divIcon for a custom map label */
+  function makeTextLabelIcon(name) {
+    return window.L.divIcon({
+      className: "qc-map-label-icon",
+      html: String(name),
+      iconSize:   [0, 0],
+      iconAnchor: [0, 0],
+    });
+  }
+
+  /** Remove all static label markers from the map */
+  function clearLabelMarkers() {
+    if (!qcMap) return;
+    qcLabelMarkers.forEach(function (m) { qcMap.removeLayer(m); });
+    qcLabelMarkers = [];
+  }
+
+  /** Fetch map labels from server and place them on the map */
+  function loadMapLabels() {
+    if (!qcMap) return;
+    fetch("/api/map-labels").then(function (r) { return r.json(); }).then(function (d) {
+      clearLabelMarkers();
+      (d.rows || []).forEach(function (item) {
+        if (!item.mgrs) return;
+        const ll = mgrsToLatLon(item.mgrs);
+        if (!ll) return;
+        const marker = window.L.marker([ll.lat, ll.lon], {
+          icon: makeTextLabelIcon(item.name),
+          interactive: false,
+          keyboard: false,
+        }).addTo(qcMap);
+        qcLabelMarkers.push(marker);
+      });
+    }).catch(function () { /* silent — labels are optional */ });
   }
 
   /** Place numbered markers for all activePoints; fit map to bounds */
@@ -539,17 +555,107 @@
     row.querySelector(".qc-mgmt-inp--name").focus();
   }
 
+  /* ── quick_map_labels management ── */
+
+  function renderLabelsMgmt(items) {
+    const list = $("qcLabelList");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<span class="small" style="opacity:.5">Порожньо</span>';
+      return;
+    }
+    items.forEach(function (item) { list.appendChild(buildLabelRow(item)); });
+  }
+
+  function buildLabelRow(item) {
+    const row = document.createElement("div");
+    row.className = "qc-mgmt-row";
+    row.dataset.id = String(item.id);
+    row.innerHTML =
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" value="' + esc(item.name) + '" placeholder="Назва" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" value="' + esc(item.mgrs) + '" placeholder="MGRS координата" />' +
+      '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
+      '<button type="button" class="qc-mgmt-del secondary">✕</button>';
+
+    row.querySelector(".qc-mgmt-save").addEventListener("click", async function () {
+      const name = row.querySelector(".qc-mgmt-inp--name").value.trim();
+      const mgrs = row.querySelector(".qc-mgmt-inp--point").value.trim();
+      if (!name) { toast("Назва не може бути порожньою", "error"); return; }
+      const r = await fetch("/api/map-labels/" + item.id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, mgrs }),
+      });
+      const d = await r.json();
+      if (!d.ok) { toast(d.error || "Помилка збереження", "error"); return; }
+      item.name = d.name; item.mgrs = d.mgrs;
+      toast("Збережено", "info", 1200);
+      reloadAll();
+    });
+
+    row.querySelector(".qc-mgmt-del").addEventListener("click", async function () {
+      if (!confirm('Видалити "' + item.name + '"?')) return;
+      const r = await fetch("/api/map-labels/" + item.id, { method: "DELETE" });
+      const d = await r.json();
+      if (!d.ok) { toast(d.error || "Помилка видалення", "error"); return; }
+      reloadAll();
+    });
+
+    return row;
+  }
+
+  function addLabelRow() {
+    const list = $("qcLabelList");
+    const errEl = $("qcLabelErr");
+    if (!list) return;
+    showMgmtErr(errEl, "");
+
+    const row = document.createElement("div");
+    row.className = "qc-mgmt-row qc-mgmt-row--new";
+    row.innerHTML =
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" placeholder="Назва (напр. Торське)" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" placeholder="MGRS (напр. 37U DQ 29050 28377)" />' +
+      '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
+      '<button type="button" class="qc-mgmt-del secondary">✕</button>';
+
+    row.querySelector(".qc-mgmt-save").addEventListener("click", async function () {
+      const name = row.querySelector(".qc-mgmt-inp--name").value.trim();
+      const mgrs = row.querySelector(".qc-mgmt-inp--point").value.trim();
+      if (!name) { showMgmtErr(errEl, "Назва не може бути порожньою"); return; }
+      const r = await fetch("/api/map-labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, mgrs }),
+      });
+      const d = await r.json();
+      if (!d.ok) { showMgmtErr(errEl, d.error || "Помилка"); return; }
+      reloadAll();
+    });
+
+    row.querySelector(".qc-mgmt-del").addEventListener("click", function () {
+      row.remove();
+      showMgmtErr(errEl, "");
+    });
+
+    list.insertBefore(row, list.firstChild);
+    row.querySelector(".qc-mgmt-inp--name").focus();
+  }
+
   /* ── Reload everything after any mutation ── */
   async function reloadAll() {
     showMgmtErr($("qcConclErr"), "");
     showMgmtErr($("qcPointErr"), "");
+    showMgmtErr($("qcLabelErr"), "");
     try {
-      const [cr, pr] = await Promise.all([
+      const [cr, pr, lr] = await Promise.all([
         fetch("/api/quick-conclusions"),
         fetch("/api/quick-points"),
+        fetch("/api/map-labels"),
       ]);
       const cd = await cr.json();
       const pd = await pr.json();
+      const ld = await lr.json();
 
       // Refresh selector buttons (top of tab)
       renderConclButtons(cd.rows || []);
@@ -560,6 +666,10 @@
       // Refresh management lists
       renderConclMgmt(cd.rows || []);
       renderPointsMgmt(pd.rows || []);
+      renderLabelsMgmt(ld.rows || []);
+
+      // Refresh labels on map
+      loadMapLabels();
     } catch (e) {
       console.error("reloadAll failed", e);
     }
@@ -588,16 +698,19 @@
     // Load selector buttons + management lists together
     (async function () {
       try {
-        const [cr, pr] = await Promise.all([
+        const [cr, pr, lr] = await Promise.all([
           fetch("/api/quick-conclusions"),
           fetch("/api/quick-points"),
+          fetch("/api/map-labels"),
         ]);
         const cd = await cr.json();
         const pd = await pr.json();
+        const ld = await lr.json();
         renderConclButtons(cd.rows || []);
         renderPointButtons(pd.rows || []);
         renderConclMgmt(cd.rows || []);
         renderPointsMgmt(pd.rows || []);
+        renderLabelsMgmt(ld.rows || []);
       } catch (e) {
         console.error("quick_conclusions: init load failed", e);
       }
@@ -610,6 +723,7 @@
     const copyMapBtn    = $("qcCopyMapBtn");
     const addConclBtn   = $("qcAddConclBtn");
     const addPointBtn   = $("qcAddPointBtn");
+    const addLabelBtn   = $("qcAddLabelBtn");
 
     initZoomInput();
 
@@ -620,6 +734,7 @@
     if (copyMapBtn)  copyMapBtn.addEventListener("click", onCopyMap);
     if (addConclBtn) addConclBtn.addEventListener("click", addConclRow);
     if (addPointBtn) addPointBtn.addEventListener("click", addPointRow);
+    if (addLabelBtn) addLabelBtn.addEventListener("click", addLabelRow);
 
     if (quickPanel && !quickPanel.classList.contains("hidden") && window.L) {
       setTimeout(initMap, 50);

@@ -378,6 +378,15 @@ CREATE TABLE IF NOT EXISTS analytical_conclusions (
 
 CREATE INDEX IF NOT EXISTS idx_analytical_conclusions_network_dt
     ON analytical_conclusions(network_id, created_at DESC);
+
+-- Custom map labels placed on the quick-conclusions Leaflet map.
+-- name  – display text (shown on the satellite map)
+-- mgrs  – MGRS coordinate string (e.g. "37U DQ 29050 28377")
+CREATE TABLE IF NOT EXISTS map_labels (
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    mgrs TEXT NOT NULL DEFAULT ''
+);
 """
 
 
@@ -1318,6 +1327,19 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             f"INSERT OR IGNORE INTO quick_points (name, point) VALUES ('{_qp_name}', '{_qp_point}')",
             stage=f"seed:quick_points:{_qp_name}",
         )
+
+    # --- Map labels table (custom place-name labels on the quick-conclusions map) ---
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS map_labels (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            mgrs TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        stage="create_table:map_labels",
+    )
 
 
 def get_db() -> sqlite3.Connection:

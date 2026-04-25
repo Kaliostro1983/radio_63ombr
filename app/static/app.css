@@ -2958,6 +2958,36 @@ button.secondary{
   border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
 }
 
+/* Full-width management block (map labels) */
+.qc-mgmt-block--full {
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* Custom map label rendered on Leaflet satellite map */
+.qc-map-label-icon {
+  background: transparent !important;
+  border: none !important;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow:
+    1px  0   0 #000,
+   -1px  0   0 #000,
+    0    1px 0 #000,
+    0   -1px 0 #000,
+    1px  1px 0 #000,
+   -1px  1px 0 #000,
+    1px -1px 0 #000,
+   -1px -1px 0 #000;
+  pointer-events: none;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
 @media (max-width: 760px) {
   .qc-containers {
     flex-direction: column;
