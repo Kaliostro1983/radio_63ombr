@@ -27,6 +27,37 @@
     }, Math.max(1000, Number(ms) || 2400));
   };
 
+  /**
+   * Copy text to clipboard.
+   * Works in both secure (HTTPS) and non-secure (HTTP) contexts.
+   * Returns a Promise<boolean> — true on success.
+   */
+  window.clipboardWrite = async function(text) {
+    const t = String(text ?? "");
+    // Modern async API — only available in secure contexts (HTTPS / localhost).
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(t);
+        return true;
+      } catch { /* fall through */ }
+    }
+    // Legacy execCommand fallback — works on HTTP remote access.
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = t;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-9999px";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (ok) return true;
+    } catch { /* fall through */ }
+    return false;
+  };
+
   window.appTouchStatus = function(label){
     const el = document.getElementById("appLastUpdate");
     if(!el) return;

@@ -429,10 +429,10 @@
     if (modalCopy) {
       modalCopy.addEventListener("click", async () => {
         const text = modalText.textContent || "";
-        try {
-          await navigator.clipboard.writeText(text);
+        const ok = await window.clipboardWrite(text);
+        if (ok) {
           if (window.appToast) window.appToast("Скопійовано в буфер.", "success", 1600);
-        } catch {
+        } else {
           if (window.appToast) window.appToast("Не вдалося скопіювати.", "error", 1600);
         }
       });

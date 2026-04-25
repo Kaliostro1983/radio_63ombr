@@ -207,10 +207,9 @@
   function onCopy() {
     if (!textarea) return;
     if (!textarea.value) { toast("Поле порожнє", "error"); return; }
-    navigator.clipboard.writeText(textarea.value).then(function () {
-      toast("Текст скопійовано!", "info", 1400);
-    }).catch(function () {
-      toast("Помилка копіювання", "error");
+    window.clipboardWrite(textarea.value).then(function (ok) {
+      if (ok) toast("Текст скопійовано!", "info", 1400);
+      else toast("Помилка копіювання", "error");
     });
   }
 

@@ -181,12 +181,8 @@
 
       const txt = (data.text || "").trim();
       if (txt) {
-        try {
-          await navigator.clipboard.writeText(txt);
-          showToast("Скопійовано у буфер");
-        } catch {
-          showToast("Згенеровано");
-        }
+        const copied = await window.clipboardWrite(txt);
+        showToast(copied ? "Скопійовано у буфер" : "Згенеровано");
       }
     } catch (e) {
       if (window.appToast) window.appToast(e.message || "Помилка", "error");
@@ -200,10 +196,10 @@
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(txt);
+    const ok = await window.clipboardWrite(txt);
+    if (ok) {
       showToast("Скопійовано", 1500);
-    } catch {
+    } else {
       if (window.appToast) window.appToast("Не вдалося скопіювати в буфер.", "error");
     }
   }
