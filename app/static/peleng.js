@@ -356,20 +356,39 @@
     return `Форма_1.2.13_${dd}.${mm}.${yyyy}.docx`;
   }
 
+  async function downloadReportBlob(url, fetchOpts) {
+    const res = await fetch(url, fetchOpts);
+    const cd = res.headers.get("Content-Disposition") || "";
+    console.log("[peleng] report response status:", res.status);
+    console.log("[peleng] Content-Disposition:", cd);
+    if (!res.ok) {
+      let msg = "Помилка формування звіту";
+      try { const d = await res.json(); msg = d.detail || d.error || msg; } catch {}
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const fname = makeReportFilename();
+    console.log("[peleng] saving as:", fname);
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  }
+
   async function generateReport() {
     const text = ($("report_source_text")?.value || "").trim();
 
     try {
       if (text) {
-        await downloadBlob(
-          "/peleng/report/from-text",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-          },
-          makeReportFilename()
-        );
+        await downloadReportBlob("/peleng/report/from-text", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
         showToast("Звіт сформовано з тексту", 1700);
         return;
       }
@@ -383,9 +402,10 @@
       }
 
       const qs = new URLSearchParams({ from_dt: fromDt, to_dt: toDt });
-      window.location.href = `/peleng/report/by-period?${qs.toString()}`;
+      await downloadReportBlob(`/peleng/report/by-period?${qs.toString()}`, {});
       showToast("Звіт сформовано з БД", 1700);
     } catch (e) {
+      console.error("[peleng] generateReport error:", e);
       if (window.appToast) window.appToast(e.message || "Помилка", "error");
     }
   }
