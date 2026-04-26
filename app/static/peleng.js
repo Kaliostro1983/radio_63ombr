@@ -379,7 +379,10 @@
     URL.revokeObjectURL(blobUrl);
   }
 
+  let _reportBusy = false;
   async function generateReport() {
+    if (_reportBusy) return;
+    _reportBusy = true;
     const text = ($("report_source_text")?.value || "").trim();
 
     try {
@@ -407,6 +410,8 @@
     } catch (e) {
       console.error("[peleng] generateReport error:", e);
       if (window.appToast) window.appToast(e.message || "Помилка", "error");
+    } finally {
+      _reportBusy = false;
     }
   }
 
@@ -595,9 +600,9 @@
       scheduleReportPreview();
     });
 
-    reportBtn?.addEventListener("click", generateReport);
-    postsAddBtn?.addEventListener("click", addPost);
-    postsSaveBtn?.addEventListener("click", savePosts);
+    if (reportBtn)  reportBtn.onclick  = generateReport;
+    if (postsAddBtn) postsAddBtn.onclick = addPost;
+    if (postsSaveBtn) postsSaveBtn.onclick = savePosts;
     postsTbody?.addEventListener("click", deletePostRow);
   });
 })();
