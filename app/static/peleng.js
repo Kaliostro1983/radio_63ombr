@@ -287,8 +287,15 @@
     let filename = fallbackName;
 
     const cd = res.headers.get("Content-Disposition") || "";
-    const m = cd.match(/filename="?([^"]+)"?/);
-    if (m && m[1]) filename = m[1];
+    // RFC 5987: filename*=UTF-8''<percent-encoded>
+    const m5987 = cd.match(/filename\*=UTF-8''([^;\s]+)/i);
+    if (m5987) {
+      try { filename = decodeURIComponent(m5987[1]); } catch { filename = m5987[1]; }
+    } else {
+      // Legacy: filename="..." or filename=...
+      const m = cd.match(/filename="?([^";\n]+)"?/);
+      if (m && m[1]) filename = m[1].trim();
+    }
 
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
