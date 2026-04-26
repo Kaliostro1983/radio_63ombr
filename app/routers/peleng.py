@@ -22,6 +22,7 @@ import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 from fastapi.responses import PlainTextResponse
 
 from fastapi import APIRouter, Query, Request
@@ -300,7 +301,7 @@ def render_docx_bytes(records: list[dict]) -> tuple[bytes, str]:
     if not posts:
         raise RuntimeError("Немає активних постів у posts.json")
 
-    filename = f"Forma_1.2.13_{datetime.now().strftime('%d.%m.%Y')}.docx"
+    filename = f"Форма_1.2.13_{datetime.now().strftime('%d.%m.%Y')}.docx"
 
     with tempfile.TemporaryDirectory() as td:
         out_path = Path(td) / filename
@@ -646,7 +647,7 @@ def peleng_report_from_text(payload: ReportFromTextIn):
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
         )
     except Exception as e:
         return JSONResponse(status_code=400, content={"detail": str(e)})
@@ -709,7 +710,7 @@ def peleng_report_by_period(
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
