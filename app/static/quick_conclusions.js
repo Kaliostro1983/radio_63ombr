@@ -86,7 +86,10 @@
       pointBtnsWrap.innerHTML = '<span class="small" style="opacity:.5">Немає даних</span>';
       return;
     }
-    items.forEach(function (item) {
+    var sorted = items.slice().sort(function (a, b) {
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+    });
+    sorted.forEach(function (item) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "qc-toggle-btn";
@@ -476,9 +479,11 @@
       list.innerHTML = '<span class="small" style="opacity:.5">Порожньо</span>';
       return;
     }
-    items.forEach(function (item) {
-      list.appendChild(buildPointRow(item));
-    });
+    items.slice()
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+      })
+      .forEach(function (item) { list.appendChild(buildPointRow(item)); });
   }
 
   function buildPointRow(item) {
