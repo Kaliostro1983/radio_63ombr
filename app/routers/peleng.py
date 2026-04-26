@@ -618,8 +618,7 @@ def peleng_status_summary():
     from datetime import datetime, timedelta
 
     now = datetime.now()
-    today_start = now.date().isoformat() + " 00:00:00"
-    d3_start = (now.date() - timedelta(days=3)).isoformat() + " 00:00:00"
+    d3_start  = (now.date() - timedelta(days=3)).isoformat()  + " 00:00:00"
     d10_start = (now.date() - timedelta(days=10)).isoformat() + " 00:00:00"
 
     db = get_db()
@@ -640,7 +639,6 @@ def peleng_status_summary():
                       AND m.content_type = 'intercept'
                       AND COALESCE(m.is_valid, 1) = 1
                       AND m.created_at >= :d3
-                      AND m.created_at <  :today
                 ), 0) AS intercept_count_3d,
                 GROUP_CONCAT(DISTINCT nt.name) AS tags
             FROM networks n
@@ -650,7 +648,7 @@ def peleng_status_summary():
             GROUP BY n.id
             ORDER BY intercept_count_3d DESC, last_peleng_dt DESC
             """,
-            {"d10": d10_start, "d3": d3_start, "today": today_start},
+            {"d10": d10_start, "d3": d3_start},
         ).fetchall()
 
         result = []
