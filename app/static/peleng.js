@@ -246,20 +246,29 @@
     refreshReportModeNote();
   }
 
-  function updateReportFromDtByHours() {
-    const toEl = $("report_to_dt");
+  /** Period field changed → update end date (start + hours = end) */
+  function updateReportEndByHours() {
     const fromEl = $("report_from_dt");
+    const toEl   = $("report_to_dt");
     const hoursEl = $("report_hours");
-
-    if (!toEl || !fromEl || !hoursEl) return;
-
-    const toVal = toEl.value;
+    if (!fromEl || !toEl || !hoursEl) return;
+    const fromVal = fromEl.value;
     const hours = Number(hoursEl.value || 0);
-    if (!toVal || !hours || hours < 1) return;
+    if (!fromVal || !hours || hours < 1) return;
+    const fromDt = new Date(fromVal);
+    toEl.value = toLocalInputValue(new Date(fromDt.getTime() + hours * 60 * 60 * 1000));
+  }
 
-    const toDt = new Date(toVal);
-    const fromDt = new Date(toDt.getTime() - hours * 60 * 60 * 1000);
-    fromEl.value = toLocalInputValue(fromDt);
+  /** Start or end date changed → recalculate period in hours */
+  function updateReportHoursByDates() {
+    const fromEl  = $("report_from_dt");
+    const toEl    = $("report_to_dt");
+    const hoursEl = $("report_hours");
+    if (!fromEl || !toEl || !hoursEl) return;
+    if (!fromEl.value || !toEl.value) return;
+    const diffMs = new Date(toEl.value).getTime() - new Date(fromEl.value).getTime();
+    const diffH  = Math.round(diffMs / (60 * 60 * 1000));
+    if (diffH > 0) hoursEl.value = String(diffH);
   }
 
   async function downloadBlob(url, options = {}, fallbackName = "report.docx") {
@@ -526,22 +535,25 @@
 
     if (reportHours) {
       reportHours.addEventListener("input", () => {
-        updateReportFromDtByHours();
+        updateReportEndByHours();
         scheduleReportPreview();
       });
 
       reportHours.addEventListener("change", () => {
-        updateReportFromDtByHours();
+        updateReportEndByHours();
         scheduleReportPreview();
       });
     }
 
-    reportTo?.addEventListener("change", () => {
-      updateReportFromDtByHours();
+    reportFrom?.addEventListener("change", () => {
+      updateReportHoursByDates();
       scheduleReportPreview();
     });
 
-    reportFrom?.addEventListener("change", scheduleReportPreview);
+    reportTo?.addEventListener("change", () => {
+      updateReportHoursByDates();
+      scheduleReportPreview();
+    });
 
     reportText?.addEventListener("input", () => {
       refreshReportModeNote();
