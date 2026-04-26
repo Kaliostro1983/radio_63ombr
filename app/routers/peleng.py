@@ -609,6 +609,82 @@ def peleng_save_posts(payload: PostsSaveIn):
         return JSONResponse(status_code=400, content={"detail": str(e)})
 
 # =========================================================
+# API: peleng status summary (Актуальне tab)
+# =========================================================
+
+@router.get("/api/peleng/status-summary")
+def peleng_status_summary():
+    """Return peleng status for all networks that have peleng data."""
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    today_start = now.date().isoformat() + " 00:00:00"
+    d3_start = (now.date() - timedelta(days=3)).isoformat() + " 00:00:00"
+    d10_start = (now.date() - timedelta(days=10)).isoformat() + " 00:00:00"
+
+    db = get_db()
+    try:
+        rows = db.execute(
+            """
+            SELECT
+                n.id,
+                n.frequency,
+                COALESCE(n.mask, '')  AS mask,
+                COALESCE(n.unit, '')  AS unit,
+                MAX(pb.event_dt)      AS last_peleng_dt,
+                COUNT(CASE WHEN pb.event_dt >= :d10 THEN pb.id END) AS peleng_count_10d,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM messages m
+                    WHERE m.network_id = n.id
+                      AND m.content_type = 'intercept'
+                      AND COALESCE(m.is_valid, 1) = 1
+                      AND m.created_at >= :d3
+                      AND m.created_at <  :today
+                ), 0) AS intercept_count_3d,
+                GROUP_CONCAT(DISTINCT nt.name) AS tags
+            FROM networks n
+            INNER JOIN peleng_batches pb ON pb.network_id = n.id
+            LEFT JOIN network_tag_links ntl ON ntl.network_id = n.id
+            LEFT JOIN network_tags nt ON nt.id = ntl.tag_id
+            GROUP BY n.id
+            ORDER BY intercept_count_3d DESC, last_peleng_dt DESC
+            """,
+            {"d10": d10_start, "d3": d3_start, "today": today_start},
+        ).fetchall()
+
+        result = []
+        for row in rows:
+            raw = row["last_peleng_dt"] or ""
+            if raw:
+                try:
+                    ld = datetime.fromisoformat(raw[:19])
+                    age_h = (now - ld).total_seconds() / 3600
+                    status = "green" if age_h <= 48 else ("yellow" if age_h <= 168 else "red")
+                    last_display = ld.strftime("%d.%m.%Y %H:%M")
+                except ValueError:
+                    status, last_display = "red", raw[:16]
+            else:
+                status, last_display = "red", ""
+
+            result.append({
+                "id": int(row["id"]),
+                "frequency": row["frequency"],
+                "mask": row["mask"],
+                "unit": row["unit"],
+                "tags": row["tags"] or "",
+                "status": status,
+                "last_peleng_dt": last_display,
+                "peleng_count_10d": int(row["peleng_count_10d"] or 0),
+                "intercept_count_3d": int(row["intercept_count_3d"] or 0),
+            })
+
+        return result
+    finally:
+        db.close()
+
+
+# =========================================================
 # API: preview report by period
 # =========================================================
 

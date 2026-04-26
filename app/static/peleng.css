@@ -322,6 +322,133 @@
 }
 
 /* =========================
+   Актуальне tab
+========================= */
+
+.pel-actual-wrap {
+  max-width: 1280px;
+  padding-top: 4px;
+}
+
+.pel-actual-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.pel-actual-cb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pel-actual-cb input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent, #6c9fff);
+}
+
+.pel-status-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-green  { background: #22c55e; }
+.dot-yellow { background: #eab308; }
+.dot-red    { background: #ef4444; }
+
+.pel-actual-info {
+  font-size: 14px;
+  opacity: .65;
+  padding: 6px 0;
+}
+
+.pel-actual-table-wrap {
+  overflow-x: auto;
+}
+
+.pel-actual-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  min-width: 720px;
+}
+
+.pel-actual-table thead th {
+  text-align: left;
+  padding: 6px 10px;
+  font-weight: 700;
+  font-size: 13px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+.pel-actual-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.pel-actual-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.pel-actual-table tbody tr:hover td {
+  background: rgba(255,255,255,.03);
+}
+
+.pel-actual-table .col-dot {
+  width: 30px;
+  text-align: center;
+}
+
+.pel-actual-table .col-freq {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.pel-actual-table .col-unit {
+  max-width: 260px;
+}
+
+.pel-actual-table .col-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  min-width: 70px;
+}
+
+.pel-actual-table .col-num.num-pos {
+  color: #9fd3a8;
+  font-weight: 600;
+}
+
+.pel-actual-table .col-dt {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  opacity: .85;
+}
+
+.pel-tag-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  font-size: 11px;
+  margin: 1px 2px;
+  white-space: nowrap;
+}
+
+/* =========================
    Responsive
 ========================= */
 

@@ -508,36 +508,101 @@
   }
 
   function setPelengTab(which) {
-    const isCompose = which === "compose";
-
-    const tabCompose = $("pelTabCompose");
-    const tabReport = $("pelTabReport");
-    const paneCompose = $("pelPaneCompose");
-    const paneReport = $("pelPaneReport");
-
     console.log("setPelengTab", which);
+    [
+      ["compose", "pelTabCompose", "pelPaneCompose"],
+      ["report",  "pelTabReport",  "pelPaneReport"],
+      ["actual",  "pelTabActual",  "pelPaneActual"],
+    ].forEach(([key, tabId, paneId]) => {
+      const isActive = key === which;
+      const tab = $(tabId), pane = $(paneId);
+      if (tab)  { tab.classList.toggle("active", isActive); tab.setAttribute("aria-selected", isActive ? "true" : "false"); }
+      if (pane)   pane.classList.toggle("hidden", !isActive);
+    });
+    if (which === "report") scheduleReportPreview();
+  }
 
-    if (tabCompose) {
-      tabCompose.classList.toggle("active", isCompose);
-      tabCompose.setAttribute("aria-selected", isCompose ? "true" : "false");
+  /* ── Актуальне tab ── */
+  function esc(s) {
+    return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  let _actualData = null;
+
+  async function loadActual() {
+    const loader   = $("pelActualLoader");
+    const emptyEl  = $("pelActualEmpty");
+    const tableWrap= $("pelActualTableWrap");
+    const tbody    = $("pelActualTbody");
+    if (!loader) return;
+
+    loader.style.display = "";
+    emptyEl.style.display = "none";
+    tableWrap.style.display = "none";
+
+    try {
+      const res = await fetch("/api/peleng/status-summary");
+      if (!res.ok) throw new Error("Помилка сервера: " + res.status);
+      _actualData = await res.json();
+      renderActual();
+    } catch (e) {
+      loader.style.display = "none";
+      if (window.appToast) window.appToast(e.message || "Помилка", "error");
+    }
+  }
+
+  function renderActual() {
+    const loader   = $("pelActualLoader");
+    const emptyEl  = $("pelActualEmpty");
+    const tableWrap= $("pelActualTableWrap");
+    const tbody    = $("pelActualTbody");
+    if (!_actualData || !tbody) return;
+
+    const showGreen  = $("cbActualGreen")?.checked !== false;
+    const showYellow = $("cbActualYellow")?.checked !== false;
+    const showRed    = $("cbActualRed")?.checked !== false;
+
+    const filtered = _actualData.filter(r =>
+      !((r.status === "green"  && !showGreen) ||
+        (r.status === "yellow" && !showYellow) ||
+        (r.status === "red"    && !showRed))
+    );
+
+    if (loader) loader.style.display = "none";
+
+    if (filtered.length === 0) {
+      if (emptyEl)   emptyEl.style.display = "";
+      if (tableWrap) tableWrap.style.display = "none";
+      return;
     }
 
-    if (tabReport) {
-      tabReport.classList.toggle("active", !isCompose);
-      tabReport.setAttribute("aria-selected", isCompose ? "false" : "true");
-    }
+    tbody.innerHTML = filtered.map(r => {
+      const tagHtml = r.tags
+        ? r.tags.split(",").map(t => `<span class="pel-tag-badge">${esc(t.trim())}</span>`).join("")
+        : "";
+      const numCls = (n) => n > 0 ? " num-pos" : "";
+      return `<tr>
+        <td class="col-dot"><span class="pel-status-dot dot-${r.status}"></span></td>
+        <td class="col-freq">${esc(r.frequency)}</td>
+        <td>${esc(r.mask)}</td>
+        <td class="col-unit">${esc(r.unit)}</td>
+        <td>${tagHtml}</td>
+        <td class="col-num${numCls(r.intercept_count_3d)}">${r.intercept_count_3d}</td>
+        <td class="col-num">${r.peleng_count_10d}</td>
+        <td class="col-dt">${esc(r.last_peleng_dt)}</td>
+      </tr>`;
+    }).join("");
 
-    if (paneCompose) paneCompose.classList.toggle("hidden", !isCompose);
-    if (paneReport) paneReport.classList.toggle("hidden", isCompose);
-
-    if (!isCompose) scheduleReportPreview();
+    if (emptyEl)   emptyEl.style.display = "none";
+    if (tableWrap) tableWrap.style.display = "";
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     console.log("peleng DOM ready");
 
     const tabCompose = $("pelTabCompose");
-    const tabReport = $("pelTabReport");
+    const tabReport  = $("pelTabReport");
+    const tabActual  = $("pelTabActual");
     const btnNow = $("btn_now");
     const btnAccept = $("btn_accept");
     const btnGenerate = $("btn_generate");
@@ -567,6 +632,13 @@
       console.log("report click");
       setPelengTab("report");
     });
+
+    tabActual?.addEventListener("click", () => {
+      setPelengTab("actual");
+    });
+
+    const pelActualShowBtn = $("pelActualShowBtn");
+    if (pelActualShowBtn) pelActualShowBtn.onclick = loadActual;
 
     btnNow?.addEventListener("click", nowToInputs);
     btnAccept?.addEventListener("click", acceptFreq);

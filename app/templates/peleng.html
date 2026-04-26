@@ -30,6 +30,17 @@
       >
         Звіт
       </button>
+
+      <button
+        id="pelTabActual"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="pelPaneActual"
+      >
+        Актуальне
+      </button>
     </div>
 
     <div class="tab-panel-wrap pel-tab-panel-wrap">
@@ -164,6 +175,54 @@
           </details>
         </div>
       </section>
+      <section
+        id="pelPaneActual"
+        class="tab-panel pel-tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="pelTabActual"
+      >
+        <div class="pel-actual-wrap">
+
+          <div class="pel-actual-filter">
+            <label class="pel-actual-cb" title="Зелений — пеленг за останні 2 доби">
+              <input type="checkbox" id="cbActualGreen" checked>
+              <span class="pel-status-dot dot-green"></span>
+            </label>
+            <label class="pel-actual-cb" title="Жовтий — пеленг від 2 до 7 діб тому">
+              <input type="checkbox" id="cbActualYellow" checked>
+              <span class="pel-status-dot dot-yellow"></span>
+            </label>
+            <label class="pel-actual-cb" title="Червоний — пеленг більше 7 діб тому">
+              <input type="checkbox" id="cbActualRed" checked>
+              <span class="pel-status-dot dot-red"></span>
+            </label>
+            <button class="btn" type="button" id="pelActualShowBtn">Показати</button>
+          </div>
+
+          <div class="pel-actual-info" id="pelActualLoader" style="display:none">Завантаження…</div>
+          <div class="pel-actual-info" id="pelActualEmpty"  style="display:none">Даних не знайдено.</div>
+
+          <div class="pel-actual-table-wrap" id="pelActualTableWrap" style="display:none">
+            <table class="pel-actual-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Частота</th>
+                  <th>Маска</th>
+                  <th>Підрозділ</th>
+                  <th>Тег</th>
+                  <th title="Перехоплень за крайні 3 доби (без сьогодні)">Перехопл. 3д</th>
+                  <th title="Пеленгів за крайні 10 днів">Пеленгів 10д</th>
+                  <th>Останній пеленг</th>
+                </tr>
+              </thead>
+              <tbody id="pelActualTbody"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
     </div>
   </section>
 </div>
@@ -173,6 +232,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/peleng.js?v=6"></script>
+<script src="/static/peleng.js?v=7"></script>
 {% endblock %}
 {% endblock %}
