@@ -286,9 +286,10 @@ def api_callsigns_search(q: str, network_id: int = 0):
     if not query:
         return {"ok": True, "rows": []}
 
-    like = f"%{query}%"
-    prefix_like = f"{query}%"
     # Canonical form for callsign matching: remove separators and normalize case.
+    # NOTE: Python's str.upper() handles Cyrillic correctly; SQLite's upper() and
+    # COLLATE NOCASE do NOT — they only fold ASCII characters.  Using q_canon for
+    # all LIKE parameters ensures "Химик" matches stored "ХИМИК".
     q_canon = (
         query.upper()
         .replace("-", "")
@@ -297,6 +298,8 @@ def api_callsigns_search(q: str, network_id: int = 0):
         .replace("–", "")
     )
     q_canon_prefix = f"{q_canon}%"
+    like = f"%{q_canon}%"
+    prefix_like = f"{q_canon}%"
 
     canon_sql = (
         "replace(replace(replace(replace(replace(upper(c.name), '-', ''), ' ', ''), '—', ''), '–', ''), '_', '')"
