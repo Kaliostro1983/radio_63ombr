@@ -660,7 +660,7 @@ def peleng_status_summary():
                 try:
                     ld = datetime.fromisoformat(raw[:19])
                     age_h = (now - ld).total_seconds() / 3600
-                    status = "green" if age_h <= 48 else ("yellow" if age_h <= 168 else "red")
+                    status = "green" if age_h <= 72 else ("yellow" if age_h <= 192 else "red")
                     last_display = ld.strftime("%d.%m.%Y %H:%M")
                 except ValueError:
                     status, last_display = "red", raw[:16]

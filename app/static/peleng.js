@@ -581,7 +581,7 @@
         ? r.tags.split(",").map(t => `<span class="pel-tag-badge">${esc(t.trim())}</span>`).join("")
         : "";
       const numCls = (n) => n > 0 ? " num-pos" : "";
-      return `<tr>
+      return `<tr class="pel-actual-row" data-net-id="${r.id}" title="Відкрити еталонку р/м">
         <td class="col-dot"><span class="pel-status-dot dot-${r.status}"></span></td>
         <td class="col-freq">${esc(r.frequency)}</td>
         <td>${esc(r.mask)}</td>
@@ -595,6 +595,14 @@
 
     if (emptyEl)   emptyEl.style.display = "none";
     if (tableWrap) tableWrap.style.display = "";
+
+    // row click → open etalon in new tab
+    tbody.onclick = (e) => {
+      const tr = e.target.closest("tr.pel-actual-row");
+      if (!tr) return;
+      const id = tr.dataset.netId;
+      if (id) window.open(`/etalons?pick=${id}`, "_blank");
+    };
   }
 
   document.addEventListener("DOMContentLoaded", () => {
