@@ -348,6 +348,14 @@
     previewTimer = setTimeout(updateReportPreview, 250);
   }
 
+  function makeReportFilename() {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const yyyy = now.getFullYear();
+    return `Форма_1.2.13_${dd}.${mm}.${yyyy}.docx`;
+  }
+
   async function generateReport() {
     const text = ($("report_source_text")?.value || "").trim();
 
@@ -360,7 +368,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text }),
           },
-          "report_from_text.docx"
+          makeReportFilename()
         );
         showToast("Звіт сформовано з тексту", 1700);
         return;
@@ -375,7 +383,7 @@
       }
 
       const qs = new URLSearchParams({ from_dt: fromDt, to_dt: toDt });
-      await downloadBlob(`/peleng/report/by-period?${qs.toString()}`, {}, "report_from_db.docx");
+      await downloadBlob(`/peleng/report/by-period?${qs.toString()}`, {}, makeReportFilename());
       showToast("Звіт сформовано з БД", 1700);
     } catch (e) {
       if (window.appToast) window.appToast(e.message || "Помилка", "error");
