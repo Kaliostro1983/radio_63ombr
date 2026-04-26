@@ -383,7 +383,7 @@
       }
 
       const qs = new URLSearchParams({ from_dt: fromDt, to_dt: toDt });
-      await downloadBlob(`/peleng/report/by-period?${qs.toString()}`, {}, makeReportFilename());
+      window.location.href = `/peleng/report/by-period?${qs.toString()}`;
       showToast("Звіт сформовано з БД", 1700);
     } catch (e) {
       if (window.appToast) window.appToast(e.message || "Помилка", "error");

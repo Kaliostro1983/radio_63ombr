@@ -41,6 +41,34 @@ from typing import Any
 
 router = APIRouter()
 
+
+def _ascii_filename_fallback(filename: str) -> str:
+    """Return a latin-1 safe fallback filename (best-effort)."""
+    safe = (filename or "").strip()
+    if not safe:
+        return "report.docx"
+    out: list[str] = []
+    for ch in safe:
+        o = ord(ch)
+        if 32 <= o < 127 and ch not in {'"', "\\"}:
+            out.append(ch)
+        elif ch in {" ", "-", "_", ".", "(", ")", "[", "]"}:
+            out.append(ch)
+        else:
+            out.append("_")
+    fallback = "".join(out).strip() or "report.docx"
+    if not fallback.lower().endswith(".docx"):
+        fallback += ".docx"
+    return fallback
+
+
+def _content_disposition_attachment(filename: str) -> str:
+    """RFC 6266 / RFC 5987 compatible Content-Disposition for UTF-8 filenames."""
+    fallback = _ascii_filename_fallback(filename)
+    utf8 = quote(filename, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{utf8}"
+
+
 MASK_PREFIXES = ("-", "—", "–")
 MGRS_SPACE_RE = re.compile(r"\s+")
 
@@ -647,7 +675,7 @@ def peleng_report_from_text(payload: ReportFromTextIn):
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+            headers={"Content-Disposition": _content_disposition_attachment(filename)},
         )
     except Exception as e:
         return JSONResponse(status_code=400, content={"detail": str(e)})
@@ -710,7 +738,7 @@ def peleng_report_by_period(
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+            headers={"Content-Disposition": _content_disposition_attachment(filename)},
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
