@@ -103,35 +103,53 @@
       </div>
     </details>
 
-    <!-- ── WinError 10048 — порт зайнятий ── -->
+    <!-- ── Порт зайнятий ── -->
     <details class="faq-item">
       <summary class="faq-question">
-        Сервіс не запускається після перезапуску — в логах «[WinError 10048] Only one usage of each socket address is normally permitted»
+        Сервіс не запускається після перезапуску — порт 8000 вже зайнятий
+        («[WinError 10048]» або «Address already in use»)
       </summary>
       <div class="faq-answer">
         <p>
-          Це означає, що попередній процес <code>uvicorn</code> ще не завершився і продовжує
-          утримувати порт <strong>8000</strong>. Новий процес не може зайняти той самий порт,
-          тому сервіс зависає або одразу падає.
+          Старий процес <code>uvicorn</code> ще не завершився і утримує порт <strong>8000</strong>.
+          Новий процес не може його зайняти.
         </p>
-        <p><strong>Рішення:</strong></p>
+
+        <p><strong>🐧 Linux-сервер (systemd)</strong></p>
+        <p>На сервері <code>ocheret-63</code> сервіс керується systemd. Правильний перезапуск:</p>
+        <div class="faq-code">sudo systemctl restart radio63</div>
+        <p>
+          Якщо це не допомогло — перевір статус і примусово зупини старий процес:
+        </p>
         <ol class="faq-steps">
           <li>
-            Відкрий командний рядок (<kbd>Win + R</kbd> → <code>cmd</code>) і виконай:
-            <div class="faq-code">taskkill /F /IM uvicorn.exe</div>
-            Команда примусово завершує всі процеси <code>uvicorn.exe</code>.
+            <div class="faq-code">sudo systemctl stop radio63</div>
           </li>
           <li>
-            Якщо сервіс запускається через <code>python</code> безпосередньо, додатково виконай:
-            <div class="faq-code">taskkill /F /IM python.exe</div>
+            <div class="faq-code">pkill -f uvicorn</div>
           </li>
           <li>
-            Після цього запусти сервіс знову — порт буде вільним.
+            <div class="faq-code">sudo systemctl start radio63</div>
           </li>
         </ol>
+
+        <p><strong>🪟 Windows (локальна розробка)</strong></p>
+        <p>
+          Помилка виглядає як <code>[WinError 10048] Only one usage of each socket address...</code>
+        </p>
+        <ol class="faq-steps">
+          <li>
+            Відкрий командний рядок і виконай:
+            <div class="faq-code">taskkill /F /IM uvicorn.exe</div>
+          </li>
+          <li>
+            Після цього запусти сервіс знову.
+          </li>
+        </ol>
+
         <div class="faq-note">
-          Щоб уникнути цього в майбутньому, зупиняй сервіс коректно (через кнопку зупинки
-          служби або <kbd>Ctrl+C</kbd> у терміналі) перед будь-яким перезапуском.
+          Щоб уникнути цього — зупиняй сервіс коректно (<kbd>Ctrl+C</kbd> або
+          <code>sudo systemctl stop radio63</code>) перед будь-яким перезапуском.
         </div>
       </div>
     </details>
