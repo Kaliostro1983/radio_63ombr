@@ -377,9 +377,10 @@
               </div>
             </div>
 
-            <div class="field" style="min-width:160px; flex:0">
+            <div class="field" style="min-width:160px; flex:0; display:flex; flex-direction:column; gap:8px">
               <label>&nbsp;</label>
               <button type="submit">Показати</button>
+              <button type="button" id="netVerifyBtn" class="secondary">Звірка</button>
             </div>
           </div>
         </form>
@@ -475,6 +476,48 @@
     </section>
   </div>
 </section>
+
+<!-- ── Verify modal ── -->
+<div id="netVerifyModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="netVerifyModalTitle" style="max-width:680px">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Радіомережі</div>
+        <div style="font-weight:700" id="netVerifyModalTitle">Звірка</div>
+      </div>
+      <button class="secondary" type="button" data-close="1">Закрити</button>
+    </div>
+
+    <!-- Input view -->
+    <div id="netVerifyInputView" class="modal-body">
+      <div class="field">
+        <label for="netVerifyTextarea">
+          Список частот/масок для звірки (один рядок — одне значення)
+        </label>
+        <textarea
+          id="netVerifyTextarea"
+          rows="10"
+          placeholder="145.5000&#10;300.3010&#10;050.6250&#10;…"
+          style="width:100%; resize:vertical; font-family:monospace; font-size:14px"
+        ></textarea>
+      </div>
+    </div>
+    <div id="netVerifyInputFoot" class="modal-foot">
+      <button type="button" class="secondary" data-close="1">Скасувати</button>
+      <button type="button" id="netVerifyCheckBtn">Перевірити</button>
+    </div>
+
+    <!-- Result view -->
+    <div id="netVerifyResultView" class="modal-body hidden" style="max-height:62vh; overflow-y:auto">
+      <div id="netVerifyResultBody"></div>
+    </div>
+    <div id="netVerifyResultFoot" class="modal-foot hidden">
+      <button type="button" id="netVerifyBackBtn" class="secondary">← Назад</button>
+      <button type="button" data-close="1">Закрити</button>
+    </div>
+  </div>
+</div>
 
 <div id="netAliasAddModal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" data-close="1"></div>
@@ -613,6 +656,132 @@
       syncUrlTab("akademik", currentNetworkPick());
     });
   })();
+</script>
+<style>
+.verify-meta { font-size:13px; opacity:.7; margin-bottom:16px; }
+.verify-section { margin-bottom:22px; }
+.verify-section:last-child { margin-bottom:0; }
+.verify-section-title { font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.verify-badge { display:inline-block; padding:1px 9px; border-radius:10px; font-size:12px; font-weight:700; }
+.verify-badge--ok   { background:rgba(34,197,94,.15);  color:#22c55e; border:1px solid rgba(34,197,94,.3); }
+.verify-badge--warn { background:rgba(234,179,8,.15);  color:#eab308; border:1px solid rgba(234,179,8,.3); }
+.verify-ok { font-size:13px; color:#22c55e; padding:4px 0; }
+.verify-table { width:100%; border-collapse:collapse; font-size:13px; }
+.verify-table th, .verify-table td { border:1px solid var(--border); padding:5px 9px; text-align:left; }
+.verify-table th { font-weight:600; white-space:nowrap; background:rgba(255,255,255,.03); }
+.verify-list { margin:0; padding-left:22px; font-size:13px; font-family:monospace; }
+.verify-list li { padding:2px 0; }
+</style>
+<script>
+/* ── Verify modal ── */
+(function () {
+  function $id(id) { return document.getElementById(id); }
+
+  const verifyBtn  = $id("netVerifyBtn");
+  if (!verifyBtn) return;
+
+  const modal      = $id("netVerifyModal");
+  const inputView  = $id("netVerifyInputView");
+  const inputFoot  = $id("netVerifyInputFoot");
+  const resultView = $id("netVerifyResultView");
+  const resultFoot = $id("netVerifyResultFoot");
+  const modalTitle = $id("netVerifyModalTitle");
+  const checkBtn   = $id("netVerifyCheckBtn");
+  const backBtn    = $id("netVerifyBackBtn");
+  const textarea   = $id("netVerifyTextarea");
+
+  function openModal() {
+    showView("input");
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    textarea.focus();
+  }
+  function closeModal() {
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  }
+  function showView(which) {
+    const isInput = which === "input";
+    inputView.classList.toggle("hidden", !isInput);
+    inputFoot.classList.toggle("hidden", !isInput);
+    resultView.classList.toggle("hidden", isInput);
+    resultFoot.classList.toggle("hidden", isInput);
+    modalTitle.textContent = isInput ? "Звірка" : "Результат звірки";
+  }
+
+  verifyBtn.addEventListener("click", openModal);
+  backBtn.addEventListener("click", () => showView("input"));
+  modal.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close='1']")) closeModal();
+  });
+
+  checkBtn.addEventListener("click", async function () {
+    const lines = textarea.value.split("\n").map(l => l.trim()).filter(Boolean);
+    if (!lines.length) { textarea.focus(); return; }
+    checkBtn.disabled = true;
+    checkBtn.textContent = "Перевірка…";
+    try {
+      const resp = await fetch("/api/networks/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: lines })
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || "Помилка сервера");
+      renderResult(data);
+      showView("result");
+    } catch (err) {
+      alert("Помилка: " + err.message);
+    } finally {
+      checkBtn.disabled = false;
+      checkBtn.textContent = "Перевірити";
+    }
+  });
+
+  function esc(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+  function badge(n) {
+    const cls = n === 0 ? "verify-badge--ok" : "verify-badge--warn";
+    return `<span class="verify-badge ${cls}">${n}</span>`;
+  }
+
+  function renderResult(data) {
+    const notInInput = data.not_in_input || [];
+    const notInDb    = data.not_in_db    || [];
+    const dbCount    = data.db_count     || 0;
+    const inputCount = textarea.value.split("\n").filter(l => l.trim()).length;
+
+    let html = `<div class="verify-meta">БД (Очерет + Спостерігається): <strong>${dbCount}</strong> р/м &nbsp;·&nbsp; Введено рядків: <strong>${inputCount}</strong></div>`;
+
+    html += `<div class="verify-section">
+      <div class="verify-section-title">В БД, але <u>НЕ</u> у введеному списку ${badge(notInInput.length)}</div>`;
+    if (!notInInput.length) {
+      html += `<div class="verify-ok">✓ Усі р/м зі спостереження є у введеному списку</div>`;
+    } else {
+      html += `<table class="verify-table"><thead><tr><th>Частота</th><th>Маска</th><th>Підрозділ / Зона</th></tr></thead><tbody>`;
+      for (const n of notInInput) {
+        const name = [n.unit, n.zone ? "н.п. " + n.zone : ""].filter(Boolean).join(", ");
+        html += `<tr><td>${esc(n.frequency)}</td><td>${n.mask ? esc(n.mask) : "—"}</td><td>${esc(name)||"—"}</td></tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="verify-section">
+      <div class="verify-section-title">У введеному списку, але <u>НЕ</u> в БД ${badge(notInDb.length)}</div>`;
+    if (!notInDb.length) {
+      html += `<div class="verify-ok">✓ Усі р/м зі списку знайдено в БД</div>`;
+    } else {
+      html += `<ul class="verify-list">`;
+      for (const item of notInDb) html += `<li>${esc(item)}</li>`;
+      html += `</ul>`;
+    }
+    html += `</div>`;
+
+    $id("netVerifyResultBody").innerHTML = html;
+  }
+})();
 </script>
 <script src="/static/networks_autocomplete.js?v=2" defer></script>
 <script src="/static/networks_graph.js?v=5" defer></script>

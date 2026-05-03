@@ -103,6 +103,39 @@
       </div>
     </details>
 
+    <!-- ── WinError 10048 — порт зайнятий ── -->
+    <details class="faq-item">
+      <summary class="faq-question">
+        Сервіс не запускається після перезапуску — в логах «[WinError 10048] Only one usage of each socket address is normally permitted»
+      </summary>
+      <div class="faq-answer">
+        <p>
+          Це означає, що попередній процес <code>uvicorn</code> ще не завершився і продовжує
+          утримувати порт <strong>8000</strong>. Новий процес не може зайняти той самий порт,
+          тому сервіс зависає або одразу падає.
+        </p>
+        <p><strong>Рішення:</strong></p>
+        <ol class="faq-steps">
+          <li>
+            Відкрий командний рядок (<kbd>Win + R</kbd> → <code>cmd</code>) і виконай:
+            <div class="faq-code">taskkill /F /IM uvicorn.exe</div>
+            Команда примусово завершує всі процеси <code>uvicorn.exe</code>.
+          </li>
+          <li>
+            Якщо сервіс запускається через <code>python</code> безпосередньо, додатково виконай:
+            <div class="faq-code">taskkill /F /IM python.exe</div>
+          </li>
+          <li>
+            Після цього запусти сервіс знову — порт буде вільним.
+          </li>
+        </ol>
+        <div class="faq-note">
+          Щоб уникнути цього в майбутньому, зупиняй сервіс коректно (через кнопку зупинки
+          служби або <kbd>Ctrl+C</kbd> у терміналі) перед будь-яким перезапуском.
+        </div>
+      </div>
+    </details>
+
   </div><!-- /faq-list -->
 </div>
 {% endblock %}

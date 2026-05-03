@@ -40,6 +40,10 @@ class NetworkAliasUpdateIn(BaseModel):
     network_id: Optional[int] = None
 
 
+class NetworkVerifyIn(BaseModel):
+    items: list[str]
+
+
 def _clean_alias_text(raw: str) -> str:
     """Trim trailing whitespace from user-entered alias (preserve leading for rare cases)."""
     return (raw or "").rstrip()
@@ -498,6 +502,106 @@ def api_network_aliases_update(
             )
 
     return {"ok": True}
+
+
+def _norm_mask_key(m: str) -> str:
+    """Pad the decimal part of a mask to exactly 4 digits.
+
+    Ensures that ``200.224`` and ``200.2240`` compare as equal — both
+    represent the same radio-network mask prefix, just written differently.
+    """
+    if "." in m:
+        left, right = m.split(".", 1)
+        right = (right + "0000")[:4]
+        return f"{left}.{right}"
+    return m
+
+
+def _normalize_verify_key(raw: str) -> str:
+    """Return a canonical key for a user-entered frequency/mask string.
+
+    Masks (100/200/300 prefix) are normalized and padded to 4 decimal places.
+    Regular frequencies are normalized to DDD.DDDD form.
+    Falls back to the trimmed raw value if normalization returns nothing.
+    """
+    freq, mask = normalize_freq_or_mask(raw.strip())
+    if mask:
+        return _norm_mask_key(mask.rstrip("%"))
+    if freq:
+        return freq
+    return raw.strip()
+
+
+@router.post("/api/networks/verify")
+def api_networks_verify(body: NetworkVerifyIn):
+    """Compare a user-supplied list of frequencies/masks against
+    networks that have chat='Очерет' AND status='Спостерігається'.
+
+    Returns two lists:
+    - ``not_in_input``: DB networks not covered by the supplied list.
+    - ``not_in_db``:    Input items that have no matching DB network.
+    """
+    raw_items = [l.strip() for l in (body.items or []) if l.strip()]
+
+    with get_conn() as conn:
+        db_rows = conn.execute(
+            """
+            SELECT n.id, n.frequency,
+                   COALESCE(n.mask, '')  AS mask,
+                   COALESCE(n.unit, '')  AS unit,
+                   COALESCE(n.zone, '')  AS zone
+            FROM networks n
+            JOIN chats    c ON c.id = n.chat_id
+            JOIN statuses s ON s.id = n.status_id
+            WHERE c.name = 'Очерет' AND s.name = 'Спостерігається'
+            ORDER BY n.frequency
+            """
+        ).fetchall()
+
+    # Build lookup: canonical_key -> network dict index.
+    # A network registers under its frequency AND (if set) its mask.
+    db_networks: list[dict] = []
+    db_key_to_idx: dict[str, int] = {}
+
+    for row in db_rows:
+        net = {
+            "id":        int(row["id"]),
+            "frequency": row["frequency"] or "",
+            "mask":      row["mask"] or "",
+            "unit":      row["unit"] or "",
+            "zone":      row["zone"] or "",
+        }
+        idx = len(db_networks)
+        db_networks.append(net)
+        if net["frequency"] and net["frequency"] not in db_key_to_idx:
+            db_key_to_idx[net["frequency"]] = idx
+        if net["mask"]:
+            # Normalize DB mask to 4-decimal key so it matches input like
+            # "200.224" (→ "200.2240") against stored "200.2240" correctly.
+            norm_mk = _norm_mask_key(net["mask"])
+            if norm_mk not in db_key_to_idx:
+                db_key_to_idx[norm_mk] = idx
+
+    # Normalize each input line to a comparable key.
+    input_pairs: list[tuple[str, str]] = [
+        (raw, _normalize_verify_key(raw)) for raw in raw_items
+    ]
+
+    # DB networks matched by at least one input item.
+    matched_db_ids: set[int] = set()
+    for _, norm in input_pairs:
+        if norm in db_key_to_idx:
+            matched_db_ids.add(db_networks[db_key_to_idx[norm]]["id"])
+
+    not_in_input = [n for n in db_networks if n["id"] not in matched_db_ids]
+    not_in_db    = [raw for raw, norm in input_pairs if norm not in db_key_to_idx]
+
+    return {
+        "ok":           True,
+        "db_count":     len(db_networks),
+        "not_in_input": not_in_input,
+        "not_in_db":    not_in_db,
+    }
 
 
 def _fetchall(conn, sql: str, params=()):
