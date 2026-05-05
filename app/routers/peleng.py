@@ -492,12 +492,12 @@ def peleng_generate(payload: GenerateIn):
     comment = (payload.comment or "").rstrip()
 
     out_lines = [
-        f"Пеленгація {dt}",
-        f"{value4} УКХ р/м {unit}, н.п. {location}",
+        f"{value4} / {dt}",
+        f"кх р/м {unit} (р-н {location})",
         *lines,
     ]
     if comment:
-        out_lines += ["", comment]
+        out_lines.append(comment)
 
     return {"text": "\n".join(out_lines)}
 

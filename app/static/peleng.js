@@ -114,8 +114,22 @@
       }, 250);
     });
 
-    freqInput.addEventListener("change", () => setUnitFromValue(freqInput.value));
-    freqInput.addEventListener("blur", () => setUnitFromValue(freqInput.value));
+    // On selection from datalist (or leaving the field) — silently fill
+    // unit + location via the accept endpoint so the user doesn't have to
+    // press "Прийняти" manually after choosing from autocomplete.
+    async function autoFillFromFreq() {
+      const raw = (freqInput.value || "").trim();
+      if (!raw) return;
+      try {
+        const data = await apiPost("/peleng/accept", { value: raw });
+        if (data.display_value) setVal("frequency", data.display_value);
+        if (data.unit)     setVal("unit",     data.unit);
+        if (data.location) setVal("location", data.location);
+      } catch { /* silent — user can still press Прийняти manually */ }
+    }
+
+    freqInput.addEventListener("change", autoFillFromFreq);
+    freqInput.addEventListener("blur",   autoFillFromFreq);
   }
 
   function nowToInputs() {
