@@ -493,7 +493,7 @@ def peleng_generate(payload: GenerateIn):
 
     out_lines = [
         f"{value4} / {dt}",
-        f"кх р/м {unit} (р-н {location})",
+        f"укх р/м {unit} (р-н {location})",
         *lines,
     ]
     if comment:
