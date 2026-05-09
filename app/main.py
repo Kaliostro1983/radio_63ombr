@@ -41,6 +41,7 @@ from app.routers.health import router as health_router
 from app.routers.landmarks import router as landmarks_router
 
 from app.routers.ingest import router as ingest_router
+from app.routers.import_export import router as import_export_router
 from app.routers.conclusions import router as conclusions_router
 from app.routers.faq import router as faq_router
 from app.services.landmark_match_service import start_landmark_match_worker
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(etalons_router)
     app.include_router(peleng.router)
     app.include_router(ingest_router)
+    app.include_router(import_export_router)
     app.include_router(callsigns_router)
     app.include_router(intercepts_router)
     app.include_router(xlsx_import_router)

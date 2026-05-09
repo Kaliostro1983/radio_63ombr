@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1>Імпорт / Експорт</h1>
+    <div class="small">Завантаження даних та черга помилок чат-боту.</div>
+  </div>
+
+  <section class="tabs-shell">
+    <div class="tabs-nav" role="tablist" aria-label="Вкладки Імпорт/Експорт">
+      <button
+        id="ieTabXlsx"
+        type="button"
+        class="tab-btn active"
+        role="tab"
+        aria-selected="true"
+        aria-controls="iePaneXlsx"
+      >XLSX</button>
+      <button
+        id="ieTabBot"
+        type="button"
+        class="tab-btn"
+        role="tab"
+        aria-selected="false"
+        aria-controls="iePaneBot"
+      >Чат-бот</button>
+    </div>
+
+    <div class="tab-panel-wrap">
+
+      <!-- ── XLSX TAB ─────────────────────────────────────────── -->
+      <section
+        id="iePaneXlsx"
+        class="tab-panel"
+        role="tabpanel"
+        aria-labelledby="ieTabXlsx"
+      >
+        <div class="ie-wrap">
+          <h3 class="section-title">Імпорт перехоплень з XLSX</h3>
+          <p class="small" style="margin-bottom:16px; opacity:.8">
+            Завантаж файл <code>.xlsx</code> з повідомленнями. Після обробки буде показано результат.
+          </p>
+
+          <div class="ie-upload-row">
+            <label class="ie-file-label">
+              <input type="file" id="ieXlsxFile" accept=".xlsx" class="ie-file-input">
+              <span class="ie-file-text" id="ieXlsxFileName">Оберіть файл…</span>
+            </label>
+            <button class="btn" type="button" id="ieXlsxUploadBtn" disabled>Завантажити</button>
+          </div>
+
+          <div class="ie-progress" id="ieXlsxProgress" style="display:none">
+            <span class="ie-spinner"></span> Обробка…
+          </div>
+
+          <div id="ieXlsxResult" style="display:none">
+            <div class="ie-result-head" id="ieXlsxResultHead"></div>
+            <div class="ie-result-details" id="ieXlsxResultDetails"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CHATBOT TAB ──────────────────────────────────────── -->
+      <section
+        id="iePaneBot"
+        class="tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="ieTabBot"
+      >
+        <div class="ie-wrap">
+          <div class="ie-bot-toolbar">
+            <div class="ie-bot-filters">
+              <label class="ie-filter-label">
+                <input type="checkbox" id="ieBotOnlyNew" checked>
+                <span>Тільки непереглянуті</span>
+              </label>
+            </div>
+            <button class="btn" type="button" id="ieBotRefreshBtn">Оновити</button>
+          </div>
+
+          <div class="ie-bot-stats" id="ieBotStats" style="display:none">
+            Знайдено: <strong id="ieBotTotal">—</strong>
+            &nbsp;|&nbsp;
+            Непереглянутих: <strong id="ieBotUnreviewed">—</strong>
+          </div>
+
+          <div class="ie-bot-info" id="ieBotLoader" style="display:none">Завантаження…</div>
+          <div class="ie-bot-info" id="ieBotEmpty"  style="display:none">Черга порожня — помилок не знайдено.</div>
+
+          <div id="ieBotTableWrap" style="display:none">
+            <table class="ie-bot-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Отримано</th>
+                  <th>Чат</th>
+                  <th>Формат</th>
+                  <th>Причина</th>
+                  <th>Статус</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="ieBotTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Import/Export page ───────────────────────────────────────── */
+.ie-wrap {
+  padding: 16px 0 24px;
+}
+
+/* XLSX tab */
+.ie-upload-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ie-file-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  min-width: 260px;
+}
+.ie-file-input {
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.ie-file-text {
+  display: block;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--input-bg);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+.ie-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  opacity: .8;
+  margin-bottom: 10px;
+}
+.ie-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ie-spin .7s linear infinite;
+}
+@keyframes ie-spin { to { transform: rotate(360deg); } }
+
+.ie-result-head {
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+.ie-result-head.ok  { color: var(--success, #22c55e); }
+.ie-result-head.err { color: var(--danger, #ef4444);  }
+.ie-result-details {
+  font-size: 13px;
+  opacity: .85;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-family: monospace;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Chatbot tab */
+.ie-bot-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.ie-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ie-bot-stats {
+  font-size: 13px;
+  opacity: .75;
+  margin-bottom: 12px;
+}
+.ie-bot-info {
+  font-size: 14px;
+  opacity: .7;
+  padding: 12px 0;
+}
+
+.ie-bot-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ie-bot-table th,
+.ie-bot-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.ie-bot-table th {
+  font-size: 12px;
+  opacity: .65;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ie-bot-table tr:last-child td { border-bottom: none; }
+.ie-bot-table tr.ie-row-reviewed td { opacity: .45; }
+
+.ie-error-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: monospace;
+  background: color-mix(in srgb, #ef4444 12%, var(--card));
+  color: #ef4444;
+  border: 1px solid color-mix(in srgb, #ef4444 30%, var(--border));
+}
+.ie-status-new {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  margin-right: 4px;
+}
+.ie-status-done {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #6b7280;
+  margin-right: 4px;
+}
+
+.ie-row-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ie-btn-sm {
+  padding: 3px 9px;
+  font-size: 12px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.ie-btn-sm:hover { background: var(--hover); }
+.ie-btn-sm.dismiss { border-color: #16a34a; color: #16a34a; }
+.ie-btn-sm.dismiss:hover { background: color-mix(in srgb, #16a34a 10%, var(--card)); }
+.ie-btn-sm.retry   { border-color: var(--accent); color: var(--accent); }
+.ie-btn-sm.retry:hover { background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+.ie-btn-sm:disabled { opacity: .4; cursor: default; pointer-events: none; }
+
+.ie-raw-row td {
+  padding: 0 10px 10px 10px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--card));
+}
+.ie-raw-text {
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input-bg);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/import_export.js?v=1" defer></script>
+{% endblock %}

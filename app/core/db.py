@@ -1328,6 +1328,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             stage=f"seed:quick_points:{_qp_name}",
         )
 
+    # --- ingest_messages: reviewed_at for chatbot error queue ---
+    _ensure_column(conn, "ingest_messages", "reviewed_at", "reviewed_at TEXT")
+
     # --- Map labels table (custom place-name labels on the quick-conclusions map) ---
     _try_ddl(
         conn,
