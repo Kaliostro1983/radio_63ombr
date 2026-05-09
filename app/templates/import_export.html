@@ -129,10 +129,10 @@
 /* ── XLSX tab ─────────────────────────────────────────────────── */
 .ie-upload-row {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 .ie-file-label {
   position: relative;
@@ -177,7 +177,8 @@
   animation: ie-spin .7s linear infinite;
 }
 @keyframes ie-spin { to { transform: rotate(360deg); } }
-.ie-result-head { font-weight: 700; margin-bottom: 8px; font-size: 15px; }
+.ie-result-head { font-weight: 700; margin-bottom: 10px; font-size: 15px; }
+#ieXlsxResult   { margin-top: 8px; }
 .ie-result-head.ok  { color: #22c55e; }
 .ie-result-head.err { color: #ef4444; }
 .ie-result-details {
