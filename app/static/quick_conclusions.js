@@ -349,13 +349,27 @@
           await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
           toast("Скріншот карти скопійовано!", "success", 1800);
         } catch (e) {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "map_" + Date.now() + ".png";
-          a.click();
-          setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
-          toast("Копіювання недоступне — файл завантажено", "info", 2500);
+          // HTTP context — clipboard.write() not allowed.
+          // Show image in modal so user can right-click → Copy image.
+          const dataUrl = canvas.toDataURL("image/png");
+          const modal   = document.getElementById("mapImgModal");
+          const preview = document.getElementById("mapImgPreview");
+          const close   = document.getElementById("mapImgCloseBtn");
+          const backdrop = document.getElementById("mapImgBackdrop");
+          if (modal && preview) {
+            preview.src = dataUrl;
+            modal.classList.remove("hidden");
+            modal.setAttribute("aria-hidden", "false");
+
+            function closeModal() {
+              modal.classList.add("hidden");
+              modal.setAttribute("aria-hidden", "true");
+              preview.src = "";
+            }
+            if (close)    close.onclick    = closeModal;
+            if (backdrop) backdrop.onclick = closeModal;
+          }
+          toast("Правою кнопкою на карту → Копіювати зображення", "info", 4000);
         }
       }, "image/png");
     } catch (e) {

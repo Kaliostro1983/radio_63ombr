@@ -274,6 +274,23 @@
   </section>
 </div>
 
+<!-- Map image preview modal (HTTP fallback) -->
+<div id="mapImgModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" id="mapImgBackdrop"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:90vw;width:auto">
+    <div class="modal-head">
+      <div style="font-weight:700">Скріншот карти</div>
+      <button class="secondary" type="button" id="mapImgCloseBtn">✕</button>
+    </div>
+    <div class="modal-body" style="padding:8px;text-align:center">
+      <p class="small" style="margin-bottom:8px;opacity:.75">
+        Правою кнопкою на зображення → <strong>Копіювати зображення</strong>
+      </p>
+      <img id="mapImgPreview" src="" alt="Карта" style="max-width:100%;border-radius:6px;display:block">
+    </div>
+  </div>
+</div>
+
 <!-- Delete type confirm modal -->
 <div id="cnDeleteModal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" id="cnDeleteBackdrop"></div>
@@ -299,5 +316,5 @@
 
 {% block scripts %}
 <script src="/static/conclusions.js?v=5" defer></script>
-<script src="/static/quick_conclusions.js?v=8" defer></script>
+<script src="/static/quick_conclusions.js?v=9" defer></script>
 {% endblock %}
