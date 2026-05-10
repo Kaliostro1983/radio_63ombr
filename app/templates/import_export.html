@@ -107,7 +107,6 @@
                   <th class="ie-col-fmt">Формат</th>
                   <th class="ie-col-reason">Причина</th>
                   <th class="ie-col-text">Текст</th>
-                  <th class="ie-col-status">Статус</th>
                   <th class="ie-col-actions"></th>
                 </tr>
               </thead>
@@ -222,7 +221,8 @@
 .ie-filter-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  row-gap: 8px;
   flex-wrap: wrap;
 }
 .ie-filter-group-label {
@@ -287,11 +287,9 @@
 /* Item rows */
 .ie-item-row td {
   padding: 12px 10px;
-  border-top: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+  border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
-/* First item: no top border */
-.ie-item-row:first-child td { border-top: none; }
 .ie-bot-table tr.ie-row-reviewed td { opacity: .4; }
 .ie-bot-table tr.ie-hidden { display: none; }
 
@@ -303,7 +301,6 @@
 .ie-col-fmt code { font-size: 11px; opacity: .75; }
 .ie-col-reason  { width: 160px; }
 .ie-col-text    { min-width: 200px; }
-.ie-col-status  { width: 100px; white-space: nowrap; }
 .ie-col-actions { width: 60px; }
 
 /* ── Badges & indicators ──────────────────────────────────────── */
@@ -317,19 +314,9 @@
   color: #ef4444;
   border: 1px solid color-mix(in srgb, #ef4444 30%, var(--border));
 }
-.ie-status-new, .ie-status-done {
-  display: inline-block;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  margin-right: 5px;
-  vertical-align: middle;
-}
-.ie-status-new  { background: #f59e0b; }
-.ie-status-done { background: #6b7280; }
-.ie-status-txt  { font-size: 12px; vertical-align: middle; }
 
 /* ── Action buttons ───────────────────────────────────────────── */
-.ie-row-actions { display: flex; gap: 4px; flex-direction: column; }
+.ie-row-actions { display: flex; gap: 6px; flex-direction: column; }
 .ie-btn-sm {
   padding: 2px 7px;
   font-size: 11px;
@@ -366,5 +353,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/import_export.js?v=3" defer></script>
+<script src="/static/import_export.js?v=4" defer></script>
 {% endblock %}

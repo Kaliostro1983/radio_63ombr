@@ -31,6 +31,11 @@
 
   function reasonLabel(r)  { return REASON_LABELS[r]  || r || "—"; }
   function formatLabel(f)  { return FORMAT_LABELS[f]  || f || "—"; }
+  function chatLabel(item) {
+    const name = item.source_chat_name || "";
+    if (/\.xlsx?$/i.test(name)) return "xlsx";
+    return name || item.platform || "—";
+  }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -291,16 +296,11 @@
       tr.innerHTML = `
         <td class="ie-col-num">${idx + 1}</td>
         <td class="ie-col-dt">${fmtDt(item.received_at)}</td>
-        <td class="ie-col-chat">${esc(item.source_chat_name || item.platform || "—")}</td>
+        <td class="ie-col-chat">${esc(chatLabel(item))}</td>
         <td class="ie-col-fmt"><code>${esc(format)}</code></td>
         <td class="ie-col-reason"><span class="ie-error-badge">${esc(reasonLabel(reason))}</span></td>
         <td class="ie-col-text">
           <div class="ie-raw-text">${esc(item.raw_text || "")}</div>
-        </td>
-        <td class="ie-col-status">
-          ${reviewed
-            ? `<span class="ie-status-done"></span><span class="ie-status-txt">переглянуто</span>`
-            : `<span class="ie-status-new"></span><span class="ie-status-txt">нове</span>`}
         </td>
         <td class="ie-col-actions">
           <div class="ie-row-actions">
