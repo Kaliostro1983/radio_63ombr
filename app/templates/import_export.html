@@ -106,6 +106,7 @@
                   <th class="ie-col-chat">Чат</th>
                   <th class="ie-col-fmt">Формат</th>
                   <th class="ie-col-reason">Причина</th>
+                  <th class="ie-col-text">Текст</th>
                   <th class="ie-col-status">Статус</th>
                   <th class="ie-col-actions"></th>
                 </tr>
@@ -231,25 +232,31 @@
   white-space: nowrap;
   min-width: 60px;
 }
+/* Checkbox-label toggle buttons (networks-page style) */
 .ie-filter-btn {
-  padding: 4px 12px;
+  display: inline-flex;
+  cursor: pointer;
+  user-select: none;
+}
+.ie-filter-btn input { display: none; }
+.ie-filter-btn span {
+  padding: 5px 12px;
   font-size: 12px;
-  border-radius: 20px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text);
-  cursor: pointer;
-  opacity: .45;
-  transition: opacity .15s, background .15s;
+  opacity: .38;
   line-height: 1.5;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s, opacity .15s;
 }
-.ie-filter-btn.active {
+.ie-filter-btn input:checked + span {
+  color: var(--text);
+  border-color: var(--text);
   opacity: 1;
-  background: color-mix(in srgb, var(--accent) 12%, var(--card));
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-  color: var(--accent);
 }
-.ie-filter-btn:hover { opacity: 1; }
+.ie-filter-btn:hover span { opacity: .7; }
 
 /* ── Stats row ────────────────────────────────────────────────── */
 .ie-bot-stats {
@@ -277,31 +284,27 @@
   white-space: nowrap;
   border-bottom: 2px solid var(--border);
 }
-/* Item metadata row */
+/* Item rows */
 .ie-item-row td {
-  padding: 10px 10px 6px;
-  border-top: 1px solid var(--border);
-  vertical-align: middle;
+  padding: 12px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+  vertical-align: top;
 }
 /* First item: no top border */
 .ie-item-row:first-child td { border-top: none; }
-/* Text (raw) row */
-.ie-text-row td {
-  padding: 0 10px 12px;
-  border-bottom: 2px solid var(--border);
-}
 .ie-bot-table tr.ie-row-reviewed td { opacity: .4; }
 .ie-bot-table tr.ie-hidden { display: none; }
 
 /* Column widths */
 .ie-col-num     { width: 36px; text-align: center; font-variant-numeric: tabular-nums; opacity: .45; }
 .ie-col-dt      { width: 110px; white-space: nowrap; }
-.ie-col-chat    { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ie-col-fmt     { width: 140px; }
+.ie-col-chat    { width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ie-col-fmt     { width: 130px; }
 .ie-col-fmt code { font-size: 11px; opacity: .75; }
-.ie-col-reason  { width: 170px; }
+.ie-col-reason  { width: 160px; }
+.ie-col-text    { min-width: 200px; }
 .ie-col-status  { width: 100px; white-space: nowrap; }
-.ie-col-actions { width: 80px; }
+.ie-col-actions { width: 60px; }
 
 /* ── Badges & indicators ──────────────────────────────────────── */
 .ie-error-badge {
@@ -326,16 +329,18 @@
 .ie-status-txt  { font-size: 12px; vertical-align: middle; }
 
 /* ── Action buttons ───────────────────────────────────────────── */
-.ie-row-actions { display: flex; gap: 6px; }
+.ie-row-actions { display: flex; gap: 4px; flex-direction: column; }
 .ie-btn-sm {
-  padding: 3px 9px;
-  font-size: 12px;
-  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text);
   cursor: pointer;
-  line-height: 1.4;
+  line-height: 1.5;
+  min-width: 24px;
+  text-align: center;
 }
 .ie-btn-sm:hover { background: var(--hover); }
 .ie-btn-sm.dismiss { border-color: #16a34a; color: #16a34a; }
@@ -344,18 +349,15 @@
 .ie-btn-sm.retry:hover { background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
 .ie-btn-sm:disabled { opacity: .4; cursor: default; pointer-events: none; }
 
-/* ── Raw message text (always visible) ───────────────────────── */
-.ie-text-cell {
-  background: color-mix(in srgb, var(--accent) 3%, var(--card));
-}
+/* ── Raw message text (inline column) ────────────────────────── */
 .ie-raw-text {
   font-family: monospace;
   font-size: 12px;
   white-space: pre-wrap;
   line-height: 1.55;
-  max-height: 180px;
+  max-height: 160px;
   overflow-y: auto;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--input-bg);
@@ -364,5 +366,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/import_export.js?v=2" defer></script>
+<script src="/static/import_export.js?v=3" defer></script>
 {% endblock %}

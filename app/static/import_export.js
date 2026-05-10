@@ -1,4 +1,4 @@
-/* import_export.js – v2
+/* import_export.js – v3
  * Handles the Import/Export page: XLSX upload + chatbot error queue.
  */
 
@@ -211,55 +211,55 @@
   // ─── Filters ─────────────────────────────────────────────────────────────
 
   function buildFilters(items) {
-    // Collect unique values from the data
+    // Collect unique values
     const reasons = [...new Set(items.map(i => i.parse_error || "—"))];
     const formats = [...new Set(items.map(i => i.message_format || "unknown"))];
 
-    // Reset active sets to "all active"
+    // All active by default
     activeReasons = new Set(reasons);
     activeFormats = new Set(formats);
 
     if (botFilterReasons) {
-      botFilterReasons.innerHTML =
-        `<span class="ie-filter-group-label">Причина:</span>`;
+      botFilterReasons.innerHTML = `<span class="ie-filter-group-label">Причина:</span>`;
       reasons.forEach(r => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "ie-filter-btn active";
-        btn.dataset.filterReason = r;
-        btn.textContent = reasonLabel(r);
-        btn.addEventListener("click", () => toggleFilter(btn, "reason", r));
-        botFilterReasons.appendChild(btn);
+        const lbl = document.createElement("label");
+        lbl.className = "ie-filter-btn";
+        const inp = document.createElement("input");
+        inp.type = "checkbox";
+        inp.checked = true;
+        inp.addEventListener("change", () => {
+          if (inp.checked) activeReasons.add(r); else activeReasons.delete(r);
+          applyFilters();
+        });
+        const span = document.createElement("span");
+        span.textContent = reasonLabel(r);
+        lbl.appendChild(inp);
+        lbl.appendChild(span);
+        botFilterReasons.appendChild(lbl);
       });
     }
 
     if (botFilterFormats) {
-      botFilterFormats.innerHTML =
-        `<span class="ie-filter-group-label">Формат:</span>`;
+      botFilterFormats.innerHTML = `<span class="ie-filter-group-label">Формат:</span>`;
       formats.forEach(f => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "ie-filter-btn active";
-        btn.dataset.filterFormat = f;
-        btn.textContent = formatLabel(f);
-        btn.addEventListener("click", () => toggleFilter(btn, "format", f));
-        botFilterFormats.appendChild(btn);
+        const lbl = document.createElement("label");
+        lbl.className = "ie-filter-btn";
+        const inp = document.createElement("input");
+        inp.type = "checkbox";
+        inp.checked = true;
+        inp.addEventListener("change", () => {
+          if (inp.checked) activeFormats.add(f); else activeFormats.delete(f);
+          applyFilters();
+        });
+        const span = document.createElement("span");
+        span.textContent = formatLabel(f);
+        lbl.appendChild(inp);
+        lbl.appendChild(span);
+        botFilterFormats.appendChild(lbl);
       });
     }
 
     if (botFilterArea) botFilterArea.style.display = "block";
-  }
-
-  function toggleFilter(btn, type, value) {
-    if (type === "reason") {
-      if (activeReasons.has(value)) activeReasons.delete(value);
-      else activeReasons.add(value);
-    } else {
-      if (activeFormats.has(value)) activeFormats.delete(value);
-      else activeFormats.add(value);
-    }
-    btn.classList.toggle("active");
-    applyFilters();
   }
 
   function applyFilters() {
@@ -267,7 +267,7 @@
     botTbody.querySelectorAll("tr[data-reason]").forEach(row => {
       const show = activeReasons.has(row.dataset.reason) && activeFormats.has(row.dataset.format);
       row.classList.toggle("ie-hidden", !show);
-      if (!row.classList.contains("ie-text-row") && show) visible++;
+      if (show) visible++;
     });
     if (botVisibleEl) botVisibleEl.textContent = visible;
   }
@@ -282,7 +282,6 @@
       const reason   = item.parse_error || "—";
       const format   = item.message_format || "unknown";
 
-      // ── Metadata row ──
       const tr = document.createElement("tr");
       tr.className = "ie-item-row" + (reviewed ? " ie-row-reviewed" : "");
       tr.dataset.reason = reason;
@@ -295,6 +294,9 @@
         <td class="ie-col-chat">${esc(item.source_chat_name || item.platform || "—")}</td>
         <td class="ie-col-fmt"><code>${esc(format)}</code></td>
         <td class="ie-col-reason"><span class="ie-error-badge">${esc(reasonLabel(reason))}</span></td>
+        <td class="ie-col-text">
+          <div class="ie-raw-text">${esc(item.raw_text || "")}</div>
+        </td>
         <td class="ie-col-status">
           ${reviewed
             ? `<span class="ie-status-done"></span><span class="ie-status-txt">переглянуто</span>`
@@ -309,17 +311,6 @@
           </div>
         </td>`;
       botTbody.appendChild(tr);
-
-      // ── Raw text row (always visible) ──
-      const trText = document.createElement("tr");
-      trText.className = "ie-text-row" + (reviewed ? " ie-row-reviewed" : "");
-      trText.dataset.reason = reason;
-      trText.dataset.format = format;
-      trText.innerHTML = `
-        <td class="ie-text-cell" colspan="7">
-          <div class="ie-raw-text">${esc(item.raw_text || "")}</div>
-        </td>`;
-      botTbody.appendChild(trText);
     });
 
     // Bind action handlers via delegation
@@ -327,14 +318,13 @@
     if (botVisibleEl) botVisibleEl.textContent = items.length;
   }
 
-  let _tableClickBound = false;
   function handleTableClick(e) {
     const dismiss = e.target.closest("[data-dismiss]");
     const retry   = e.target.closest("[data-retry]");
     if (dismiss) dismissRow(Number(dismiss.dataset.dismiss));
     if (retry)   retryRow(Number(retry.dataset.retry));
   }
-  // Bind once (to avoid duplicates on reload)
+  // Bind once to the static element (avoids duplicates on reload)
   qs("#ieBotTbody") && qs("#ieBotTbody").addEventListener("click", handleTableClick);
 
   async function dismissRow(id) {
