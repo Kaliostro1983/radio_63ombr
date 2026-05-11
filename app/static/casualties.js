@@ -163,21 +163,14 @@
   async function clearColumn(col) {
     const label = col === "morning" ? "08:00–16:00" : "16:00–08:00";
     if (!confirm(`Обнулити всі значення колонки «${label}» за ${currentDate}?`)) return;
-    const saves = [];
-    units.forEach(unit => {
-      ["irr", "san"].forEach(cat => {
-        const key = `${cat}_${unit.id}`;
-        const e = entries[key] || { morning: 0, night: 0 };
-        e[col] = 0;
-        entries[key] = e;
-        saves.push(apiFetch("/api/cas/entry", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ unit_id: unit.id, date: currentDate, category: cat, morning: e.morning, night: e.night }),
-        }));
-      });
+    // Cancel any pending debounce saves so they don't override the clear
+    Object.keys(saveTimers).forEach(k => { clearTimeout(saveTimers[k]); delete saveTimers[k]; });
+    await apiFetch("/api/cas/clear-column", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ date: currentDate, column: col }),
     });
-    await Promise.all(saves);
+    await loadEntries();
     render();
   }
 

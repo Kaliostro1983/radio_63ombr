@@ -99,6 +99,22 @@ def get_entries(date: str = Query(default="")):
         return {"ok": True, "date": entry_date, "entries": entries}
 
 
+class ClearColumnBody(BaseModel):
+    date: str = ""
+    column: str          # "morning" | "night"
+
+
+@router.post("/api/cas/clear-column")
+def clear_column(body: ClearColumnBody):
+    if body.column not in ("morning", "night"):
+        return JSONResponse({"ok": False, "error": "column must be morning or night"}, status_code=400)
+    entry_date = (body.date or "").strip() or _date.today().isoformat()
+    col = body.column
+    with get_conn() as conn:
+        conn.execute(f"UPDATE cas_entries SET {col} = 0 WHERE entry_date = ?", (entry_date,))
+        return {"ok": True}
+
+
 class SaveEntryBody(BaseModel):
     unit_id: int
     date: str = ""
