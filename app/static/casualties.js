@@ -221,37 +221,32 @@
   document.getElementById("casSSNight")?.addEventListener("click",   () => doScreenshot("night"));
 
   function doScreenshot(mode) {
-    if (typeof html2canvas === "undefined") {
-      alert("html2canvas не завантажено — перевір підключення.");
-      return;
-    }
-    // Switch to compact mode (persists after screenshot)
+    // Switch to compact mode (visual feedback)
     compactMode = mode;
     render();
 
-    // Small delay so browser repaints before capture
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      html2canvas(tableWrap, { scale: 2, useCORS: true, logging: false }).then(canvas => {
-        canvas.toBlob(blob => {
-          // Try modern Clipboard API first
-          if (navigator.clipboard?.write && window.ClipboardItem) {
-            navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
-              .then(() => toast("Скопійовано у буфер!", "success", 3000))
-              .catch(() => autoDownload(canvas, mode));
-          } else {
-            autoDownload(canvas, mode);
-          }
-        }, "image/png");
-      });
-    }));
+    const url = `/api/cas/image?date=${encodeURIComponent(currentDate)}&mode=${mode}`;
+    fetch(url)
+      .then(r => { if (!r.ok) throw new Error("server error"); return r.blob(); })
+      .then(blob => {
+        if (navigator.clipboard?.write && window.ClipboardItem) {
+          navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+            .then(() => toast("Скопійовано у буфер!", "success", 3000))
+            .catch(() => autoDownload(blob, mode));
+        } else {
+          autoDownload(blob, mode);
+        }
+      })
+      .catch(() => toast("Помилка генерації зображення", "error", 4000));
   }
 
-  function autoDownload(canvas, mode) {
+  function autoDownload(blob, mode) {
     const a = document.createElement("a");
     a.download = `zvit-${mode}-${currentDate}.png`;
-    a.href = canvas.toDataURL("image/png");
+    a.href = URL.createObjectURL(blob);
     a.click();
-    toast("Збережено як файл (HTTP не дозволяє буфер)", "info", 4000);
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    toast("Збережено як файл", "info", 3000);
   }
 
   function toast(msg, type, ms) {

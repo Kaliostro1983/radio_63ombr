@@ -7,14 +7,17 @@ Exposes:
 - POST /api/cas/units/reorder      → update sort order
 - GET  /api/cas/entries?date=...   → entries for a given date (ISO)
 - POST /api/cas/entry              → upsert a single entry
+- POST /api/cas/clear-column       → zero one column for a date
+- GET  /api/cas/image              → PNG screenshot of compact table
 """
 
 from __future__ import annotations
 
+import io
 from datetime import date as _date
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List
 
@@ -139,3 +142,38 @@ def save_entry(body: SaveEntryBody):
             (body.unit_id, entry_date, body.category, body.morning, body.night),
         )
         return {"ok": True}
+
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+
+@router.get("/api/cas/image")
+def get_cas_image(date: str = Query(default=""), mode: str = Query(default="morning")):
+    if mode not in ("morning", "night"):
+        return JSONResponse({"ok": False, "error": "mode must be morning or night"}, status_code=400)
+
+    from app.services.cas_image import build_cas_image
+
+    entry_date = (date or "").strip() or _date.today().isoformat()
+
+    with get_conn() as conn:
+        unit_rows = conn.execute(
+            "SELECT id, name FROM cas_units ORDER BY sort_order, id"
+        ).fetchall()
+        entry_rows = conn.execute(
+            "SELECT unit_id, category, morning, night FROM cas_entries WHERE entry_date = ?",
+            (entry_date,),
+        ).fetchall()
+
+    units = [{"id": r["id"], "name": r["name"]} for r in unit_rows]
+    entries_map = {
+        f"{r['category']}_{r['unit_id']}": (r["morning"] or 0, r["night"] or 0)
+        for r in entry_rows
+    }
+
+    buf = build_cas_image(units, entries_map, mode, entry_date)
+    filename = f"vtrata-{mode}-{entry_date}.png"
+    return StreamingResponse(
+        buf,
+        media_type="image/png",
+        headers={"Content-Disposition": f"inline; filename={filename}"},
+    )
