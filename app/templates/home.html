@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% set home_tab = (request.query_params.get("tab") or "activity")|lower %}
-{% if home_tab not in ["activity", "overview", "reports"] %}
+{% if home_tab not in ["activity", "overview", "reports", "casualties"] %}
   {% set home_tab = "activity" %}
 {% endif %}
 
@@ -48,6 +48,18 @@
         data-tab="reports"
       >
         Звіти
+      </button>
+
+      <button
+        id="homeTabCasualties"
+        type="button"
+        class="tab-btn {% if home_tab == 'casualties' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if home_tab == 'casualties' %}true{% else %}false{% endif %}"
+        aria-controls="homePaneCasualties"
+        data-tab="casualties"
+      >
+        Втрати
       </button>
     </div>
 
@@ -185,9 +197,68 @@
           </div>
         </div>
       </section>
+      <!-- ── CASUALTIES TAB ──────────────────────────────────────── -->
+      <section
+        id="homePaneCasualties"
+        class="tab-panel {% if home_tab != 'casualties' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="homeTabCasualties"
+      >
+        <div class="tab-panel-section">
+
+          <!-- Toolbar -->
+          <div class="cas-toolbar">
+            <div class="cas-toolbar-left">
+              <label class="small" style="white-space:nowrap">Дата</label>
+              <input type="date" id="casDate" class="cas-date-input" />
+            </div>
+            <div class="cas-toolbar-right">
+              <button type="button" id="casAddUnit" class="secondary">+ Підрозділ</button>
+              <button type="button" id="casRemoveUnit" class="secondary">− Підрозділ</button>
+              <span class="cas-sep"></span>
+              <button type="button" id="casSSMorning" class="secondary">📷 08:00–16:00</button>
+              <button type="button" id="casSSNight"   class="secondary">📷 16:00–08:00</button>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div id="casTableWrap" class="cas-table-wrap">
+            <table class="cas-table" id="casTable">
+              <thead>
+                <tr>
+                  <th class="cas-col-name">Підрозділ</th>
+                  <th class="cas-col-morning">08:00–16:00</th>
+                  <th class="cas-col-night">16:00–08:00</th>
+                  <th class="cas-col-total">08:00–08:00</th>
+                  <th class="cas-col-arrows"></th>
+                </tr>
+              </thead>
+              <tbody id="casTbody"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
     </div>
   </section>
 </div>
+
+<!-- Screenshot modal -->
+<div id="casSSModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close-ss="1"></div>
+  <div class="modal-card cas-ss-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div style="font-weight:700">Скріншот</div>
+      <button type="button" class="secondary" data-close-ss="1" style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px;overflow:auto">
+      <img id="casSSImg" src="" alt="screenshot" style="max-width:100%;border-radius:6px" />
+      <p class="small" style="opacity:.65;margin-top:10px">Правий клік → «Зберегти зображення» або «Копіювати зображення».</p>
+    </div>
+  </div>
+</div>
+
 <!-- Movement report result modal -->
 <div id="movModal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" id="movModalBackdrop"></div>
@@ -207,6 +278,112 @@
 </div>
 {% endblock %}
 
+{% block extra_head %}
+<style>
+/* ── Casualties tab ────────────────────────────────────────────── */
+.cas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.cas-toolbar-left  { display: flex; align-items: center; gap: 8px; }
+.cas-toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cas-sep { width: 1px; height: 24px; background: var(--border); display: inline-block; }
+.cas-date-input { padding: 5px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); }
+
+.cas-table-wrap { overflow-x: auto; }
+.cas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cas-table thead th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  opacity: .5;
+  padding: 0 10px 8px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--border);
+}
+/* Section header row */
+.cas-section-hdr td {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  opacity: .6;
+  padding: 14px 10px 6px;
+  border-top: 2px solid var(--border);
+}
+.cas-section-hdr:first-child td { border-top: none; }
+
+/* Data rows */
+.cas-row td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.cas-empty { text-align: center; padding: 24px; opacity: .5; }
+
+/* Columns */
+.cas-col-name    { min-width: 200px; }
+.cas-col-morning { width: 110px; }
+.cas-col-night   { width: 110px; }
+.cas-col-total   { width: 110px; font-weight: 700; }
+.cas-col-arrows  { width: 64px; }
+
+.cas-input {
+  width: 80px;
+  padding: 3px 6px;
+  font-size: 13px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+.cas-input:focus { outline: none; border-color: var(--accent); }
+/* Hide native number arrows */
+.cas-input::-webkit-inner-spin-button,
+.cas-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.cas-input[type=number] { -moz-appearance: textfield; }
+
+.cas-arrow {
+  padding: 1px 6px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.5;
+}
+.cas-arrow:hover:not(:disabled) { background: var(--hover); }
+.cas-arrow:disabled { opacity: .25; cursor: default; }
+
+/* Screenshot modal */
+.cas-ss-modal-card { max-width: 860px; width: 95vw; }
+
+/* Screenshot modes — applied to casTableWrap before capture */
+.cas-ss-active .cas-col-arrows,
+.cas-ss-active thead .cas-col-arrows { display: none; }
+.cas-ss-morning .cas-col-night,
+.cas-ss-morning .cas-col-total,
+.cas-ss-morning thead .cas-col-night,
+.cas-ss-morning thead .cas-col-total { display: none; }
+.cas-ss-night .cas-col-morning,
+.cas-ss-night thead .cas-col-morning  { display: none; }
+.cas-ss-hide { display: none !important; }
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script src="/static/home.js?v=19" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="/static/casualties.js?v=1" defer></script>
 {% endblock %}

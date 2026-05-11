@@ -1344,6 +1344,35 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         stage="create_table:map_labels",
     )
 
+    # --- Casualties: units + daily entries ---
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS cas_units (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL UNIQUE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT
+        )
+        """,
+        stage="create_table:cas_units",
+    )
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS cas_entries (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id    INTEGER NOT NULL REFERENCES cas_units(id) ON DELETE CASCADE,
+            entry_date TEXT NOT NULL,
+            category   TEXT NOT NULL,
+            morning    INTEGER NOT NULL DEFAULT 0,
+            night      INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(unit_id, entry_date, category)
+        )
+        """,
+        stage="create_table:cas_entries",
+    )
+
 
 def get_db() -> sqlite3.Connection:
     """Create and return a new low-level SQLite connection.
