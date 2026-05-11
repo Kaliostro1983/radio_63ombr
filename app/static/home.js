@@ -26,10 +26,14 @@
     acIndex: -1,
   };
 
+  const tabCasualties  = $("homeTabCasualties");
+  const paneCasualties = $("homePaneCasualties");
+
   const tabMap = {
-    activity: { btn: tabActivity, pane: paneActivity },
-    overview: { btn: tabOverview, pane: paneOverview },
-    reports: { btn: tabReports, pane: paneReports },
+    activity:   { btn: tabActivity,   pane: paneActivity },
+    overview:   { btn: tabOverview,   pane: paneOverview },
+    reports:    { btn: tabReports,    pane: paneReports },
+    casualties: { btn: tabCasualties, pane: paneCasualties },
   };
 
   function setTab(which, opts) {
@@ -53,7 +57,7 @@
 
   function initialTabFromUrl() {
     const t = (new URLSearchParams(location.search).get("tab") || "").toLowerCase();
-    if (t === "overview" || t === "reports") return t;
+    if (t in tabMap) return t;
     return "activity";
   }
 
@@ -62,6 +66,7 @@
   tabOverview.addEventListener("click", () => setTab("overview"));
   tabActivity.addEventListener("click", () => setTab("activity"));
   tabReports.addEventListener("click", () => setTab("reports"));
+  tabCasualties?.addEventListener("click", () => setTab("casualties"));
 
   function escapeHtml(value) {
     return String(value || "")
