@@ -79,6 +79,7 @@
     // Section header row
     const hdrTr = document.createElement("tr");
     hdrTr.className = "cas-section-hdr";
+    hdrTr.dataset.cat = cat;
     hdrTr.innerHTML = `<td colspan="6">${label}</td>`;
     tbody.appendChild(hdrTr);
 

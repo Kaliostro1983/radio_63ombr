@@ -291,56 +291,74 @@
 .cas-toolbar-left  { display: flex; align-items: center; gap: 8px; }
 .cas-toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cas-sep { width: 1px; height: 24px; background: var(--border); display: inline-block; }
-.cas-date-input { padding: 5px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); }
+.cas-date-input { padding: 5px 10px; font-size: 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text); }
 
 .cas-table-wrap { overflow-x: auto; }
 .cas-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 16px;
 }
 .cas-table thead th {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .04em;
   opacity: .5;
-  padding: 0 10px 8px;
+  padding: 0 12px 10px;
   text-align: left;
   white-space: nowrap;
   border-bottom: 2px solid var(--border);
 }
-/* Section header row */
+thead .cas-col-morning,
+thead .cas-col-night,
+thead .cas-col-total { text-align: center; }
+
+/* Section header rows */
 .cas-section-hdr td {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: .05em;
   text-transform: uppercase;
-  opacity: .6;
-  padding: 14px 10px 6px;
+  padding: 16px 12px 8px;
   border-top: 2px solid var(--border);
 }
 .cas-section-hdr:first-child td { border-top: none; }
 
+/* Section background colours */
+.cas-section-hdr[data-cat="irr"] td,
+.cas-row[data-category="irr"] td {
+  background: color-mix(in srgb, #ef4444 7%, var(--card));
+}
+.cas-section-hdr[data-cat="san"] td,
+.cas-row[data-category="san"] td {
+  background: color-mix(in srgb, #22c55e 7%, var(--card));
+}
+
+/* Row hover + focus-within highlight for easy tracking */
+.cas-row:hover td       { filter: brightness(1.14); }
+.cas-row:focus-within td { filter: brightness(1.22); }
+
 /* Data rows */
 .cas-row td {
-  padding: 6px 10px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 .cas-empty { text-align: center; padding: 24px; opacity: .5; }
 
-/* Columns */
-.cas-col-name    { min-width: 200px; }
-.cas-col-morning { width: 110px; }
-.cas-col-night   { width: 110px; }
-.cas-col-total   { width: 110px; font-weight: 700; }
-.cas-col-arrows  { width: 64px; }
+/* Column widths (table-layout: fixed) */
+.cas-col-name    { width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cas-col-morning { width: 130px; text-align: center; }
+.cas-col-night   { width: 130px; text-align: center; }
+.cas-col-total   { width: 130px; text-align: center; font-weight: 700; }
+.cas-col-arrows  { width: 72px; }
 
 .cas-input {
-  width: 80px;
-  padding: 3px 6px;
-  font-size: 13px;
+  width: 90px;
+  padding: 4px 8px;
+  font-size: 16px;
   text-align: center;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -348,17 +366,16 @@
   color: var(--text);
 }
 .cas-input:focus { outline: none; border-color: var(--accent); }
-/* Hide native number arrows */
 .cas-input::-webkit-inner-spin-button,
 .cas-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .cas-input[type=number] { -moz-appearance: textfield; }
 
 .cas-arrow {
-  padding: 1px 6px;
-  font-size: 13px;
+  padding: 2px 7px;
+  font-size: 14px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--card);
+  background: transparent;
   color: var(--text);
   cursor: pointer;
   line-height: 1.5;
@@ -369,7 +386,7 @@
 /* Screenshot modal */
 .cas-ss-modal-card { max-width: 860px; width: 95vw; }
 
-/* Screenshot modes — applied to casTableWrap before capture */
+/* Screenshot modes */
 .cas-ss-active .cas-col-arrows,
 .cas-ss-active thead .cas-col-arrows { display: none; }
 .cas-ss-morning .cas-col-night,
@@ -385,5 +402,5 @@
 {% block scripts %}
 <script src="/static/home.js?v=20" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
-<script src="/static/casualties.js?v=1" defer></script>
+<script src="/static/casualties.js?v=2" defer></script>
 {% endblock %}
