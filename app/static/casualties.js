@@ -220,8 +220,19 @@
   document.getElementById("casSSMorning")?.addEventListener("click", () => doScreenshot("morning"));
   document.getElementById("casSSNight")?.addEventListener("click",   () => doScreenshot("night"));
 
+  const ssModal  = document.getElementById("casSSModal");
+  const ssImg    = document.getElementById("casSSImg");
+  let   ssObjUrl = null;
+
+  document.querySelectorAll("[data-close-ss]").forEach(el =>
+    el.addEventListener("click", () => {
+      ssModal?.classList.add("hidden");
+      if (ssModal) ssModal.setAttribute("aria-hidden", "true");
+      if (ssObjUrl) { URL.revokeObjectURL(ssObjUrl); ssObjUrl = null; }
+    })
+  );
+
   function doScreenshot(mode) {
-    // Switch to compact mode (visual feedback)
     compactMode = mode;
     render();
 
@@ -229,24 +240,23 @@
     fetch(url)
       .then(r => { if (!r.ok) throw new Error("server error"); return r.blob(); })
       .then(blob => {
+        // Show image in modal so user can right-click → Copy
+        if (ssObjUrl) URL.revokeObjectURL(ssObjUrl);
+        ssObjUrl = URL.createObjectURL(blob);
+        if (ssImg) ssImg.src = ssObjUrl;
+        if (ssModal) {
+          ssModal.classList.remove("hidden");
+          ssModal.setAttribute("aria-hidden", "false");
+        }
+
+        // Also try clipboard (works on HTTPS / localhost)
         if (navigator.clipboard?.write && window.ClipboardItem) {
           navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
             .then(() => toast("Скопійовано у буфер!", "success", 3000))
-            .catch(() => autoDownload(blob, mode));
-        } else {
-          autoDownload(blob, mode);
+            .catch(() => {});
         }
       })
       .catch(() => toast("Помилка генерації зображення", "error", 4000));
-  }
-
-  function autoDownload(blob, mode) {
-    const a = document.createElement("a");
-    a.download = `zvit-${mode}-${currentDate}.png`;
-    a.href = URL.createObjectURL(blob);
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-    toast("Збережено як файл", "info", 3000);
   }
 
   function toast(msg, type, ms) {
