@@ -101,6 +101,12 @@ def build_cas_image(
 
     TW = sum(w for _, w, _ in columns)
 
+    # Expand TW if title text is wider than the table
+    mode_lbl = "08:00–16:00" if mode == "morning" else "16:00–08:00"
+    title_str = f"Таблиця втрат  ·  {entry_date}  ·  {mode_lbl}"
+    title_min_w = (_tw(tmp_draw, title_str, ft) + 32 * S) // S
+    TW = max(TW, title_min_w)
+
     # Compute image height
     img_h = PAD + TITLE_H + HDR_H
     for r in table_rows:
