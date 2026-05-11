@@ -218,6 +218,7 @@
               <span class="cas-sep"></span>
               <button type="button" id="casSSMorning" class="secondary">📷 08:00–16:00</button>
               <button type="button" id="casSSNight"   class="secondary">📷 16:00–08:00</button>
+              <button type="button" id="casShowAll"   class="secondary" style="display:none">↩ Показати всі</button>
             </div>
           </div>
 
@@ -227,8 +228,8 @@
               <thead>
                 <tr>
                   <th class="cas-col-name">Підрозділ</th>
-                  <th class="cas-col-morning">08:00–16:00</th>
-                  <th class="cas-col-night">16:00–08:00</th>
+                  <th class="cas-col-morning">08:00–16:00 <button id="casClearMorning" class="cas-clear-btn" title="Обнулити колонку">✕</button></th>
+                  <th class="cas-col-night">16:00–08:00 <button id="casClearNight" class="cas-clear-btn" title="Обнулити колонку">✕</button></th>
                   <th class="cas-col-total">08:00–08:00</th>
                   <th class="cas-col-arrows"></th>
                 </tr>
@@ -350,6 +351,7 @@ thead .cas-col-total { text-align: center; }
 
 /* Column widths (table-layout: fixed) */
 .cas-col-name    { width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cas-row td.cas-col-name { text-align: right; }
 .cas-col-morning { width: 130px; text-align: center; }
 .cas-col-night   { width: 130px; text-align: center; }
 .cas-col-total   { width: 130px; text-align: center; font-weight: 700; }
@@ -383,6 +385,21 @@ thead .cas-col-total { text-align: center; }
 .cas-arrow:hover:not(:disabled) { background: var(--hover); }
 .cas-arrow:disabled { opacity: .25; cursor: default; }
 
+.cas-clear-btn {
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  opacity: .45;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.cas-clear-btn:hover { opacity: 1; color: #ef4444; border-color: #ef4444; }
+
 /* Screenshot modal */
 .cas-ss-modal-card { max-width: 860px; width: 95vw; }
 
@@ -402,5 +419,5 @@ thead .cas-col-total { text-align: center; }
 {% block scripts %}
 <script src="/static/home.js?v=20" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
-<script src="/static/casualties.js?v=2" defer></script>
+<script src="/static/casualties.js?v=3" defer></script>
 {% endblock %}

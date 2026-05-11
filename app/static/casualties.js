@@ -1,4 +1,4 @@
-/* casualties.js – v1
+/* casualties.js – v3
  * Interactive casualties table for the home page "Втрати" tab.
  */
 
@@ -6,10 +6,11 @@
   "use strict";
 
   // ── State ─────────────────────────────────────────────────────────────────
-  let units   = [];   // [{id, name, sort_order}]
-  let entries = {};   // {"irr_<id>": {morning, night}, "san_<id>": {...}}
+  let units       = [];   // [{id, name, sort_order}]
+  let entries     = {};   // {"irr_<id>": {morning, night}, "san_<id>": {...}}
   let currentDate = todayISO();
   let saveTimers  = {};
+  let compactMode = null; // null | "morning" | "night"
 
   function todayISO() {
     const d = new Date();
@@ -18,11 +19,12 @@
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const pane      = document.getElementById("homePaneCasualties");
-  if (!pane) return; // tab not present
+  if (!pane) return;
 
-  const dateInput = document.getElementById("casDate");
-  const tbody     = document.getElementById("casTbody");
-  const tableWrap = document.getElementById("casTableWrap");
+  const dateInput  = document.getElementById("casDate");
+  const tbody      = document.getElementById("casTbody");
+  const tableWrap  = document.getElementById("casTableWrap");
+  const showAllBtn = document.getElementById("casShowAll");
 
   // ── Init ──────────────────────────────────────────────────────────────────
   let _inited = false;
@@ -35,7 +37,6 @@
     render();
   }
 
-  // Trigger on tab click or if already active
   document.getElementById("homeTabCasualties")?.addEventListener("click", init);
   if (!pane.classList.contains("hidden")) init();
 
@@ -64,9 +65,15 @@
     if (!tbody) return;
     tbody.innerHTML = "";
 
+    // Apply / remove compact-mode CSS classes on the wrapper
+    tableWrap.classList.toggle("cas-ss-active",  compactMode !== null);
+    tableWrap.classList.toggle("cas-ss-morning", compactMode === "morning");
+    tableWrap.classList.toggle("cas-ss-night",   compactMode === "night");
+    if (showAllBtn) showAllBtn.style.display = compactMode ? "" : "none";
+
     if (units.length === 0) {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td colspan="6" class="cas-empty">Підрозділів немає — натисніть «Додати».</td>`;
+      tr.innerHTML = `<td colspan="5" class="cas-empty">Підрозділів немає — натисніть «+ Підрозділ».</td>`;
       tbody.appendChild(tr);
       return;
     }
@@ -76,11 +83,10 @@
   }
 
   function renderSection(cat, label) {
-    // Section header row
     const hdrTr = document.createElement("tr");
     hdrTr.className = "cas-section-hdr";
     hdrTr.dataset.cat = cat;
-    hdrTr.innerHTML = `<td colspan="6">${label}</td>`;
+    hdrTr.innerHTML = `<td colspan="5">${label}</td>`;
     tbody.appendChild(hdrTr);
 
     units.forEach((unit, idx) => {
@@ -93,6 +99,10 @@
       tr.className = "cas-row";
       tr.dataset.unitId   = unit.id;
       tr.dataset.category = cat;
+
+      // Hide row in compact mode when value is 0
+      if (compactMode === "morning" && !morning) tr.classList.add("cas-ss-hide");
+      if (compactMode === "night"   && !night && !total) tr.classList.add("cas-ss-hide");
 
       tr.innerHTML = `
         <td class="cas-col-name">${escHtml(unit.name)}</td>
@@ -108,11 +118,8 @@
           <button class="cas-arrow" data-dir="1"  title="Вниз"${idx === units.length - 1 ? " disabled" : ""}>↓</button>
         </td>`;
 
-      // Input listeners
       tr.querySelector(".cas-col-morning input").addEventListener("input", () => onInput(tr, cat, unit.id));
-      tr.querySelector(".cas-col-night input").addEventListener("input",   () => onInput(tr, cat, unit.id));
-
-      // Arrow listeners
+      tr.querySelector(".cas-col-night   input").addEventListener("input", () => onInput(tr, cat, unit.id));
       tr.querySelectorAll(".cas-arrow").forEach(btn => {
         btn.addEventListener("click", () => moveUnit(idx, Number(btn.dataset.dir)));
       });
@@ -127,9 +134,6 @@
     const n = parseInt(tr.querySelector(".cas-col-night   input").value) || 0;
     tr.querySelector(".cas-col-total").textContent = (m + n) || "";
     entries[`${cat}_${uid}`] = { morning: m, night: n };
-
-    // Also update the matching row in the other section (same unit, different cat)
-    // (total cells only — inputs are per-section)
 
     const key = `${cat}_${uid}`;
     clearTimeout(saveTimers[key]);
@@ -154,6 +158,31 @@
       body:    JSON.stringify({ order: units.map(u => u.id) }),
     });
   }
+
+  // ── Clear column ──────────────────────────────────────────────────────────
+  async function clearColumn(col) {
+    const label = col === "morning" ? "08:00–16:00" : "16:00–08:00";
+    if (!confirm(`Обнулити всі значення колонки «${label}» за ${currentDate}?`)) return;
+    const saves = [];
+    units.forEach(unit => {
+      ["irr", "san"].forEach(cat => {
+        const key = `${cat}_${unit.id}`;
+        const e = entries[key] || { morning: 0, night: 0 };
+        e[col] = 0;
+        entries[key] = e;
+        saves.push(apiFetch("/api/cas/entry", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ unit_id: unit.id, date: currentDate, category: cat, morning: e.morning, night: e.night }),
+        }));
+      });
+    });
+    await Promise.all(saves);
+    render();
+  }
+
+  document.getElementById("casClearMorning")?.addEventListener("click", () => clearColumn("morning"));
+  document.getElementById("casClearNight")?.addEventListener("click",   () => clearColumn("night"));
 
   // ── Add / remove unit ─────────────────────────────────────────────────────
   document.getElementById("casAddUnit")?.addEventListener("click", async () => {
@@ -181,6 +210,12 @@
     render();
   });
 
+  // ── Show all ──────────────────────────────────────────────────────────────
+  showAllBtn?.addEventListener("click", () => {
+    compactMode = null;
+    render();
+  });
+
   // ── Date change ───────────────────────────────────────────────────────────
   dateInput?.addEventListener("change", async () => {
     currentDate = dateInput.value || todayISO();
@@ -197,44 +232,44 @@
       alert("html2canvas не завантажено — перевір підключення.");
       return;
     }
+    // Switch to compact mode (persists after screenshot)
+    compactMode = mode;
+    render();
 
-    // Collect rows to hide
-    const hiddenRows = [];
-    tbody.querySelectorAll(".cas-row").forEach(row => {
-      const cat = row.dataset.category;
-      const uid = row.dataset.unitId;
-      const e   = getEntry(cat, uid);
-      const hide = mode === "morning" ? !e.morning : (!e.night && !(e.morning + e.night));
-      if (hide) {
-        row.classList.add("cas-ss-hide");
-        hiddenRows.push(row);
-      }
-    });
-
-    // Apply layout class
-    tableWrap.classList.add("cas-ss-active", `cas-ss-${mode}`);
-
-    html2canvas(tableWrap, { scale: 2, useCORS: true, logging: false }).then(canvas => {
-      // Restore
-      tableWrap.classList.remove("cas-ss-active", `cas-ss-morning`, `cas-ss-night`);
-      hiddenRows.forEach(r => r.classList.remove("cas-ss-hide"));
-
-      // Show modal
-      const modal = document.getElementById("casSSModal");
-      const img   = document.getElementById("casSSImg");
-      img.src = canvas.toDataURL("image/png");
-      modal.classList.remove("hidden");
-      modal.setAttribute("aria-hidden", "false");
-    });
+    // Small delay so browser repaints before capture
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      html2canvas(tableWrap, { scale: 2, useCORS: true, logging: false }).then(canvas => {
+        canvas.toBlob(blob => {
+          // Try modern Clipboard API first
+          if (navigator.clipboard?.write && window.ClipboardItem) {
+            navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+              .then(() => toast("Скопійовано у буфер!", "success", 3000))
+              .catch(() => autoDownload(canvas, mode));
+          } else {
+            autoDownload(canvas, mode);
+          }
+        }, "image/png");
+      });
+    }));
   }
 
-  // Close screenshot modal
-  document.getElementById("casSSModal")?.addEventListener("click", e => {
-    if (e.target.closest("[data-close-ss]") || e.target.id === "casSSModal") {
-      document.getElementById("casSSModal").classList.add("hidden");
-      document.getElementById("casSSModal").setAttribute("aria-hidden", "true");
-    }
-  });
+  function autoDownload(canvas, mode) {
+    const a = document.createElement("a");
+    a.download = `zvit-${mode}-${currentDate}.png`;
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+    toast("Збережено як файл (HTTP не дозволяє буфер)", "info", 4000);
+  }
+
+  function toast(msg, type, ms) {
+    const stack = document.getElementById("appToastStack");
+    if (!stack) return;
+    const el = document.createElement("div");
+    el.className = "app-toast app-toast--" + (type || "info");
+    el.textContent = msg;
+    stack.appendChild(el);
+    setTimeout(() => el.remove(), ms || 3000);
+  }
 
   // ── Util ──────────────────────────────────────────────────────────────────
   function escHtml(s) {
