@@ -1,4 +1,4 @@
-/* import_export.js – v3
+/* import_export.js – v4
  * Handles the Import/Export page: XLSX upload + chatbot error queue.
  */
 
@@ -313,8 +313,6 @@
       botTbody.appendChild(tr);
     });
 
-    // Bind action handlers via delegation
-    botTbody.addEventListener("click", handleTableClick, { once: false });
     if (botVisibleEl) botVisibleEl.textContent = items.length;
   }
 
@@ -327,11 +325,21 @@
   // Bind once to the static element (avoids duplicates on reload)
   qs("#ieBotTbody") && qs("#ieBotTbody").addEventListener("click", handleTableClick);
 
+  function markRowDone(id, labelText) {
+    const row = document.getElementById(`ie-row-${id}`);
+    if (!row) return;
+    row.classList.add("ie-row-reviewed", "ie-row-done");
+    const actions = row.querySelector(".ie-row-actions");
+    if (actions) {
+      actions.innerHTML = `<span class="ie-done-mark">${esc(labelText)}</span>`;
+    }
+  }
+
   async function dismissRow(id) {
     const data = await apiFetch(`/api/ingest/${id}/dismiss`, { method: "POST" });
     if (data.ok) {
       toast("Позначено як переглянуте", "success", 2000);
-      loadErrors();
+      markRowDone(id, "Переглянуто");
     } else {
       toast("Помилка: " + (data.error || "?"), "error");
     }
@@ -346,16 +354,19 @@
     if (data.ok) {
       if (data.skipped) {
         toast(`Ще не вдалося: ${reasonLabel(data.reason)}`, "info", 4000);
+        if (btn) { btn.disabled = false; btn.textContent = "▶"; }
       } else if (data.duplicate) {
-        toast("Дублікат — повідомлення вже є в БД", "info", 3000);
+        toast("Дублікат — вже є в БД", "info", 3000);
+        markRowDone(id, "Дублікат");
       } else if (data.message_row_id) {
-        toast(`Успішно прийнято → повідомлення #${data.message_row_id}`, "success", 3500);
+        toast(`✅ Прийнято → #${data.message_row_id}`, "success", 3500);
+        markRowDone(id, "✓ Прийнято");
       } else {
         toast("Оброблено", "success", 3000);
+        markRowDone(id, "✓ Оброблено");
       }
-      loadErrors();
     } else {
-      toast("Помилка повторної обробки: " + (data.error || "?"), "error");
+      toast("Помилка: " + (data.error || "?"), "error");
       if (btn) { btn.disabled = false; btn.textContent = "▶"; }
     }
   }

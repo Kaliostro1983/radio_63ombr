@@ -291,6 +291,14 @@
   vertical-align: top;
 }
 .ie-bot-table tr.ie-row-reviewed td { opacity: .4; }
+.ie-bot-table tr.ie-row-done td { opacity: .35; pointer-events: none; }
+.ie-bot-table tr.ie-row-done .ie-col-actions { pointer-events: none; }
+.ie-done-mark {
+  font-size: 11px;
+  font-weight: 600;
+  color: #16a34a;
+  white-space: nowrap;
+}
 .ie-bot-table tr.ie-hidden { display: none; }
 
 /* Column widths */
@@ -353,5 +361,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/import_export.js?v=4" defer></script>
+<script src="/static/import_export.js?v=5" defer></script>
 {% endblock %}
