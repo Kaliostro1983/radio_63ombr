@@ -208,6 +208,24 @@ def _run_ingest_pipeline(
                 "actions": actions,
             }
 
+        existing_batch = cur.execute(
+            "SELECT id FROM peleng_batches WHERE event_dt = ? AND network_id = ?",
+            (created_at, network_id),
+        ).fetchone()
+        if existing_batch:
+            batch_id = int(existing_batch[0] if not isinstance(existing_batch, dict) else existing_batch["id"])
+            cur.execute(
+                "UPDATE ingest_messages SET reviewed_at = ? WHERE id = ?",
+                (now_sql(), ingest_id),
+            )
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "duplicate": True,
+                "peleng_batch_id": batch_id,
+                "actions": actions,
+            }
+
         cur.execute(
             "INSERT INTO peleng_batches (event_dt, network_id) VALUES (?, ?)",
             (created_at, network_id),
