@@ -300,6 +300,16 @@ def fetch_latest_networks_by_frequencies(db, freqs: list[str]) -> dict[str, dict
     return result
 
 
+def _fmt_event_dt(event_dt: str) -> str:
+    """Format a raw DB event_dt string as 'dd.mm.yyyy\nHH:MM' for report cells."""
+    try:
+        s = str(event_dt).replace("T", " ").strip()
+        dt = datetime.fromisoformat(s)
+        return dt.strftime("%d.%m.%Y\n%H:%M")
+    except Exception:
+        return str(event_dt)
+
+
 def build_records_from_db_rows(batches, points, net_by_freq: dict[str, dict]) -> list[dict]:
     """Convert DB rows into record dicts expected by DOCX generator."""
     batch_by_id = {int(b["id"]): b for b in batches}
@@ -316,7 +326,7 @@ def build_records_from_db_rows(batches, points, net_by_freq: dict[str, dict]) ->
         records.append({
             "freq_or_mask": freq,
             "unit_desc": build_unit_desc(net.get("unit"), net.get("zone")),
-            "dt": str(batch["event_dt"]),
+            "dt": _fmt_event_dt(str(batch["event_dt"])),
             "mgrs": str(p["mgrs"]),
         })
 
@@ -698,7 +708,7 @@ def peleng_report_preview(
             """
             SELECT id
             FROM peleng_batches
-            WHERE event_dt >= ? AND event_dt <= ?
+            WHERE REPLACE(event_dt, 'T', ' ') >= ? AND REPLACE(event_dt, 'T', ' ') <= ?
             """,
             (from_dt, to_dt),
         ).fetchall()
@@ -773,8 +783,8 @@ def peleng_report_by_period(
                 COALESCE(n.frequency, '') AS frequency
             FROM peleng_batches pb
             LEFT JOIN networks n ON n.id = pb.network_id
-            WHERE pb.event_dt >= ? AND pb.event_dt <= ?
-            ORDER BY pb.event_dt ASC, pb.id ASC
+            WHERE REPLACE(pb.event_dt, 'T', ' ') >= ? AND REPLACE(pb.event_dt, 'T', ' ') <= ?
+            ORDER BY REPLACE(pb.event_dt, 'T', ' ') ASC, pb.id ASC
             """,
             (from_dt, to_dt),
         ).fetchall()

@@ -46,7 +46,7 @@ def to_sql_dt(dt_text: str | None) -> str | None:
             dt = datetime.strptime(s, "%d.%m.%Y, %H:%M:%S")
         else:
             dt = datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
-        return dt.isoformat(timespec="seconds")
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return None
 

@@ -1254,6 +1254,13 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_peleng_batches_event_network "
              "ON peleng_batches(event_dt, network_id)",
              stage="create_index:ux_peleng_batches_event_network")
+    # Normalize any T-format event_dt values (e.g. "2026-05-14T08:24:00" → "2026-05-14 08:24:00")
+    # so that string range queries work correctly in SQLite (space < 'T' in ASCII).
+    _try_ddl(
+        conn,
+        "UPDATE peleng_batches SET event_dt = REPLACE(event_dt, 'T', ' ') WHERE event_dt LIKE '%T%'",
+        stage="normalize:peleng_batches.event_dt",
+    )
 
     # Required for upsert in callsign_service.upsert_callsign_edge()
     _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_callsign_edges_net_pair "

@@ -59,8 +59,8 @@ class PelengRepo:
                 COALESCE(n.frequency, '') AS frequency
             FROM peleng_batches pb
             LEFT JOIN networks n ON n.id = pb.network_id
-            WHERE pb.event_dt >= ? AND pb.event_dt <= ?
-            ORDER BY pb.event_dt ASC, pb.id ASC
+            WHERE REPLACE(pb.event_dt, 'T', ' ') >= ? AND REPLACE(pb.event_dt, 'T', ' ') <= ?
+            ORDER BY REPLACE(pb.event_dt, 'T', ' ') ASC, pb.id ASC
             """,
             (from_dt, to_dt),
         )

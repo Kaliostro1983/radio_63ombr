@@ -14,9 +14,20 @@ Note:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Iterable, Mapping
 
 FALLBACK_UNIT_DESC = "УКХ р/м НВ підрозділу, н.п. УТОЧНЮЄТЬСЯ"
+
+
+def _fmt_event_dt(event_dt: str) -> str:
+    """Format a raw DB event_dt string as 'dd.mm.yyyy\nHH:MM' for report cells."""
+    try:
+        s = str(event_dt).replace("T", " ").strip()
+        dt = datetime.fromisoformat(s)
+        return dt.strftime("%d.%m.%Y\n%H:%M")
+    except Exception:
+        return str(event_dt)
 
 def build_unit_desc(unit: str | None, zone: str | None) -> str:
     """Build the unit description string used in peleng report rows."""
@@ -58,7 +69,7 @@ def build_records_from_db(
         records.append({
             "freq_or_mask": freq,
             "unit_desc": unit_desc,
-            "dt": str(b["event_dt"]),
+            "dt": _fmt_event_dt(str(b["event_dt"])),
             "mgrs": str(p["mgrs"]),
         })
 
