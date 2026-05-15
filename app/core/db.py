@@ -1373,7 +1373,17 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         stage="create_table:cas_entries",
     )
     # Snapshot saved when the 16-08 summary button is pressed.
-    # Stores the final reported values (night + total) for period queries.
+    # Stores only the daily total (08-08) per unit/category for period queries.
+    # If old schema with morning/night columns exists, drop and recreate (no data loss —
+    # the table is populated on demand and the source-of-truth is cas_entries).
+    if _has_column(conn, "cas_report_snapshots", "morning"):
+        safe_execute(
+            conn,
+            "DROP TABLE IF EXISTS cas_report_snapshots",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="drop_table:cas_report_snapshots_old_schema",
+        )
     _try_ddl(
         conn,
         """
@@ -1383,8 +1393,6 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             unit_id     INTEGER NOT NULL REFERENCES cas_units(id) ON DELETE CASCADE,
             unit_name   TEXT NOT NULL,
             category    TEXT NOT NULL,
-            morning     INTEGER NOT NULL DEFAULT 0,
-            night       INTEGER NOT NULL DEFAULT 0,
             total       INTEGER NOT NULL DEFAULT 0,
             created_at  TEXT NOT NULL,
             UNIQUE(report_date, unit_id, category)
