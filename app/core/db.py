@@ -1344,7 +1344,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         stage="create_table:map_labels",
     )
 
-    # --- Casualties: units + daily entries ---
+    # --- Casualties: units + working entries (no date) + daily snapshots ---
     _try_ddl(
         conn,
         """
@@ -1357,25 +1357,70 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         """,
         stage="create_table:cas_units",
     )
+    # cas_entries holds the *current* (undated) working values for the two input
+    # columns.  When the old date-keyed schema is detected, migrate to the new
+    # one by keeping the most-recent values per (unit_id, category).
+    if _has_column(conn, "cas_entries", "entry_date"):
+        safe_execute(
+            conn,
+            """
+            CREATE TABLE IF NOT EXISTS cas_entries_new (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                unit_id  INTEGER NOT NULL REFERENCES cas_units(id) ON DELETE CASCADE,
+                category TEXT NOT NULL,
+                morning  INTEGER NOT NULL DEFAULT 0,
+                night    INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(unit_id, category)
+            )
+            """,
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="create_table:cas_entries_new",
+        )
+        safe_execute(
+            conn,
+            """
+            INSERT OR IGNORE INTO cas_entries_new (unit_id, category, morning, night)
+            SELECT unit_id, category, morning, night
+            FROM cas_entries e1
+            WHERE entry_date = (
+                SELECT MAX(entry_date) FROM cas_entries e2
+                WHERE e2.unit_id = e1.unit_id AND e2.category = e1.category
+            )
+            """,
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="migrate:cas_entries_to_undated",
+        )
+        safe_execute(
+            conn, "DROP TABLE cas_entries",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="drop_table:cas_entries_dated",
+        )
+        safe_execute(
+            conn, "ALTER TABLE cas_entries_new RENAME TO cas_entries",
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="rename:cas_entries_new",
+        )
     _try_ddl(
         conn,
         """
         CREATE TABLE IF NOT EXISTS cas_entries (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            unit_id    INTEGER NOT NULL REFERENCES cas_units(id) ON DELETE CASCADE,
-            entry_date TEXT NOT NULL,
-            category   TEXT NOT NULL,
-            morning    INTEGER NOT NULL DEFAULT 0,
-            night      INTEGER NOT NULL DEFAULT 0,
-            UNIQUE(unit_id, entry_date, category)
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id  INTEGER NOT NULL REFERENCES cas_units(id) ON DELETE CASCADE,
+            category TEXT NOT NULL,
+            morning  INTEGER NOT NULL DEFAULT 0,
+            night    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(unit_id, category)
         )
         """,
         stage="create_table:cas_entries",
     )
     # Snapshot saved when the 16-08 summary button is pressed.
     # Stores only the daily total (08-08) per unit/category for period queries.
-    # If old schema with morning/night columns exists, drop and recreate (no data loss —
-    # the table is populated on demand and the source-of-truth is cas_entries).
+    # If old schema with morning/night columns exists, drop and recreate.
     if _has_column(conn, "cas_report_snapshots", "morning"):
         safe_execute(
             conn,

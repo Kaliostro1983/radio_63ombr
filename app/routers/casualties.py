@@ -5,15 +5,15 @@ Exposes:
 - POST /api/cas/units              → add a new unit
 - DELETE /api/cas/units/{id}       → remove a unit (cascades entries)
 - POST /api/cas/units/reorder      → update sort order
-- GET  /api/cas/entries?date=...   → entries for a given date (ISO)
-- POST /api/cas/entry              → upsert a single entry
-- POST /api/cas/clear-column       → zero one column for a date
-- GET  /api/cas/image              → PNG screenshot of compact table
+- GET  /api/cas/entries            → current (undated) working values
+- POST /api/cas/entry              → upsert a single entry (no date)
+- POST /api/cas/clear-column       → zero one column (no date)
+- POST /api/cas/snapshot           → save daily total with date to cas_report_snapshots
+- GET  /api/cas/image              → PNG screenshot (date used for header only)
 """
 
 from __future__ import annotations
 
-import io
 from datetime import date as _date
 
 from fastapi import APIRouter, Query
@@ -83,68 +83,62 @@ def reorder_units(body: ReorderBody):
         return {"ok": True}
 
 
-# ── Entries ───────────────────────────────────────────────────────────────────
+# ── Entries (undated working values) ──────────────────────────────────────────
 
 @router.get("/api/cas/entries")
-def get_entries(date: str = Query(default="")):
-    entry_date = date or _date.today().isoformat()
+def get_entries():
+    """Return current working values for all units (no date binding)."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT unit_id, category, morning, night FROM cas_entries WHERE entry_date = ?",
-            (entry_date,),
+            "SELECT unit_id, category, morning, night FROM cas_entries"
         ).fetchall()
         entries = {}
         for r in rows:
             entries[f"{r['category']}_{r['unit_id']}"] = {
                 "morning": r["morning"],
-                "night": r["night"],
+                "night":   r["night"],
             }
-        return {"ok": True, "date": entry_date, "entries": entries}
+        return {"ok": True, "entries": entries}
 
 
 class ClearColumnBody(BaseModel):
-    date: str = ""
-    column: str          # "morning" | "night"
+    column: str   # "morning" | "night"
 
 
 @router.post("/api/cas/clear-column")
 def clear_column(body: ClearColumnBody):
     if body.column not in ("morning", "night"):
         return JSONResponse({"ok": False, "error": "column must be morning or night"}, status_code=400)
-    entry_date = (body.date or "").strip() or _date.today().isoformat()
-    col = body.column
     with get_conn() as conn:
-        conn.execute(f"UPDATE cas_entries SET {col} = 0 WHERE entry_date = ?", (entry_date,))
+        conn.execute(f"UPDATE cas_entries SET {body.column} = 0")
         return {"ok": True}
 
 
 class SaveEntryBody(BaseModel):
-    unit_id: int
-    date: str = ""
-    category: str        # "irr" | "san"
-    morning: int = 0
-    night: int = 0
+    unit_id:  int
+    category: str   # "irr" | "san"
+    morning:  int = 0
+    night:    int = 0
 
 
 @router.post("/api/cas/entry")
 def save_entry(body: SaveEntryBody):
     if body.category not in ("irr", "san"):
         return JSONResponse({"ok": False, "error": "category must be irr or san"}, status_code=400)
-    entry_date = (body.date or "").strip() or _date.today().isoformat()
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO cas_entries (unit_id, entry_date, category, morning, night)
-            VALUES (?,?,?,?,?)
-            ON CONFLICT(unit_id, entry_date, category)
+            INSERT INTO cas_entries (unit_id, category, morning, night)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(unit_id, category)
             DO UPDATE SET morning = excluded.morning, night = excluded.night
             """,
-            (body.unit_id, entry_date, body.category, body.morning, body.night),
+            (body.unit_id, body.category, body.morning, body.night),
         )
         return {"ok": True}
 
 
-# ── Snapshot ──────────────────────────────────────────────────────────────────
+# ── Snapshot (daily total saved with date) ────────────────────────────────────
 
 class SnapshotBody(BaseModel):
     date: str = ""
@@ -152,11 +146,9 @@ class SnapshotBody(BaseModel):
 
 @router.post("/api/cas/snapshot")
 def save_snapshot(body: SnapshotBody):
-    """Save daily total snapshot for the given date (called when 16-08 button is pressed).
-
-    Reads cas_entries for the date, sums morning+night → total, and writes
-    only the total into cas_report_snapshots.  Pressing the button multiple
-    times overwrites with the latest values.
+    """Persist the current working totals (morning+night) to cas_report_snapshots
+    under the given date.  Called when the 16-08 report button is pressed.
+    Pressing multiple times for the same date overwrites with latest values.
     """
     report_date = (body.date or "").strip() or _date.today().isoformat()
     with get_conn() as conn:
@@ -166,9 +158,7 @@ def save_snapshot(body: SnapshotBody):
                    COALESCE(e.morning, 0) + COALESCE(e.night, 0) AS total
             FROM cas_entries e
             JOIN cas_units u ON u.id = e.unit_id
-            WHERE e.entry_date = ?
             """,
-            (report_date,),
         ).fetchall()
         ts = now_sql()
         for r in rows:
@@ -204,9 +194,9 @@ def get_cas_image(date: str = Query(default=""), mode: str = Query(default="morn
         unit_rows = conn.execute(
             "SELECT id, name FROM cas_units ORDER BY sort_order, id"
         ).fetchall()
+        # Entries are no longer date-keyed — fetch current working values
         entry_rows = conn.execute(
-            "SELECT unit_id, category, morning, night FROM cas_entries WHERE entry_date = ?",
-            (entry_date,),
+            "SELECT unit_id, category, morning, night FROM cas_entries"
         ).fetchall()
 
     units = [{"id": r["id"], "name": r["name"]} for r in unit_rows]

@@ -1,6 +1,7 @@
-/* casualties.js – v7
+/* casualties.js – v8
  * Interactive casualties table for the home page "Втрати" tab.
- * v7: persist selected date in localStorage so refresh keeps the same date.
+ * v8: entries are undated (no date param in API); date used only for report
+ *     header and snapshot. Polling syncs undated working values.
  */
 
 (function () {
@@ -9,12 +10,12 @@
   // ── State ─────────────────────────────────────────────────────────────────
   let units       = [];   // [{id, name, sort_order}]
   let entries     = {};   // {"irr_<id>": {morning, night}, "san_<id>": {...}}
-  let currentDate = localStorage.getItem("cas_date") || todayISO();
+  let reportDate  = localStorage.getItem("cas_date") || todayISO(); // used for image header + snapshot only
   let saveTimers  = {};
   let compactMode = null; // null | "morning" | "night"
 
   // ── Auto-sync ─────────────────────────────────────────────────────────────
-  const POLL_MS = 30_000;   // 30 seconds between background refreshes
+  const POLL_MS = 30_000;
   let _pollTimer = null;
 
   function startPolling() {
@@ -25,11 +26,8 @@
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
   }
   async function pollSync() {
-    // Skip when the tab is in the background (save bandwidth/battery)
     if (document.hidden) return;
-    // Skip when user is actively typing — pending debounce saves exist
     if (Object.keys(saveTimers).length > 0) return;
-    // Skip when a casualties input cell has focus (would re-render + lose cursor)
     if (document.activeElement?.classList.contains("cas-input")) return;
     await loadEntries();
     render();
@@ -39,11 +37,6 @@
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
-
-  // Return ISO date for the night-shift report.
-  // Night shift = 16:00 today → 08:00 tomorrow.
-  // If the current time is before 10:00 we are still "in" the night that
-  // started yesterday, so the report date is yesterday.
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const pane      = document.getElementById("homePaneCasualties");
@@ -59,11 +52,11 @@
   async function init() {
     if (_inited) return;
     _inited = true;
-    if (dateInput) dateInput.value = currentDate;
+    if (dateInput) dateInput.value = reportDate;
     await loadUnits();
     await loadEntries();
     render();
-    startPolling();   // begin background sync after first load
+    startPolling();
   }
 
   document.getElementById("homeTabCasualties")?.addEventListener("click", init);
@@ -81,7 +74,8 @@
   }
 
   async function loadEntries() {
-    const d = await apiFetch(`/api/cas/entries?date=${currentDate}`);
+    // Entries are not date-keyed — always fetch the current working state
+    const d = await apiFetch("/api/cas/entries");
     if (d.ok) entries = d.entries;
   }
 
@@ -94,7 +88,6 @@
     if (!tbody) return;
     tbody.innerHTML = "";
 
-    // Apply / remove compact-mode CSS classes on the wrapper
     tableWrap.classList.toggle("cas-ss-active",  compactMode !== null);
     tableWrap.classList.toggle("cas-ss-morning", compactMode === "morning");
     tableWrap.classList.toggle("cas-ss-night",   compactMode === "night");
@@ -129,7 +122,6 @@
       tr.dataset.unitId   = unit.id;
       tr.dataset.category = cat;
 
-      // Hide row in compact mode when value is 0
       if (compactMode === "morning" && !morning) tr.classList.add("cas-ss-hide");
       if (compactMode === "night"   && !night)   tr.classList.add("cas-ss-hide");
 
@@ -167,11 +159,11 @@
     const key = `${cat}_${uid}`;
     clearTimeout(saveTimers[key]);
     saveTimers[key] = setTimeout(() => {
-      delete saveTimers[key];   // clear guard so polling resumes after save
+      delete saveTimers[key];
       apiFetch("/api/cas/entry", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ unit_id: uid, date: currentDate, category: cat, morning: m, night: n }),
+        body:    JSON.stringify({ unit_id: uid, category: cat, morning: m, night: n }),
       });
     }, 700);
   }
@@ -192,13 +184,12 @@
   // ── Clear column ──────────────────────────────────────────────────────────
   async function clearColumn(col) {
     const label = col === "morning" ? "08:00–16:00" : "16:00–08:00";
-    if (!confirm(`Обнулити всі значення колонки «${label}» за ${currentDate}?`)) return;
-    // Cancel any pending debounce saves so they don't override the clear
+    if (!confirm(`Обнулити всі значення колонки «${label}»?`)) return;
     Object.keys(saveTimers).forEach(k => { clearTimeout(saveTimers[k]); delete saveTimers[k]; });
     await apiFetch("/api/cas/clear-column", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ date: currentDate, column: col }),
+      body:    JSON.stringify({ column: col }),
     });
     await loadEntries();
     render();
@@ -239,24 +230,21 @@
     render();
   });
 
-  // ── Date change ───────────────────────────────────────────────────────────
-  dateInput?.addEventListener("change", async () => {
-    currentDate = dateInput.value || todayISO();
-    localStorage.setItem("cas_date", currentDate);
-    await loadEntries();
-    render();
-    startPolling();   // reset timer for the new date
+  // ── Date (report header only — does not affect which entries are loaded) ──
+  dateInput?.addEventListener("change", () => {
+    reportDate = dateInput.value || todayISO();
+    localStorage.setItem("cas_date", reportDate);
+    // No reload needed — entries are not date-keyed
   });
 
   // ── Screenshots ───────────────────────────────────────────────────────────
   document.getElementById("casSSMorning")?.addEventListener("click", () => doScreenshot("morning"));
   document.getElementById("casSSNight")?.addEventListener("click", () => {
-    // Save a snapshot of the current date's data before generating the image.
-    // Fire-and-forget — does not block image generation.
+    // Save daily total snapshot under the current report date
     apiFetch("/api/cas/snapshot", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ date: currentDate }),
+      body:    JSON.stringify({ date: reportDate }),
     });
     doScreenshot("night");
   });
@@ -277,11 +265,10 @@
     compactMode = mode;
     render();
 
-    const url = `/api/cas/image?date=${encodeURIComponent(currentDate)}&mode=${mode}`;
+    const url = `/api/cas/image?date=${encodeURIComponent(reportDate)}&mode=${mode}`;
     fetch(url)
       .then(r => { if (!r.ok) throw new Error("server error"); return r.blob(); })
       .then(blob => {
-        // Show image in modal so user can right-click → Copy
         if (ssObjUrl) URL.revokeObjectURL(ssObjUrl);
         ssObjUrl = URL.createObjectURL(blob);
         if (ssImg) ssImg.src = ssObjUrl;
@@ -289,8 +276,6 @@
           ssModal.classList.remove("hidden");
           ssModal.setAttribute("aria-hidden", "false");
         }
-
-        // Also try clipboard (works on HTTPS / localhost)
         if (navigator.clipboard?.write && window.ClipboardItem) {
           navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
             .then(() => toast("Скопійовано у буфер!", "success", 3000))
