@@ -1372,6 +1372,26 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         """,
         stage="create_table:cas_entries",
     )
+    # Snapshot saved when the 16-08 summary button is pressed.
+    # Stores the final reported values (night + total) for period queries.
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS cas_report_snapshots (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_date TEXT NOT NULL,
+            unit_id     INTEGER NOT NULL REFERENCES cas_units(id) ON DELETE CASCADE,
+            unit_name   TEXT NOT NULL,
+            category    TEXT NOT NULL,
+            morning     INTEGER NOT NULL DEFAULT 0,
+            night       INTEGER NOT NULL DEFAULT 0,
+            total       INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT NOT NULL,
+            UNIQUE(report_date, unit_id, category)
+        )
+        """,
+        stage="create_table:cas_report_snapshots",
+    )
 
 
 def get_db() -> sqlite3.Connection:

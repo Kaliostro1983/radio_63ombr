@@ -1,5 +1,6 @@
-/* casualties.js – v3
+/* casualties.js – v7
  * Interactive casualties table for the home page "Втрати" tab.
+ * v7: persist selected date in localStorage so refresh keeps the same date.
  */
 
 (function () {
@@ -8,14 +9,41 @@
   // ── State ─────────────────────────────────────────────────────────────────
   let units       = [];   // [{id, name, sort_order}]
   let entries     = {};   // {"irr_<id>": {morning, night}, "san_<id>": {...}}
-  let currentDate = todayISO();
+  let currentDate = localStorage.getItem("cas_date") || todayISO();
   let saveTimers  = {};
   let compactMode = null; // null | "morning" | "night"
+
+  // ── Auto-sync ─────────────────────────────────────────────────────────────
+  const POLL_MS = 30_000;   // 30 seconds between background refreshes
+  let _pollTimer = null;
+
+  function startPolling() {
+    stopPolling();
+    _pollTimer = setInterval(pollSync, POLL_MS);
+  }
+  function stopPolling() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  }
+  async function pollSync() {
+    // Skip when the tab is in the background (save bandwidth/battery)
+    if (document.hidden) return;
+    // Skip when user is actively typing — pending debounce saves exist
+    if (Object.keys(saveTimers).length > 0) return;
+    // Skip when a casualties input cell has focus (would re-render + lose cursor)
+    if (document.activeElement?.classList.contains("cas-input")) return;
+    await loadEntries();
+    render();
+  }
 
   function todayISO() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
+
+  // Return ISO date for the night-shift report.
+  // Night shift = 16:00 today → 08:00 tomorrow.
+  // If the current time is before 10:00 we are still "in" the night that
+  // started yesterday, so the report date is yesterday.
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const pane      = document.getElementById("homePaneCasualties");
@@ -35,6 +63,7 @@
     await loadUnits();
     await loadEntries();
     render();
+    startPolling();   // begin background sync after first load
   }
 
   document.getElementById("homeTabCasualties")?.addEventListener("click", init);
@@ -102,7 +131,7 @@
 
       // Hide row in compact mode when value is 0
       if (compactMode === "morning" && !morning) tr.classList.add("cas-ss-hide");
-      if (compactMode === "night"   && !night && !total) tr.classList.add("cas-ss-hide");
+      if (compactMode === "night"   && !night)   tr.classList.add("cas-ss-hide");
 
       tr.innerHTML = `
         <td class="cas-col-name">${escHtml(unit.name)}</td>
@@ -138,6 +167,7 @@
     const key = `${cat}_${uid}`;
     clearTimeout(saveTimers[key]);
     saveTimers[key] = setTimeout(() => {
+      delete saveTimers[key];   // clear guard so polling resumes after save
       apiFetch("/api/cas/entry", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,13 +242,24 @@
   // ── Date change ───────────────────────────────────────────────────────────
   dateInput?.addEventListener("change", async () => {
     currentDate = dateInput.value || todayISO();
+    localStorage.setItem("cas_date", currentDate);
     await loadEntries();
     render();
+    startPolling();   // reset timer for the new date
   });
 
   // ── Screenshots ───────────────────────────────────────────────────────────
   document.getElementById("casSSMorning")?.addEventListener("click", () => doScreenshot("morning"));
-  document.getElementById("casSSNight")?.addEventListener("click",   () => doScreenshot("night"));
+  document.getElementById("casSSNight")?.addEventListener("click", () => {
+    // Save a snapshot of the current date's data before generating the image.
+    // Fire-and-forget — does not block image generation.
+    apiFetch("/api/cas/snapshot", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ date: currentDate }),
+    });
+    doScreenshot("night");
+  });
 
   const ssModal  = document.getElementById("casSSModal");
   const ssImg    = document.getElementById("casSSImg");

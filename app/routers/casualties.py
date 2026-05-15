@@ -144,6 +144,55 @@ def save_entry(body: SaveEntryBody):
         return {"ok": True}
 
 
+# ── Snapshot ──────────────────────────────────────────────────────────────────
+
+class SnapshotBody(BaseModel):
+    date: str = ""
+
+
+@router.post("/api/cas/snapshot")
+def save_snapshot(body: SnapshotBody):
+    """Save a report snapshot for the given date (called when 16-08 button is pressed).
+
+    Reads current cas_entries for the date and writes morning / night / total
+    into cas_report_snapshots.  Uses UPSERT so pressing the button multiple
+    times always reflects the latest values.
+    """
+    report_date = (body.date or "").strip() or _date.today().isoformat()
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT e.unit_id, u.name AS unit_name, e.category,
+                   e.morning, e.night
+            FROM cas_entries e
+            JOIN cas_units u ON u.id = e.unit_id
+            WHERE e.entry_date = ?
+            """,
+            (report_date,),
+        ).fetchall()
+        ts = now_sql()
+        for r in rows:
+            m = r["morning"] or 0
+            n = r["night"]   or 0
+            conn.execute(
+                """
+                INSERT INTO cas_report_snapshots
+                    (report_date, unit_id, unit_name, category, morning, night, total, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(report_date, unit_id, category)
+                DO UPDATE SET
+                    unit_name  = excluded.unit_name,
+                    morning    = excluded.morning,
+                    night      = excluded.night,
+                    total      = excluded.total,
+                    created_at = excluded.created_at
+                """,
+                (report_date, r["unit_id"], r["unit_name"],
+                 r["category"], m, n, m + n, ts),
+            )
+    return {"ok": True, "date": report_date}
+
+
 # ── Image ─────────────────────────────────────────────────────────────────────
 
 @router.get("/api/cas/image")
