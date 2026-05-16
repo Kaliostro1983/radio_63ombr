@@ -123,7 +123,7 @@
       tr.dataset.category = cat;
 
       if (compactMode === "morning" && !morning) tr.classList.add("cas-ss-hide");
-      if (compactMode === "night"   && !night)   tr.classList.add("cas-ss-hide");
+      if (compactMode === "night"   && !total)   tr.classList.add("cas-ss-hide");
 
       tr.innerHTML = `
         <td class="cas-col-name">${escHtml(unit.name)}</td>
