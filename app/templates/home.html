@@ -120,7 +120,46 @@
         aria-labelledby="homeTabOverview"
       >
         <div class="tab-panel-section">
-          <div class="small" style="opacity:.8">Поки що порожньо.</div>
+
+          <!-- Toolbar -->
+          <div class="ovw-toolbar">
+            <label class="small">Початок</label>
+            <input type="datetime-local" id="ovwFrom" />
+            <label class="small">Кінець</label>
+            <input type="datetime-local" id="ovwTo" />
+            <button id="ovwLoad" type="button">Оновити</button>
+            <button id="ovwCopy" type="button" class="secondary">📋 Копіювати</button>
+          </div>
+
+          <!-- Stats cards -->
+          <div class="ovw-cards">
+            <div class="ovw-card">
+              <div class="ovw-card-label">Перехоплень</div>
+              <div class="ovw-card-value" id="ovwTotal">—</div>
+            </div>
+            <div class="ovw-card">
+              <div class="ovw-card-label">Перехоплень «Очерет»</div>
+              <div class="ovw-card-value" id="ovwOcheret">—</div>
+            </div>
+            <div class="ovw-card">
+              <div class="ovw-card-label">Пеленгів</div>
+              <div class="ovw-card-value" id="ovwPeleng">—</div>
+            </div>
+            <div class="ovw-card">
+              <div class="ovw-card-label">Аналітичних висновків</div>
+              <div class="ovw-card-value" id="ovwAnalytical">—</div>
+            </div>
+          </div>
+
+          <!-- Pie chart -->
+          <div class="card" style="margin-top:16px">
+            <div style="font-weight:700; margin-bottom:12px">Перехоплення за чатами</div>
+            <div class="ovw-chart-wrap">
+              <canvas id="ovwPieCanvas" width="200" height="200"></canvas>
+              <ul id="ovwPieLegend" class="ovw-legend"></ul>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -419,4 +458,5 @@ thead .cas-col-total { text-align: center; }
 {% block scripts %}
 <script src="/static/home.js?v=20" defer></script>
 <script src="/static/casualties.js?v=11" defer></script>
+<script src="/static/overview.js?v=1" defer></script>
 {% endblock %}
