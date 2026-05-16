@@ -73,7 +73,7 @@ def build_cas_image(
             t = m + n
             if mode == "morning" and not m:
                 continue
-            if mode == "night" and not n:
+            if mode == "night" and not t:
                 continue
             visible.append((u["name"], m, n, t))
         if visible:
