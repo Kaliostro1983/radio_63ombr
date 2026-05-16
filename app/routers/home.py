@@ -64,8 +64,8 @@ def api_home_activity(
 
     start_dt_obj = datetime.combine(days_list[0], datetime.min.time())
     end_dt_obj = datetime.combine(days_list[-1], datetime.max.time().replace(microsecond=0))
-    start_dt = start_dt_obj.isoformat(timespec="seconds")
-    end_dt = end_dt_obj.isoformat(timespec="seconds")
+    start_dt = start_dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+    end_dt = end_dt_obj.strftime("%Y-%m-%d %H:%M:%S")
 
     freq_list = [x.strip() for x in (freqs or "").split(",") if x.strip()]
 
@@ -145,8 +145,8 @@ def api_home_activity(
                         FROM messages m
                         WHERE m.is_valid = 1
                           AND coalesce(m.content_type, 'intercept') = 'intercept'
-                          AND m.created_at >= ?
-                          AND m.created_at <= ?
+                          AND REPLACE(m.created_at, 'T', ' ') >= ?
+                          AND REPLACE(m.created_at, 'T', ' ') <= ?
                     )
                     ORDER BY g.name, n.frequency
                     """,
@@ -210,8 +210,8 @@ def api_home_activity(
             FROM messages m
             WHERE m.is_valid = 1
               AND coalesce(m.content_type, 'intercept') = 'intercept'
-              AND m.created_at >= ?
-              AND m.created_at <= ?
+              AND REPLACE(m.created_at, 'T', ' ') >= ?
+              AND REPLACE(m.created_at, 'T', ' ') <= ?
               AND m.network_id IN ({placeholders})
             GROUP BY m.network_id, substr(m.created_at, 1, 10)
             """,
@@ -291,7 +291,7 @@ def api_home_analytical_summary(
             dt = datetime.fromisoformat(raw)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid datetime: {value}")
-        return dt.strftime("%Y-%m-%dT%H:%M:%S")
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     start_norm = _parse_dt_opt(start_dt)
     end_norm = _parse_dt_opt(end_dt)
@@ -305,10 +305,10 @@ def api_home_analytical_summary(
     params: list[object] = []
 
     if start_norm:
-        where.append("m.created_at >= ?")
+        where.append("REPLACE(m.created_at, 'T', ' ') >= ?")
         params.append(start_norm)
     if end_norm:
-        where.append("m.created_at <= ?")
+        where.append("REPLACE(m.created_at, 'T', ' ') <= ?")
         params.append(end_norm)
 
     if freq_raw:
@@ -443,11 +443,11 @@ def api_movement_count(period: str = "day", words: str = "мот,квадр,ко
             FROM messages m
             WHERE m.network_id = ?
               AND m.is_valid = 1
-              AND m.created_at >= ?
-              AND m.created_at < ?
+              AND REPLACE(m.created_at, 'T', ' ') >= ?
+              AND REPLACE(m.created_at, 'T', ' ') < ?
               AND ({like_clauses})
             """,
-            (network_id, start_dt.isoformat(timespec="seconds"), end_dt.isoformat(timespec="seconds"), *like_params),
+            (network_id, start_dt.strftime("%Y-%m-%d %H:%M:%S"), end_dt.strftime("%Y-%m-%d %H:%M:%S"), *like_params),
         ).fetchone()
 
     return {
