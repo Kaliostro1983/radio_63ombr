@@ -3115,9 +3115,26 @@ button.secondary{
 .ovw-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 12px;
   margin-bottom: 16px;
+}
+
+.ovw-toolbar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ovw-toolbar-label {
+  white-space: nowrap;
+}
+
+.ovw-toolbar-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 1px;
 }
 
 .ovw-toolbar input[type="datetime-local"] {
@@ -3127,6 +3144,7 @@ button.secondary{
   border-radius: 6px;
   background: var(--inputbg);
   color: var(--inputfg);
+  height: 34px;
 }
 
 .ovw-cards {

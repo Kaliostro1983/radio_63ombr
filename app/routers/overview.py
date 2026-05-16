@@ -36,16 +36,17 @@ def get_overview_stats(
         ).fetchone()
         total_intercepts = int(row[0] or 0)
 
-        # ── Очерет intercepts ─────────────────────────────────────────────────
+        # ── Очерет intercepts (via network → chat) ───────────────────────────
         row = conn.execute(
             f"""
             SELECT COUNT(*)
             FROM messages m
-            JOIN ingest_messages im ON im.id = m.ingest_id
+            JOIN networks n ON n.id = m.network_id
+            JOIN chats c ON c.id = n.chat_id
             WHERE m.content_type = 'intercept'
               AND {_norm('m.created_at')} >= ?
               AND {_norm('m.created_at')} <= ?
-              AND im.source_chat_name = 'Очерет'
+              AND c.name = 'Очерет'
             """,
             (from_dt, to_dt),
         ).fetchone()
@@ -75,18 +76,19 @@ def get_overview_stats(
         ).fetchone()
         analytical_count = int(row[0] or 0)
 
-        # ── Intercepts by source chat ─────────────────────────────────────────
+        # ── Intercepts by network chat ────────────────────────────────────────
         rows = conn.execute(
             f"""
             SELECT
-                COALESCE(im.source_chat_name, '(без чату)') AS chat_name,
+                COALESCE(c.name, '(без чату)') AS chat_name,
                 COUNT(*) AS cnt
             FROM messages m
-            JOIN ingest_messages im ON im.id = m.ingest_id
+            JOIN networks n ON n.id = m.network_id
+            JOIN chats c ON c.id = n.chat_id
             WHERE m.content_type = 'intercept'
               AND {_norm('m.created_at')} >= ?
               AND {_norm('m.created_at')} <= ?
-            GROUP BY im.source_chat_name
+            GROUP BY c.name
             ORDER BY cnt DESC
             """,
             (from_dt, to_dt),

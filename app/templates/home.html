@@ -123,12 +123,18 @@
 
           <!-- Toolbar -->
           <div class="ovw-toolbar">
-            <label class="small">Початок</label>
-            <input type="datetime-local" id="ovwFrom" />
-            <label class="small">Кінець</label>
-            <input type="datetime-local" id="ovwTo" />
-            <button id="ovwLoad" type="button">Оновити</button>
-            <button id="ovwCopy" type="button" class="secondary">📋 Копіювати</button>
+            <div class="ovw-toolbar-field">
+              <label class="small ovw-toolbar-label">Початок</label>
+              <input type="datetime-local" id="ovwFrom" />
+            </div>
+            <div class="ovw-toolbar-field">
+              <label class="small ovw-toolbar-label">Кінець</label>
+              <input type="datetime-local" id="ovwTo" />
+            </div>
+            <div class="ovw-toolbar-btns">
+              <button id="ovwLoad" type="button">Оновити</button>
+              <button id="ovwCopy" type="button" class="secondary">📋 Копіювати</button>
+            </div>
           </div>
 
           <!-- Stats cards -->
