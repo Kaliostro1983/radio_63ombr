@@ -185,6 +185,9 @@ def normalize_freq_or_mask(value: str | None) -> tuple[str | None, str | None]:
     return normalize_freq(value), None
 
 
+_RE_DT_NORM = re.compile(r"^\s*\d{2}\.\d{2}\.\d{4}[,\s]+\d{2}:\d{2}:\d{2}\s*$")
+
+
 def normalize_nonstandard_type_1(text: str) -> str:
     """Normalize nonstandard intercept format into the template-like layout.
 
@@ -192,6 +195,11 @@ def normalize_nonstandard_type_1(text: str) -> str:
     that contains "укх" and "р/м" markers but does not fully match the
     expected template. The normalization injects a placeholder net line
     (`укх р/м`) and keeps the original body intact.
+
+    If the message has a preamble (analytical note, MGRS coordinates,
+    a separator line, etc.) before the actual date/freq/network header,
+    the function finds the first datetime line and returns everything
+    from that line onward instead of blindly using lines[0] as the date.
 
     Args:
         text: raw intercept text.
@@ -204,8 +212,18 @@ def normalize_nonstandard_type_1(text: str) -> str:
     if len(lines) < 2:
         return text
 
-    dt = lines[0]
-    freq = lines[1]
-    body = "\n".join(lines[2:])
+    # If the first line already looks like a datetime → original behaviour.
+    if _RE_DT_NORM.match(lines[0]):
+        dt = lines[0]
+        freq = lines[1]
+        body = "\n".join(lines[2:])
+        return f"{dt}\n{freq}\nукх р/м\n\n\n{body}"
 
-    return f"{dt}\n{freq}\nукх р/м\n\n\n{body}"
+    # The message has a preamble before the real header.
+    # Find the first datetime line and return everything from that point.
+    for i, line in enumerate(lines):
+        if _RE_DT_NORM.match(line):
+            return "\n".join(lines[i:])
+
+    # No datetime found — return as-is and let the parser report dt_invalid.
+    return text

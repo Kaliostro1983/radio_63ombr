@@ -15,7 +15,10 @@ from typing import Any, Dict
 from app.core.intercept_parser import parse_template_intercept
 
 
-RE_63_OMBR = re.compile(r"63\s*омбр", flags=re.IGNORECASE)
+# Matches the brigade/unit separator line that divides analytical preamble
+# from the standard template header.  Covers known variants:
+# "------- 🐻 63 ОМБр 🐻 -------"  and  "---------- ꑭ ОБТВР ꑭ ----------"
+RE_63_OMBR = re.compile(r"(63\s*омбр|обтвр)", flags=re.IGNORECASE)
 RE_MGRS_ANY = re.compile(
     r"\b(\d{1,2})\s*([C-HJ-NP-X])\s*([A-HJ-NP-Z]{2})\s*(\d{2,5})\s*(\d{2,5})\b",
     flags=re.IGNORECASE,
