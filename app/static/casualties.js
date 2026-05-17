@@ -261,9 +261,41 @@
     })
   );
 
-  function doScreenshot(mode) {
+  /**
+   * Flush any debounced (unsaved) entries to the server immediately.
+   * Called before generating the screenshot to ensure the server-side
+   * image reflects the current input values, not stale DB state.
+   */
+  async function flushPendingSaves() {
+    const pendingKeys = Object.keys(saveTimers);
+    if (!pendingKeys.length) return;
+
+    const promises = pendingKeys.map(key => {
+      clearTimeout(saveTimers[key]);
+      delete saveTimers[key];
+      // key format: "irr_<uid>" or "san_<uid>"
+      const sep = key.indexOf("_");
+      const cat = key.slice(0, sep);          // "irr" | "san"
+      const uid = parseInt(key.slice(sep + 1), 10);
+      const entry = entries[key] || { morning: 0, night: 0 };
+      return apiFetch("/api/cas/entry", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ unit_id: uid, category: cat,
+                                  morning: entry.morning || 0,
+                                  night:   entry.night   || 0 }),
+      });
+    });
+    await Promise.all(promises);
+  }
+
+  async function doScreenshot(mode) {
     compactMode = mode;
     render();
+
+    // Ensure all unsaved inputs are written to the DB before the server
+    // renders the image (prevents "stale DB" race condition).
+    await flushPendingSaves();
 
     const url = `/api/cas/image?date=${encodeURIComponent(reportDate)}&mode=${mode}`;
     fetch(url)
