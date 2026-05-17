@@ -8,11 +8,21 @@
       .replaceAll("'", "&#039;");
   }
 
-  function setupNetworkFreqLookup(input) {
+  /**
+   * Attach frequency autocomplete to an input element.
+   *
+   * @param {HTMLInputElement} input  - the target input
+   * @param {Function}        [onPick] - optional callback(item, value) called
+   *   when the user picks a suggestion.  If omitted, the nearest <form> is
+   *   submitted with form.submit().
+   */
+  function setupNetworkFreqLookup(input, onPick) {
     if (!input) return;
     const form = input.closest("form");
     const wrap = input.closest(".home-freq-input-wrap");
-    if (!form || !wrap) return;
+    if (!wrap) return;
+    // Need either a form (for default submit) or an onPick callback
+    if (!form && typeof onPick !== "function") return;
 
     let box = null;
     let items = [];
@@ -38,7 +48,11 @@
       if (!value) return;
       input.value = value;
       close();
-      form.submit();
+      if (typeof onPick === "function") {
+        onPick(it, value);
+      } else if (form) {
+        form.submit();
+      }
     }
 
     async function lookup(q) {
@@ -110,4 +124,22 @@
 
   setupNetworkFreqLookup(document.getElementById("netSearchQuery"));
   setupNetworkFreqLookup(document.getElementById("etalonsFreqQuery"));
+
+  // Intercepts explorer — dispatch JS submit event (not form.submit which bypasses listeners)
+  setupNetworkFreqLookup(
+    document.getElementById("networkQuery"),
+    function () {
+      var f = document.getElementById("interceptsFilterForm");
+      if (f) f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    }
+  );
+
+  // Callsigns "by frequency" tab — trigger the Показати button
+  setupNetworkFreqLookup(
+    document.getElementById("csFreq"),
+    function () {
+      var btn = document.getElementById("csShow");
+      if (btn) btn.click();
+    }
+  );
 })();

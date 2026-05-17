@@ -61,7 +61,9 @@
           <div class="row callsigns-form-row">
             <div class="callsigns-field callsigns-field-frequency">
               <label class="small">Частота</label>
-              <input id="csFreq" type="text" placeholder="Напр.: 300.3250 або 300.3250" />
+              <div class="home-freq-input-wrap">
+                <input id="csFreq" type="text" placeholder="Напр.: 300.3250 або 300.3250" autocomplete="off" />
+              </div>
             </div>
 
             <div class="callsigns-field callsigns-field-days">
@@ -262,4 +264,5 @@
 </div>
 
 <script src="/static/callsigns.js?v=8" defer></script>
+<script src="/static/networks_autocomplete.js?v=3" defer></script>
 {% endblock %}
