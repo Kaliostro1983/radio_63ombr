@@ -1,7 +1,9 @@
-/* casualties.js – v8
+/* casualties.js – v9
  * Interactive casualties table for the home page "Втрати" tab.
- * v8: entries are undated (no date param in API); date used only for report
- *     header and snapshot. Polling syncs undated working values.
+ * v9: fix race condition where pollSync overwrote local values with stale DB
+ *     data while a save fetch was still in-flight (saveTimers key was deleted
+ *     before the fetch completed). Added _inFlight counter and saveEntry()
+ *     helper that increments/decrements it so pollSync blocks correctly.
  */
 
 (function () {
@@ -12,6 +14,7 @@
   let entries     = {};   // {"irr_<id>": {morning, night}, "san_<id>": {...}}
   let reportDate  = localStorage.getItem("cas_date") || todayISO(); // used for image header + snapshot only
   let saveTimers  = {};
+  let _inFlight   = 0;    // count of save fetches currently in-flight
   let compactMode = null; // null | "morning" | "night"
 
   // ── Auto-sync ─────────────────────────────────────────────────────────────
@@ -27,7 +30,12 @@
   }
   async function pollSync() {
     if (document.hidden) return;
+    // Skip if there are pending debounce timers OR in-flight save fetches.
+    // Previously only saveTimers was checked; after a timer fires the key is
+    // deleted immediately but the fetch can still be in-flight, letting an
+    // old poll overwrite local state with stale DB data.
     if (Object.keys(saveTimers).length > 0) return;
+    if (_inFlight > 0) return;
     if (document.activeElement?.classList.contains("cas-input")) return;
     await loadEntries();
     render();
@@ -66,6 +74,24 @@
   async function apiFetch(url, opts) {
     const res = await fetch(url, opts);
     return res.json().catch(() => ({}));
+  }
+
+  /**
+   * Save a single (cat, uid) entry to the server.
+   * Increments _inFlight before the request and decrements after, so that
+   * pollSync cannot overwrite local state while this request is pending.
+   */
+  async function saveEntry(uid, cat, m, n) {
+    _inFlight++;
+    try {
+      await apiFetch("/api/cas/entry", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ unit_id: uid, category: cat, morning: m, night: n }),
+      });
+    } finally {
+      _inFlight = Math.max(0, _inFlight - 1);
+    }
   }
 
   async function loadUnits() {
@@ -160,11 +186,7 @@
     clearTimeout(saveTimers[key]);
     saveTimers[key] = setTimeout(() => {
       delete saveTimers[key];
-      apiFetch("/api/cas/entry", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ unit_id: uid, category: cat, morning: m, night: n }),
-      });
+      saveEntry(uid, cat, m, n);  // tracks _inFlight so pollSync waits
     }, 700);
   }
 
@@ -278,13 +300,7 @@
       const cat = key.slice(0, sep);          // "irr" | "san"
       const uid = parseInt(key.slice(sep + 1), 10);
       const entry = entries[key] || { morning: 0, night: 0 };
-      return apiFetch("/api/cas/entry", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ unit_id: uid, category: cat,
-                                  morning: entry.morning || 0,
-                                  night:   entry.night   || 0 }),
-      });
+      return saveEntry(uid, cat, entry.morning || 0, entry.night || 0);
     });
     await Promise.all(promises);
   }
