@@ -317,6 +317,34 @@ def insert_message(
     return message_id
 
 
+def _score_conclusion_type(cur, conclusion_text: str) -> int:
+    """Return the best-matching conclusion type_id for *conclusion_text*.
+
+    Iterates all user-defined conclusion types (id > 0) in their configured
+    sort_order and picks the one whose keywords appear most often in the text.
+    Returns 0 (невідомо) when no type has at least one keyword hit.
+    """
+    try:
+        rows = cur.execute(
+            "SELECT id, keywords_json FROM conclusion_types "
+            "WHERE id > 0 ORDER BY sort_order ASC, id ASC"
+        ).fetchall()
+    except Exception:
+        return 0
+
+    text = (conclusion_text or "").lower()
+    best_id, best_score = 0, 0
+    for row in rows:
+        try:
+            kws = json.loads(row[1] or "[]")
+        except Exception:
+            kws = []
+        score = sum(1 for kw in kws if kw and kw.lower() in text)
+        if score > best_score:
+            best_score, best_id = score, int(row[0])
+    return best_id
+
+
 def insert_analytical_conclusion(
     cur,
     *,
@@ -331,6 +359,9 @@ def insert_analytical_conclusion(
     Uses INSERT OR IGNORE so re-ingesting the same message (e.g. after a
     pipeline fix) is safe — the existing row is kept unchanged.
 
+    The conclusion type is determined automatically via keyword scoring against
+    the configured conclusion_types table (respecting user-defined sort_order).
+
     Args:
         cur: SQLite cursor.
         message_id: FK to messages.id.
@@ -342,14 +373,17 @@ def insert_analytical_conclusion(
     Returns:
         int: inserted analytical_conclusions.id, or 0 if already existed.
     """
+    type_id = _score_conclusion_type(cur, conclusion_text)
+
     safe_execute(
         cur,
         """
         INSERT OR IGNORE INTO analytical_conclusions
             (message_id, network_id, created_at, conclusion_text, mgrs_json, type_id)
-        VALUES (?, ?, ?, ?, ?, 0)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (message_id, network_id, created_at, conclusion_text, json.dumps(mgrs_list, ensure_ascii=False)),
+        (message_id, network_id, created_at, conclusion_text,
+         json.dumps(mgrs_list, ensure_ascii=False), type_id),
         module="app.services.ingest_store",
         function="insert_analytical_conclusion",
     )
