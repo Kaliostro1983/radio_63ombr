@@ -543,6 +543,45 @@
 
   let _actualData = null;
 
+  // ── Threshold helpers ──────────────────────────────────────────────────────
+  function getThresholds() {
+    const gd = Math.max(1, parseInt($("pelThreshGreenDays")?.value)  || 3);
+    const yd = Math.max(1, parseInt($("pelThreshYellowDays")?.value) || 8);
+    return { greenH: gd * 24, yellowH: Math.max(gd * 24 + 1, yd * 24) };
+  }
+
+  function initThresholds() {
+    const gd = parseInt(localStorage.getItem("pel_thresh_green_days"))  || 3;
+    const yd = parseInt(localStorage.getItem("pel_thresh_yellow_days")) || 8;
+    const gEl = $("pelThreshGreenDays");
+    const yEl = $("pelThreshYellowDays");
+    if (gEl) gEl.value = gd;
+    if (yEl) yEl.value = yd;
+    updateThreshDisplays(false);   // false = don't re-render (no data yet)
+  }
+
+  function updateThreshDisplays(rerender) {
+    const gd = Math.max(1, parseInt($("pelThreshGreenDays")?.value)  || 3);
+    const yd = Math.max(gd + 1, parseInt($("pelThreshYellowDays")?.value) || 8);
+    localStorage.setItem("pel_thresh_green_days",  gd);
+    localStorage.setItem("pel_thresh_yellow_days", yd);
+
+    const gh = gd * 24;
+    const yh = yd * 24;
+
+    const ghEl = $("pelThreshGreenHours");
+    const yhEl = $("pelThreshYellowHours");
+    const rdEl = $("pelThreshRedDays");
+    const rhEl = $("pelThreshRedHours");
+
+    if (ghEl) ghEl.textContent = `≤ ${gh} год`;
+    if (yhEl) yhEl.textContent = `≤ ${yh} год`;
+    if (rdEl) rdEl.textContent = `> ${yd} діб`;
+    if (rhEl) rhEl.textContent = `> ${yh} год`;
+
+    if (rerender !== false && _actualData) renderActual();
+  }
+
   async function loadActual() {
     const loader   = $("pelActualLoader");
     const emptyEl  = $("pelActualEmpty");
@@ -576,11 +615,22 @@
     const showYellow = $("cbActualYellow")?.checked !== false;
     const showRed    = $("cbActualRed")?.checked !== false;
 
-    const filtered = _actualData.filter(r =>
-      !((r.status === "green"  && !showGreen) ||
-        (r.status === "yellow" && !showYellow) ||
-        (r.status === "red"    && !showRed))
-    );
+    const { greenH, yellowH } = getThresholds();
+
+    // Re-classify using current thresholds (server may use different defaults)
+    const filtered = _actualData
+      .map(r => {
+        let status = r.status;
+        if (r.age_h != null) {
+          status = r.age_h <= greenH ? "green" : (r.age_h <= yellowH ? "yellow" : "red");
+        }
+        return { ...r, status };
+      })
+      .filter(r =>
+        !((r.status === "green"  && !showGreen) ||
+          (r.status === "yellow" && !showYellow) ||
+          (r.status === "red"    && !showRed))
+      );
 
     if (loader) loader.style.display = "none";
 
@@ -661,6 +711,15 @@
 
     const pelActualShowBtn = $("pelActualShowBtn");
     if (pelActualShowBtn) pelActualShowBtn.onclick = loadActual;
+
+    // Threshold table — init from localStorage, update displays on change
+    initThresholds();
+    $("pelThreshGreenDays")?.addEventListener("input",  () => updateThreshDisplays());
+    $("pelThreshYellowDays")?.addEventListener("input", () => updateThreshDisplays());
+    // Checkboxes re-render immediately when data is already loaded
+    $("cbActualGreen")?.addEventListener("change",  () => { if (_actualData) renderActual(); });
+    $("cbActualYellow")?.addEventListener("change", () => { if (_actualData) renderActual(); });
+    $("cbActualRed")?.addEventListener("change",    () => { if (_actualData) renderActual(); });
 
     btnNow?.addEventListener("click", nowToInputs);
     btnAccept?.addEventListener("click", acceptFreq);

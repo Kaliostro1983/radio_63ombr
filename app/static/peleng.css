@@ -331,26 +331,56 @@
 }
 
 .pel-actual-filter {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: inline-block;
   margin-bottom: 14px;
 }
 
-.pel-actual-cb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  user-select: none;
+.pel-thresh-table {
+  border-collapse: collapse;
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.pel-actual-cb input[type="checkbox"] {
+.pel-thresh-table td {
+  padding: 3px 12px 3px 0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pel-thresh-table td:first-child {
+  padding-right: 6px;
+}
+
+.pel-thresh-table input[type="checkbox"] {
   width: 16px;
   height: 16px;
   cursor: pointer;
   accent-color: var(--accent, #6c9fff);
+  vertical-align: middle;
+}
+
+.pel-thresh-input {
+  width: 44px;
+  padding: 2px 4px;
+  background: var(--bg-input, #1e2130);
+  border: 1px solid var(--border, #3a3f55);
+  border-radius: 4px;
+  color: inherit;
+  font-size: 13px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.pel-thresh-input::-webkit-outer-spin-button,
+.pel-thresh-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pel-thresh-hours {
+  opacity: 0.65;
+  font-size: 12px;
 }
 
 .pel-status-dot {

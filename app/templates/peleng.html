@@ -184,18 +184,28 @@
         <div class="pel-actual-wrap">
 
           <div class="pel-actual-filter">
-            <label class="pel-actual-cb" title="Зелений — пеленг за останні 2 доби">
-              <input type="checkbox" id="cbActualGreen" checked>
-              <span class="pel-status-dot dot-green"></span>
-            </label>
-            <label class="pel-actual-cb" title="Жовтий — пеленг від 2 до 7 діб тому">
-              <input type="checkbox" id="cbActualYellow" checked>
-              <span class="pel-status-dot dot-yellow"></span>
-            </label>
-            <label class="pel-actual-cb" title="Червоний — пеленг більше 7 діб тому">
-              <input type="checkbox" id="cbActualRed" checked>
-              <span class="pel-status-dot dot-red"></span>
-            </label>
+            <table class="pel-thresh-table">
+              <tbody>
+                <tr>
+                  <td><input type="checkbox" id="cbActualGreen" checked></td>
+                  <td><span class="pel-status-dot dot-green"></span></td>
+                  <td>≤&nbsp;<input type="number" id="pelThreshGreenDays" class="pel-thresh-input" value="3" min="1" max="365">&nbsp;діб</td>
+                  <td id="pelThreshGreenHours" class="pel-thresh-hours">≤&nbsp;72&nbsp;год</td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" id="cbActualYellow" checked></td>
+                  <td><span class="pel-status-dot dot-yellow"></span></td>
+                  <td>≤&nbsp;<input type="number" id="pelThreshYellowDays" class="pel-thresh-input" value="8" min="1" max="365">&nbsp;діб</td>
+                  <td id="pelThreshYellowHours" class="pel-thresh-hours">≤&nbsp;192&nbsp;год</td>
+                </tr>
+                <tr>
+                  <td><input type="checkbox" id="cbActualRed" checked></td>
+                  <td><span class="pel-status-dot dot-red"></span></td>
+                  <td id="pelThreshRedDays">&gt;&nbsp;8&nbsp;діб</td>
+                  <td id="pelThreshRedHours" class="pel-thresh-hours">&gt;&nbsp;192&nbsp;год</td>
+                </tr>
+              </tbody>
+            </table>
             <button class="btn" type="button" id="pelActualShowBtn">Показати</button>
           </div>
 
@@ -232,6 +242,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/peleng.js?v=9"></script>
+<script src="/static/peleng.js?v=10"></script>
 {% endblock %}
 {% endblock %}

@@ -664,10 +664,12 @@ def peleng_status_summary():
         result = []
         for row in rows:
             raw = row["last_peleng_dt"] or ""
+            age_h_val = None
             if raw:
                 try:
                     ld = datetime.fromisoformat(raw[:19])
                     age_h = (now - ld).total_seconds() / 3600
+                    age_h_val = round(age_h, 1)
                     status = "green" if age_h <= 72 else ("yellow" if age_h <= 192 else "red")
                     last_display = ld.strftime("%d.%m.%Y %H:%M")
                 except ValueError:
@@ -682,6 +684,7 @@ def peleng_status_summary():
                 "unit": row["unit"],
                 "tags": row["tags"] or "",
                 "status": status,
+                "age_h": age_h_val,
                 "last_peleng_dt": last_display,
                 "peleng_count_10d": int(row["peleng_count_10d"] or 0),
                 "intercept_count_3d": int(row["intercept_count_3d"] or 0),
