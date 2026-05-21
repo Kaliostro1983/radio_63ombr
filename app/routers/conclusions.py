@@ -21,17 +21,17 @@ def _now_sql() -> str:
 def _parse_filter_dt(value: str, default_time: str) -> str:
     """Accept either a plain date ('YYYY-MM-DD') or a datetime-local
     ('YYYY-MM-DDTHH:MM' / 'YYYY-MM-DDTHH:MM:SS') and normalise to
-    an ISO-8601 datetime with seconds."""
+    space-separated 'YYYY-MM-DD HH:MM:SS' (matches DB storage format)."""
     today = datetime.now().date().isoformat()
     if not value:
-        return f"{today}T{default_time}"
-    v = value.strip()
-    if "T" in v:
-        date_part, time_part = v.split("T", 1)
-        # pad to HH:MM:SS
-        time_part = (time_part + ":00:00")[:8]
-        return f"{date_part}T{time_part}"
-    return f"{v}T{default_time}"
+        return f"{today} {default_time}"
+    v = value.strip().replace("T", " ")
+    if " " not in v:
+        return f"{v} {default_time}"
+    date_part, time_part = v.split(" ", 1)
+    # pad to HH:MM:SS
+    time_part = (time_part + ":00:00")[:8]
+    return f"{date_part} {time_part}"
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ def api_conclusions_list(
     start = _parse_filter_dt(date_from, "00:00:00")
     end   = _parse_filter_dt(date_to,   "23:59:59")
 
-    wheres = ["ac.created_at >= ?", "ac.created_at <= ?"]
+    wheres = ["REPLACE(ac.created_at,'T',' ') >= ?", "REPLACE(ac.created_at,'T',' ') <= ?"]
     params: List[Any] = [start, end]
 
     if network_id:
