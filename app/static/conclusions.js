@@ -216,11 +216,12 @@
       })
     );
 
-    // Position below the badge
+    // Position below the badge (position:fixed → viewport coords, no scroll offset)
     const rect = badge.getBoundingClientRect();
-    typePicker.style.top  = (rect.bottom + window.scrollY + 4) + "px";
-    typePicker.style.left = (rect.left  + window.scrollX)      + "px";
-    typePicker.classList.remove("hidden");
+    typePicker.classList.remove("hidden");   // unhide first so offsetWidth is available
+    const pickerW = typePicker.offsetWidth || 180;
+    typePicker.style.top  = (rect.bottom + 4) + "px";
+    typePicker.style.left = Math.min(rect.left, window.innerWidth - pickerW - 8) + "px";
   }
 
   function closeTypePicker() {
