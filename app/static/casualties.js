@@ -55,6 +55,18 @@
   const tableWrap  = document.getElementById("casTableWrap");
   const showAllBtn = document.getElementById("casShowAll");
 
+  // ── Prevent scroll-wheel from changing focused number inputs ──────────────
+  // <input type="number"> increments/decrements its value when the mouse
+  // wheel is used while the field is focused.  This causes silent data loss:
+  // user types "1", starts scrolling the table → value becomes "0" and the
+  // debounce timer saves the wrong number to the DB.
+  // Fix: blur the focused cas-input whenever the user scrolls inside the pane.
+  pane.addEventListener("wheel", () => {
+    if (document.activeElement?.classList.contains("cas-input")) {
+      document.activeElement.blur();
+    }
+  }, { passive: true });
+
   // ── Init ──────────────────────────────────────────────────────────────────
   let _inited = false;
   async function init() {
