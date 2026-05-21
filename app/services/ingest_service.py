@@ -523,6 +523,21 @@ def _run_ingest_pipeline(
                 "created_at": created_at,
             },
         )
+        # For analytical messages the intercept body may already be stored as a
+        # plain 'intercept' record.  We still need to persist the analytical
+        # conclusion — just link it to the existing message row.
+        if message_format == "analytical_type":
+            conclusion_text = parsed.get("analytical_conclusion") or ""
+            mgrs_list = list(parsed.get("analytical_mgrs") or [])
+            if conclusion_text:
+                insert_analytical_conclusion(
+                    cur,
+                    message_id=existing_message_id,
+                    network_id=network_id,
+                    created_at=created_at,
+                    conclusion_text=conclusion_text,
+                    mgrs_list=mgrs_list,
+                )
         mark_duplicate_content(cur, ingest_id, existing_message_id)
         return {
             "ok": True,
