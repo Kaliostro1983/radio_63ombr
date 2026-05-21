@@ -162,10 +162,11 @@ def api_conclusions_list(
 
 @router.get("/api/conclusions/types")
 def api_conclusion_types():
-    """Return all conclusion types with their keyword lists and colors."""
+    """Return all conclusion types ordered by sort_order (user-defined), then id."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, type, keywords_json, color FROM conclusion_types ORDER BY id ASC"
+            "SELECT id, type, keywords_json, color, sort_order "
+            "FROM conclusion_types ORDER BY sort_order ASC, id ASC"
         ).fetchall()
 
     out = []
@@ -175,12 +176,28 @@ def api_conclusion_types():
         except Exception:
             kws = []
         out.append({
-            "id":       int(r["id"]),
-            "type":     r["type"] or "",
-            "keywords": kws,
-            "color":    r["color"] or "",
+            "id":         int(r["id"]),
+            "type":       r["type"] or "",
+            "keywords":   kws,
+            "color":      r["color"] or "",
+            "sort_order": int(r["sort_order"]) if r["sort_order"] is not None else 0,
         })
     return {"ok": True, "rows": out}
+
+
+@router.put("/api/conclusions/types/order")
+async def api_conclusion_types_reorder(request: Request):
+    """Persist a new sort order.  Body: [{id, sort_order}, ...]"""
+    payload = await request.json()
+    if not isinstance(payload, list):
+        return JSONResponse({"ok": False, "error": "expected array"}, status_code=400)
+    with get_conn() as conn:
+        for item in payload:
+            conn.execute(
+                "UPDATE conclusion_types SET sort_order = ? WHERE id = ?",
+                (int(item["sort_order"]), int(item["id"])),
+            )
+    return {"ok": True}
 
 
 @router.post("/api/conclusions/types")
@@ -295,7 +312,8 @@ def api_reclassify_conclusion(ac_id: int):
             return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
 
         types = conn.execute(
-            "SELECT id, type, keywords_json, color FROM conclusion_types WHERE id > 0 ORDER BY id"
+            "SELECT id, type, keywords_json, color FROM conclusion_types "
+            "WHERE id > 0 ORDER BY sort_order ASC, id ASC"
         ).fetchall()
 
         text = (ac["conclusion_text"] or "").lower()

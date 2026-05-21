@@ -516,9 +516,97 @@
     }
   }
 
+  let _dragDropSetUp = false;
   function renderTypesList() {
     typesList.innerHTML = "";
     state.settings.types.forEach((t) => typesList.appendChild(buildTypeCard(t)));
+    if (!_dragDropSetUp) { setupTypeDragDrop(); _dragDropSetUp = true; }
+  }
+
+  /* ─── drag-and-drop reorder ─── */
+  let _dragSrc = null;
+
+  function setupTypeDragDrop() {
+    typesList.addEventListener("dragstart", (e) => {
+      const card = e.target.closest(".cn-type-card[draggable='true']");
+      if (!card) { e.preventDefault(); return; }
+      _dragSrc = card;
+      card.classList.add("cn-card-dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", card.dataset.typeId);
+    });
+
+    typesList.addEventListener("dragend", () => {
+      typesList.querySelectorAll(".cn-type-card").forEach((c) =>
+        c.classList.remove("cn-card-dragging", "cn-card-over")
+      );
+      _dragSrc = null;
+    });
+
+    typesList.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const card = e.target.closest(".cn-type-card[draggable='true']");
+      if (!card || card === _dragSrc) return;
+      typesList.querySelectorAll(".cn-type-card").forEach((c) => c.classList.remove("cn-card-over"));
+      card.classList.add("cn-card-over");
+    });
+
+    typesList.addEventListener("dragleave", (e) => {
+      if (!typesList.contains(e.relatedTarget)) {
+        typesList.querySelectorAll(".cn-type-card").forEach((c) => c.classList.remove("cn-card-over"));
+      }
+    });
+
+    typesList.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const target = e.target.closest(".cn-type-card[draggable='true']");
+      if (!target || !_dragSrc || target === _dragSrc) return;
+
+      // Insert in DOM
+      const allCards = [...typesList.querySelectorAll(".cn-type-card")];
+      const srcIdx = allCards.indexOf(_dragSrc);
+      const tgtIdx = allCards.indexOf(target);
+      if (srcIdx < tgtIdx) typesList.insertBefore(_dragSrc, target.nextSibling);
+      else                 typesList.insertBefore(_dragSrc, target);
+
+      // Sync state array order
+      const srcId = parseInt(_dragSrc.dataset.typeId, 10);
+      const srcType = state.settings.types.find((t) => t.id === srcId);
+      if (srcType) {
+        state.settings.types = state.settings.types.filter((t) => t.id !== srcId);
+        const newOrder = [...typesList.querySelectorAll(".cn-type-card[draggable='true']")];
+        const newIdx   = newOrder.indexOf(_dragSrc);
+        // Insert after the protected card(s) at front of state
+        const protectedCount = state.settings.types.filter((t) => t.id === 0).length;
+        state.settings.types.splice(protectedCount + newIdx, 0, srcType);
+      }
+
+      saveTypeOrder();
+    });
+  }
+
+  async function saveTypeOrder() {
+    const cards = [...typesList.querySelectorAll(".cn-type-card[draggable='true']")];
+    const order = cards.map((c, i) => ({
+      id:         parseInt(c.dataset.typeId, 10),
+      sort_order: i + 1,   // 1-based; id=0 keeps sort_order=0 (always first)
+    }));
+    // Update state
+    order.forEach(({ id, sort_order }) => {
+      const t = state.settings.types.find((x) => x.id === id);
+      if (t) t.sort_order = sort_order;
+    });
+    try {
+      const res = await fetch("/api/conclusions/types/order", {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(order),
+      });
+      if (!res.ok) toast("Помилка збереження порядку", "error");
+    } catch (err) {
+      toast("Помилка: " + err.message, "error");
+    }
   }
 
   /* ─── type card ─── */
@@ -530,10 +618,13 @@
     const isProtected   = typeObj.id === 0;
     const cardColor     = typeObj.color || "#6b7280";
 
+    if (!isProtected) card.draggable = true;
+
     card.innerHTML = `
       <div class="cn-type-card__head">
+        ${isProtected ? "" : `<span class="cn-drag-handle" title="Перетягнути для зміни порядку">⠿</span>`}
         <span class="cn-type-card__swatch" title="Колір типу на карті"></span>
-        <input type="color" class="cn-type-color-inp" value="${escapeHtml(cardColor)}" title="Обрати колір" />
+        <input type="color" class="cn-type-color-inp" value="${escapeHtml(cardColor)}" title="Обрати колір" draggable="false" />
         <span class="cn-type-card__name">${escapeHtml(typeObj.type)}</span>
         ${isProtected
           ? `<span class="small" style="opacity:.5">(системний)</span>`

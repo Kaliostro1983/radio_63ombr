@@ -750,7 +750,15 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     )
     # Add keywords_json BEFORE the seed INSERT so it exists on old databases.
     _ensure_column(conn, "conclusion_types", "keywords_json", "keywords_json TEXT NOT NULL DEFAULT '[]'")
-    _ensure_column(conn, "conclusion_types", "color", "color TEXT")
+    _ensure_column(conn, "conclusion_types", "color",      "color TEXT")
+    _ensure_column(conn, "conclusion_types", "sort_order", "sort_order INTEGER NOT NULL DEFAULT 0")
+    # Initialise sort_order from id for rows that still have the default 0.
+    # id=0 keeps sort_order=0 (always first); user types get sort_order = id.
+    _try_ddl(
+        conn,
+        "UPDATE conclusion_types SET sort_order = id WHERE sort_order = 0 AND id > 0",
+        stage="migrate:conclusion_types.sort_order",
+    )
     safe_execute(
         conn,
         "INSERT OR IGNORE INTO conclusion_types (id, type) VALUES (0, 'невідомо')",

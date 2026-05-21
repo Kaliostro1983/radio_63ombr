@@ -2461,6 +2461,38 @@ button.secondary{
   padding: 14px 16px;
   margin-bottom: 14px;
   background: var(--card);
+  transition: opacity .15s, box-shadow .15s, border-color .15s;
+}
+
+/* Drag handle */
+.cn-drag-handle {
+  cursor: grab;
+  font-size: 18px;
+  line-height: 1;
+  opacity: .35;
+  padding: 0 4px 0 0;
+  flex-shrink: 0;
+  user-select: none;
+  color: var(--fg);
+  transition: opacity .15s;
+}
+.cn-drag-handle:hover {
+  opacity: .75;
+}
+.cn-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* While dragging */
+.cn-type-card.cn-card-dragging {
+  opacity: .35;
+  box-shadow: none;
+}
+
+/* Drop target highlight */
+.cn-type-card.cn-card-over {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .cn-type-card__head {
