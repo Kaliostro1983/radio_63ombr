@@ -253,6 +253,78 @@ async def api_conclusion_type_update(type_id: int, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Patch a single conclusion's type (manual override)
+# ---------------------------------------------------------------------------
+
+@router.patch("/api/conclusions/{ac_id}/type")
+async def api_patch_conclusion_type(ac_id: int, request: Request):
+    """Manually set the type_id on a single analytical_conclusion row."""
+    payload: Dict[str, Any] = await request.json()
+    if "type_id" not in payload:
+        return JSONResponse({"ok": False, "error": "type_id required"}, status_code=400)
+    type_id = int(payload["type_id"])
+
+    with get_conn() as conn:
+        if not conn.execute("SELECT id FROM analytical_conclusions WHERE id=?", (ac_id,)).fetchone():
+            return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+        conn.execute("UPDATE analytical_conclusions SET type_id=? WHERE id=?", (type_id, ac_id))
+        t = conn.execute("SELECT type, color FROM conclusion_types WHERE id=?", (type_id,)).fetchone()
+    return {
+        "ok": True,
+        "type_id":    type_id,
+        "type_label": (t["type"]  if t else "невідомо"),
+        "type_color": (t["color"] if t else "#6b7280"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Re-classify a single conclusion by keyword matching
+# ---------------------------------------------------------------------------
+
+@router.post("/api/conclusions/{ac_id}/reclassify")
+def api_reclassify_conclusion(ac_id: int):
+    """Re-score the conclusion text against all conclusion_types keywords and
+    assign the best-matching type (most keyword hits). If no type matches,
+    type_id stays 0 (невідомо)."""
+    with get_conn() as conn:
+        ac = conn.execute(
+            "SELECT id, conclusion_text, type_id FROM analytical_conclusions WHERE id=?",
+            (ac_id,),
+        ).fetchone()
+        if not ac:
+            return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+
+        types = conn.execute(
+            "SELECT id, type, keywords_json, color FROM conclusion_types WHERE id > 0 ORDER BY id"
+        ).fetchall()
+
+        text = (ac["conclusion_text"] or "").lower()
+        best_id, best_score = 0, 0
+        for t in types:
+            try:
+                kws = json.loads(t["keywords_json"] or "[]")
+            except Exception:
+                kws = []
+            score = sum(1 for kw in kws if kw and kw.lower() in text)
+            if score > best_score:
+                best_score, best_id = score, int(t["id"])
+
+        conn.execute(
+            "UPDATE analytical_conclusions SET type_id=? WHERE id=?", (best_id, ac_id)
+        )
+        t_row = conn.execute(
+            "SELECT type, color FROM conclusion_types WHERE id=?", (best_id,)
+        ).fetchone() if best_id else None
+
+    return {
+        "ok": True,
+        "type_id":    best_id,
+        "type_label": (t_row["type"]  if t_row else "невідомо"),
+        "type_color": (t_row["color"] if t_row else "#6b7280"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Quick conclusions + quick points
 # ---------------------------------------------------------------------------
 

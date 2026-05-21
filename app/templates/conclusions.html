@@ -129,14 +129,19 @@
           <div id="cnLoader"    class="small" style="opacity:.6; display:none">Завантаження…</div>
           <div id="cnEmptyMsg"  class="small" style="opacity:.6; display:none">Висновків не знайдено.</div>
 
+          <!-- Type picker dropdown (singleton, positioned by JS) -->
+          <div id="cnTypePicker" class="cn-type-picker hidden" role="listbox" aria-label="Оберіть тип"></div>
+
           <div id="cnTableWrap" style="overflow-x:auto">
             <table id="cnTable" class="cn-results-table" style="display:none">
               <thead>
                 <tr>
                   <th style="width:140px">Час / Мережа</th>
                   <th style="width:110px">Тип</th>
-                  <th style="text-align:left">Висновок</th>
-                  <th style="width:170px">Координати</th>
+                  <th style="text-align:left; min-width:180px">Висновок</th>
+                  <th style="text-align:left; width:240px">Перехоплення</th>
+                  <th style="width:160px">Координати</th>
+                  <th style="width:36px" title="Повторно проаналізувати тип"></th>
                 </tr>
               </thead>
               <tbody id="cnTableBody"></tbody>
@@ -315,6 +320,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/conclusions.js?v=5" defer></script>
+<script src="/static/conclusions.js?v=6" defer></script>
 <script src="/static/quick_conclusions.js?v=9" defer></script>
 {% endblock %}

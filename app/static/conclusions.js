@@ -35,6 +35,7 @@
     view: {
       loaded:   false,
       networks: [],   // [{id, frequency, mask, unit, label}]
+      types:    [],   // [{id, type, color}] — loaded for type picker
       rows:     [],   // last loaded conclusion rows
     },
     settings: {
@@ -43,6 +44,28 @@
       deleteTargetId: null,
     },
   };
+
+  /* ──────────────────────────────────────────────
+   *  CONCLUSION TEXT FORMATTER
+   *  - strips leading location-prefix lines (ALL-CAPS or in parentheses)
+   *  - returns cleaned text (coordinates already stripped by parser)
+   * ────────────────────────────────────────────── */
+  function formatConclusion(text) {
+    if (!text) return "";
+    const lines = text.split("\n").map((l) => l.trim()).filter((l) => l);
+    // Strip leading lines that are location names:
+    //   ALL-CAPS: no lowercase letters + at least 2 uppercase Ukrainian letters
+    //   Parenthesised: entire line wrapped in ( ... )
+    let start = 0;
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i];
+      const isAllCaps  = !/[а-яіїєґa-z]/.test(line) && /[А-ЯІЇЄҐ]{2}/.test(line);
+      const isInParens = /^\(.+\)$/.test(line);
+      if (isAllCaps || isInParens) { start = i + 1; }
+      else { break; }
+    }
+    return lines.slice(start).join(" ").trim();
+  }
 
   /* ──────────────────────────────────────────────
    *  TAB SWITCHING
@@ -147,20 +170,116 @@
   });
 
   /* ──────────────────────────────────────────────
-   *  TYPE FILTER (select)
+   *  TYPE FILTER (select) + type-picker data
    * ────────────────────────────────────────────── */
   async function loadTypesForFilter() {
     try {
       const res  = await fetch("/api/conclusions/types");
       if (!res.ok) return;
       const data = await res.json();
-      (data.rows || []).forEach((t) => {
+      state.view.types = data.rows || [];
+      state.view.types.forEach((t) => {
         const opt = document.createElement("option");
         opt.value       = t.id;
         opt.textContent = t.type || "невідомо";
         typeSel.appendChild(opt);
       });
     } catch (_) { /* silent */ }
+  }
+
+  /* ──────────────────────────────────────────────
+   *  TYPE PICKER DROPDOWN
+   * ────────────────────────────────────────────── */
+  const typePicker    = $("cnTypePicker");
+  let   _pickerBadge  = null;   // badge element currently being edited
+
+  function openTypePicker(badge) {
+    if (_pickerBadge === badge) { closeTypePicker(); return; }
+    _pickerBadge = badge;
+
+    // Build items: "невідомо" (id=0) + all user types
+    const items = [
+      { id: 0, type: "невідомо", color: "#6b7280" },
+      ...state.view.types.filter((t) => t.id !== 0),
+    ];
+
+    typePicker.innerHTML = items.map((t) => `
+      <div class="cn-type-picker-item" data-type-id="${t.id}" style="${colorStyle(t.color || "#6b7280")}">
+        ${escapeHtml(t.type || "невідомо")}
+      </div>
+    `).join("");
+
+    typePicker.querySelectorAll(".cn-type-picker-item").forEach((el) =>
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        applyTypeFromPicker(parseInt(el.dataset.typeId, 10));
+      })
+    );
+
+    // Position below the badge
+    const rect = badge.getBoundingClientRect();
+    typePicker.style.top  = (rect.bottom + window.scrollY + 4) + "px";
+    typePicker.style.left = (rect.left  + window.scrollX)      + "px";
+    typePicker.classList.remove("hidden");
+  }
+
+  function closeTypePicker() {
+    typePicker.classList.add("hidden");
+    _pickerBadge = null;
+  }
+
+  document.addEventListener("click", (e) => {
+    if (!_pickerBadge) return;
+    if (!typePicker.contains(e.target) && !e.target.closest(".cn-type-badge--pick")) {
+      closeTypePicker();
+    }
+  });
+
+  async function applyTypeFromPicker(typeId) {
+    const badge  = _pickerBadge;
+    const tr     = badge?.closest("tr");
+    const acId   = tr ? parseInt(tr.dataset.acId, 10) : null;
+    closeTypePicker();
+    if (!acId) return;
+
+    try {
+      const res  = await fetch(`/api/conclusions/${acId}/type`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ type_id: typeId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { toast(data.error || "Помилка збереження типу", "error"); return; }
+      updateBadge(tr, data.type_id, data.type_label, data.type_color);
+    } catch (err) { toast("Помилка: " + err.message, "error"); }
+  }
+
+  /* ──────────────────────────────────────────────
+   *  RE-CLASSIFY (keyword matching)
+   * ────────────────────────────────────────────── */
+  async function reclassifyConclusion(btn) {
+    const tr   = btn.closest("tr");
+    const acId = tr ? parseInt(tr.dataset.acId, 10) : null;
+    if (!acId) return;
+
+    btn.textContent = "⏳";
+    btn.disabled    = true;
+    try {
+      const res  = await fetch(`/api/conclusions/${acId}/reclassify`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { toast(data.error || "Помилка", "error"); return; }
+      updateBadge(tr, data.type_id, data.type_label, data.type_color);
+      toast("Тип оновлено: " + (data.type_label || "невідомо"), "success", 2000);
+    } catch (err) { toast("Помилка: " + err.message, "error"); }
+    finally { btn.textContent = "♻"; btn.disabled = false; }
+  }
+
+  function updateBadge(tr, typeId, typeLabel, typeColor) {
+    const badge = tr?.querySelector(".cn-type-badge--pick");
+    if (!badge) return;
+    badge.textContent        = typeLabel || "невідомо";
+    badge.dataset.typeId     = typeId;
+    badge.style.cssText      = colorStyle(typeColor || "#6b7280");
   }
 
   /* ──────────────────────────────────────────────
@@ -204,19 +323,38 @@
         const mgrs  = (r.mgrs || [])
           .map((m) => `<code class="cn-mgrs-code">${escapeHtml(m)}</code>`)
           .join(" ");
+        const conclusionFmt = escapeHtml(formatConclusion(r.conclusion_text || ""));
+        const interceptHtml = r.body_text
+          ? `<div class="cn-intercept-cell">${escapeHtml(r.body_text)}</div>`
+          : `<span style="opacity:.4">—</span>`;
 
-        return `<tr>
+        return `<tr data-ac-id="${r.id}">
           <td style="text-align:center">
             <div class="small" style="font-weight:600;white-space:nowrap">${escapeHtml(dateP)} ${escapeHtml(timeP)}</div>
             ${net ? `<div class="small" style="opacity:.65;margin-top:2px;white-space:nowrap">${escapeHtml(net)}</div>` : ""}
           </td>
           <td style="text-align:center">
-            <span class="cn-type-badge" style="${colorStyle(color)}">${escapeHtml(r.type_label || "невідомо")}</span>
+            <span class="cn-type-badge cn-type-badge--pick"
+                  data-type-id="${r.type_id}"
+                  style="${colorStyle(color)}"
+                  title="Клікніть щоб змінити тип">${escapeHtml(r.type_label || "невідомо")}</span>
           </td>
-          <td class="small">${escapeHtml(r.conclusion_text || "")}</td>
+          <td class="small">${conclusionFmt}</td>
+          <td>${interceptHtml}</td>
           <td style="text-align:center">${mgrs || "<span style='opacity:.4'>—</span>"}</td>
+          <td style="text-align:center">
+            <button class="cn-reclassify-btn" title="Повторно проаналізувати тип">♻</button>
+          </td>
         </tr>`;
       }).join("");
+
+      // Event delegation: type picker + reclassify
+      cnTableBody.onclick = (e) => {
+        const badge = e.target.closest(".cn-type-badge--pick");
+        if (badge) { openTypePicker(badge); return; }
+        const reBtn = e.target.closest(".cn-reclassify-btn");
+        if (reBtn) { reclassifyConclusion(reBtn); }
+      };
 
       cnTable.style.display = "";
       if (geoState.visible) plotMarkers();
