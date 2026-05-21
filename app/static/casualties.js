@@ -68,11 +68,18 @@
   }, { passive: true });
 
   // ── Init ──────────────────────────────────────────────────────────────────
+  function syncDateToToday() {
+    const today = todayISO();
+    reportDate = today;
+    localStorage.setItem("cas_date", today);
+    if (dateInput) dateInput.value = today;
+  }
+
   let _inited = false;
   async function init() {
+    syncDateToToday();            // always update to today on tab activation
     if (_inited) return;
     _inited = true;
-    if (dateInput) dateInput.value = reportDate;
     await loadUnits();
     await loadEntries();
     render();
