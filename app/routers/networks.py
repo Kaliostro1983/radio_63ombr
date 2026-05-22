@@ -17,7 +17,6 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, date, timedelta
-from pathlib import Path
 from typing import List, Optional
 
 log = logging.getLogger(__name__)
@@ -28,6 +27,7 @@ from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.core.db import get_conn
 from app.core.normalize import normalize_freq, normalize_freq_or_mask
 from app.core.auth_context import get_actor
@@ -1098,9 +1098,7 @@ def _missing_fields_message(
 # Google Sheets sync (via Apps Script web-app — no credentials needed)
 # ---------------------------------------------------------------------------
 
-_SHEETS_SCRIPT_URL_FILE = (
-    Path(__file__).resolve().parent.parent.parent / "secrets" / "sheets_script_url.txt"
-)
+# URL is stored in config.env as SHEETS_SCRIPT_URL (not committed to git).
 
 
 def _build_sheets_data(conn) -> list[list[str]]:
@@ -1192,11 +1190,9 @@ def _sync_gsheets_bg(conn_factory):
     No credentials or Google Cloud setup required.
     """
     def _run():
-        if not _SHEETS_SCRIPT_URL_FILE.exists():
-            log.debug("Google Sheets sync skipped: %s not found", _SHEETS_SCRIPT_URL_FILE)
-            return
-        script_url = _SHEETS_SCRIPT_URL_FILE.read_text().strip()
+        script_url = settings.sheets_script_url.strip()
         if not script_url:
+            log.debug("Google Sheets sync skipped: SHEETS_SCRIPT_URL not configured")
             return
         try:
             import json as _json

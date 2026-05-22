@@ -38,6 +38,8 @@ class Settings:
     etalon_xlsx: str = ""
     # When False: no background thread; no enqueue from ingest / landmark APIs.
     landmark_auto_match_enabled: bool = False
+    # Google Sheets sync via Apps Script webhook (empty = disabled).
+    sheets_script_url: str = ""
 
 
 def load_settings() -> Settings:
@@ -61,6 +63,7 @@ def load_settings() -> Settings:
         freq_xlsx=os.getenv("FREQ_XLSX", "Frequencies_63.xlsx"),
         etalon_xlsx=os.getenv("ETALON_XLSX", ""),
         landmark_auto_match_enabled=_env_bool("LANDMARK_AUTO_MATCH", default=False),
+        sheets_script_url=os.getenv("SHEETS_SCRIPT_URL", ""),
     )
 
 settings = load_settings()
