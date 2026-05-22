@@ -187,6 +187,16 @@
     } catch (_) { /* silent */ }
   }
 
+  /** Refresh only the types color/name cache — no DOM changes to the filter select. */
+  async function refreshTypesCache() {
+    try {
+      const res = await fetch("/api/conclusions/types");
+      if (!res.ok) return;
+      const data = await res.json();
+      state.view.types = data.rows || [];
+    } catch (_) { /* silent */ }
+  }
+
   /* ──────────────────────────────────────────────
    *  TYPE PICKER DROPDOWN
    * ────────────────────────────────────────────── */
@@ -365,6 +375,7 @@
 
       cnTable.style.display = "";
       if (geoState.visible) plotMarkers();
+      refreshTypesCache();   // keep colour data fresh for the type picker
 
     } catch (err) {
       cnLoader.style.display = "none";
