@@ -230,10 +230,17 @@
           {% set selected_ids = draft.tag_ids %}
         {% endif %}
         <div id="netTagButtons" class="tag-toggle-wrap">
-          {% for t in tags %}
+          {% for t in main_tags %}
             {% set is_on = (t.id in selected_ids) %}
             <button type="button" class="tag-toggle {% if is_on %}is-on{% endif %}" data-tag-id="{{ t.id }}">{{ t.name }}</button>
           {% endfor %}
+          {% if comp_tags %}
+            <div class="tag-toggle-sep"></div>
+            {% for t in comp_tags %}
+              {% set is_on = (t.id in selected_ids) %}
+              <button type="button" class="tag-toggle tag-toggle--comp {% if is_on %}is-on{% endif %}" data-tag-id="{{ t.id }}">{{ t.name }}</button>
+            {% endfor %}
+          {% endif %}
         </div>
         <div id="netTagHidden"></div>
       </div>

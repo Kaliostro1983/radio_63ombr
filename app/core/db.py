@@ -1086,6 +1086,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         stage="create_table:network_tag_links",
     )
 
+    # Add tag_group column to network_tags (main vs composition).
+    _ensure_column(conn, "network_tags", "tag_group", "tag_group TEXT NOT NULL DEFAULT 'main'")
+
     # Seed required network tags (idempotent).
     for name in ("БпЛА", "ППО", "ШД", "Загальна", "Арта", "Евак"):
         safe_execute(
@@ -1095,6 +1098,17 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             module="app.core.db",
             function="_run_lightweight_migrations",
             stage="seed:network_tags",
+        )
+
+    # Seed composition tags (second tier: voice structure).
+    for name in ("Сольник", "Дует", "Тріо", "Квартет"):
+        safe_execute(
+            conn,
+            "INSERT OR IGNORE INTO network_tags(name, tag_group) VALUES (?, 'composition')",
+            (name,),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage="seed:network_tags:composition",
         )
 
     # Migrate old selections by matching tag names, if we have the old table.

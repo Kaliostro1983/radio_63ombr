@@ -13,9 +13,14 @@ handled in service modules (see `app.services.network_service`).
 
 from __future__ import annotations
 
+import logging
 import sqlite3
+import threading
 from datetime import datetime, date, timedelta
+from pathlib import Path
 from typing import List, Optional
+
+log = logging.getLogger(__name__)
 
 from app.services.network_search import search_network_rows
 
@@ -621,7 +626,10 @@ def _lookup(conn):
     statuses = _fetchall(conn, "SELECT id, name FROM statuses ORDER BY name")
     chats = _fetchall(conn, "SELECT id, name FROM chats ORDER BY name")
     groups = _fetchall(conn, "SELECT id, name FROM groups ORDER BY name")
-    tags = _fetchall(conn, "SELECT id, name FROM network_tags ORDER BY name")
+    tags = _fetchall(
+        conn,
+        "SELECT id, name, COALESCE(tag_group,'main') AS tag_group FROM network_tags ORDER BY name",
+    )
 
     status_map = {r["id"]: r["name"] for r in statuses}
     chat_map = {r["id"]: r["name"] for r in chats}
@@ -737,6 +745,8 @@ def _build_networks_context(
     etalon_exists: bool = False,
 ):
     """Build Jinja template context for the networks page."""
+    main_tags = [t for t in (tags or []) if t["tag_group"] == "main"]
+    comp_tags  = [t for t in (tags or []) if t["tag_group"] == "composition"]
     return dict(
         request=request,
         actor=actor,
@@ -750,6 +760,8 @@ def _build_networks_context(
         chats=chats,
         groups=groups,
         tags=tags,
+        main_tags=main_tags,
+        comp_tags=comp_tags,
         status_map=status_map,
         chat_map=chat_map,
         group_map=group_map,
@@ -1082,6 +1094,128 @@ def _missing_fields_message(
     return "Потрібно вказати: " + ", ".join(missing_labels[:-1]) + f" та {missing_labels[-1]}.", missing_keys
     
     
+# ---------------------------------------------------------------------------
+# Google Sheets sync
+# ---------------------------------------------------------------------------
+
+_SHEETS_CREDS_PATH = Path(__file__).resolve().parent.parent.parent / "secrets" / "google_credentials.json"
+_SHEETS_SPREADSHEET_ID = "1LSvECSCP_nUoLs76Km0MCRdInzwMEcIE9a27E8W__90"
+_SHEETS_WORKSHEET = 0   # first sheet (index)
+
+
+def _build_sheets_data(conn) -> list[list[str]]:
+    """Build a 2-D list (rows × columns) to write to Google Sheets.
+
+    Layout:
+      Row 0  : headers  – «Хор», then one column per tag (alphabetical)
+      Row 1+ : frequencies/masks, one entry per cell
+    Column «Хор»  : all Спостерігається networks (freq + mask if both present)
+    Tag columns   : Спостерігається networks that carry the tag
+    """
+    # All Спостерігається networks with their tags
+    rows = conn.execute(
+        """
+        SELECT n.id, n.frequency, n.mask, nt.name AS tag_name
+        FROM   networks n
+        LEFT JOIN network_tag_links ntl ON ntl.network_id = n.id
+        LEFT JOIN network_tags      nt  ON nt.id = ntl.tag_id
+        WHERE  n.status_id = (SELECT id FROM statuses WHERE name = 'Спостерігається' LIMIT 1)
+        ORDER  BY n.id
+        """
+    ).fetchall()
+
+    # Gather all tag names in sorted order
+    all_tag_names: list[str] = sorted({
+        r["tag_name"] for r in rows if r["tag_name"]
+    })
+
+    # Build set of freq/mask entries per bucket (set to avoid duplicates)
+    def _entries(freq, mask) -> list[str]:
+        out = []
+        if freq:
+            out.append(freq)
+        if mask and mask != freq:
+            out.append(mask)
+        return out
+
+    # Хор bucket: unique entries across all Спостерігається networks
+    seen_choir: set[str] = set()
+    choir: list[str] = []
+    # tag buckets
+    tag_buckets: dict[str, list[str]] = {t: [] for t in all_tag_names}
+    seen_tag: dict[str, set[str]] = {t: set() for t in all_tag_names}
+
+    # Process rows (each row may repeat network_id when a network has multiple tags)
+    processed_networks_choir: set[int] = set()
+    processed_per_tag: dict[str, set[int]] = {t: set() for t in all_tag_names}
+
+    for r in rows:
+        nid = int(r["id"])
+        freq = r["frequency"] or ""
+        mask = r["mask"] or ""
+        tag  = r["tag_name"]
+
+        # Add to choir once per network
+        if nid not in processed_networks_choir:
+            processed_networks_choir.add(nid)
+            for e in _entries(freq, mask):
+                if e not in seen_choir:
+                    seen_choir.add(e)
+                    choir.append(e)
+
+        # Add to tag bucket once per (network, tag) pair
+        if tag and tag in tag_buckets:
+            if nid not in processed_per_tag[tag]:
+                processed_per_tag[tag].add(nid)
+                for e in _entries(freq, mask):
+                    if e not in seen_tag[tag]:
+                        seen_tag[tag].add(e)
+                        tag_buckets[tag].append(e)
+
+    # Build 2-D grid
+    headers = ["Хор"] + all_tag_names
+    columns = [choir] + [tag_buckets[t] for t in all_tag_names]
+    max_rows = max((len(c) for c in columns), default=0)
+
+    grid: list[list[str]] = [headers]
+    for i in range(max_rows):
+        grid.append([col[i] if i < len(col) else "" for col in columns])
+
+    return grid
+
+
+def _sync_gsheets_bg(conn_factory):
+    """Run Google Sheets sync in a background thread (fire-and-forget)."""
+    def _run():
+        if not _SHEETS_CREDS_PATH.exists():
+            log.warning("Google Sheets sync skipped: credentials not found at %s", _SHEETS_CREDS_PATH)
+            return
+        try:
+            import gspread                                   # noqa: PLC0415
+            from google.oauth2.service_account import Credentials  # noqa: PLC0415
+
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive",
+            ]
+            creds = Credentials.from_service_account_file(str(_SHEETS_CREDS_PATH), scopes=scopes)
+            client = gspread.authorize(creds)
+            sh = client.open_by_key(_SHEETS_SPREADSHEET_ID)
+            ws = sh.get_worksheet(_SHEETS_WORKSHEET)
+
+            with conn_factory() as conn:
+                data = _build_sheets_data(conn)
+
+            ws.clear()
+            if data:
+                ws.update(data, "A1")
+            log.info("Google Sheets sync OK (%d rows, %d cols)", len(data), len(data[0]) if data else 0)
+        except Exception as exc:           # noqa: BLE001
+            log.error("Google Sheets sync failed: %s", exc)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 @router.post("/networks/save")
 def networks_save(
     request: Request,
@@ -1194,6 +1328,9 @@ def networks_save(
             )
 
         conn.commit()
+
+    # Sync to Google Sheets in background (non-blocking)
+    _sync_gsheets_bg(get_conn)
 
     request.session.pop("network_save_draft", None)
     return RedirectResponse(url=f"/networks?pick={network_id}", status_code=303)
