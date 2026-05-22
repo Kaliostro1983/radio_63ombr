@@ -1095,12 +1095,12 @@ def _missing_fields_message(
     
     
 # ---------------------------------------------------------------------------
-# Google Sheets sync
+# Google Sheets sync (via Apps Script web-app — no credentials needed)
 # ---------------------------------------------------------------------------
 
-_SHEETS_CREDS_PATH = Path(__file__).resolve().parent.parent.parent / "secrets" / "google_credentials.json"
-_SHEETS_SPREADSHEET_ID = "1LSvECSCP_nUoLs76Km0MCRdInzwMEcIE9a27E8W__90"
-_SHEETS_WORKSHEET = 0   # first sheet (index)
+_SHEETS_SCRIPT_URL_FILE = (
+    Path(__file__).resolve().parent.parent.parent / "secrets" / "sheets_script_url.txt"
+)
 
 
 def _build_sheets_data(conn) -> list[list[str]]:
@@ -1185,31 +1185,36 @@ def _build_sheets_data(conn) -> list[list[str]]:
 
 
 def _sync_gsheets_bg(conn_factory):
-    """Run Google Sheets sync in a background thread (fire-and-forget)."""
+    """Fire-and-forget: POST sheet data to the Apps Script web-app URL.
+
+    Configure by placing the deployment URL (one line) in:
+        secrets/sheets_script_url.txt
+    No credentials or Google Cloud setup required.
+    """
     def _run():
-        if not _SHEETS_CREDS_PATH.exists():
-            log.warning("Google Sheets sync skipped: credentials not found at %s", _SHEETS_CREDS_PATH)
+        if not _SHEETS_SCRIPT_URL_FILE.exists():
+            log.debug("Google Sheets sync skipped: %s not found", _SHEETS_SCRIPT_URL_FILE)
+            return
+        script_url = _SHEETS_SCRIPT_URL_FILE.read_text().strip()
+        if not script_url:
             return
         try:
-            import gspread                                   # noqa: PLC0415
-            from google.oauth2.service_account import Credentials  # noqa: PLC0415
-
-            scopes = [
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive",
-            ]
-            creds = Credentials.from_service_account_file(str(_SHEETS_CREDS_PATH), scopes=scopes)
-            client = gspread.authorize(creds)
-            sh = client.open_by_key(_SHEETS_SPREADSHEET_ID)
-            ws = sh.get_worksheet(_SHEETS_WORKSHEET)
+            import json as _json
+            import urllib.request as _req
 
             with conn_factory() as conn:
                 data = _build_sheets_data(conn)
 
-            ws.clear()
-            if data:
-                ws.update(data, "A1")
-            log.info("Google Sheets sync OK (%d rows, %d cols)", len(data), len(data[0]) if data else 0)
+            payload = _json.dumps(data, ensure_ascii=False).encode()
+            request = _req.Request(
+                script_url,
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with _req.urlopen(request, timeout=20) as resp:
+                body = resp.read().decode()
+            log.info("Google Sheets sync OK: %s", body[:120])
         except Exception as exc:           # noqa: BLE001
             log.error("Google Sheets sync failed: %s", exc)
 
