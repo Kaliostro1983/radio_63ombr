@@ -1,6 +1,6 @@
 /**
  * quick_conclusions.js — «Швидко» tab on the /conclusions page.
- *
+ * v10
  * Depends on: Leaflet (already on page), mgrs.min.js (already on page).
  * html2canvas is loaded lazily on first screenshot attempt.
  */
@@ -378,6 +378,51 @@
   }
 
   /* ─────────────────────────────────────────────
+   *  PUBLISH — send text + map image to bot service
+   * ───────────────────────────────────────────── */
+  async function onPublish() {
+    const text = textarea ? textarea.value.trim() : "";
+    if (!text) { toast("Текст порожній — спочатку згенеруйте висновок", "error", 3000); return; }
+
+    const publishBtn = $("qcPublishBtn");
+    if (publishBtn) { publishBtn.disabled = true; publishBtn.textContent = "⏳ Публікація…"; }
+
+    try {
+      // Capture map screenshot as base64 PNG (best-effort — skip on failure)
+      let imageb64 = "";
+      if (mapDiv) {
+        if (!window.html2canvas) {
+          try { await loadScript("https://html2canvas.hertzen.com/dist/html2canvas.min.js"); }
+          catch (_) { /* continue without image */ }
+        }
+        if (window.html2canvas) {
+          try {
+            if (qcMap) qcMap.invalidateSize();
+            const canvas = await window.html2canvas(mapDiv, {
+              useCORS: true, allowTaint: false, logging: false, imageTimeout: 15000,
+            });
+            const dataUrl = canvas.toDataURL("image/png");
+            imageb64 = dataUrl.split(",")[1] || "";
+          } catch (_) { /* skip image, still send text */ }
+        }
+      }
+
+      const r = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, image_b64: imageb64 }),
+      });
+      const d = await r.json();
+      if (!d.ok) { toast(d.error || "Помилка публікації", "error", 5000); return; }
+      toast("Опубліковано! 📢", "success", 2500);
+    } catch (e) {
+      toast("Помилка: " + (e.message || e), "error", 4000);
+    } finally {
+      if (publishBtn) { publishBtn.disabled = false; publishBtn.textContent = "📢 Опублікувати"; }
+    }
+  }
+
+  /* ─────────────────────────────────────────────
    *  MANAGEMENT BLOCKS — CRUD
    * ───────────────────────────────────────────── */
 
@@ -740,6 +785,7 @@
     const clearBtn      = $("qcClearBtn");
     const generateBtn   = $("qcGenerateBtn");
     const copyMapBtn    = $("qcCopyMapBtn");
+    const publishBtn    = $("qcPublishBtn");
     const addConclBtn   = $("qcAddConclBtn");
     const addPointBtn   = $("qcAddPointBtn");
     const addLabelBtn   = $("qcAddLabelBtn");
@@ -751,6 +797,7 @@
     if (clearBtn)    clearBtn.addEventListener("click", onClear);
     if (generateBtn) generateBtn.addEventListener("click", onGenerate);
     if (copyMapBtn)  copyMapBtn.addEventListener("click", onCopyMap);
+    if (publishBtn)  publishBtn.addEventListener("click", onPublish);
     if (addConclBtn) addConclBtn.addEventListener("click", addConclRow);
     if (addPointBtn) addPointBtn.addEventListener("click", addPointRow);
     if (addLabelBtn) addLabelBtn.addEventListener("click", addLabelRow);

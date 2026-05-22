@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.core.config import settings
 from app.core.db import get_conn
 
 router = APIRouter(tags=["conclusions"])
@@ -537,6 +540,64 @@ def api_map_labels_delete(item_id: int):
             return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
         conn.execute("DELETE FROM map_labels WHERE id = ?", (item_id,))
         conn.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Publish to chat-bot service
+# ---------------------------------------------------------------------------
+
+@router.post("/api/publish")
+async def api_publish(request: Request):
+    """Forward text + optional map image to the chat-bot service on port 3001.
+
+    Body: { "text": str, "image_b64": str }
+      text      — conclusion text (required)
+      image_b64 — base-64 PNG from the map screenshot (optional, may be empty)
+
+    The bot service URL is read from PUBLISH_BOT_URL in config.env.
+    The bot must have a "FastAPI → chat" automation configured; our request
+    simply delivers the payload — the target group is resolved by the bot.
+    """
+    if not settings.publish_bot_url:
+        return JSONResponse(
+            {"ok": False, "error": "PUBLISH_BOT_URL не налаштовано в config.env"},
+            status_code=503,
+        )
+
+    payload: Dict[str, Any] = await request.json()
+    text = (payload.get("text") or "").strip()
+    image_b64 = (payload.get("image_b64") or "").strip()
+
+    if not text:
+        return JSONResponse({"ok": False, "error": "Текст порожній"}, status_code=400)
+
+    bot_body = json.dumps(
+        {"text": text, "image_base64": image_b64},
+        ensure_ascii=False,
+    ).encode()
+
+    req = urllib.request.Request(
+        settings.publish_bot_url,
+        data=bot_body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()          # consume body, check for errors
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode(errors="replace")[:200]
+        except Exception:
+            detail = ""
+        return JSONResponse(
+            {"ok": False, "error": f"Bot HTTP {exc.code}: {detail}"},
+            status_code=502,
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
+
     return {"ok": True}
 
 

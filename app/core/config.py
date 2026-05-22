@@ -40,6 +40,9 @@ class Settings:
     landmark_auto_match_enabled: bool = False
     # Google Sheets sync via Apps Script webhook (empty = disabled).
     sheets_script_url: str = ""
+    # Chat-bot publish endpoint (empty = disabled).
+    # Set to e.g. http://localhost:3001/send in config.env.
+    publish_bot_url: str = ""
 
 
 def load_settings() -> Settings:
@@ -64,6 +67,7 @@ def load_settings() -> Settings:
         etalon_xlsx=os.getenv("ETALON_XLSX", ""),
         landmark_auto_match_enabled=_env_bool("LANDMARK_AUTO_MATCH", default=False),
         sheets_script_url=os.getenv("SHEETS_SCRIPT_URL", ""),
+        publish_bot_url=os.getenv("PUBLISH_BOT_URL", ""),
     )
 
 settings = load_settings()

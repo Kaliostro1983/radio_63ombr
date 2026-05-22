@@ -2952,6 +2952,21 @@ button.secondary{
   min-width: 36px;
 }
 
+.qc-publish-btn {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+  font-weight: 600;
+}
+.qc-publish-btn:hover:not(:disabled) {
+  background: #166534;
+  border-color: #166534;
+}
+.qc-publish-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
 .qc-textarea {
   flex: 1;
   min-height: 420px;
