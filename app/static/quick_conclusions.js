@@ -401,7 +401,17 @@
             const canvas = await window.html2canvas(mapDiv, {
               useCORS: true, allowTaint: false, logging: false, imageTimeout: 15000,
             });
-            const dataUrl = canvas.toDataURL("image/png");
+            // Scale down to max 1200px wide + use JPEG to reduce payload size
+            const MAX_W = 1200;
+            let outCanvas = canvas;
+            if (canvas.width > MAX_W) {
+              const scale = MAX_W / canvas.width;
+              outCanvas = document.createElement("canvas");
+              outCanvas.width  = MAX_W;
+              outCanvas.height = Math.round(canvas.height * scale);
+              outCanvas.getContext("2d").drawImage(canvas, 0, 0, outCanvas.width, outCanvas.height);
+            }
+            const dataUrl = outCanvas.toDataURL("image/jpeg", 0.82);
             imageb64 = dataUrl.split(",")[1] || "";
           } catch (_) { /* skip image, still send text */ }
         }
