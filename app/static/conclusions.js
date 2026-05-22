@@ -216,11 +216,17 @@
       })
     );
 
-    // Position below the badge (position:fixed → viewport coords, no scroll offset)
-    const rect = badge.getBoundingClientRect();
-    typePicker.classList.remove("hidden");   // unhide first so offsetWidth is available
-    const pickerW = typePicker.offsetWidth || 180;
-    typePicker.style.top  = (rect.bottom + 4) + "px";
+    // Position below the badge (position:fixed → viewport coords, no scroll offset).
+    // Falls back to opening upward if there is not enough room below.
+    const rect    = badge.getBoundingClientRect();
+    typePicker.classList.remove("hidden");          // unhide so dimensions are available
+    const pickerW = typePicker.offsetWidth  || 180;
+    const pickerH = typePicker.offsetHeight || 200;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const topPos  = spaceBelow >= pickerH
+      ? (rect.bottom + 4)
+      : Math.max(4, rect.top - pickerH - 4);
+    typePicker.style.top  = topPos + "px";
     typePicker.style.left = Math.min(rect.left, window.innerWidth - pickerW - 8) + "px";
   }
 
