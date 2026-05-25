@@ -202,22 +202,45 @@
           <!-- Two-column containers -->
           <div class="qc-containers">
 
-            <!-- LEFT: text editor -->
+            <!-- LEFT: send bar + textarea -->
             <div class="qc-editor-col">
-              <div class="qc-action-btns">
-                <button type="button" id="qcPasteBtn"    class="secondary qc-icon-btn" title="Вставити з буферу">Paste</button>
-                <button type="button" id="qcCopyBtn"     class="secondary qc-icon-btn" title="Копіювати текст">Copy</button>
-                <button type="button" id="qcClearBtn"    class="secondary qc-icon-btn" title="Очистити">Clear</button>
-                <button type="button" id="qcGenerateBtn" title="Згенерувати висновок">⚡ Згенерувати</button>
-                <button type="button" id="qcPublishBtn" class="qc-publish-btn" title="Опублікувати текст і карту в групу">📢 Опублікувати</button>
+
+              <!-- Send bar: platform toggle | chat autocomplete | send -->
+              <div class="qc-send-bar">
+                <button
+                  type="button"
+                  id="qcPlatformBtn"
+                  class="qc-platform-btn qc-platform-btn--wa"
+                  title="WhatsApp (натисни для Signal)"
+                >W</button>
+                <div class="qc-chat-ac-wrap">
+                  <input
+                    id="qcChatInput"
+                    type="text"
+                    class="qc-chat-input"
+                    placeholder="Оберіть чат…"
+                    autocomplete="off"
+                  />
+                  <div id="qcChatDrop" class="qc-chat-drop hidden"></div>
+                  <input type="hidden" id="qcChatId" value="" />
+                </div>
+                <button
+                  type="button"
+                  id="qcSendBtn"
+                  class="qc-send-btn"
+                  title="Надіслати текст і карту"
+                >&#10148;</button>
               </div>
+
               <textarea id="qcTextarea" class="qc-textarea" placeholder="Натисни «Згенерувати» для створення висновку…"></textarea>
             </div>
 
-            <!-- RIGHT: map -->
+            <!-- RIGHT: toolbar + map -->
             <div class="qc-map-col">
               <div class="qc-map-toolbar">
-                <button type="button" id="qcCopyMapBtn" class="secondary" title="Копіювати скріншот карти в буфер">📸 Копіювати карту</button>
+                <button type="button" id="qcGenerateBtn" title="Згенерувати висновок">⚡ Згенерувати</button>
+                <button type="button" id="qcCopyBtn"     class="secondary qc-icon-btn" title="Копіювати текст">Copy</button>
+                <button type="button" id="qcCopyMapBtn"  class="secondary" title="Копіювати скріншот карти в буфер">📸 Копіювати карту</button>
                 <label class="qc-zoom-label" for="qcMapZoom">Зум</label>
                 <input type="number" id="qcMapZoom" class="qc-zoom-inp" min="1" max="18" value="12" title="Масштаб карти після генерування" />
               </div>
@@ -322,5 +345,5 @@
 
 {% block scripts %}
 <script src="/static/conclusions.js?v=10" defer></script>
-<script src="/static/quick_conclusions.js?v=10" defer></script>
+<script src="/static/quick_conclusions.js?v=11" defer></script>
 {% endblock %}

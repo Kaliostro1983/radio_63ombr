@@ -1,6 +1,6 @@
 /**
  * quick_conclusions.js — «Швидко» tab on the /conclusions page.
- * v10
+ * v11
  * Depends on: Leaflet (already on page), mgrs.min.js (already on page).
  * html2canvas is loaded lazily on first screenshot attempt.
  */
@@ -11,14 +11,25 @@
   function toast(msg, type, ms) {
     if (window.appToast) window.appToast(msg, type || "info", ms || 2000);
   }
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
 
-  /* ── State ── */
-  let activeConclusion = null;   // { id, name, text }
-  let activePoints     = [];     // ordered array of { id, name, point } — multi-select
+  /* ── Map / generation state ── */
+  let activeConclusion = null;
+  let activePoints     = [];
   let qcMap            = null;
-  let qcMarkers        = [];     // array of L.Marker, one per activePoints entry
-  let qcLabelMarkers   = [];     // array of L.Marker for static map labels
+  let qcMarkers        = [];
+  let qcLabelMarkers   = [];
   let mapReady         = false;
+
+  /* ── Platform / chat state (persisted in localStorage) ── */
+  let activePlatform = localStorage.getItem("qcPlatform") || "whatsapp";
+  let activeChatId   = localStorage.getItem("qcChatId")   || "";
+  let activeChatName = localStorage.getItem("qcChatName") || "";
+  let cachedChats    = {};   // { "whatsapp": [...], "signal": [...] }
 
   /* ── DOM refs ── */
   const conclBtnsWrap = $("qcConclBtns");
@@ -44,9 +55,7 @@
     if (isFinite(saved) && saved >= 1 && saved <= 18) inp.value = String(saved);
     inp.addEventListener("change", function () {
       const v = parseInt(inp.value, 10);
-      if (isFinite(v) && v >= 1 && v <= 18) {
-        localStorage.setItem(ZOOM_KEY, String(v));
-      }
+      if (isFinite(v) && v >= 1 && v <= 18) localStorage.setItem(ZOOM_KEY, String(v));
     });
   }
 
@@ -99,10 +108,8 @@
       btn.addEventListener("click", function () {
         const idx = activePoints.findIndex(function (p) { return p.id === item.id; });
         if (idx === -1) {
-          // Add to selection
           activePoints.push(item);
         } else {
-          // Remove from selection
           activePoints.splice(idx, 1);
         }
         refreshPointButtonLabels();
@@ -111,7 +118,6 @@
     });
   }
 
-  /** Re-draw order numbers on all point buttons after selection change */
   function refreshPointButtonLabels() {
     if (!pointBtnsWrap) return;
     pointBtnsWrap.querySelectorAll(".qc-toggle-btn[data-id]").forEach(function (btn) {
@@ -150,11 +156,9 @@
       .addAttribution("Tiles &copy; Esri")
       .addTo(qcMap);
 
-    // Load custom place-name labels from DB
     loadMapLabels();
   }
 
-  /** Convert MGRS string (with or without spaces) → { lat, lon } or null */
   function mgrsToLatLon(s) {
     if (!window.mgrs || !window.mgrs.toPoint) return null;
     try {
@@ -165,7 +169,6 @@
     } catch (_) { return null; }
   }
 
-  /** Numbered divIcon — red circle with white order number */
   function makeNumberedIcon(num) {
     return window.L.divIcon({
       className: "",
@@ -175,14 +178,12 @@
     });
   }
 
-  /** Remove all existing point markers (numbered, per-generate) */
   function clearMapMarkers() {
     if (!qcMap) return;
     qcMarkers.forEach(function (m) { qcMap.removeLayer(m); });
     qcMarkers = [];
   }
 
-  /** Build a text-only Leaflet divIcon for a custom map label */
   function makeTextLabelIcon(name) {
     return window.L.divIcon({
       className: "qc-map-label-icon",
@@ -192,14 +193,12 @@
     });
   }
 
-  /** Remove all static label markers from the map */
   function clearLabelMarkers() {
     if (!qcMap) return;
     qcLabelMarkers.forEach(function (m) { qcMap.removeLayer(m); });
     qcLabelMarkers = [];
   }
 
-  /** Fetch map labels from server and place them on the map */
   function loadMapLabels() {
     if (!qcMap) return;
     fetch("/api/map-labels").then(function (r) { return r.json(); }).then(function (d) {
@@ -215,10 +214,9 @@
         }).addTo(qcMap);
         qcLabelMarkers.push(marker);
       });
-    }).catch(function () { /* silent — labels are optional */ });
+    }).catch(function () {});
   }
 
-  /** Place numbered markers for all activePoints; fit map to bounds */
   function setMapMarkers(points) {
     if (!qcMap) return;
     clearMapMarkers();
@@ -236,7 +234,6 @@
     });
 
     if (!latlngs.length) return;
-
     const zoom = getZoom();
     if (latlngs.length === 1) {
       qcMap.flyTo(latlngs[0], zoom, { animate: false, duration: 0 });
@@ -246,50 +243,13 @@
   }
 
   /* ─────────────────────────────────────────────
-   *  TEXT OPERATIONS
+   *  GENERATE
    * ───────────────────────────────────────────── */
-  function resetIfDirty() {
-    if (!textarea) return;
-    if (textarea.value.trim()) {
-      textarea.value = "";
-      clearMapMarkers();
-    }
-  }
-
-  function onPaste() {
-    resetIfDirty();
-    if (!navigator.clipboard?.readText) {
-      toast("Браузер не підтримує читання буферу. Натисніть Ctrl+V у полі нижче.", "error", 3000);
-      if (textarea) textarea.focus();
-      return;
-    }
-    navigator.clipboard.readText().then(function (text) {
-      if (textarea) textarea.value = text;
-    }).catch(function () {
-      toast("Немає доступу до буферу обміну. Вставте вручну (Ctrl+V).", "error", 3000);
-      if (textarea) textarea.focus();
-    });
-  }
-
-  function onCopy() {
-    if (!textarea) return;
-    if (!textarea.value) { toast("Поле порожнє", "error"); return; }
-    window.clipboardWrite(textarea.value).then(function (ok) {
-      if (ok) toast("Текст скопійовано!", "info", 1400);
-      else toast("Помилка копіювання", "error");
-    });
-  }
-
-  function onClear() {
-    resetIfDirty();
-  }
-
   function onGenerate() {
     if (!activeConclusion)    { toast("Оберіть тип висновку", "error"); return; }
     if (!activePoints.length) { toast("Оберіть точку",        "error"); return; }
     if (!textarea) return;
 
-    // Build points block
     let pointsBlock;
     if (activePoints.length === 1) {
       pointsBlock = activePoints[0].point;
@@ -309,6 +269,18 @@
   }
 
   /* ─────────────────────────────────────────────
+   *  COPY TEXT
+   * ───────────────────────────────────────────── */
+  function onCopy() {
+    if (!textarea) return;
+    if (!textarea.value) { toast("Поле порожнє", "error"); return; }
+    window.clipboardWrite(textarea.value).then(function (ok) {
+      if (ok) toast("Текст скопійовано!", "info", 1400);
+      else toast("Помилка копіювання", "error");
+    });
+  }
+
+  /* ─────────────────────────────────────────────
    *  MAP SCREENSHOT → CLIPBOARD
    * ───────────────────────────────────────────── */
   function loadScript(src) {
@@ -323,34 +295,21 @@
 
   async function onCopyMap() {
     if (!mapDiv) return;
-
     if (!window.html2canvas) {
-      try {
-        await loadScript("https://html2canvas.hertzen.com/dist/html2canvas.min.js");
-      } catch (e) {
-        toast("Не вдалося завантажити бібліотеку скріншоту", "error", 3500);
-        return;
-      }
+      try { await loadScript("https://html2canvas.hertzen.com/dist/html2canvas.min.js"); }
+      catch (e) { toast("Не вдалося завантажити бібліотеку скріншоту", "error", 3500); return; }
     }
-
     if (qcMap) qcMap.invalidateSize();
-
     try {
       const canvas = await window.html2canvas(mapDiv, {
-        useCORS:      true,
-        allowTaint:   false,
-        logging:      false,
-        imageTimeout: 15000,
+        useCORS: true, allowTaint: false, logging: false, imageTimeout: 15000,
       });
-
       canvas.toBlob(async function (blob) {
         if (!blob) { toast("Не вдалося створити зображення", "error"); return; }
         try {
           await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
           toast("Скріншот карти скопійовано!", "success", 1800);
         } catch (e) {
-          // HTTP context — clipboard.write() not allowed.
-          // Show image in modal so user can right-click → Copy image.
           const dataUrl = canvas.toDataURL("image/png");
           const modal   = document.getElementById("mapImgModal");
           const preview = document.getElementById("mapImgPreview");
@@ -360,7 +319,6 @@
             preview.src = dataUrl;
             modal.classList.remove("hidden");
             modal.setAttribute("aria-hidden", "false");
-
             function closeModal() {
               modal.classList.add("hidden");
               modal.setAttribute("aria-hidden", "true");
@@ -378,17 +336,168 @@
   }
 
   /* ─────────────────────────────────────────────
-   *  PUBLISH — send text + map image to bot service
+   *  PLATFORM TOGGLE
    * ───────────────────────────────────────────── */
-  async function onPublish() {
-    const text = textarea ? textarea.value.trim() : "";
-    if (!text) { toast("Текст порожній — спочатку згенеруйте висновок", "error", 3000); return; }
+  function savePlatform(p) {
+    activePlatform = p;
+    localStorage.setItem("qcPlatform", p);
+  }
 
-    const publishBtn = $("qcPublishBtn");
-    if (publishBtn) { publishBtn.disabled = true; publishBtn.textContent = "⏳ Публікація…"; }
+  function updatePlatformBtn() {
+    const btn = $("qcPlatformBtn");
+    if (!btn) return;
+    if (activePlatform === "signal") {
+      btn.textContent = "S";
+      btn.className   = "qc-platform-btn qc-platform-btn--signal";
+      btn.title       = "Signal (натисни для WhatsApp)";
+    } else {
+      btn.textContent = "W";
+      btn.className   = "qc-platform-btn qc-platform-btn--wa";
+      btn.title       = "WhatsApp (натисни для Signal)";
+    }
+  }
+
+  function onPlatformToggle() {
+    savePlatform(activePlatform === "whatsapp" ? "signal" : "whatsapp");
+    updatePlatformBtn();
+    // Clear chat selection — chats differ by platform
+    activeChatId   = "";
+    activeChatName = "";
+    localStorage.removeItem("qcChatId");
+    localStorage.removeItem("qcChatName");
+    const inp = $("qcChatInput");
+    if (inp) inp.value = "";
+    // Preload chats for new platform
+    loadChats(activePlatform);
+  }
+
+  /* ─────────────────────────────────────────────
+   *  CHAT AUTOCOMPLETE
+   * ───────────────────────────────────────────── */
+  function saveChat(id, name) {
+    activeChatId   = id;
+    activeChatName = name;
+    localStorage.setItem("qcChatId",   id);
+    localStorage.setItem("qcChatName", name);
+  }
+
+  async function loadChats(platform) {
+    if (cachedChats[platform]) return cachedChats[platform];
+    try {
+      const r = await fetch("/api/push/chats?platform=" + platform + "&only_groups=0");
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.chats)) {
+        cachedChats[platform] = d.chats;
+        return d.chats;
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  function renderChatDrop(chats, query) {
+    const drop = $("qcChatDrop");
+    if (!drop) return;
+    const q = (query || "").toLowerCase();
+    const filtered = q
+      ? chats.filter(function (c) { return c.name.toLowerCase().includes(q); })
+      : chats;
+
+    if (!filtered.length) { drop.classList.add("hidden"); return; }
+
+    drop.innerHTML = "";
+    filtered.slice(0, 40).forEach(function (chat) {
+      const item = document.createElement("div");
+      item.className = "qc-chat-drop-item";
+      item.dataset.id   = chat.id;
+      item.dataset.name = chat.name;
+      item.innerHTML =
+        '<span>' + esc(chat.name) + '</span>' +
+        '<span class="qc-chat-drop-item__type">' +
+        esc(chat.type === "group" ? "група" : "контакт") + '</span>';
+      item.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        selectChat(chat.id, chat.name);
+        drop.classList.add("hidden");
+      });
+      drop.appendChild(item);
+    });
+    drop.classList.remove("hidden");
+  }
+
+  function selectChat(id, name) {
+    const inp = $("qcChatInput");
+    if (inp) inp.value = name;
+    saveChat(id, name);
+  }
+
+  function setupChatAutocomplete() {
+    const input = $("qcChatInput");
+    const drop  = $("qcChatDrop");
+    if (!input || !drop) return;
+
+    // Restore saved selection
+    if (activeChatName) input.value = activeChatName;
+
+    input.addEventListener("focus", async function () {
+      const chats = await loadChats(activePlatform);
+      renderChatDrop(chats, input.value);
+    });
+
+    input.addEventListener("input", async function () {
+      // If user edits, clear stored chat_id
+      if (input.value !== activeChatName) {
+        activeChatId   = "";
+        activeChatName = input.value;
+      }
+      const chats = await loadChats(activePlatform);
+      renderChatDrop(chats, input.value);
+    });
+
+    input.addEventListener("blur", function () {
+      setTimeout(function () { drop.classList.add("hidden"); }, 160);
+    });
+
+    input.addEventListener("keydown", function (e) {
+      const items = drop.querySelectorAll(".qc-chat-drop-item");
+      if (!items.length || drop.classList.contains("hidden")) return;
+      const focused = drop.querySelector(".qc-chat-drop-item.focused");
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!focused) { items[0].classList.add("focused"); }
+        else {
+          focused.classList.remove("focused");
+          (focused.nextElementSibling || items[0]).classList.add("focused");
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!focused) { items[items.length - 1].classList.add("focused"); }
+        else {
+          focused.classList.remove("focused");
+          (focused.previousElementSibling || items[items.length - 1]).classList.add("focused");
+        }
+      } else if (e.key === "Enter" && focused) {
+        e.preventDefault();
+        focused.dispatchEvent(new MouseEvent("mousedown"));
+      } else if (e.key === "Escape") {
+        drop.classList.add("hidden");
+      }
+    });
+  }
+
+  /* ─────────────────────────────────────────────
+   *  SEND (text + map → bot service)
+   * ───────────────────────────────────────────── */
+  async function onSend() {
+    const text = textarea ? textarea.value.trim() : "";
+    if (!text)        { toast("Текст порожній — спочатку згенеруйте висновок", "error", 3000); return; }
+    if (!activeChatId){ toast("Оберіть чат зі списку", "error", 2500); return; }
+
+    const sendBtn = $("qcSendBtn");
+    if (sendBtn) sendBtn.disabled = true;
 
     try {
-      // Capture map screenshot as base64 PNG (best-effort — skip on failure)
+      // Capture map screenshot as JPEG (scaled to ≤1200px)
       let imageb64 = "";
       if (mapDiv) {
         if (!window.html2canvas) {
@@ -401,34 +510,43 @@
             const canvas = await window.html2canvas(mapDiv, {
               useCORS: true, allowTaint: false, logging: false, imageTimeout: 15000,
             });
-            // Scale down to max 1200px wide + use JPEG to reduce payload size
             const MAX_W = 1200;
-            let outCanvas = canvas;
+            let out = canvas;
             if (canvas.width > MAX_W) {
               const scale = MAX_W / canvas.width;
-              outCanvas = document.createElement("canvas");
-              outCanvas.width  = MAX_W;
-              outCanvas.height = Math.round(canvas.height * scale);
-              outCanvas.getContext("2d").drawImage(canvas, 0, 0, outCanvas.width, outCanvas.height);
+              out = document.createElement("canvas");
+              out.width  = MAX_W;
+              out.height = Math.round(canvas.height * scale);
+              out.getContext("2d").drawImage(canvas, 0, 0, out.width, out.height);
             }
-            const dataUrl = outCanvas.toDataURL("image/jpeg", 0.82);
-            imageb64 = dataUrl.split(",")[1] || "";
-          } catch (_) { /* skip image, still send text */ }
+            imageb64 = out.toDataURL("image/jpeg", 0.82).split(",")[1] || "";
+          } catch (_) { /* skip image */ }
         }
       }
 
-      const r = await fetch("/api/publish", {
+      const r = await fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, image_b64: imageb64 }),
+        body: JSON.stringify({
+          platform:     activePlatform,
+          chat_id:      activeChatId,
+          text:         text,
+          image_base64: imageb64,
+        }),
       });
       const d = await r.json();
-      if (!d.ok) { toast(d.error || "Помилка публікації", "error", 5000); return; }
-      toast("Опубліковано! 📢", "success", 2500);
+      if (!d.ok) {
+        const msg = (typeof d.error === "object")
+          ? JSON.stringify(d.error)
+          : (d.error || d.message || "Помилка відправки");
+        toast(msg, "error", 5000);
+        return;
+      }
+      toast("Надіслано! 📢", "success", 2500);
     } catch (e) {
       toast("Помилка: " + (e.message || e), "error", 4000);
     } finally {
-      if (publishBtn) { publishBtn.disabled = false; publishBtn.textContent = "📢 Опублікувати"; }
+      if (sendBtn) sendBtn.disabled = false;
     }
   }
 
@@ -436,17 +554,10 @@
    *  MANAGEMENT BLOCKS — CRUD
    * ───────────────────────────────────────────── */
 
-  function esc(s) {
-    return String(s ?? "")
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-
-  /** Show/hide an error div */
   function showMgmtErr(el, msg) {
     if (!el) return;
     if (msg) { el.textContent = msg; el.style.display = ""; }
-    else { el.style.display = "none"; el.textContent = ""; }
+    else     { el.style.display = "none"; el.textContent = ""; }
   }
 
   /* ── quick_conclusions management ── */
@@ -459,9 +570,7 @@
       list.innerHTML = '<span class="small" style="opacity:.5">Порожньо</span>';
       return;
     }
-    items.forEach(function (item) {
-      list.appendChild(buildConclRow(item));
-    });
+    items.forEach(function (item) { list.appendChild(buildConclRow(item)); });
   }
 
   function buildConclRow(item) {
@@ -502,7 +611,7 @@
   }
 
   function addConclRow() {
-    const list = $("qcConclList");
+    const list  = $("qcConclList");
     const errEl = $("qcConclErr");
     if (!list) return;
     showMgmtErr(errEl, "");
@@ -560,7 +669,7 @@
     row.className = "qc-mgmt-row";
     row.dataset.id = String(item.id);
     row.innerHTML =
-      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" value="' + esc(item.name) + '" placeholder="Назва" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name"  type="text" value="' + esc(item.name)  + '" placeholder="Назва" />' +
       '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" value="' + esc(item.point) + '" placeholder="MGRS координата" />' +
       '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
       '<button type="button" class="qc-mgmt-del secondary">✕</button>';
@@ -593,7 +702,7 @@
   }
 
   function addPointRow() {
-    const list = $("qcPointList");
+    const list  = $("qcPointList");
     const errEl = $("qcPointErr");
     if (!list) return;
     showMgmtErr(errEl, "");
@@ -601,7 +710,7 @@
     const row = document.createElement("div");
     row.className = "qc-mgmt-row qc-mgmt-row--new";
     row.innerHTML =
-      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" placeholder="Назва (напр. 04)" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name"  type="text" placeholder="Назва (напр. 04)" />' +
       '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" placeholder="MGRS (напр. 37U DQ 29050 28377)" />' +
       '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
       '<button type="button" class="qc-mgmt-del secondary">✕</button>';
@@ -647,7 +756,7 @@
     row.className = "qc-mgmt-row";
     row.dataset.id = String(item.id);
     row.innerHTML =
-      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" value="' + esc(item.name) + '" placeholder="Назва" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name"  type="text" value="' + esc(item.name) + '" placeholder="Назва" />' +
       '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" value="' + esc(item.mgrs) + '" placeholder="MGRS координата" />' +
       '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
       '<button type="button" class="qc-mgmt-del secondary">✕</button>';
@@ -680,7 +789,7 @@
   }
 
   function addLabelRow() {
-    const list = $("qcLabelList");
+    const list  = $("qcLabelList");
     const errEl = $("qcLabelErr");
     if (!list) return;
     showMgmtErr(errEl, "");
@@ -688,7 +797,7 @@
     const row = document.createElement("div");
     row.className = "qc-mgmt-row qc-mgmt-row--new";
     row.innerHTML =
-      '<input class="qc-mgmt-inp qc-mgmt-inp--name" type="text" placeholder="Назва (напр. Торське)" />' +
+      '<input class="qc-mgmt-inp qc-mgmt-inp--name"  type="text" placeholder="Назва (напр. Торське)" />' +
       '<input class="qc-mgmt-inp qc-mgmt-inp--point" type="text" placeholder="MGRS (напр. 37U DQ 29050 28377)" />' +
       '<button type="button" class="qc-mgmt-save">Зберегти</button>' +
       '<button type="button" class="qc-mgmt-del secondary">✕</button>';
@@ -731,18 +840,15 @@
       const pd = await pr.json();
       const ld = await lr.json();
 
-      // Refresh selector buttons (top of tab)
       renderConclButtons(cd.rows || []);
       renderPointButtons(pd.rows || []);
       activeConclusion = null;
       activePoints = [];
 
-      // Refresh management lists
       renderConclMgmt(cd.rows || []);
       renderPointsMgmt(pd.rows || []);
       renderLabelsMgmt(ld.rows || []);
 
-      // Refresh labels on map
       loadMapLabels();
     } catch (e) {
       console.error("reloadAll failed", e);
@@ -769,7 +875,6 @@
    *  INIT
    * ───────────────────────────────────────────── */
   function init() {
-    // Load selector buttons + management lists together
     (async function () {
       try {
         const [cr, pr, lr] = await Promise.all([
@@ -790,24 +895,32 @@
       }
     })();
 
-    const pasteBtn      = $("qcPasteBtn");
-    const copyBtn       = $("qcCopyBtn");
-    const clearBtn      = $("qcClearBtn");
-    const generateBtn   = $("qcGenerateBtn");
-    const copyMapBtn    = $("qcCopyMapBtn");
-    const publishBtn    = $("qcPublishBtn");
-    const addConclBtn   = $("qcAddConclBtn");
-    const addPointBtn   = $("qcAddPointBtn");
-    const addLabelBtn   = $("qcAddLabelBtn");
+    // Platform button
+    const platformBtn = $("qcPlatformBtn");
+    updatePlatformBtn();
+    if (platformBtn) platformBtn.addEventListener("click", onPlatformToggle);
+
+    // Chat autocomplete
+    setupChatAutocomplete();
+
+    // Preload chats for current platform (background)
+    loadChats(activePlatform);
+
+    // Other buttons
+    const generateBtn = $("qcGenerateBtn");
+    const copyBtn     = $("qcCopyBtn");
+    const copyMapBtn  = $("qcCopyMapBtn");
+    const sendBtn     = $("qcSendBtn");
+    const addConclBtn = $("qcAddConclBtn");
+    const addPointBtn = $("qcAddPointBtn");
+    const addLabelBtn = $("qcAddLabelBtn");
 
     initZoomInput();
 
-    if (pasteBtn)    pasteBtn.addEventListener("click", onPaste);
-    if (copyBtn)     copyBtn.addEventListener("click", onCopy);
-    if (clearBtn)    clearBtn.addEventListener("click", onClear);
     if (generateBtn) generateBtn.addEventListener("click", onGenerate);
+    if (copyBtn)     copyBtn.addEventListener("click", onCopy);
     if (copyMapBtn)  copyMapBtn.addEventListener("click", onCopyMap);
-    if (publishBtn)  publishBtn.addEventListener("click", onPublish);
+    if (sendBtn)     sendBtn.addEventListener("click", onSend);
     if (addConclBtn) addConclBtn.addEventListener("click", addConclRow);
     if (addPointBtn) addPointBtn.addEventListener("click", addPointRow);
     if (addLabelBtn) addLabelBtn.addEventListener("click", addLabelRow);

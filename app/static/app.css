@@ -2952,20 +2952,100 @@ button.secondary{
   min-width: 36px;
 }
 
-.qc-publish-btn {
-  background: #15803d;
-  border-color: #15803d;
+/* ── Send bar (platform toggle + chat autocomplete + send) ── */
+.qc-send-bar {
+  display: flex;
+  align-items: stretch;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.qc-platform-btn {
+  flex-shrink: 0;
+  min-width: 42px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: .03em;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
   color: #fff;
-  font-weight: 600;
+  padding: 0 13px;
+  transition: opacity .15s;
 }
-.qc-publish-btn:hover:not(:disabled) {
-  background: #166534;
-  border-color: #166534;
+.qc-platform-btn:hover { opacity: .85; }
+.qc-platform-btn--wa     { background: #25d366; }
+.qc-platform-btn--signal { background: #3a76f0; }
+
+.qc-chat-ac-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-left:  1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
-.qc-publish-btn:disabled {
-  opacity: .6;
-  cursor: not-allowed;
+
+.qc-chat-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: var(--inputbg);
+  color: var(--inputfg);
+  padding: 0 10px;
+  font-size: 0.88rem;
+  outline: none;
 }
+.qc-chat-input::placeholder { opacity: .5; }
+
+.qc-chat-drop {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: -1px;
+  right: -1px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+
+.qc-chat-drop-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.87rem;
+}
+.qc-chat-drop-item:hover,
+.qc-chat-drop-item.focused { background: var(--hover); }
+.qc-chat-drop-item__type {
+  font-size: 0.72rem;
+  opacity: .45;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.qc-send-btn {
+  flex-shrink: 0;
+  min-width: 46px;
+  border: none;
+  border-radius: 0;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 14px;
+  transition: background .15s;
+}
+.qc-send-btn:hover:not(:disabled) { background: #d97706; }
+.qc-send-btn:disabled { opacity: .55; cursor: not-allowed; }
 
 .qc-textarea {
   flex: 1;
