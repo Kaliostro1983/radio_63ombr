@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Карта висновків — {{ app_name }}</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin/>
+
+  <!-- Map page styles -->
+  <link rel="stylesheet" href="/static/conclusions_map.css?v=1">
+</head>
+<body>
+
+<!-- Map container -->
+<div id="map"></div>
+
+<!-- Loading overlay -->
+<div id="mapOverlay">Завантаження…</div>
+
+<!-- ── Top panel ───────────────────────────────────────────── -->
+<div id="topPanel">
+  <div id="topHandle">
+    <span>Категорії</span>
+    <span class="handle-arrow">▲</span>
+  </div>
+  <div id="topContent">
+    <div id="topInner">
+      <div id="chipContainer" style="display:contents"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Right detail panel ─────────────────────────────────── -->
+<div id="rightPanel">
+  <div id="rightHandle" title="Деталі висновку">&#8249;</div>
+  <div id="rightContent">
+
+    <div class="rp-header">
+      <div id="rpTypeBadge" class="rp-type-badge">
+        <img class="rp-badge-icon" src="/static/icons/default.svg" alt="" width="20" height="20">
+        <span class="rp-badge-label">—</span>
+      </div>
+      <button class="rp-close" id="rpCloseBtn" title="Закрити">✕</button>
+    </div>
+
+    <div class="rp-meta">
+      <div class="rp-meta-row">
+        <span>🕐 <strong id="rpMetaDate">—</strong></span>
+        <span>📡 <strong id="rpMetaNet">—</strong></span>
+      </div>
+    </div>
+
+    <div class="rp-body">
+
+      <div>
+        <div class="rp-section-label">Аналітичний висновок</div>
+        <div id="rpConclusionText" class="rp-text"></div>
+      </div>
+
+      <div id="rpBodySection">
+        <div class="rp-section-label">Повідомлення</div>
+        <div id="rpBodyText" class="rp-text"></div>
+      </div>
+
+      <div>
+        <div class="rp-section-label">Координати MGRS</div>
+        <div id="rpCoords" class="rp-coords"></div>
+      </div>
+
+    </div><!-- /rp-body -->
+  </div><!-- /rightContent -->
+</div><!-- /rightPanel -->
+
+<!-- Marker count badge -->
+<div id="markerCount" class="hidden"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
+<!-- MGRS library -->
+<script src="https://cdn.jsdelivr.net/npm/mgrs@2.1.0/dist/mgrs.js"></script>
+
+<script>
+  // Wire up close button
+  document.getElementById("rpCloseBtn").addEventListener("click", () => {
+    document.getElementById("rightPanel").classList.remove("open");
+    document.getElementById("rightHandle").style.display = "";
+  });
+  // Right handle click opens panel
+  document.getElementById("rightHandle").addEventListener("click", () => {
+    document.getElementById("rightPanel").classList.add("open");
+    document.getElementById("rightHandle").style.display = "none";
+  });
+</script>
+
+<!-- Map logic -->
+<script src="/static/conclusions_map.js?v=1"></script>
+
+</body>
+</html>

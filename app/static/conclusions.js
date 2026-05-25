@@ -1,5 +1,5 @@
 /**
- * conclusions.js — Висновки page (v3).
+ * conclusions.js — Висновки page (v4 / map icons).
  *
  * "Перегляд"     — filter bar + geo panel + card-style results table
  * "Налаштування" — conclusion types CRUD with keyword chips + colour picker
@@ -570,6 +570,18 @@
 
   cnMapToggleBtn.addEventListener("click", toggleGeoPanel);
 
+  // Full-map button — opens /conclusions/map in a new tab with current filters
+  const cnFullMapBtn = $("cnFullMapBtn");
+  if (cnFullMapBtn) {
+    cnFullMapBtn.addEventListener("click", () => {
+      const qs = new URLSearchParams();
+      if (dateFrom.value)   qs.set("date_from",  dateFrom.value);
+      if (dateTo.value)     qs.set("date_to",    dateTo.value);
+      if (networkId.value)  qs.set("network_id", networkId.value);
+      window.open("/conclusions/map?" + qs.toString(), "_blank");
+    });
+  }
+
   function toggleGeoPanel() {
     geoState.visible = !geoState.visible;
     cnMapToggleBtn.setAttribute("aria-pressed", geoState.visible ? "true" : "false");
@@ -790,6 +802,17 @@
     } catch (_) { _deltaTypeOptions = []; }
   }
 
+  /* Available SVG icons for map markers (loaded once when Settings tab opens) */
+  let _availableIcons = [];
+  async function loadAvailableIcons() {
+    if (_availableIcons.length) return;
+    try {
+      const r = await fetch("/api/conclusions/icons");
+      const d = await r.json();
+      _availableIcons = d.ok ? (d.icons || []) : [];
+    } catch (_) { _availableIcons = []; }
+  }
+
   /* ──────────────────────────────────────────────
    *  НАЛАШТУВАННЯ — types CRUD
    * ────────────────────────────────────────────── */
@@ -830,7 +853,7 @@
     typesLoader.style.display = "";
     typesList.innerHTML = "";
     try {
-      await loadDeltaTypeOptions();
+      await Promise.all([loadDeltaTypeOptions(), loadAvailableIcons()]);
       const [typesRes, settingsRes] = await Promise.all([
         fetch("/api/conclusions/types"),
         fetch("/api/settings?keys=delta_send_enabled,delta_chat_id,delta_platform,delta_chat_name"),
@@ -998,6 +1021,14 @@
       `<option value="${escapeHtml(opt.value)}"${opt.value === typeObj.delta_type ? " selected" : ""}>${escapeHtml(opt.value)}</option>`
     ).join("");
 
+    // Build icon options
+    const iconOptionsHtml = [
+      `<option value="">— без іконки (за замовчуванням) —</option>`,
+      ..._availableIcons.map(f =>
+        `<option value="${escapeHtml(f)}"${f === typeObj.icon_filename ? " selected" : ""}>${escapeHtml(f)}</option>`
+      )
+    ].join("");
+
     card.innerHTML = `
       <div class="cn-type-card__head">
         ${isProtected ? "" : `<span class="cn-drag-handle" title="Перетягнути для зміни порядку">⠿</span>`}
@@ -1011,6 +1042,14 @@
                       color:var(--danger);border-color:color-mix(in srgb,var(--danger) 50%,var(--border))"
              >Видалити</button>`
         }
+      </div>
+
+      <!-- Icon selector -->
+      <div style="display:flex;align-items:center;gap:8px;margin:6px 0 2px">
+        <span class="small" style="opacity:.7;white-space:nowrap">Іконка на карті:</span>
+        <select class="cn-icon-sel" style="flex:1;font-size:12px;padding:2px 6px">${iconOptionsHtml}</select>
+        <img class="cn-icon-preview" src="${typeObj.icon_filename ? `/static/icons/${escapeHtml(typeObj.icon_filename)}` : '/static/icons/default.svg'}"
+             width="22" height="22" style="flex-shrink:0;opacity:.85" alt="" />
       </div>
 
       <div class="small" style="opacity:.7;margin:6px 0 4px">Ключові слова:</div>
@@ -1078,6 +1117,17 @@
     colorInp.addEventListener("change", async () => {
       await patchTypeColor(typeObj.id, colorInp.value, card);
     });
+
+    // ── Icon selector handler ──
+    const iconSel     = card.querySelector(".cn-icon-sel");
+    const iconPreview = card.querySelector(".cn-icon-preview");
+    if (iconSel && iconPreview) {
+      iconSel.addEventListener("change", () => {
+        const fn = iconSel.value;
+        iconPreview.src = fn ? `/static/icons/${fn}` : "/static/icons/default.svg";
+        patchTypeIcon(typeObj.id, fn);
+      });
+    }
 
     // ── Delta section handlers ──
     const deltaSection      = card.querySelector(".cn-delta-section");
@@ -1172,6 +1222,25 @@
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         toast(d.error || "Помилка збереження кольору", "error");
+      }
+    } catch (err) {
+      toast("Помилка: " + err.message, "error");
+    }
+  }
+
+  /* ─── patch icon ─── */
+  async function patchTypeIcon(typeId, iconFilename) {
+    const typeObj = state.settings.types.find((t) => t.id === typeId);
+    if (typeObj) typeObj.icon_filename = iconFilename;
+    try {
+      const res = await fetch(`/api/conclusions/types/${typeId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ icon_filename: iconFilename }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast(d.error || "Помилка збереження іконки", "error");
       }
     } catch (err) {
       toast("Помилка: " + err.message, "error");

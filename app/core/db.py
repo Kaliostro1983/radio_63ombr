@@ -349,11 +349,13 @@ CREATE TABLE IF NOT EXISTS callsign_corrections (
 -- Typology for analytical conclusions (filled manually via UI or migration).
 -- id=0 is reserved as the "невідомо" default.
 -- keywords_json holds a JSON array of keyword stems used for auto-classification.
+-- icon_filename references a file in static/icons/ for fullscreen map markers.
 CREATE TABLE IF NOT EXISTS conclusion_types (
     id            INTEGER PRIMARY KEY,
     type          TEXT NOT NULL UNIQUE,
     keywords_json TEXT NOT NULL DEFAULT '[]',
-    color         TEXT
+    color         TEXT,
+    icon_filename TEXT NOT NULL DEFAULT ''
 );
 
 INSERT OR IGNORE INTO conclusion_types (id, type) VALUES (0, 'невідомо');
@@ -1540,6 +1542,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         conn, "analytical_conclusions", "sended",
         "sended INTEGER NOT NULL DEFAULT 0",
     )
+
+    # --- conclusion_types: icon_filename for map markers ---
+    _ensure_column(conn, "conclusion_types", "icon_filename", "icon_filename TEXT NOT NULL DEFAULT ''")
 
 
 def get_db() -> sqlite3.Connection:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -46,6 +47,15 @@ def conclusions_page(request: Request):
     templates = request.app.state.templates
     return templates.TemplateResponse(
         "conclusions.html",
+        {"request": request, "app_name": request.app.state.app_name},
+    )
+
+
+@router.get("/conclusions/map", response_class=HTMLResponse)
+def conclusions_map_page(request: Request):
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        "conclusions_map.html",
         {"request": request, "app_name": request.app.state.app_name},
     )
 
@@ -172,7 +182,7 @@ def api_conclusion_types():
         rows = conn.execute(
             "SELECT id, type, keywords_json, color, sort_order,"
             "       delta_auto_send, delta_type, delta_identification,"
-            "       delta_source, delta_presence "
+            "       delta_source, delta_presence, icon_filename "
             "FROM conclusion_types ORDER BY sort_order ASC, id ASC"
         ).fetchall()
 
@@ -193,8 +203,21 @@ def api_conclusion_types():
             "delta_identification": r["delta_identification"] or "Ворожий",
             "delta_source":         r["delta_source"] or "Радіорозвідка (РР)",
             "delta_presence":       r["delta_presence"] or "присутній",
+            "icon_filename":        r["icon_filename"] or "",
         })
     return {"ok": True, "rows": out}
+
+
+@router.get("/api/conclusions/icons")
+def api_conclusion_icons():
+    """Return a list of available SVG icon filenames from the static/icons folder."""
+    icons_dir = os.path.join(os.path.dirname(__file__), "..", "static", "icons")
+    icons_dir = os.path.normpath(icons_dir)
+    try:
+        files = sorted(f for f in os.listdir(icons_dir) if f.lower().endswith(".svg"))
+    except FileNotFoundError:
+        files = []
+    return {"ok": True, "icons": files}
 
 
 @router.put("/api/conclusions/types/order")
@@ -284,6 +307,8 @@ async def api_conclusion_type_update(type_id: int, request: Request):
             delta_fields["delta_source"] = str(payload["delta_source"]).strip()
         if "delta_presence" in payload:
             delta_fields["delta_presence"] = str(payload["delta_presence"]).strip()
+        if "icon_filename" in payload:
+            delta_fields["icon_filename"] = str(payload["icon_filename"]).strip()
 
         set_parts = "type = ?, keywords_json = ?, color = ?"
         params: List[Any] = [new_name, kws_json, new_color or None]
