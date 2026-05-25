@@ -413,7 +413,7 @@
     if (radius)  lines.push(`Радіус дії: ${radius}`);
     if (mgrs)    lines.push(`MGRS: ${mgrs}`);
 
-    const text = lines.join("\n") + "\n\n" + (_deltaModalRow.conclusion_text || "").trim();
+    const text = lines.join("\n") + "\n\n" + (_deltaModalRow.body_text || "").trim();
 
     if (!cnSettingsChatId) {
       toast("Оберіть цільовий чат у вкладці «Налаштування»", "warn");
