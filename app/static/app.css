@@ -3065,31 +3065,65 @@ button.secondary{
   padding: 10px 12px;
 }
 
+/* ── Map toolbar — unified bar matching send-bar style ── */
 .qc-map-toolbar {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.qc-zoom-label {
-  font-size: .82rem;
-  opacity: .75;
-  white-space: nowrap;
-}
-.qc-zoom-inp {
-  width: 58px;
-  padding: 4px 6px;
-  font-size: .88rem;
-  text-align: center;
-  background: var(--inputbg);
-  color: var(--inputfg);
+  align-items: stretch;
+  height: 38px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  overflow: hidden;   /* safe here — no dropdowns inside */
 }
-.qc-zoom-inp:focus {
-  outline: none;
-  border-color: var(--accent);
+
+/* All direct button children share the same look */
+.qc-map-toolbar > button {
+  flex-shrink: 0;
+  background: var(--card);
+  border: none;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0 14px;
+  color: var(--fg);
+  white-space: nowrap;
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+  height: 100%;
+  transition: background 0.12s;
 }
+.qc-map-toolbar > button:hover:not(:disabled) { background: var(--hover); }
+
+/* Generate gets bold text to stand out */
+#qcGenerateBtn { font-weight: 700; }
+
+/* Zoom label — acts as the separator + text before the input */
+.qc-zoom-label {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 12px;
+  font-size: .82rem;
+  opacity: .70;
+  white-space: nowrap;
+  background: var(--card);
+  border-left: 1px solid var(--border);
+}
+
+/* Zoom input — last segment, no individual border */
+.qc-zoom-inp {
+  flex-shrink: 0;
+  width: 50px;
+  border: none;
+  padding: 0 8px;
+  background: var(--card);
+  color: var(--inputfg);
+  text-align: center;
+  font-size: .88rem;
+  font-family: inherit;
+  height: 100%;
+}
+.qc-zoom-inp:focus { outline: none; }
 
 .qc-map-container {
   flex: 1;
