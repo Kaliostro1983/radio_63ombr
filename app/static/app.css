@@ -3180,8 +3180,9 @@ button.secondary{
   padding: 10px 12px;
 }
 
-/* ── Map toolbar — unified bar matching send-bar style ── */
-.qc-map-toolbar {
+/* ── Map toolbar + Text toolbar — unified bar matching send-bar style ── */
+.qc-map-toolbar,
+.qc-text-toolbar {
   display: flex;
   align-items: stretch;
   height: 38px;
@@ -3192,7 +3193,8 @@ button.secondary{
 }
 
 /* All direct button children share the same look */
-.qc-map-toolbar > button {
+.qc-map-toolbar > button,
+.qc-text-toolbar > button {
   flex-shrink: 0;
   background: var(--card);
   border: none;
@@ -3207,7 +3209,20 @@ button.secondary{
   height: 100%;
   transition: background 0.12s;
 }
-.qc-map-toolbar > button:hover:not(:disabled) { background: var(--hover); }
+.qc-map-toolbar > button:hover:not(:disabled),
+.qc-text-toolbar > button:hover:not(:disabled) { background: var(--hover); }
+
+/* Text toolbar — margin above textarea, no bottom radius (textarea sits flush below) */
+.qc-text-toolbar {
+  border-radius: 8px 8px 0 0;
+  margin-top: 8px;
+}
+/* Make textarea corners match when text toolbar is present */
+.qc-text-toolbar + .qc-textarea {
+  border-radius: 0 0 8px 8px;
+  border-top: none;
+  margin-top: 0;
+}
 
 /* Generate gets bold text to stand out */
 #qcGenerateBtn { font-weight: 700; }

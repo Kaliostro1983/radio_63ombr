@@ -246,6 +246,12 @@
                 >&#10148;</button>
               </div>
 
+              <!-- Text toolbar: paste | clear -->
+              <div class="qc-text-toolbar">
+                <button type="button" id="qcPasteBtn" title="Вставити текст з буфера обміну">📋 Вставити</button>
+                <button type="button" id="qcClearBtn"  title="Очистити текстове поле">✕ Очистити</button>
+              </div>
+
               <textarea id="qcTextarea" class="qc-textarea" placeholder="Натисни «Згенерувати» для створення висновку…"></textarea>
             </div>
 
@@ -445,5 +451,5 @@
 
 {% block scripts %}
 <script src="/static/conclusions.js?v=12" defer></script>
-<script src="/static/quick_conclusions.js?v=11" defer></script>
+<script src="/static/quick_conclusions.js?v=12" defer></script>
 {% endblock %}

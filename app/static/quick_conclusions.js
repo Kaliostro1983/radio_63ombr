@@ -911,6 +911,8 @@
     const copyBtn     = $("qcCopyBtn");
     const copyMapBtn  = $("qcCopyMapBtn");
     const sendBtn     = $("qcSendBtn");
+    const pasteBtn    = $("qcPasteBtn");
+    const clearBtn    = $("qcClearBtn");
     const addConclBtn = $("qcAddConclBtn");
     const addPointBtn = $("qcAddPointBtn");
     const addLabelBtn = $("qcAddLabelBtn");
@@ -921,6 +923,19 @@
     if (copyBtn)     copyBtn.addEventListener("click", onCopy);
     if (copyMapBtn)  copyMapBtn.addEventListener("click", onCopyMap);
     if (sendBtn)     sendBtn.addEventListener("click", onSend);
+
+    if (pasteBtn) pasteBtn.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (textarea) { textarea.value = text; textarea.focus(); }
+      } catch (_) {
+        toast("Немає доступу до буфера обміну", "warn");
+      }
+    });
+
+    if (clearBtn) clearBtn.addEventListener("click", () => {
+      if (textarea) { textarea.value = ""; textarea.focus(); }
+    });
     if (addConclBtn) addConclBtn.addEventListener("click", addConclRow);
     if (addPointBtn) addPointBtn.addEventListener("click", addPointRow);
     if (addLabelBtn) addLabelBtn.addEventListener("click", addLabelRow);
