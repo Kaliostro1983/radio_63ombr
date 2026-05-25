@@ -105,7 +105,6 @@
   const networkId      = $("cnNetworkId");
   const typeSel        = $("cnTypeSel");
   const cnShowBtn      = $("cnShowBtn");
-  const cnLoadBtn      = $("cnLoadBtn");
   const cnCountVal     = $("cnCountVal");
   const cnMapToggleBtn = $("cnMapToggleBtn");
   const cnGeoPanel     = $("cnGeoPanel");
@@ -592,7 +591,6 @@
   }
 
   filterForm.addEventListener("submit",  (e) => { e.preventDefault(); loadConclusions(); });
-  cnLoadBtn.addEventListener("click",    () => loadConclusions());
 
   /* ──────────────────────────────────────────────
    *  GEO PANEL
