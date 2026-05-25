@@ -296,15 +296,27 @@ html, body {
 }
 
 /* ── Leaflet marker icon overrides ──────────────────────────── */
-.cm-icon {
-  width: 36px;
-  height: 36px;
-  position: relative;
+
+/*
+ * Leaflet's .leaflet-div-icon has default styles:
+ *   background: #fff; border: 1px solid #666;
+ * With box-sizing:border-box those 2px reduce the content area to 34×34
+ * and shift the iconAnchor calculation off by 1px, causing visible drift
+ * when zooming. Override to transparent / no-border.
+ */
+.leaflet-div-icon.cm-icon {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  /* no position:relative — do not create a new stacking context */
+  overflow: visible !important;
 }
+
 .cm-icon img {
   width: 36px;
   height: 36px;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,.6));
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.55));
 }
 
 /* ── Loading / error overlay ────────────────────────────────── */

@@ -21,9 +21,13 @@ let _allMarkers  = [];      // [{row, marker, typeId}]
 function mgrsToLatLng(mgrsStr) {
   try {
     if (window.mgrs && window.mgrs.toPoint) {
-      const pt = window.mgrs.toPoint(mgrsStr.trim());
+      // Strip all whitespace and uppercase — required by mgrs library
+      const clean = String(mgrsStr).replace(/\s+/g, "").toUpperCase();
+      const pt = window.mgrs.toPoint(clean);
       // toPoint returns [lon, lat]
-      return [pt[1], pt[0]];
+      if (!Array.isArray(pt) || pt.length < 2) return null;
+      const lat = Number(pt[1]), lon = Number(pt[0]);
+      return (isFinite(lat) && isFinite(lon)) ? [lat, lon] : null;
     }
   } catch (_) {}
   return null;
