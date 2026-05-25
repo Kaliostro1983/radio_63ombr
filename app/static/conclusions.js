@@ -35,7 +35,7 @@
     view: {
       loaded:   false,
       networks: [],   // [{id, frequency, mask, unit, label}]
-      types:    [],   // [{id, type, color}] — loaded for type picker
+      types:    [],   // [{id, type, color, delta_*}] — loaded for type picker
       rows:     [],   // last loaded conclusion rows
     },
     settings: {
@@ -44,6 +44,9 @@
       deleteTargetId: null,
     },
   };
+
+  /* Delta modal state */
+  let _deltaModalRow = null;
 
   /* ──────────────────────────────────────────────
    *  CONCLUSION TEXT FORMATTER
@@ -300,6 +303,151 @@
   }
 
   /* ──────────────────────────────────────────────
+   *  DELTA MODAL
+   * ────────────────────────────────────────────── */
+  async function openDeltaModal(row) {
+    _deltaModalRow = row;
+
+    // Lazy-load delta type options if not yet populated
+    if (!_deltaTypeOptions.length) {
+      await loadDeltaTypeOptions();
+    }
+
+    const typeObj = state.view.types.find((t) => t.id === row.type_id) || {};
+
+    // Populate Тип select
+    const cdmType = $("cdmType");
+    if (cdmType) {
+      const currentType = typeObj.delta_type || (_deltaTypeOptions[0] && _deltaTypeOptions[0].value) || "";
+      cdmType.innerHTML = _deltaTypeOptions.map((opt) =>
+        `<option value="${escapeHtml(opt.value)}"${opt.value === currentType ? " selected" : ""}>${escapeHtml(opt.value)}</option>`
+      ).join("");
+      if (!cdmType.value && currentType) {
+        // if no option matched, add one
+        const fb = document.createElement("option");
+        fb.value = currentType; fb.textContent = currentType; fb.selected = true;
+        cdmType.prepend(fb);
+      }
+    }
+
+    // Ідентифікація
+    const cdmIdent = $("cdmIdent");
+    if (cdmIdent) cdmIdent.value = typeObj.delta_identification || "Ворожий";
+
+    // Джерело
+    const cdmSource = $("cdmSource");
+    if (cdmSource) cdmSource.value = typeObj.delta_source || "Радіорозвідка (РР)";
+
+    // Присутність
+    const cdmPresence = $("cdmPresence");
+    if (cdmPresence) cdmPresence.value = typeObj.delta_presence || "присутній";
+
+    // Назва — pre-fill from frequency
+    const cdmName = $("cdmName");
+    if (cdmName) cdmName.value = row.frequency || "";
+
+    // Підрозділ — pre-fill from unit
+    const cdmUnit = $("cdmUnit");
+    if (cdmUnit) cdmUnit.value = row.unit || "";
+
+    // Час виявлення — convert "2026-05-25 09:58:42" → datetime-local "2026-05-25T09:58"
+    const cdmDatetime = $("cdmDatetime");
+    if (cdmDatetime) {
+      const raw = (row.created_at || "").replace(" ", "T");
+      cdmDatetime.value = raw.slice(0, 16);
+    }
+
+    // Радіус дії — empty by default
+    const cdmRadius = $("cdmRadius");
+    if (cdmRadius) cdmRadius.value = "";
+
+    // MGRS — compact (no spaces), comma-separated
+    const cdmMgrs = $("cdmMgrs");
+    if (cdmMgrs) {
+      cdmMgrs.value = (row.mgrs || []).map((m) => m.replace(/\s+/g, "")).join(", ");
+    }
+
+    const modal = $("cnDeltaModal");
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeDeltaModal() {
+    _deltaModalRow = null;
+    const modal = $("cnDeltaModal");
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  async function sendDeltaReport() {
+    if (!_deltaModalRow) return;
+
+    const type      = $("cdmType")?.value?.trim()     || "";
+    const name      = $("cdmName")?.value?.trim()     || "";
+    const ident     = $("cdmIdent")?.value            || "";
+    const unit      = $("cdmUnit")?.value?.trim()     || "";
+    const source    = $("cdmSource")?.value           || "";
+    const presence  = $("cdmPresence")?.value         || "";
+    const dtRaw     = $("cdmDatetime")?.value         || "";
+    const radius    = $("cdmRadius")?.value?.trim()   || "";
+    const mgrs      = $("cdmMgrs")?.value?.trim()     || "";
+
+    // Format datetime-local "2026-05-25T09:58" → "25.05.2026 09:58:00"
+    let dtFmt = "";
+    if (dtRaw) {
+      const [datePart, timePart] = dtRaw.split("T");
+      if (datePart && timePart) {
+        const [y, mo, d] = datePart.split("-");
+        dtFmt = `${d}.${mo}.${y} ${timePart}:00`;
+      }
+    }
+
+    const lines = [];
+    if (type)    lines.push(`Тип: ${type}`);
+    if (name)    lines.push(`Назва: ${name}`);
+    if (ident)   lines.push(`Ідентифікація: ${ident}`);
+    if (unit)    lines.push(`Підрозділ: ${unit}`);
+    if (presence) lines.push(`Присутність: ${presence}`);
+    if (source)  lines.push(`Джерело: ${source}`);
+    if (dtFmt)   lines.push(`Час виявлення: ${dtFmt}`);
+    if (radius)  lines.push(`Радіус дії: ${radius}`);
+    if (mgrs)    lines.push(`MGRS: ${mgrs}`);
+
+    const text = lines.join("\n") + "\n\n" + (_deltaModalRow.conclusion_text || "").trim();
+
+    if (!cnSettingsChatId) {
+      toast("Оберіть цільовий чат у вкладці «Налаштування»", "warn");
+      return;
+    }
+
+    const sendBtn = $("cnDeltaSendBtn");
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "…"; }
+
+    try {
+      const res = await fetch("/api/push/send", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          platform: cnSettingsPlatform,
+          chat_id:  cnSettingsChatId,
+          text,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok) {
+        toast("Дельта-звіт надіслано", "success");
+        closeDeltaModal();
+      } else {
+        toast(d.error || "Помилка надсилання", "error");
+      }
+    } catch (err) {
+      toast("Помилка: " + err.message, "error");
+    } finally {
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = "&#10148; Надіслати"; }
+    }
+  }
+
+  /* ──────────────────────────────────────────────
    *  LOAD CONCLUSIONS
    * ────────────────────────────────────────────── */
   async function loadConclusions() {
@@ -345,6 +493,12 @@
           ? `<div class="cn-intercept-cell">${escapeHtml(r.body_text)}</div>`
           : `<span style="opacity:.4">—</span>`;
 
+        // Delta button colour: gray if auto_send enabled, red if disabled
+        const typeObj = state.view.types.find((t) => t.id === r.type_id);
+        const deltaAutoSend  = typeObj ? !!typeObj.delta_auto_send : true;
+        const deltaBtnClass  = deltaAutoSend ? "cn-delta-btn--on" : "cn-delta-btn--off";
+        const deltaBtnTitle  = deltaAutoSend ? "Дельта-звіт (авто-надсилання увімкнено)" : "Дельта-звіт (авто-надсилання вимкнено)";
+
         return `<tr data-ac-id="${r.id}">
           <td style="text-align:center">
             <div class="small" style="font-weight:600;white-space:nowrap">${escapeHtml(dateP)} ${escapeHtml(timeP)}</div>
@@ -359,18 +513,28 @@
           <td class="small">${conclusionFmt}</td>
           <td>${interceptHtml}</td>
           <td style="text-align:center">${mgrs || "<span style='opacity:.4'>—</span>"}</td>
-          <td style="text-align:center">
+          <td style="text-align:center;white-space:nowrap">
             <button class="cn-reclassify-btn" title="Повторно проаналізувати тип">♻</button>
+            <button class="cn-delta-btn ${deltaBtnClass}" title="${deltaBtnTitle}">⊡</button>
           </td>
         </tr>`;
       }).join("");
 
-      // Event delegation: type picker + reclassify
+      // Event delegation: type picker + reclassify + delta
       cnTableBody.onclick = (e) => {
         const badge = e.target.closest(".cn-type-badge--pick");
         if (badge) { openTypePicker(badge); return; }
         const reBtn = e.target.closest(".cn-reclassify-btn");
-        if (reBtn) { reclassifyConclusion(reBtn); }
+        if (reBtn) { reclassifyConclusion(reBtn); return; }
+        const deltaBtn = e.target.closest(".cn-delta-btn");
+        if (deltaBtn) {
+          const tr  = deltaBtn.closest("tr");
+          const acId = tr ? parseInt(tr.dataset.acId, 10) : null;
+          if (acId) {
+            const row = state.view.rows.find((r) => r.id === acId);
+            if (row) openDeltaModal(row);
+          }
+        }
       };
 
       cnTable.style.display = "";
@@ -1050,6 +1214,20 @@
       toast("Тип видалено", "success");
     } catch (err) { toast("Помилка: " + err.message, "error"); }
   }
+
+  /* ──────────────────────────────────────────────
+   *  DELTA MODAL WIRING
+   * ────────────────────────────────────────────── */
+  [$("cnDeltaCloseBtn"), $("cnDeltaCancelBtn"), $("cnDeltaBackdrop")].forEach((el) => {
+    if (el) el.addEventListener("click", closeDeltaModal);
+  });
+  const cnDeltaSendBtn = $("cnDeltaSendBtn");
+  if (cnDeltaSendBtn) cnDeltaSendBtn.addEventListener("click", sendDeltaReport);
+
+  // Close on Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && _deltaModalRow) closeDeltaModal();
+  });
 
   /* ──────────────────────────────────────────────
    *  INITIAL
