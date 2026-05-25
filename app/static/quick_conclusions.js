@@ -384,7 +384,7 @@
   async function loadChats(platform) {
     if (cachedChats[platform]) return cachedChats[platform];
     try {
-      const r = await fetch("/api/push/chats?platform=" + platform + "&only_groups=0");
+      const r = await fetch("/api/push/chats?platform=" + platform + "&only_groups=1");
       const d = await r.json();
       if (d.ok && Array.isArray(d.chats)) {
         cachedChats[platform] = d.chats;
