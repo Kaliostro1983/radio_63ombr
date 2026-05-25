@@ -848,16 +848,27 @@
         const chk = $("cnDeltaSendEnabled");
         if (chk) chk.checked = (srv.delta_send_enabled ?? "1") === "1";
 
-        // Sync chat settings: server wins if localStorage is empty
-        if (srv.delta_chat_id && !cnSettingsChatId) {
+        // Bidirectional sync:
+        //   • server has value  → push to localStorage
+        //   • localStorage has value, server is empty → push to server
+        if (srv.delta_chat_id) {
           cnSettingsChatId   = srv.delta_chat_id;
           cnSettingsChatName = srv.delta_chat_name || "";
           localStorage.setItem("cnSettingsChatId",   cnSettingsChatId);
           localStorage.setItem("cnSettingsChatName", cnSettingsChatName);
+        } else if (cnSettingsChatId) {
+          // localStorage has a chat that server doesn't know about yet — sync up
+          saveAppSettings({
+            delta_chat_id:   cnSettingsChatId,
+            delta_chat_name: cnSettingsChatName,
+            delta_platform:  cnSettingsPlatform,
+          });
         }
-        if (srv.delta_platform && !localStorage.getItem("cnSettingsPlatform")) {
+        if (srv.delta_platform) {
           cnSettingsPlatform = srv.delta_platform;
           localStorage.setItem("cnSettingsPlatform", cnSettingsPlatform);
+        } else if (cnSettingsPlatform) {
+          saveAppSettings({ delta_platform: cnSettingsPlatform });
         }
       }
 
