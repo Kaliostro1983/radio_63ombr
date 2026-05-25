@@ -371,7 +371,8 @@ def insert_analytical_conclusion(
         mgrs_list: list of normalized MGRS coordinate strings.
 
     Returns:
-        int: inserted analytical_conclusions.id, or 0 if already existed.
+        dict: {"id": inserted_id, "type_id": assigned_type_id}.
+              id is 0 if the row already existed (INSERT OR IGNORE).
     """
     type_id = _score_conclusion_type(cur, conclusion_text)
 
@@ -387,4 +388,4 @@ def insert_analytical_conclusion(
         module="app.services.ingest_store",
         function="insert_analytical_conclusion",
     )
-    return int(cur.lastrowid or 0)
+    return {"id": int(cur.lastrowid or 0), "type_id": type_id}

@@ -21,6 +21,9 @@ the `/api/ingest/whatsapp` router.
 
 from __future__ import annotations
 
+import json as _json
+import urllib.error as _uerr
+import urllib.request as _ureq
 from typing import Any, Dict, List
 import sqlite3
 
@@ -49,6 +52,118 @@ from app.services.network_service import ensure_network, NetworkNotFoundError
 from app.services.structured_intercept_service import process_structured_intercept
 
 log = get_logger("ingest_service")
+
+
+def _try_delta_auto_send(
+    conn,
+    ac_id: int,
+    type_id: int,
+    conclusion_text: str,
+    body_text: str,
+    created_at: str,
+    network_id: int,
+    mgrs_list: list,
+) -> None:
+    """Attempt to auto-send a Delta report via the bot service.
+
+    All exceptions are silently swallowed — auto-send is best-effort
+    and must never interrupt the ingest pipeline.
+    """
+    from app.core.config import settings as _cfg  # local import to avoid circulars
+
+    try:
+        if not _cfg.bot_service_url:
+            return
+
+        # Global switch
+        row = conn.execute(
+            "SELECT value FROM app_settings WHERE key='delta_send_enabled'"
+        ).fetchone()
+        if not row or str(row[0]) != "1":
+            return
+
+        chat_id_row  = conn.execute(
+            "SELECT value FROM app_settings WHERE key='delta_chat_id'"
+        ).fetchone()
+        platform_row = conn.execute(
+            "SELECT value FROM app_settings WHERE key='delta_platform'"
+        ).fetchone()
+        chat_id  = (chat_id_row[0]  if chat_id_row  else "") or ""
+        platform = (platform_row[0] if platform_row else "whatsapp") or "whatsapp"
+        if not chat_id:
+            return
+
+        # Per-type auto-send flag
+        type_row = conn.execute(
+            "SELECT delta_auto_send, delta_type, delta_identification, "
+            "       delta_source, delta_presence "
+            "FROM conclusion_types WHERE id=?",
+            (type_id,),
+        ).fetchone()
+        if not type_row or not int(type_row[0] or 0):
+            return  # delta_auto_send is off for this type
+
+        # Network for frequency / unit
+        net_row = conn.execute(
+            "SELECT frequency, unit FROM networks WHERE id=?", (network_id,)
+        ).fetchone()
+        frequency = (net_row[0] if net_row else "") or ""
+        unit      = (net_row[1] if net_row else "") or ""
+
+        # Format datetime "2026-05-25 09:58:42" → "25.05.2026 09:58:42"
+        dt_fmt = created_at or ""
+        try:
+            raw_dt = dt_fmt.replace("T", " ")
+            dp, tp = raw_dt.split(" ", 1)
+            y, mo, d = dp.split("-")
+            dt_fmt = f"{d}.{mo}.{y} {tp}"
+        except Exception:
+            pass
+
+        mgrs_compact = ", ".join(m.replace(" ", "") for m in (mgrs_list or []) if m)
+
+        delta_type     = str(type_row[1] or "")
+        identification = str(type_row[2] or "")
+        source         = str(type_row[3] or "")
+        presence       = str(type_row[4] or "")
+
+        header_lines: list[str] = []
+        if delta_type:     header_lines.append(f"Тип: {delta_type}")
+        if frequency:      header_lines.append(f"Назва: {frequency}")
+        if identification: header_lines.append(f"Ідентифікація: {identification}")
+        if unit:           header_lines.append(f"Підрозділ: {unit}")
+        if presence:       header_lines.append(f"Присутність: {presence}")
+        if source:         header_lines.append(f"Джерело: {source}")
+        if dt_fmt:         header_lines.append(f"Час виявлення: {dt_fmt}")
+        if mgrs_compact:   header_lines.append(f"MGRS: {mgrs_compact}")
+
+        text = "\n\n".join(
+            p for p in [
+                "\n".join(header_lines),
+                (conclusion_text or "").strip(),
+                (body_text or "").strip(),
+            ]
+            if p
+        )
+
+        payload = _json.dumps(
+            {"platform": platform, "chat_id": chat_id, "text": text}
+        ).encode("utf-8")
+        req = _ureq.Request(
+            f"{_cfg.bot_service_url.rstrip('/')}/api/push/send",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _ureq.urlopen(req, timeout=8) as resp:
+            resp_data = _json.loads(resp.read())
+            if resp_data.get("ok"):
+                conn.execute(
+                    "UPDATE analytical_conclusions SET sended=1 WHERE id=?",
+                    (ac_id,),
+                )
+    except Exception:
+        pass  # best-effort; never break ingest
 
 
 def _content_type_from_format(message_format: str) -> str:
@@ -530,7 +645,7 @@ def _run_ingest_pipeline(
             conclusion_text = parsed.get("analytical_conclusion") or ""
             mgrs_list = list(parsed.get("analytical_mgrs") or [])
             if conclusion_text:
-                insert_analytical_conclusion(
+                ac_info = insert_analytical_conclusion(
                     cur,
                     message_id=existing_message_id,
                     network_id=network_id,
@@ -538,6 +653,17 @@ def _run_ingest_pipeline(
                     conclusion_text=conclusion_text,
                     mgrs_list=mgrs_list,
                 )
+                if ac_info["id"]:
+                    _try_delta_auto_send(
+                        conn,
+                        ac_id=ac_info["id"],
+                        type_id=ac_info["type_id"],
+                        conclusion_text=conclusion_text,
+                        body_text=body_text,
+                        created_at=created_at,
+                        network_id=network_id,
+                        mgrs_list=mgrs_list,
+                    )
         mark_duplicate_content(cur, ingest_id, existing_message_id)
         return {
             "ok": True,
@@ -586,7 +712,7 @@ def _run_ingest_pipeline(
         conclusion_text = parsed.get("analytical_conclusion") or ""
         mgrs_list = list(parsed.get("analytical_mgrs") or [])
         if conclusion_text:
-            insert_analytical_conclusion(
+            ac_info = insert_analytical_conclusion(
                 cur,
                 message_id=message_id,
                 network_id=network_id,
@@ -594,6 +720,17 @@ def _run_ingest_pipeline(
                 conclusion_text=conclusion_text,
                 mgrs_list=mgrs_list,
             )
+            if ac_info["id"]:
+                _try_delta_auto_send(
+                    conn,
+                    ac_id=ac_info["id"],
+                    type_id=ac_info["type_id"],
+                    conclusion_text=conclusion_text,
+                    body_text=body_text,
+                    created_at=created_at,
+                    network_id=network_id,
+                    mgrs_list=mgrs_list,
+                )
 
     return {
         "ok": True,

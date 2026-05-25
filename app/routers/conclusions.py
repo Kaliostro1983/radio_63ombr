@@ -117,6 +117,7 @@ def api_conclusions_list(
                 ac.conclusion_text,
                 ac.mgrs_json,
                 ac.type_id,
+                ac.sended,
                 ct.type   AS type_label,
                 ct.color  AS type_color,
                 n.frequency,
@@ -154,6 +155,7 @@ def api_conclusions_list(
             "frequency":       r["frequency"] or "",
             "mask":            r["mask"] or "",
             "unit":            r["unit"] or "",
+            "sended":          int(r["sended"]) if r["sended"] is not None else 0,
         })
 
     return {"ok": True, "rows": out, "total": len(out)}
@@ -367,6 +369,50 @@ def api_reclassify_conclusion(ac_id: int):
         "type_label": (t_row["type"]  if t_row else "невідомо"),
         "type_color": (t_row["color"] if t_row else "#6b7280"),
     }
+
+
+@router.post("/api/conclusions/{ac_id}/mark-sended")
+def api_mark_sended(ac_id: int):
+    """Mark an analytical conclusion as Delta-sent (sended=1)."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE analytical_conclusions SET sended=1 WHERE id=?", (ac_id,)
+        )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# App settings (global key-value store)
+# ---------------------------------------------------------------------------
+
+@router.get("/api/settings")
+def api_get_settings(keys: str = ""):
+    """Return app_settings rows.  Pass ?keys=k1,k2 to filter."""
+    key_list = [k.strip() for k in keys.split(",") if k.strip()]
+    with get_conn() as conn:
+        if key_list:
+            placeholders = ",".join("?" * len(key_list))
+            rows = conn.execute(
+                f"SELECT key, value FROM app_settings WHERE key IN ({placeholders})",
+                key_list,
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+    return {"ok": True, "settings": {r["key"]: r["value"] for r in rows}}
+
+
+@router.put("/api/settings")
+async def api_put_settings(request: Request):
+    """Upsert one or more app_settings rows.  Body: {key: value, ...}"""
+    data = await request.json()
+    with get_conn() as conn:
+        for key, value in data.items():
+            conn.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (str(key), str(value)),
+            )
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

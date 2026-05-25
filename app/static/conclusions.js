@@ -438,6 +438,17 @@
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.ok) {
         toast("Дельта-звіт надіслано", "success");
+        // Mark sended in DB + update button in table
+        const rowId = _deltaModalRow.id;
+        fetch(`/api/conclusions/${rowId}/mark-sended`, { method: "POST" }).catch(() => {});
+        const rowObj = state.view.rows.find((r) => r.id === rowId);
+        if (rowObj) rowObj.sended = 1;
+        const tr = cnTableBody.querySelector(`tr[data-ac-id="${rowId}"]`);
+        const dBtn = tr?.querySelector(".cn-delta-btn");
+        if (dBtn) {
+          dBtn.className = "cn-delta-btn cn-delta-btn--on";
+          dBtn.title = "Дельта-звіт надіслано";
+        }
         closeDeltaModal();
       } else {
         toast(d.error || "Помилка надсилання", "error");
@@ -495,11 +506,9 @@
           ? `<div class="cn-intercept-cell">${escapeHtml(r.body_text)}</div>`
           : `<span style="opacity:.4">—</span>`;
 
-        // Delta button colour: gray if auto_send enabled, red if disabled
-        const typeObj = state.view.types.find((t) => t.id === r.type_id);
-        const deltaAutoSend  = typeObj ? !!typeObj.delta_auto_send : true;
-        const deltaBtnClass  = deltaAutoSend ? "cn-delta-btn--on" : "cn-delta-btn--off";
-        const deltaBtnTitle  = deltaAutoSend ? "Дельта-звіт (авто-надсилання увімкнено)" : "Дельта-звіт (авто-надсилання вимкнено)";
+        // Delta button: gray = already sent, red = not yet sent
+        const deltaBtnClass = r.sended ? "cn-delta-btn--on" : "cn-delta-btn--off";
+        const deltaBtnTitle = r.sended ? "Дельта-звіт надіслано" : "Надіслати Дельта-звіт";
 
         return `<tr data-ac-id="${r.id}">
           <td style="text-align:center">
@@ -658,14 +667,27 @@
   let _cnSettingsChatsCache = {};  // { platform: [...] }
   let _deltaTypeOptions = [];      // shared list loaded once
 
+  /** Persist key-value pairs to server app_settings */
+  async function saveAppSettings(pairs) {
+    try {
+      await fetch("/api/settings", {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(pairs),
+      });
+    } catch (_) { /* best-effort */ }
+  }
+
   function cnSettingsSavePlatform(p) {
     cnSettingsPlatform = p;
     localStorage.setItem("cnSettingsPlatform", p);
+    saveAppSettings({ delta_platform: p });
   }
   function cnSettingsSaveChat(id, name) {
     cnSettingsChatId   = id;   cnSettingsChatName = name;
     localStorage.setItem("cnSettingsChatId",   id);
     localStorage.setItem("cnSettingsChatName", name);
+    saveAppSettings({ delta_chat_id: id, delta_chat_name: name });
   }
   function updateCnSettingsPlatformBtn() {
     const btn = $("cnSettingsPlatformBtn");
@@ -809,16 +831,51 @@
     typesList.innerHTML = "";
     try {
       await loadDeltaTypeOptions();
-      const res  = await fetch("/api/conclusions/types");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const [typesRes, settingsRes] = await Promise.all([
+        fetch("/api/conclusions/types"),
+        fetch("/api/settings?keys=delta_send_enabled,delta_chat_id,delta_platform,delta_chat_name"),
+      ]);
+      if (!typesRes.ok) throw new Error(`HTTP ${typesRes.status}`);
+      const data = await typesRes.json();
       state.settings.types = data.rows || [];
+
+      // Apply server-side settings
+      if (settingsRes.ok) {
+        const sData = await settingsRes.json();
+        const srv   = sData.settings || {};
+
+        // delta_send_enabled
+        const chk = $("cnDeltaSendEnabled");
+        if (chk) chk.checked = (srv.delta_send_enabled ?? "1") === "1";
+
+        // Sync chat settings: server wins if localStorage is empty
+        if (srv.delta_chat_id && !cnSettingsChatId) {
+          cnSettingsChatId   = srv.delta_chat_id;
+          cnSettingsChatName = srv.delta_chat_name || "";
+          localStorage.setItem("cnSettingsChatId",   cnSettingsChatId);
+          localStorage.setItem("cnSettingsChatName", cnSettingsChatName);
+        }
+        if (srv.delta_platform && !localStorage.getItem("cnSettingsPlatform")) {
+          cnSettingsPlatform = srv.delta_platform;
+          localStorage.setItem("cnSettingsPlatform", cnSettingsPlatform);
+        }
+      }
+
       typesLoader.style.display = "none";
       renderTypesList();
       setupCnSettingsChatSelector();
+      setupDeltaSendEnabledCheckbox();
     } catch (err) {
       typesLoader.textContent = "Помилка завантаження: " + err.message;
     }
+  }
+
+  function setupDeltaSendEnabledCheckbox() {
+    const chk = $("cnDeltaSendEnabled");
+    if (!chk) return;
+    chk.addEventListener("change", () => {
+      saveAppSettings({ delta_send_enabled: chk.checked ? "1" : "0" });
+    });
   }
 
   let _dragDropSetUp = false;

@@ -387,6 +387,12 @@ CREATE TABLE IF NOT EXISTS map_labels (
     name TEXT NOT NULL,
     mgrs TEXT NOT NULL DEFAULT ''
 );
+
+-- Global application key-value settings (e.g. delta auto-send config).
+CREATE TABLE IF NOT EXISTS app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
 """
 
 
@@ -1501,6 +1507,38 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         )
         """,
         stage="create_table:cas_report_snapshots",
+    )
+
+    # --- app_settings key-value store ---
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        stage="create_table:app_settings",
+    )
+    for _key, _default in [
+        ("delta_send_enabled", "1"),
+        ("delta_chat_id",      ""),
+        ("delta_platform",     "whatsapp"),
+        ("delta_chat_name",    ""),
+    ]:
+        safe_execute(
+            conn,
+            "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)",
+            (_key, _default),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"seed:app_settings:{_key}",
+        )
+
+    # --- analytical_conclusions: sended flag ---
+    _ensure_column(
+        conn, "analytical_conclusions", "sended",
+        "sended INTEGER NOT NULL DEFAULT 0",
     )
 
 

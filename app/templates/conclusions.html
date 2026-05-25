@@ -168,6 +168,10 @@
                 <input type="hidden" id="cnSettingsChatId" value="" />
               </div>
             </div>
+            <div style="margin-top:10px; display:flex; align-items:center; gap:8px">
+              <input type="checkbox" id="cnDeltaSendEnabled" />
+              <label for="cnDeltaSendEnabled" class="small">Надсилати в Дельту при надходженні нового висновку</label>
+            </div>
           </div>
           <hr style="margin:0 0 22px; border:none; border-top:1px solid var(--border)">
 
@@ -450,6 +454,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/conclusions.js?v=12" defer></script>
+<script src="/static/conclusions.js?v=13" defer></script>
 <script src="/static/quick_conclusions.js?v=12" defer></script>
 {% endblock %}
