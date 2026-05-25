@@ -188,6 +188,8 @@
         typeSel.appendChild(opt);
       });
     } catch (_) { /* silent */ }
+    // Ensure chat from localStorage is persisted to server for auto-send
+    syncChatToServer();
   }
 
   /** Refresh only the types color/name cache — no DOM changes to the filter select. */
@@ -198,6 +200,29 @@
       const data = await res.json();
       state.view.types = data.rows || [];
     } catch (_) { /* silent */ }
+  }
+
+  /**
+   * Ensure the current chat (from localStorage) is persisted to the server.
+   * Called on every page load so that auto-send works even if the user never
+   * opens the Settings tab.
+   */
+  async function syncChatToServer() {
+    if (!cnSettingsChatId) return;          // nothing to sync
+    try {
+      const res  = await fetch("/api/settings?keys=delta_chat_id");
+      if (!res.ok) return;
+      const data = await res.json();
+      const srvChatId = (data.settings || {}).delta_chat_id || "";
+      if (!srvChatId) {
+        // Server doesn't have the chat — push from localStorage
+        await saveAppSettings({
+          delta_chat_id:   cnSettingsChatId,
+          delta_chat_name: cnSettingsChatName,
+          delta_platform:  cnSettingsPlatform,
+        });
+      }
+    } catch (_) { /* best-effort */ }
   }
 
   /* ──────────────────────────────────────────────
@@ -438,6 +463,12 @@
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.ok) {
         toast("Дельта-звіт надіслано", "success");
+        // Persist chat to server so auto-send can use it
+        saveAppSettings({
+          delta_chat_id:   cnSettingsChatId,
+          delta_chat_name: cnSettingsChatName,
+          delta_platform:  cnSettingsPlatform,
+        });
         // Mark sended in DB + update button in table
         const rowId = _deltaModalRow.id;
         fetch(`/api/conclusions/${rowId}/mark-sended`, { method: "POST" }).catch(() => {});

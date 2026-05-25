@@ -73,6 +73,7 @@ def _try_delta_auto_send(
 
     try:
         if not _cfg.bot_service_url:
+            log.warning("_try_delta_auto_send: bot_service_url not configured (BOT_SERVICE_URL empty)")
             return
 
         # Global switch
@@ -80,6 +81,7 @@ def _try_delta_auto_send(
             "SELECT value FROM app_settings WHERE key='delta_send_enabled'"
         ).fetchone()
         if not row or str(row[0]) != "1":
+            log.info("_try_delta_auto_send: skipped — delta_send_enabled is off (ac_id=%s)", ac_id)
             return
 
         chat_id_row  = conn.execute(
@@ -91,6 +93,10 @@ def _try_delta_auto_send(
         chat_id  = (chat_id_row[0]  if chat_id_row  else "") or ""
         platform = (platform_row[0] if platform_row else "whatsapp") or "whatsapp"
         if not chat_id:
+            log.warning(
+                "_try_delta_auto_send: skipped — delta_chat_id is empty in app_settings "
+                "(ac_id=%s). Open Налаштування tab to sync chat from browser.", ac_id
+            )
             return
 
         # Per-type auto-send flag
@@ -101,6 +107,10 @@ def _try_delta_auto_send(
             (type_id,),
         ).fetchone()
         if not type_row or not int(type_row[0] or 0):
+            log.info(
+                "_try_delta_auto_send: skipped — delta_auto_send=0 for type_id=%s (ac_id=%s)",
+                type_id, ac_id,
+            )
             return  # delta_auto_send is off for this type
 
         # Network for frequency / unit
@@ -162,7 +172,17 @@ def _try_delta_auto_send(
                     "UPDATE analytical_conclusions SET sended=1 WHERE id=?",
                     (ac_id,),
                 )
-    except Exception:
+                log.info(
+                    "_try_delta_auto_send: sent OK (ac_id=%s type_id=%s chat=%s)",
+                    ac_id, type_id, chat_id,
+                )
+            else:
+                log.warning(
+                    "_try_delta_auto_send: bot returned not-ok (ac_id=%s): %s",
+                    ac_id, resp_data,
+                )
+    except Exception as exc:
+        log.warning("_try_delta_auto_send: exception (ac_id=%s): %s", ac_id, exc)
         pass  # best-effort; never break ingest
 
 
