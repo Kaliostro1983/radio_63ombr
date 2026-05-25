@@ -752,6 +752,12 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "conclusion_types", "keywords_json", "keywords_json TEXT NOT NULL DEFAULT '[]'")
     _ensure_column(conn, "conclusion_types", "color",      "color TEXT")
     _ensure_column(conn, "conclusion_types", "sort_order", "sort_order INTEGER NOT NULL DEFAULT 0")
+    # Delta / НАТО-звіт налаштування per type
+    _ensure_column(conn, "conclusion_types", "delta_auto_send",     "delta_auto_send INTEGER NOT NULL DEFAULT 1")
+    _ensure_column(conn, "conclusion_types", "delta_type",          "delta_type TEXT NOT NULL DEFAULT 'Піхотний підрозділ'")
+    _ensure_column(conn, "conclusion_types", "delta_identification", "delta_identification TEXT NOT NULL DEFAULT 'Ворожий'")
+    _ensure_column(conn, "conclusion_types", "delta_source",        "delta_source TEXT NOT NULL DEFAULT 'Радіорозвідка (РР)'")
+    _ensure_column(conn, "conclusion_types", "delta_presence",      "delta_presence TEXT NOT NULL DEFAULT 'присутній'")
     # Initialise sort_order from id for rows that still have the default 0.
     # id=0 keeps sort_order=0 (always first); user types get sort_order = id.
     _try_ddl(
@@ -781,6 +787,28 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             function="_run_lightweight_migrations",
             stage=f"seed_color:conclusion_types:{_ct_name}",
         )
+    # User-configurable "Тип" options for Delta reports (shared across all conclusion types)
+    safe_execute(
+        conn,
+        "CREATE TABLE IF NOT EXISTS delta_type_options ("
+        "  id         INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  value      TEXT NOT NULL UNIQUE,"
+        "  sort_order INTEGER NOT NULL DEFAULT 0"
+        ")",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:delta_type_options",
+    )
+    for _dto_val in ["Піхотний підрозділ", "Орієнтир (точка інтересу)", "Пожежа"]:
+        safe_execute(
+            conn,
+            "INSERT OR IGNORE INTO delta_type_options (value) VALUES (?)",
+            (_dto_val,),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"seed:delta_type_options:{_dto_val}",
+        )
+
     safe_execute(
         conn,
         """

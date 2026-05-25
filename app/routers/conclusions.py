@@ -6,7 +6,7 @@ import json
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -168,7 +168,9 @@ def api_conclusion_types():
     """Return all conclusion types ordered by sort_order (user-defined), then id."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, type, keywords_json, color, sort_order "
+            "SELECT id, type, keywords_json, color, sort_order,"
+            "       delta_auto_send, delta_type, delta_identification,"
+            "       delta_source, delta_presence "
             "FROM conclusion_types ORDER BY sort_order ASC, id ASC"
         ).fetchall()
 
@@ -179,11 +181,16 @@ def api_conclusion_types():
         except Exception:
             kws = []
         out.append({
-            "id":         int(r["id"]),
-            "type":       r["type"] or "",
-            "keywords":   kws,
-            "color":      r["color"] or "",
-            "sort_order": int(r["sort_order"]) if r["sort_order"] is not None else 0,
+            "id":                   int(r["id"]),
+            "type":                 r["type"] or "",
+            "keywords":             kws,
+            "color":                r["color"] or "",
+            "sort_order":           int(r["sort_order"]) if r["sort_order"] is not None else 0,
+            "delta_auto_send":      bool(r["delta_auto_send"]) if r["delta_auto_send"] is not None else True,
+            "delta_type":           r["delta_type"] or "Піхотний підрозділ",
+            "delta_identification": r["delta_identification"] or "Ворожий",
+            "delta_source":         r["delta_source"] or "Радіорозвідка (РР)",
+            "delta_presence":       r["delta_presence"] or "присутній",
         })
     return {"ok": True, "rows": out}
 
@@ -263,10 +270,27 @@ async def api_conclusion_type_update(type_id: int, request: Request):
             str(payload["color"]).strip() if "color" in payload else (row["color"] or "")
         )
 
-        conn.execute(
-            "UPDATE conclusion_types SET type = ?, keywords_json = ?, color = ? WHERE id = ?",
-            (new_name, kws_json, new_color or None, type_id),
-        )
+        # Delta fields (optional)
+        delta_fields: Dict[str, Any] = {}
+        if "delta_auto_send" in payload:
+            delta_fields["delta_auto_send"] = 1 if payload["delta_auto_send"] else 0
+        if "delta_type" in payload:
+            delta_fields["delta_type"] = str(payload["delta_type"]).strip()
+        if "delta_identification" in payload:
+            delta_fields["delta_identification"] = str(payload["delta_identification"]).strip()
+        if "delta_source" in payload:
+            delta_fields["delta_source"] = str(payload["delta_source"]).strip()
+        if "delta_presence" in payload:
+            delta_fields["delta_presence"] = str(payload["delta_presence"]).strip()
+
+        set_parts = "type = ?, keywords_json = ?, color = ?"
+        params: List[Any] = [new_name, kws_json, new_color or None]
+        for col, val in delta_fields.items():
+            set_parts += f", {col} = ?"
+            params.append(val)
+        params.append(type_id)
+
+        conn.execute(f"UPDATE conclusion_types SET {set_parts} WHERE id = ?", params)
         conn.commit()
 
     return {"ok": True, "id": type_id, "type": new_name, "color": new_color}
@@ -598,6 +622,47 @@ async def api_publish(request: Request):
     except Exception as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
 
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Delta "Тип" options — user-configurable list shared across all types
+# ---------------------------------------------------------------------------
+
+@router.get("/api/delta/type-options")
+def api_delta_type_options():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, value FROM delta_type_options ORDER BY sort_order ASC, id ASC"
+        ).fetchall()
+    return {"ok": True, "rows": [{"id": r["id"], "value": r["value"]} for r in rows]}
+
+
+@router.post("/api/delta/type-options")
+async def api_delta_type_option_add(request: Request):
+    payload: Dict[str, Any] = await request.json()
+    value = (payload.get("value") or "").strip()
+    if not value:
+        return JSONResponse({"ok": False, "error": "Значення порожнє"}, status_code=400)
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM delta_type_options WHERE value = ? COLLATE NOCASE LIMIT 1", (value,)
+        ).fetchone()
+        if existing:
+            return JSONResponse({"ok": False, "error": "Такий варіант вже існує"}, status_code=409)
+        cur = conn.execute("INSERT INTO delta_type_options (value) VALUES (?)", (value,))
+        conn.commit()
+        new_id = cur.lastrowid
+    return {"ok": True, "id": new_id, "value": value}
+
+
+@router.delete("/api/delta/type-options/{option_id}")
+def api_delta_type_option_delete(option_id: int):
+    with get_conn() as conn:
+        if not conn.execute("SELECT id FROM delta_type_options WHERE id=?", (option_id,)).fetchone():
+            return JSONResponse({"ok": False, "error": "Не знайдено"}, status_code=404)
+        conn.execute("DELETE FROM delta_type_options WHERE id=?", (option_id,))
+        conn.commit()
     return {"ok": True}
 
 

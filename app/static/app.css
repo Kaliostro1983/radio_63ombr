@@ -2484,6 +2484,79 @@ button.secondary{
   transition: opacity .15s, box-shadow .15s, border-color .15s;
 }
 
+/* ── Delta section inside type card ── */
+.cn-delta-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.cn-delta-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.cn-delta-autosend-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.cn-delta-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.cn-delta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cn-delta-field__label {
+  opacity: .65;
+}
+.cn-delta-sel {
+  background: var(--inputbg);
+  color: var(--inputfg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: .85rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.cn-delta-sel:focus { outline: none; border-color: var(--accent); }
+.cn-delta-type-wrap {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.cn-delta-type-wrap .cn-delta-sel { flex: 1; min-width: 0; }
+.cn-delta-add-inp {
+  width: 120px;
+  padding: 5px 7px;
+  font-size: .82rem;
+  background: var(--inputbg);
+  color: var(--inputfg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.cn-delta-add-inp:focus { outline: none; border-color: var(--accent); }
+
+/* Settings chat bar — no send button (right edge on the input wrap) */
+.cn-settings-chat-bar {
+  max-width: 480px;
+}
+.cn-settings-chat-bar .qc-chat-ac-wrap {
+  border-right: none;
+  border-radius: 0 7px 7px 0;
+}
+.cn-settings-chat-bar .qc-chat-input {
+  border-radius: 0 7px 7px 0;
+}
+
 /* Drag handle */
 .cn-drag-handle {
   cursor: grab;

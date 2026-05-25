@@ -484,6 +484,125 @@
   }
 
   /* ──────────────────────────────────────────────
+   *  НАЛАШТУВАННЯ — Settings chat selector (Delta target)
+   * ────────────────────────────────────────────── */
+  let cnSettingsPlatform = localStorage.getItem("cnSettingsPlatform") || "whatsapp";
+  let cnSettingsChatId   = localStorage.getItem("cnSettingsChatId")   || "";
+  let cnSettingsChatName = localStorage.getItem("cnSettingsChatName") || "";
+  let _cnSettingsChatsCache = {};  // { platform: [...] }
+  let _deltaTypeOptions = [];      // shared list loaded once
+
+  function cnSettingsSavePlatform(p) {
+    cnSettingsPlatform = p;
+    localStorage.setItem("cnSettingsPlatform", p);
+  }
+  function cnSettingsSaveChat(id, name) {
+    cnSettingsChatId   = id;   cnSettingsChatName = name;
+    localStorage.setItem("cnSettingsChatId",   id);
+    localStorage.setItem("cnSettingsChatName", name);
+  }
+  function updateCnSettingsPlatformBtn() {
+    const btn = $("cnSettingsPlatformBtn");
+    if (!btn) return;
+    if (cnSettingsPlatform === "signal") {
+      btn.textContent = "S"; btn.className = "qc-platform-btn qc-platform-btn--signal";
+      btn.title = "Signal (натисни для WhatsApp)";
+    } else {
+      btn.textContent = "W"; btn.className = "qc-platform-btn qc-platform-btn--wa";
+      btn.title = "WhatsApp (натисни для Signal)";
+    }
+  }
+  async function cnSettingsLoadChats(platform) {
+    if (_cnSettingsChatsCache[platform]) return _cnSettingsChatsCache[platform];
+    try {
+      const r = await fetch("/api/push/chats?platform=" + platform + "&only_groups=1");
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.chats)) { _cnSettingsChatsCache[platform] = d.chats; return d.chats; }
+    } catch (_) {}
+    return [];
+  }
+  function renderCnSettingsChatDrop(chats, query) {
+    const drop = $("cnSettingsChatDrop");
+    if (!drop) return;
+    const q = (query || "").toLowerCase();
+    const filtered = q ? chats.filter(c => c.name.toLowerCase().includes(q)) : chats;
+    if (!filtered.length) { drop.classList.add("hidden"); return; }
+    drop.innerHTML = "";
+    filtered.slice(0, 40).forEach(chat => {
+      const item = document.createElement("div");
+      item.className = "qc-chat-drop-item";
+      item.innerHTML = `<span>${escapeHtml(chat.name)}</span><span class="qc-chat-drop-item__type">група</span>`;
+      item.addEventListener("mousedown", e => {
+        e.preventDefault();
+        const inp = $("cnSettingsChatInput");
+        if (inp) inp.value = chat.name;
+        cnSettingsSaveChat(chat.id, chat.name);
+        drop.classList.add("hidden");
+      });
+      drop.appendChild(item);
+    });
+    drop.classList.remove("hidden");
+  }
+  function setupCnSettingsChatSelector() {
+    const input = $("cnSettingsChatInput");
+    const drop  = $("cnSettingsChatDrop");
+    const platBtn = $("cnSettingsPlatformBtn");
+    if (!input) return;
+    updateCnSettingsPlatformBtn();
+    if (cnSettingsChatName) input.value = cnSettingsChatName;
+
+    if (platBtn) platBtn.addEventListener("click", () => {
+      cnSettingsSavePlatform(cnSettingsPlatform === "whatsapp" ? "signal" : "whatsapp");
+      updateCnSettingsPlatformBtn();
+      cnSettingsChatId = ""; cnSettingsChatName = "";
+      localStorage.removeItem("cnSettingsChatId"); localStorage.removeItem("cnSettingsChatName");
+      if (input) input.value = "";
+      _cnSettingsChatsCache = {};
+      cnSettingsLoadChats(cnSettingsPlatform);
+    });
+
+    input.addEventListener("focus", async () => {
+      const chats = await cnSettingsLoadChats(cnSettingsPlatform);
+      renderCnSettingsChatDrop(chats, input.value);
+    });
+    input.addEventListener("input", async () => {
+      if (input.value !== cnSettingsChatName) { cnSettingsChatId = ""; cnSettingsChatName = input.value; }
+      const chats = await cnSettingsLoadChats(cnSettingsPlatform);
+      renderCnSettingsChatDrop(chats, input.value);
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(() => drop && drop.classList.add("hidden"), 160);
+    });
+    input.addEventListener("keydown", e => {
+      if (!drop || drop.classList.contains("hidden")) return;
+      const items = drop.querySelectorAll(".qc-chat-drop-item");
+      const focused = drop.querySelector(".qc-chat-drop-item.focused");
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!focused) items[0]?.classList.add("focused");
+        else { focused.classList.remove("focused"); (focused.nextElementSibling || items[0])?.classList.add("focused"); }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!focused) items[items.length-1]?.classList.add("focused");
+        else { focused.classList.remove("focused"); (focused.previousElementSibling || items[items.length-1])?.classList.add("focused"); }
+      } else if (e.key === "Enter" && focused) {
+        e.preventDefault(); focused.dispatchEvent(new MouseEvent("mousedown"));
+      } else if (e.key === "Escape") drop.classList.add("hidden");
+    });
+
+    cnSettingsLoadChats(cnSettingsPlatform);
+  }
+
+  /* Load delta type options (global, shared list) */
+  async function loadDeltaTypeOptions() {
+    try {
+      const r = await fetch("/api/delta/type-options");
+      const d = await r.json();
+      _deltaTypeOptions = d.ok ? (d.rows || []) : [];
+    } catch (_) { _deltaTypeOptions = []; }
+  }
+
+  /* ──────────────────────────────────────────────
    *  НАЛАШТУВАННЯ — types CRUD
    * ────────────────────────────────────────────── */
   const typesLoader   = $("cnTypesLoader");
@@ -523,12 +642,14 @@
     typesLoader.style.display = "";
     typesList.innerHTML = "";
     try {
+      await loadDeltaTypeOptions();
       const res  = await fetch("/api/conclusions/types");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       state.settings.types = data.rows || [];
       typesLoader.style.display = "none";
       renderTypesList();
+      setupCnSettingsChatSelector();
     } catch (err) {
       typesLoader.textContent = "Помилка завантаження: " + err.message;
     }
@@ -638,6 +759,11 @@
 
     if (!isProtected) card.draggable = true;
 
+    // Build Delta "Тип" options
+    const dtypeOptionsHtml = _deltaTypeOptions.map(opt =>
+      `<option value="${escapeHtml(opt.value)}"${opt.value === typeObj.delta_type ? " selected" : ""}>${escapeHtml(opt.value)}</option>`
+    ).join("");
+
     card.innerHTML = `
       <div class="cn-type-card__head">
         ${isProtected ? "" : `<span class="cn-drag-handle" title="Перетягнути для зміни порядку">⠿</span>`}
@@ -652,12 +778,58 @@
              >Видалити</button>`
         }
       </div>
+
       <div class="small" style="opacity:.7;margin:6px 0 4px">Ключові слова:</div>
       <div class="chips cn-type-chips" data-type-id="${typeObj.id}"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
         <input type="text" class="cn-kw-input" placeholder="Додати ключове слово…"
                autocomplete="off" style="flex:1" />
         <button type="button" class="secondary cn-kw-add-btn" style="white-space:nowrap">Додати</button>
+      </div>
+
+      <!-- Delta section -->
+      <div class="cn-delta-section">
+        <div class="cn-delta-head">
+          <strong class="small">Дельта</strong>
+          <label class="cn-delta-autosend-label">
+            <input type="checkbox" class="cn-delta-autosend-chk" ${typeObj.delta_auto_send ? "checked" : ""} />
+            <span class="small">Автоматично надсилати</span>
+          </label>
+        </div>
+        <div class="cn-delta-fields">
+          <div class="cn-delta-field">
+            <span class="cn-delta-field__label small">Тип</span>
+            <div class="cn-delta-type-wrap">
+              <select class="cn-delta-sel cn-delta-type-sel">${dtypeOptionsHtml}</select>
+              <input type="text" class="cn-delta-add-inp" placeholder="Новий варіант…" autocomplete="off" />
+              <button type="button" class="secondary cn-delta-add-btn" style="white-space:nowrap;padding:3px 10px">+</button>
+            </div>
+          </div>
+          <div class="cn-delta-field">
+            <span class="cn-delta-field__label small">Ідентифікація</span>
+            <select class="cn-delta-sel cn-delta-identification-sel">
+              ${["Ворожий","Дружній","Невідомий"].map(v =>
+                `<option${v === typeObj.delta_identification ? " selected" : ""}>${escapeHtml(v)}</option>`
+              ).join("")}
+            </select>
+          </div>
+          <div class="cn-delta-field">
+            <span class="cn-delta-field__label small">Джерело</span>
+            <select class="cn-delta-sel cn-delta-source-sel">
+              ${["Радіорозвідка (РР)"].map(v =>
+                `<option${v === typeObj.delta_source ? " selected" : ""}>${escapeHtml(v)}</option>`
+              ).join("")}
+            </select>
+          </div>
+          <div class="cn-delta-field">
+            <span class="cn-delta-field__label small">Присутність</span>
+            <select class="cn-delta-sel cn-delta-presence-sel">
+              ${["присутній","очікуваний, імовірний"].map(v =>
+                `<option${v === typeObj.delta_presence ? " selected" : ""}>${escapeHtml(v)}</option>`
+              ).join("")}
+            </select>
+          </div>
+        </div>
       </div>
     `;
 
@@ -672,6 +844,62 @@
     colorInp.addEventListener("change", async () => {
       await patchTypeColor(typeObj.id, colorInp.value, card);
     });
+
+    // ── Delta section handlers ──
+    const deltaSection      = card.querySelector(".cn-delta-section");
+    const autoSendChk       = card.querySelector(".cn-delta-autosend-chk");
+    const typeSel           = card.querySelector(".cn-delta-type-sel");
+    const identSel          = card.querySelector(".cn-delta-identification-sel");
+    const sourceSel         = card.querySelector(".cn-delta-source-sel");
+    const presenceSel       = card.querySelector(".cn-delta-presence-sel");
+    const deltaAddInp       = card.querySelector(".cn-delta-add-inp");
+    const deltaAddBtn       = card.querySelector(".cn-delta-add-btn");
+
+    async function saveDelta() {
+      const payload = {
+        delta_auto_send:      autoSendChk ? autoSendChk.checked : true,
+        delta_type:           typeSel ? typeSel.value : "",
+        delta_identification: identSel ? identSel.value : "",
+        delta_source:         sourceSel ? sourceSel.value : "",
+        delta_presence:       presenceSel ? presenceSel.value : "",
+      };
+      try {
+        const res = await fetch(`/api/conclusions/types/${typeObj.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); toast(d.error || "Помилка збереження Дельта", "error"); }
+      } catch (err) { toast("Помилка: " + err.message, "error"); }
+    }
+
+    if (autoSendChk) autoSendChk.addEventListener("change", saveDelta);
+    if (typeSel)     typeSel.addEventListener("change", saveDelta);
+    if (identSel)    identSel.addEventListener("change", saveDelta);
+    if (sourceSel)   sourceSel.addEventListener("change", saveDelta);
+    if (presenceSel) presenceSel.addEventListener("change", saveDelta);
+
+    // Add new "Тип" option
+    async function addDeltaTypeOption() {
+      const val = deltaAddInp ? deltaAddInp.value.trim() : "";
+      if (!val) return;
+      const res = await fetch("/api/delta/type-options", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: val }),
+      });
+      const d = await res.json();
+      if (!d.ok) { toast(d.error || "Помилка", "error"); return; }
+      // Add to global cache + all visible selects
+      _deltaTypeOptions.push({ id: d.id, value: val });
+      document.querySelectorAll(".cn-delta-type-sel").forEach(sel => {
+        const opt = document.createElement("option");
+        opt.value = val; opt.textContent = val;
+        sel.appendChild(opt);
+      });
+      if (deltaAddInp) deltaAddInp.value = "";
+      toast("Додано", "info", 1200);
+    }
+    if (deltaAddBtn) deltaAddBtn.addEventListener("click", addDeltaTypeOption);
+    if (deltaAddInp) deltaAddInp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addDeltaTypeOption(); } });
 
     // Keyword chips
     const chipsWrap = card.querySelector(".cn-type-chips");

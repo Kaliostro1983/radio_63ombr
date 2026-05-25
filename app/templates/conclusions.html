@@ -157,6 +157,20 @@
       >
         <div class="tab-panel-section">
 
+          <!-- Chat selector for Delta auto-send -->
+          <div style="margin-bottom:20px">
+            <label class="small" style="display:block;margin-bottom:6px;opacity:.75">Цільовий чат для надсилання Дельта-звітів</label>
+            <div class="qc-send-bar cn-settings-chat-bar">
+              <button type="button" id="cnSettingsPlatformBtn" class="qc-platform-btn qc-platform-btn--wa" title="WhatsApp">W</button>
+              <div class="qc-chat-ac-wrap">
+                <input id="cnSettingsChatInput" type="text" class="qc-chat-input" placeholder="Оберіть чат…" autocomplete="off" />
+                <div id="cnSettingsChatDrop" class="qc-chat-drop hidden"></div>
+                <input type="hidden" id="cnSettingsChatId" value="" />
+              </div>
+            </div>
+          </div>
+          <hr style="margin:0 0 22px; border:none; border-top:1px solid var(--border)">
+
           <!-- Add new type -->
           <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:22px; flex-wrap:wrap">
             <div class="field" style="flex:1; min-width:200px">
@@ -344,6 +358,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/conclusions.js?v=10" defer></script>
+<script src="/static/conclusions.js?v=11" defer></script>
 <script src="/static/quick_conclusions.js?v=11" defer></script>
 {% endblock %}
