@@ -332,39 +332,31 @@
   async function openDeltaModal(row) {
     _deltaModalRow = row;
 
-    // Lazy-load delta type options if not yet populated
-    if (!_deltaTypeOptions.length) {
-      await loadDeltaTypeOptions();
-    }
-
     const typeObj = state.view.types.find((t) => t.id === row.type_id) || {};
 
-    // Populate Тип select
-    const cdmType = $("cdmType");
-    if (cdmType) {
-      // Derive type label from SIDC icon (normalize pos-4 to '6' — library stores Hostile)
-      const iconSidc = typeObj.icon_sidc || "";
-      const normSidc = iconSidc.length >= 4
-        ? iconSidc.slice(0, 3) + "6" + iconSidc.slice(4)
-        : iconSidc;
-      const sidcEntry = normSidc ? _SIDC_ICONS.find(e => e.s === normSidc) : null;
-      const sidcIconLabel = sidcEntry ? sidcEntry.l : "";
+    // Populate Тип input from SIDC icon label
+    const cdmType      = $("cdmType");
+    const cdmTypeWarn  = $("cdmTypeWarn");
+    const cdmSendBtn   = $("cnDeltaSendBtn");
 
-      // Priority: SIDC icon label → stored delta_type → first dropdown option
-      const currentType = sidcIconLabel
-        || typeObj.delta_type
-        || (_deltaTypeOptions[0] && _deltaTypeOptions[0].value)
-        || "";
+    // Normalize pos-4 to '6' before lookup (library stores all icons as Hostile)
+    const iconSidc = typeObj.icon_sidc || "";
+    const normSidc = iconSidc.length >= 4
+      ? iconSidc.slice(0, 3) + "6" + iconSidc.slice(4)
+      : iconSidc;
+    const sidcEntry    = normSidc ? _SIDC_ICONS.find(e => e.s === normSidc) : null;
+    const sidcIconLabel = sidcEntry ? sidcEntry.l : "";
 
-      // Prepend currentType if it is not present in the options list
-      const hasMatch = _deltaTypeOptions.some(opt => opt.value === currentType);
-      const opts = (hasMatch || !currentType)
-        ? _deltaTypeOptions
-        : [{ value: currentType }, ..._deltaTypeOptions];
-      cdmType.innerHTML = opts.map((opt) =>
-        `<option value="${escapeHtml(opt.value)}"${opt.value === currentType ? " selected" : ""}>${escapeHtml(opt.value)}</option>`
-      ).join("");
+    if (cdmType) cdmType.value = sidcIconLabel;
+
+    // Block sending if no icon is configured
+    const hasIcon = !!sidcIconLabel;
+    if (cdmTypeWarn) {
+      cdmTypeWarn.classList.toggle("hidden", hasIcon);
+      const warnName = document.getElementById("cdmTypeWarnName");
+      if (warnName) warnName.textContent = typeObj.type || "";
     }
+    if (cdmSendBtn) cdmSendBtn.disabled = !hasIcon;
 
     // Ідентифікація
     const cdmIdent = $("cdmIdent");

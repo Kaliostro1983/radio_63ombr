@@ -366,7 +366,7 @@
         <!-- Тип -->
         <div class="cn-delta-modal-field">
           <label class="small" for="cdmType">Тип</label>
-          <select id="cdmType"></select>
+          <input id="cdmType" type="text" autocomplete="off" placeholder="—" />
         </div>
 
         <!-- Назва -->
@@ -427,6 +427,13 @@
         </div>
 
       </div>
+
+      <!-- Попередження: іконка не обрана -->
+      <div id="cdmTypeWarn" class="cn-delta-type-warn hidden">
+        ⚠ Для категорії «<span id="cdmTypeWarnName"></span>» не обрано іконку — тип об'єкта невідомий.<br>
+        Оберіть іконку у вкладці <strong>Налаштування</strong>.
+      </div>
+
     </div>
     <div class="modal-foot">
       <button id="cnDeltaSendBtn" type="button">&#10148; Надіслати</button>
