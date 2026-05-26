@@ -14,6 +14,7 @@ let _map = null;
 let _types = [];            // [{id, type, color, icon_filename, ...}]
 let _rows  = [];            // all conclusions with MGRS
 let _activeTypeIds = new Set(); // empty = show all
+let _allHidden    = false;      // "Всі" toggle — true = all markers hidden
 let _layerGroups = {};      // typeId → L.LayerGroup
 let _allMarkers  = [];      // [{row, marker, typeId}]
 
@@ -124,7 +125,7 @@ async function loadTypes() {
     _layerGroups[0] = L.layerGroup().addTo(_map);
   }
 
-  renderTypeChips();
+  // chips rendered after placeMarkers() so counts are available
 }
 
 // ── Render type filter chips ──────────────────────────────────
@@ -132,12 +133,22 @@ function renderTypeChips() {
   const container = document.getElementById("chipContainer");
   container.innerHTML = "";
 
-  // "Всі" button
+  // Count markers per typeId
+  const countByType = {};
+  for (const { typeId } of _allMarkers) {
+    countByType[typeId] = (countByType[typeId] || 0) + 1;
+  }
+
+  // Only show types that actually have markers on the map
+  const presentTypes = _types.filter(t => countByType[t.id] > 0);
+
+  // "Всі" toggle button
   const allBtn = document.createElement("button");
   allBtn.className = "type-chip-all";
   allBtn.textContent = "Всі";
   allBtn.addEventListener("click", () => {
-    _activeTypeIds.clear();
+    _allHidden = !_allHidden;
+    if (!_allHidden) _activeTypeIds.clear();
     updateChipStates();
     applyTypeFilter();
   });
@@ -147,7 +158,7 @@ function renderTypeChips() {
   divider.className = "chip-divider";
   container.appendChild(divider);
 
-  for (const t of _types) {
+  for (const t of presentTypes) {
     const chip = document.createElement("div");
     chip.className = "type-chip";
     chip.dataset.typeId = t.id;
@@ -161,7 +172,7 @@ function renderTypeChips() {
     chip.appendChild(img);
 
     const label = document.createElement("span");
-    label.textContent = t.type;
+    label.textContent = `${t.type} (${countByType[t.id]})`;
     chip.appendChild(label);
 
     chip.addEventListener("click", () => toggleTypeChip(t.id));
@@ -172,11 +183,9 @@ function renderTypeChips() {
 }
 
 function toggleTypeChip(typeId) {
+  _allHidden = false; // clicking a chip always un-hides
   if (_activeTypeIds.has(typeId)) {
     _activeTypeIds.delete(typeId);
-    if (_activeTypeIds.size === 0) {
-      // nothing selected = show all (same as clicking "Всі")
-    }
   } else {
     _activeTypeIds.add(typeId);
   }
@@ -185,23 +194,23 @@ function toggleTypeChip(typeId) {
 }
 
 function updateChipStates() {
-  const allActive = _activeTypeIds.size === 0;
+  const allActive = _activeTypeIds.size === 0 && !_allHidden;
   document.querySelectorAll(".type-chip").forEach(chip => {
     const id = parseInt(chip.dataset.typeId, 10);
-    chip.classList.toggle("active", allActive || _activeTypeIds.has(id));
+    chip.classList.toggle("active", !_allHidden && (allActive || _activeTypeIds.has(id)));
   });
-  // "Всі" button always visible, highlight when nothing selected
   const allBtn = document.querySelector(".type-chip-all");
   if (allBtn) {
+    allBtn.textContent   = _allHidden ? "Показати всі" : "Всі";
     allBtn.style.background = allActive ? "rgba(255,255,255,.12)" : "transparent";
   }
 }
 
 function applyTypeFilter() {
   let visible = 0;
-  const showAll = _activeTypeIds.size === 0;
+  const showAll = _activeTypeIds.size === 0 && !_allHidden;
   for (const { row, marker, typeId } of _allMarkers) {
-    const show = showAll || _activeTypeIds.has(typeId);
+    const show = !_allHidden && (showAll || _activeTypeIds.has(typeId));
     if (show) {
       if (!_map.hasLayer(marker)) marker.addTo(_map);
       visible++;
@@ -265,6 +274,7 @@ async function placeMarkers() {
   if (bounds.length > 0) {
     _map.fitBounds(bounds, { padding: [48, 48], maxZoom: 14 });
   }
+  renderTypeChips();          // chips built after markers → counts are known
   updateCountBadge(_allMarkers.length);
 }
 
