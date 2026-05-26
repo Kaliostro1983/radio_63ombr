@@ -13,8 +13,8 @@ const _networkId = parseInt(_params.get("network_id") || "0", 10);
 let _map = null;
 let _types = [];            // [{id, type, color, icon_filename, icon_sidc, ...}]
 let _rows  = [];            // all conclusions with MGRS
-let _activeTypeIds = new Set(); // empty = show all
-let _allHidden    = false;      // "Всі" toggle — true = all markers hidden
+let _hiddenTypeIds = new Set(); // types hidden individually; empty = all visible
+let _allHidden     = false;     // true = all markers hidden via "Сховати всі"
 let _layerGroups = {};      // typeId → L.LayerGroup
 let _allMarkers  = [];      // [{row, marker, typeId}]
 
@@ -160,7 +160,7 @@ function renderTypeChips() {
   allBtn.textContent = "Всі";
   allBtn.addEventListener("click", () => {
     _allHidden = !_allHidden;
-    if (!_allHidden) _activeTypeIds.clear();
+    if (!_allHidden) _hiddenTypeIds.clear(); // "Показати всі" скидає індивідуальні сховання
     updateChipStates();
     applyTypeFilter();
   });
@@ -202,33 +202,33 @@ function renderTypeChips() {
 
 function toggleTypeChip(typeId) {
   _allHidden = false;
-  if (_activeTypeIds.has(typeId)) {
-    _activeTypeIds.delete(typeId);
+  if (_hiddenTypeIds.has(typeId)) {
+    _hiddenTypeIds.delete(typeId); // було сховано → показуємо
   } else {
-    _activeTypeIds.add(typeId);
+    _hiddenTypeIds.add(typeId);    // було видно → ховаємо
   }
+  closeRightPanel();
   updateChipStates();
   applyTypeFilter();
 }
 
 function updateChipStates() {
-  const allActive = _activeTypeIds.size === 0 && !_allHidden;
   document.querySelectorAll(".type-chip").forEach(chip => {
     const id = parseInt(chip.dataset.typeId, 10);
-    chip.classList.toggle("active", !_allHidden && (allActive || _activeTypeIds.has(id)));
+    // чіп підсвічений = категорія видима (не прихована і не "сховати всі")
+    chip.classList.toggle("active", !_allHidden && !_hiddenTypeIds.has(id));
   });
   const allBtn = document.querySelector(".type-chip-all");
   if (allBtn) {
-    allBtn.textContent      = _allHidden ? "Показати всі" : "Всі";
-    allBtn.style.background = allActive ? "rgba(255,255,255,.12)" : "transparent";
+    allBtn.textContent      = _allHidden ? "Показати всі" : "Сховати всі";
+    allBtn.style.background = _allHidden ? "transparent" : "rgba(255,255,255,.12)";
   }
 }
 
 function applyTypeFilter() {
   let visible = 0;
-  const showAll = _activeTypeIds.size === 0 && !_allHidden;
   for (const { marker, typeId } of _allMarkers) {
-    const show = !_allHidden && (showAll || _activeTypeIds.has(typeId));
+    const show = !_allHidden && !_hiddenTypeIds.has(typeId);
     if (show) {
       if (!_map.hasLayer(marker)) marker.addTo(_map);
       visible++;

@@ -75,7 +75,7 @@ html, body {
 }
 
 #topInner {
-  margin: 6px 12px 10px;
+  margin: 6px 12px 10px 56px; /* left gap to clear Leaflet zoom buttons */
   padding: 10px 14px;
   background: rgba(15, 23, 42, 0.88);
   backdrop-filter: blur(8px);
