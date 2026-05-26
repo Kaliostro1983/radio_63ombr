@@ -1206,7 +1206,7 @@
       <div class="cn-kw-bar">
         <div class="cn-type-chips" data-type-id="${typeObj.id}"></div>
         <button type="button" class="cn-kw-toggle-btn" title="Додати ключове слово">+</button>
-        <input type="text" class="cn-kw-inline-inp" placeholder="Нове слово…" autocomplete="off" />
+        <input type="text" class="cn-kw-inline-inp" placeholder="Нове слово…" autocomplete="off" style="display:none" />
       </div>
 
       <!-- Delta section -->
@@ -1346,7 +1346,7 @@
 
     if (kwToggleBtn) {
       kwToggleBtn.addEventListener("click", () => {
-        const open = kwInput && kwInput.style.display !== "none";
+        const open = kwInput && getComputedStyle(kwInput).display !== "none";
         if (open) {
           doAdd(); // save if something typed, else just close
         } else {
@@ -1367,7 +1367,7 @@
       });
       kwInput.addEventListener("blur", () => {
         setTimeout(() => {
-          if (kwInput.style.display !== "none") {
+          if (getComputedStyle(kwInput).display !== "none") {
             if (kwInput.value.trim()) doAdd();
             else {
               kwInput.style.display = "none";
