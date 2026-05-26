@@ -1350,7 +1350,7 @@
         if (open) {
           doAdd(); // save if something typed, else just close
         } else {
-          if (kwInput) { kwInput.style.display = ""; kwInput.focus(); }
+          if (kwInput) { kwInput.style.display = "inline-block"; kwInput.focus(); }
           kwToggleBtn.textContent = "✓";
           kwToggleBtn.classList.add("active");
         }
