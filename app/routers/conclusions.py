@@ -199,7 +199,7 @@ def api_conclusion_types():
             "color":                r["color"] or "",
             "sort_order":           int(r["sort_order"]) if r["sort_order"] is not None else 0,
             "delta_auto_send":      bool(r["delta_auto_send"]) if r["delta_auto_send"] is not None else True,
-            "delta_type":           r["delta_type"] or "Піхотний підрозділ",
+            "delta_type":           r["delta_type"] or "",
             "delta_identification": r["delta_identification"] or "Ворожий",
             "delta_source":         r["delta_source"] or "Радіорозвідка (РР)",
             "delta_presence":       r["delta_presence"] or "присутній",

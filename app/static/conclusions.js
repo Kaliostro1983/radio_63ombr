@@ -343,15 +343,15 @@
     const cdmType = $("cdmType");
     if (cdmType) {
       const currentType = typeObj.delta_type || (_deltaTypeOptions[0] && _deltaTypeOptions[0].value) || "";
-      cdmType.innerHTML = _deltaTypeOptions.map((opt) =>
+      // Check BEFORE setting innerHTML (after — browser auto-selects first option,
+      // so cdmType.value is never empty and the old fallback never triggered)
+      const hasMatch = _deltaTypeOptions.some(opt => opt.value === currentType);
+      const opts = (hasMatch || !currentType)
+        ? _deltaTypeOptions
+        : [{ value: currentType }, ..._deltaTypeOptions];
+      cdmType.innerHTML = opts.map((opt) =>
         `<option value="${escapeHtml(opt.value)}"${opt.value === currentType ? " selected" : ""}>${escapeHtml(opt.value)}</option>`
       ).join("");
-      if (!cdmType.value && currentType) {
-        // if no option matched, add one
-        const fb = document.createElement("option");
-        fb.value = currentType; fb.textContent = currentType; fb.selected = true;
-        cdmType.prepend(fb);
-      }
     }
 
     // Ідентифікація
