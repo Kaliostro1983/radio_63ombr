@@ -3608,6 +3608,81 @@ button.secondary{
   flex-shrink: 0;
 }
 
+/* ── Keyword chips (compact toolbar-style) ──────────────────── */
+.cn-kw-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0 4px;
+}
+/* cn-type-chips wraps chips; display:contents lets them participate in parent flex */
+.cn-kw-bar .cn-type-chips { display: contents; }
+
+.cn-kw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 3px 2px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.cn-kw-chip__x {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 3px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: color .1s, background .1s;
+}
+.cn-kw-chip__x:hover { color: var(--fg); background: rgba(255,255,255,.12); }
+
+.cn-kw-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px dashed var(--border);
+  background: none;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: background .12s, border-color .12s, color .12s;
+  flex-shrink: 0;
+}
+.cn-kw-toggle-btn:hover {
+  background: rgba(255,255,255,.08);
+  border-color: var(--fg);
+  border-style: solid;
+  color: var(--fg);
+}
+.cn-kw-toggle-btn.active {
+  border-style: solid;
+  border-color: var(--fg);
+  color: var(--fg);
+}
+.cn-kw-inline-inp {
+  display: none;
+  width: 100px;
+  padding: 2px 7px;
+  font-size: 12px;
+  background: var(--inputbg);
+  color: var(--inputfg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.cn-kw-inline-inp:focus { outline: none; border-color: var(--accent); }
+
 /* ── SIDC icon picker ──────────────────────────────────────── */
 .cn-sidc-row {
   display: flex;

@@ -1159,11 +1159,6 @@
 
     if (!isProtected) card.draggable = true;
 
-    // Build Delta "Тип" options
-    const dtypeOptionsHtml = _deltaTypeOptions.map(opt =>
-      `<option value="${escapeHtml(opt.value)}"${opt.value === typeObj.delta_type ? " selected" : ""}>${escapeHtml(opt.value)}</option>`
-    ).join("");
-
     // Resolve current SIDC label for display
     const curSidcLabel = typeObj.icon_sidc ? sidcLabel(typeObj.icon_sidc) : "";
 
@@ -1208,12 +1203,11 @@
           : ""}
       </div>
 
-      <div class="small" style="opacity:.7;margin:6px 0 4px">Ключові слова:</div>
-      <div class="chips cn-type-chips" data-type-id="${typeObj.id}"></div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-        <input type="text" class="cn-kw-input" placeholder="Додати ключове слово…"
-               autocomplete="off" style="flex:1" />
-        <button type="button" class="secondary cn-kw-add-btn" style="white-space:nowrap">Додати</button>
+      <!-- Keywords compact bar -->
+      <div class="cn-kw-bar">
+        <div class="cn-type-chips" data-type-id="${typeObj.id}"></div>
+        <button type="button" class="cn-kw-toggle-btn" title="Додати ключове слово">+</button>
+        <input type="text" class="cn-kw-inline-inp" placeholder="Нове слово…" autocomplete="off" />
       </div>
 
       <!-- Delta section -->
@@ -1222,26 +1216,14 @@
           <strong class="small">Дельта</strong>
           <label class="cn-delta-autosend-label">
             <input type="checkbox" class="cn-delta-autosend-chk" ${typeObj.delta_auto_send ? "checked" : ""} />
-            <span class="small">Автоматично надсилати</span>
+            <span class="small">Авто надсилати</span>
+          </label>
+          <label class="cn-delta-autosend-label" style="margin-left:auto">
+            <input type="checkbox" class="cn-delta-hostile-chk" ${typeObj.delta_identification === "Ворожий" || !typeObj.delta_identification ? "checked" : ""} />
+            <span class="small">Ворожий</span>
           </label>
         </div>
         <div class="cn-delta-fields">
-          <div class="cn-delta-field">
-            <span class="cn-delta-field__label small">Тип</span>
-            <div class="cn-delta-type-wrap">
-              <select class="cn-delta-sel cn-delta-type-sel">${dtypeOptionsHtml}</select>
-              <input type="text" class="cn-delta-add-inp" placeholder="Новий варіант…" autocomplete="off" />
-              <button type="button" class="secondary cn-delta-add-btn" style="white-space:nowrap;padding:3px 10px">+</button>
-            </div>
-          </div>
-          <div class="cn-delta-field">
-            <span class="cn-delta-field__label small">Ідентифікація</span>
-            <select class="cn-delta-sel cn-delta-identification-sel">
-              ${["Ворожий","Дружній","Невідомий"].map(v =>
-                `<option${v === typeObj.delta_identification ? " selected" : ""}>${escapeHtml(v)}</option>`
-              ).join("")}
-            </select>
-          </div>
           <div class="cn-delta-field">
             <span class="cn-delta-field__label small">Джерело</span>
             <select class="cn-delta-sel cn-delta-source-sel">
@@ -1317,33 +1299,28 @@
       sidcPickBtn.addEventListener("click", () => {
         openSidcPicker((sidc, label) => {
           applySidc(sidc, label);
-          patchTypeSidc(typeObj.id, sidc);
+          patchTypeSidc(typeObj.id, sidc, label); // also updates delta_type
         });
       });
     }
     if (sidcClearBtn) {
       sidcClearBtn.addEventListener("click", () => {
         applySidc("", "");
-        patchTypeSidc(typeObj.id, "");
+        patchTypeSidc(typeObj.id, ""); // no deltaType — keep existing
       });
     }
 
     // ── Delta section handlers ──
-    const deltaSection      = card.querySelector(".cn-delta-section");
-    const autoSendChk       = card.querySelector(".cn-delta-autosend-chk");
-    const typeSel           = card.querySelector(".cn-delta-type-sel");
-    const identSel          = card.querySelector(".cn-delta-identification-sel");
-    const sourceSel         = card.querySelector(".cn-delta-source-sel");
-    const presenceSel       = card.querySelector(".cn-delta-presence-sel");
-    const deltaAddInp       = card.querySelector(".cn-delta-add-inp");
-    const deltaAddBtn       = card.querySelector(".cn-delta-add-btn");
+    const autoSendChk = card.querySelector(".cn-delta-autosend-chk");
+    const hostileChk  = card.querySelector(".cn-delta-hostile-chk");
+    const sourceSel   = card.querySelector(".cn-delta-source-sel");
+    const presenceSel = card.querySelector(".cn-delta-presence-sel");
 
     async function saveDelta() {
       const payload = {
         delta_auto_send:      autoSendChk ? autoSendChk.checked : true,
-        delta_type:           typeSel ? typeSel.value : "",
-        delta_identification: identSel ? identSel.value : "",
-        delta_source:         sourceSel ? sourceSel.value : "",
+        delta_identification: hostileChk && hostileChk.checked ? "Ворожий" : "Невизначений",
+        delta_source:         sourceSel   ? sourceSel.value   : "",
         delta_presence:       presenceSel ? presenceSel.value : "",
       };
       try {
@@ -1356,37 +1333,59 @@
     }
 
     if (autoSendChk) autoSendChk.addEventListener("change", saveDelta);
-    if (typeSel)     typeSel.addEventListener("change", saveDelta);
-    if (identSel)    identSel.addEventListener("change", saveDelta);
-    if (sourceSel)   sourceSel.addEventListener("change", saveDelta);
+    if (hostileChk)  hostileChk.addEventListener("change",  saveDelta);
+    if (sourceSel)   sourceSel.addEventListener("change",   saveDelta);
     if (presenceSel) presenceSel.addEventListener("change", saveDelta);
 
-    // Add new "Тип" option
-    async function addDeltaTypeOption() {
-      const val = deltaAddInp ? deltaAddInp.value.trim() : "";
-      if (!val) return;
-      const res = await fetch("/api/delta/type-options", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: val }),
-      });
-      const d = await res.json();
-      if (!d.ok) { toast(d.error || "Помилка", "error"); return; }
-      // Add to global cache + all visible selects
-      _deltaTypeOptions.push({ id: d.id, value: val });
-      document.querySelectorAll(".cn-delta-type-sel").forEach(sel => {
-        const opt = document.createElement("option");
-        opt.value = val; opt.textContent = val;
-        sel.appendChild(opt);
-      });
-      if (deltaAddInp) deltaAddInp.value = "";
-      toast("Додано", "info", 1200);
-    }
-    if (deltaAddBtn) deltaAddBtn.addEventListener("click", addDeltaTypeOption);
-    if (deltaAddInp) deltaAddInp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addDeltaTypeOption(); } });
+    // ── Keyword chips ──
+    const chipsWrap   = card.querySelector(".cn-type-chips");
+    const kwToggleBtn = card.querySelector(".cn-kw-toggle-btn");
+    const kwInput     = card.querySelector(".cn-kw-inline-inp");
 
-    // Keyword chips
-    const chipsWrap = card.querySelector(".cn-type-chips");
     (typeObj.keywords || []).forEach((kw) => chipsWrap.appendChild(buildKeywordChip(kw, typeObj.id)));
+
+    function doAdd() {
+      const kw = (kwInput ? kwInput.value : "").trim();
+      if (!kw) return;
+      if (kwInput)     kwInput.value        = "";
+      if (kwInput)     kwInput.style.display = "none";
+      if (kwToggleBtn) { kwToggleBtn.textContent = "+"; kwToggleBtn.classList.remove("active"); }
+      addKeyword(typeObj.id, kw, chipsWrap);
+    }
+
+    if (kwToggleBtn) {
+      kwToggleBtn.addEventListener("click", () => {
+        const open = kwInput && kwInput.style.display !== "none";
+        if (open) {
+          doAdd(); // save if something typed, else just close
+        } else {
+          if (kwInput) { kwInput.style.display = ""; kwInput.focus(); }
+          kwToggleBtn.textContent = "✓";
+          kwToggleBtn.classList.add("active");
+        }
+      });
+    }
+    if (kwInput) {
+      kwInput.addEventListener("keydown", e => {
+        if (e.key === "Enter")  { e.preventDefault(); doAdd(); }
+        if (e.key === "Escape") {
+          kwInput.style.display = "none";
+          kwInput.value = "";
+          if (kwToggleBtn) { kwToggleBtn.textContent = "+"; kwToggleBtn.classList.remove("active"); }
+        }
+      });
+      kwInput.addEventListener("blur", () => {
+        setTimeout(() => {
+          if (kwInput.style.display !== "none") {
+            if (kwInput.value.trim()) doAdd();
+            else {
+              kwInput.style.display = "none";
+              if (kwToggleBtn) { kwToggleBtn.textContent = "+"; kwToggleBtn.classList.remove("active"); }
+            }
+          }
+        }, 150);
+      });
+    }
 
     if (!isProtected) {
       card.querySelector(".cn-type-del-btn").addEventListener("click", () =>
@@ -1435,17 +1434,6 @@
       });
     }
 
-    const kwInput  = card.querySelector(".cn-kw-input");
-    const kwAddBtn = card.querySelector(".cn-kw-add-btn");
-    function doAdd() {
-      const kw = kwInput.value.trim();
-      if (!kw) return;
-      kwInput.value = "";
-      addKeyword(typeObj.id, kw, chipsWrap);
-    }
-    kwAddBtn.addEventListener("click", doAdd);
-    kwInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
-
     return card;
   }
 
@@ -1468,15 +1456,20 @@
     }
   }
 
-  /* ─── patch sidc ─── */
-  async function patchTypeSidc(typeId, sidc) {
+  /* ─── patch sidc (+ optionally set delta_type from icon label) ─── */
+  async function patchTypeSidc(typeId, sidc, deltaType) {
     const typeObj = state.settings.types.find((t) => t.id === typeId);
     if (typeObj) typeObj.icon_sidc = sidc;
+    const payload = { icon_sidc: sidc };
+    if (deltaType !== undefined) {
+      payload.delta_type = deltaType;
+      if (typeObj) typeObj.delta_type = deltaType;
+    }
     try {
       const res = await fetch(`/api/conclusions/types/${typeId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ icon_sidc: sidc }),
+        body:    JSON.stringify(payload),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -1590,12 +1583,20 @@
 
   /* ─── keyword chip ─── */
   function buildKeywordChip(kw, typeId) {
-    const span = document.createElement("span");
-    span.className = "chip";
-    span.dataset.kw = kw;
-    span.innerHTML = `<span>${escapeHtml(kw)}</span><button type="button" class="chip-x" aria-label="Видалити">×</button>`;
-    span.querySelector(".chip-x").addEventListener("click", () => removeKeyword(typeId, kw, span));
-    return span;
+    const chip = document.createElement("span");
+    chip.className  = "cn-kw-chip";
+    chip.dataset.kw = kw;
+    const text = document.createElement("span");
+    text.textContent = kw;
+    const xBtn = document.createElement("button");
+    xBtn.type = "button";
+    xBtn.className   = "cn-kw-chip__x";
+    xBtn.textContent = "×";
+    xBtn.setAttribute("aria-label", "Видалити");
+    xBtn.addEventListener("click", () => removeKeyword(typeId, kw, chip));
+    chip.appendChild(text);
+    chip.appendChild(xBtn);
+    return chip;
   }
 
   async function addKeyword(typeId, kw, chipsWrap) {
