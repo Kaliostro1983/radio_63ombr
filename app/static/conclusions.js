@@ -360,7 +360,9 @@
 
     // Ідентифікація
     const cdmIdent = $("cdmIdent");
-    if (cdmIdent) cdmIdent.value = typeObj.delta_identification || "Ворожий";
+    // Map legacy "Невизначений" → "Дружній"; default to "Ворожий"
+    const _rawIdent = typeObj.delta_identification || "Ворожий";
+    if (cdmIdent) cdmIdent.value = (_rawIdent === "Невизначений" ? "Дружній" : _rawIdent);
 
     // Джерело
     const cdmSource = $("cdmSource");
@@ -1168,8 +1170,13 @@
 
     if (!isProtected) card.draggable = true;
 
-    // Resolve current SIDC label for display
-    const curSidcLabel = typeObj.icon_sidc ? sidcLabel(typeObj.icon_sidc) : "";
+    // Resolve current SIDC label for display (normalize pos-4 → '6' before lookup)
+    const _rawSidcForLabel = typeObj.icon_sidc || "";
+    const _normSidcForLabel = _rawSidcForLabel.length >= 4
+      ? _rawSidcForLabel.slice(0, 3) + "6" + _rawSidcForLabel.slice(4)
+      : _rawSidcForLabel;
+    const _sidcLabelFound = _normSidcForLabel ? _SIDC_ICONS.find(e => e.s === _normSidcForLabel) : null;
+    const curSidcLabel = _sidcLabelFound ? _sidcLabelFound.l : "";
 
     card.innerHTML = `
       <div class="cn-type-card__head">
@@ -1294,7 +1301,7 @@
     async function saveDelta() {
       const payload = {
         delta_auto_send:      autoSendChk ? autoSendChk.checked : true,
-        delta_identification: hostileChk && hostileChk.checked ? "Ворожий" : "Невизначений",
+        delta_identification: hostileChk && hostileChk.checked ? "Ворожий" : "Дружній",
         delta_source:         sourceSel   ? sourceSel.value   : "",
         delta_presence:       presenceSel ? presenceSel.value : "",
       };
