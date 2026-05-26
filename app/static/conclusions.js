@@ -1148,6 +1148,11 @@
     }
   }
 
+  /* ─── SVG icon literals (used in type card action buttons) ─── */
+  const _SVG_PENCIL = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`;
+  const _SVG_TRASH  = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+  const _SVG_CHECK  = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
   /* ─── type card ─── */
   function buildTypeCard(typeObj) {
     const card = document.createElement("div");
@@ -1175,13 +1180,8 @@
                       color:inherit;border:1px solid var(--border);border-radius:4px" />`}
         ${isProtected
           ? `<span class="small" style="opacity:.5">(системний)</span>`
-          : `<button type="button" class="secondary cn-type-rename-btn"
-               style="font-size:12px;padding:2px 8px;margin-left:auto;white-space:nowrap"
-             >Редагувати</button>
-             <button type="button" class="secondary cn-type-del-btn"
-               style="font-size:12px;padding:2px 8px;
-                      color:var(--danger);border-color:color-mix(in srgb,var(--danger) 50%,var(--border))"
-             >Видалити</button>`
+          : `<button type="button" class="cn-icon-btn cn-type-rename-btn" title="Перейменувати" style="margin-left:auto">${_SVG_PENCIL}</button>
+             <button type="button" class="cn-icon-btn cn-icon-btn--danger cn-type-del-btn" title="Видалити">${_SVG_TRASH}</button>`
         }
       </div>
 
@@ -1196,11 +1196,6 @@
         </span>
         <button type="button" class="secondary cn-sidc-pick-btn"
                 style="font-size:11px;padding:3px 10px;white-space:nowrap;flex-shrink:0">Обрати</button>
-        ${typeObj.icon_sidc
-          ? `<button type="button" class="secondary cn-sidc-clear-btn"
-                     style="font-size:11px;padding:3px 8px;opacity:.7;flex-shrink:0"
-                     title="Очистити іконку">✕</button>`
-          : ""}
       </div>
 
       <!-- Keywords compact bar -->
@@ -1218,7 +1213,7 @@
             <input type="checkbox" class="cn-delta-autosend-chk" ${typeObj.delta_auto_send ? "checked" : ""} />
             <span class="small">Авто надсилати</span>
           </label>
-          <label class="cn-delta-autosend-label" style="margin-left:auto">
+          <label class="cn-delta-autosend-label">
             <input type="checkbox" class="cn-delta-hostile-chk" ${typeObj.delta_identification === "Ворожий" || !typeObj.delta_identification ? "checked" : ""} />
             <span class="small">Ворожий</span>
           </label>
@@ -1260,7 +1255,6 @@
     const sidcImg      = card.querySelector(".cn-sidc-img");
     const sidcLbl      = card.querySelector(".cn-sidc-lbl");
     const sidcPickBtn  = card.querySelector(".cn-sidc-pick-btn");
-    let   sidcClearBtn = card.querySelector(".cn-sidc-clear-btn");
 
     // Render initial SIDC preview
     if (typeObj.icon_sidc && sidcImg) {
@@ -1272,27 +1266,10 @@
       typeObj.icon_sidc = sidc;
       if (sidcImg) {
         const blobUrl = sidc ? sidcToBlobUrl(sidc) : null;
-        sidcImg.src            = blobUrl || "";
-        sidcImg.style.display  = blobUrl ? "" : "none";
+        sidcImg.src           = blobUrl || "";
+        sidcImg.style.display = blobUrl ? "" : "none";
       }
       if (sidcLbl) sidcLbl.textContent = label || "— без іконки (за замовчуванням) —";
-      // Toggle clear button
-      if (sidc && !sidcClearBtn) {
-        sidcClearBtn = document.createElement("button");
-        sidcClearBtn.type      = "button";
-        sidcClearBtn.className = "secondary cn-sidc-clear-btn";
-        sidcClearBtn.style.cssText = "font-size:11px;padding:3px 8px;opacity:.7;flex-shrink:0";
-        sidcClearBtn.title     = "Очистити іконку";
-        sidcClearBtn.textContent = "✕";
-        sidcClearBtn.addEventListener("click", () => {
-          applySidc("", "");
-          patchTypeSidc(typeObj.id, "");
-        });
-        card.querySelector(".cn-sidc-row").appendChild(sidcClearBtn);
-      } else if (!sidc && sidcClearBtn) {
-        sidcClearBtn.remove();
-        sidcClearBtn = null;
-      }
     }
 
     if (sidcPickBtn) {
@@ -1301,12 +1278,6 @@
           applySidc(sidc, label);
           patchTypeSidc(typeObj.id, sidc, label); // also updates delta_type
         });
-      });
-    }
-    if (sidcClearBtn) {
-      sidcClearBtn.addEventListener("click", () => {
-        applySidc("", "");
-        patchTypeSidc(typeObj.id, ""); // no deltaType — keep existing
       });
     }
 
@@ -1333,7 +1304,23 @@
     }
 
     if (autoSendChk) autoSendChk.addEventListener("change", saveDelta);
-    if (hostileChk)  hostileChk.addEventListener("change",  saveDelta);
+    if (hostileChk) {
+      hostileChk.addEventListener("change", async () => {
+        // Flip SIDC affiliation (position 4): 6 = Hostile, 3 = Friend
+        if (typeObj.icon_sidc) {
+          const arr = typeObj.icon_sidc.split("");
+          arr[3] = hostileChk.checked ? "6" : "3";
+          const updatedSidc = arr.join("");
+          typeObj.icon_sidc = updatedSidc;
+          if (sidcImg) {
+            const blobUrl = sidcToBlobUrl(updatedSidc);
+            if (blobUrl) { sidcImg.src = blobUrl; sidcImg.style.display = ""; }
+          }
+          await patchTypeSidc(typeObj.id, updatedSidc);
+        }
+        await saveDelta();
+      });
+    }
     if (sourceSel)   sourceSel.addEventListener("change",   saveDelta);
     if (presenceSel) presenceSel.addEventListener("change", saveDelta);
 
@@ -1400,7 +1387,8 @@
         nameInp.value          = typeObj.type;
         nameSpan.style.display = "none";
         nameInp.style.display  = "";
-        renameBtn.textContent  = "Зберегти";
+        renameBtn.innerHTML    = _SVG_CHECK;
+        renameBtn.title        = "Зберегти";
         nameInp.focus();
         nameInp.select();
       }
@@ -1409,7 +1397,8 @@
         const newName = nameInp.value.trim();
         nameSpan.style.display = "";
         nameInp.style.display  = "none";
-        renameBtn.textContent  = "Редагувати";
+        renameBtn.innerHTML    = _SVG_PENCIL;
+        renameBtn.title        = "Перейменувати";
         if (save && newName && newName !== typeObj.type) {
           await patchTypeName(typeObj.id, newName, nameSpan);
         }

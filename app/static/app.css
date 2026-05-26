@@ -2557,6 +2557,31 @@ button.secondary{
   border-radius: 0 7px 7px 0;
 }
 
+/* Icon-only action buttons in type card header */
+.cn-icon-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--fg);
+  flex-shrink: 0;
+  transition: background .12s, border-color .12s;
+}
+.cn-icon-btn:hover { background: rgba(255,255,255,.08); }
+.cn-icon-btn--danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+}
+.cn-icon-btn--danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
 /* Drag handle */
 .cn-drag-handle {
   cursor: grab;
