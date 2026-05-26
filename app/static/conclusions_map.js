@@ -201,11 +201,18 @@ function renderTypeChips() {
 }
 
 function toggleTypeChip(typeId) {
-  _allHidden = false;
-  if (_hiddenTypeIds.has(typeId)) {
-    _hiddenTypeIds.delete(typeId); // було сховано → показуємо
+  if (_allHidden) {
+    // Вихід із "сховати всі": заповнюємо _hiddenTypeIds усіма категоріями
+    // крім натиснутої — показуємо лише її
+    _allHidden = false;
+    const presentIds = new Set(_allMarkers.map(m => m.typeId));
+    _hiddenTypeIds = new Set([...presentIds].filter(id => id !== typeId));
   } else {
-    _hiddenTypeIds.add(typeId);    // було видно → ховаємо
+    if (_hiddenTypeIds.has(typeId)) {
+      _hiddenTypeIds.delete(typeId); // було сховано → показуємо
+    } else {
+      _hiddenTypeIds.add(typeId);    // було видно → ховаємо
+    }
   }
   closeRightPanel();
   updateChipStates();
