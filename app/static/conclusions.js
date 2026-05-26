@@ -1064,10 +1064,18 @@
         <span class="cn-type-card__swatch" title="Колір типу на карті"></span>
         <input type="color" class="cn-type-color-inp" value="${escapeHtml(cardColor)}" title="Обрати колір" draggable="false" />
         <span class="cn-type-card__name">${escapeHtml(typeObj.type)}</span>
+        ${isProtected ? "" : `<input type="text" class="cn-type-name-inp"
+               value="${escapeHtml(typeObj.type)}"
+               style="display:none;flex:1;font-size:14px;font-weight:600;
+                      padding:2px 6px;background:var(--input-bg,#1e293b);
+                      color:inherit;border:1px solid var(--border);border-radius:4px" />`}
         ${isProtected
           ? `<span class="small" style="opacity:.5">(системний)</span>`
-          : `<button type="button" class="secondary cn-type-del-btn"
-               style="font-size:12px;padding:2px 8px;margin-left:auto;
+          : `<button type="button" class="secondary cn-type-rename-btn"
+               style="font-size:12px;padding:2px 8px;margin-left:auto;white-space:nowrap"
+             >Редагувати</button>
+             <button type="button" class="secondary cn-type-del-btn"
+               style="font-size:12px;padding:2px 8px;
                       color:var(--danger);border-color:color-mix(in srgb,var(--danger) 50%,var(--border))"
              >Видалити</button>`
         }
@@ -1222,6 +1230,47 @@
       card.querySelector(".cn-type-del-btn").addEventListener("click", () =>
         openDeleteModal(typeObj.id, typeObj.type)
       );
+
+      const nameSpan  = card.querySelector(".cn-type-card__name");
+      const nameInp   = card.querySelector(".cn-type-name-inp");
+      const renameBtn = card.querySelector(".cn-type-rename-btn");
+
+      function enterRenameMode() {
+        nameInp.value          = typeObj.type;
+        nameSpan.style.display = "none";
+        nameInp.style.display  = "";
+        renameBtn.textContent  = "Зберегти";
+        nameInp.focus();
+        nameInp.select();
+      }
+
+      async function exitRenameMode(save) {
+        const newName = nameInp.value.trim();
+        nameSpan.style.display = "";
+        nameInp.style.display  = "none";
+        renameBtn.textContent  = "Редагувати";
+        if (save && newName && newName !== typeObj.type) {
+          await patchTypeName(typeObj.id, newName, nameSpan);
+        }
+      }
+
+      renameBtn.addEventListener("click", () => {
+        if (nameInp.style.display === "none") {
+          enterRenameMode();
+        } else {
+          exitRenameMode(true);
+        }
+      });
+
+      nameInp.addEventListener("keydown", e => {
+        if (e.key === "Enter")  { e.preventDefault(); exitRenameMode(true);  }
+        if (e.key === "Escape") { e.preventDefault(); exitRenameMode(false); }
+      });
+
+      nameInp.addEventListener("blur", () => {
+        // small timeout so click on "Зберегти" fires first
+        setTimeout(() => { if (nameInp.style.display !== "none") exitRenameMode(true); }, 120);
+      });
     }
 
     const kwInput  = card.querySelector(".cn-kw-input");
@@ -1270,6 +1319,27 @@
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         toast(d.error || "Помилка збереження іконки", "error");
+      }
+    } catch (err) {
+      toast("Помилка: " + err.message, "error");
+    }
+  }
+
+  /* ─── patch name ─── */
+  async function patchTypeName(typeId, name, nameSpan) {
+    const typeObj = state.settings.types.find(t => t.id === typeId);
+    if (typeObj) typeObj.type = name;
+    if (nameSpan) nameSpan.textContent = name;
+    try {
+      const res = await fetch(`/api/conclusions/types/${typeId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: name }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast(d.error || "Помилка перейменування", "error");
+      } else {
+        toast("Перейменовано", "info", 1200);
       }
     } catch (err) {
       toast("Помилка: " + err.message, "error");
