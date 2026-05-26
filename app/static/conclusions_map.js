@@ -1,5 +1,5 @@
 /* ============================================================
-   Fullscreen analytical-conclusions map
+   Fullscreen analytical-conclusions map  (v4 — milsymbol icons)
    ============================================================ */
 "use strict";
 
@@ -11,21 +11,19 @@ const _networkId = parseInt(_params.get("network_id") || "0", 10);
 
 // ── State ─────────────────────────────────────────────────────
 let _map = null;
-let _types = [];            // [{id, type, color, icon_filename, ...}]
+let _types = [];            // [{id, type, color, icon_filename, icon_sidc, ...}]
 let _rows  = [];            // all conclusions with MGRS
 let _activeTypeIds = new Set(); // empty = show all
 let _allHidden    = false;      // "Всі" toggle — true = all markers hidden
 let _layerGroups = {};      // typeId → L.LayerGroup
 let _allMarkers  = [];      // [{row, marker, typeId}]
 
-// ── MGRS helper (uses window.mgrs if loaded, else stub) ───────
+// ── MGRS helper ───────────────────────────────────────────────
 function mgrsToLatLng(mgrsStr) {
   try {
     if (window.mgrs && window.mgrs.toPoint) {
-      // Strip all whitespace and uppercase — required by mgrs library
       const clean = String(mgrsStr).replace(/\s+/g, "").toUpperCase();
       const pt = window.mgrs.toPoint(clean);
-      // toPoint returns [lon, lat]
       if (!Array.isArray(pt) || pt.length < 2) return null;
       const lat = Number(pt[1]), lon = Number(pt[0]);
       return (isFinite(lat) && isFinite(lon)) ? [lat, lon] : null;
@@ -34,35 +32,17 @@ function mgrsToLatLng(mgrsStr) {
   return null;
 }
 
-// ── Icon URL builder ──────────────────────────────────────────
+// ── Icon URL builder (legacy SVG files) ───────────────────────
 function iconUrl(filename) {
-  if (filename) return `/static/icons/${filename}`;
-  return `/static/icons/default.svg`;
+  return filename ? `/static/icons/${filename}` : `/static/icons/default.svg`;
 }
 
-// Replace FILL placeholder in SVG with the type color
-async function buildColoredIconUrl(filename, color) {
-  const url = iconUrl(filename);
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error("fetch failed");
-    let svg = await resp.text();
-    svg = svg.replace(/FILL/g, encodeURIComponent(color));
-    // re-encode back for use as data URI
-    svg = svg.replace(/%23/g, "#"); // undo any double-encoding
-    const blob = new Blob([svg.replace(/FILL/g, color)], { type: "image/svg+xml" });
-    return URL.createObjectURL(blob);
-  } catch (_) {
-    return url;
-  }
-}
-
-// Cache of colored icon blob URLs: key = `${filename}::${color}`
-const _iconCache = {};
+// Cache: key = `${filename}::${color}`
+const _svgIconCache = {};
 
 async function getIconUrl(filename, color) {
   const key = `${filename || ""}::${color || "#6b7280"}`;
-  if (_iconCache[key]) return _iconCache[key];
+  if (_svgIconCache[key]) return _svgIconCache[key];
 
   const effectiveFile = filename || "default.svg";
   const url = `/static/icons/${effectiveFile}`;
@@ -73,23 +53,58 @@ async function getIconUrl(filename, color) {
     svg = svg.replace(/FILL/g, color || "#6b7280");
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const blobUrl = URL.createObjectURL(blob);
-    _iconCache[key] = blobUrl;
+    _svgIconCache[key] = blobUrl;
     return blobUrl;
   } catch (_) {
-    _iconCache[key] = url; // fallback to raw file
+    _svgIconCache[key] = url;
     return url;
   }
 }
 
+// ── milsymbol icon generation (APP-6 / MIL-STD-2525) ─────────
+// Cache: sidc → { url, w, h }
+const _sidcCache = {};
+
+function getSidcIcon(sidc) {
+  if (!sidc || !window.ms) return null;
+  if (_sidcCache[sidc]) return _sidcCache[sidc];
+  try {
+    const sym = new ms.Symbol(sidc, { size: 40 });
+    const sz  = sym.getSize();
+    const svg = sym.asSVG();
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url  = URL.createObjectURL(blob);
+    const result = { url, w: Math.round(sz.width), h: Math.round(sz.height) };
+    _sidcCache[sidc] = result;
+    return result;
+  } catch (_) {
+    return null;
+  }
+}
+
 // ── Build Leaflet DivIcon ─────────────────────────────────────
-function makeLeafletIcon(imgUrl) {
+function makeLeafletIcon(imgUrl, w, h) {
+  const sw = w || 36, sh = h || 36;
   return L.divIcon({
     className: "cm-icon",
-    html: `<img src="${imgUrl}" alt="">`,
-    iconSize:   [36, 36],
-    iconAnchor: [18, 18],
-    popupAnchor:[0, -20],
+    html: `<img src="${imgUrl}" alt="" width="${sw}" height="${sh}">`,
+    iconSize:   [sw, sh],
+    iconAnchor: [Math.round(sw / 2), Math.round(sh / 2)],
+    popupAnchor:[0, -Math.round(sh / 2)],
   });
+}
+
+// ── Resolve icon data for a type ──────────────────────────────
+async function resolveIconData(typeObj) {
+  // Prefer SIDC → SVG file → colored default
+  if (typeObj && typeObj.icon_sidc) {
+    const info = getSidcIcon(typeObj.icon_sidc);
+    if (info) return info;
+  }
+  const color = (typeObj && typeObj.color) || "#6b7280";
+  const filename = (typeObj && typeObj.icon_filename) || "";
+  const url = await getIconUrl(filename, color);
+  return { url, w: 36, h: 36 };
 }
 
 // ── Map initialisation ────────────────────────────────────────
@@ -105,7 +120,6 @@ function initMap() {
     { attribution: "Esri", maxZoom: 19 }
   ).addTo(_map);
 
-  // Click on map closes right panel
   _map.on("click", () => closeRightPanel());
 }
 
@@ -115,16 +129,14 @@ async function loadTypes() {
   const data = await resp.json();
   _types = data.rows || [];
 
-  // Build layer groups
   for (const t of _types) {
-    const lg = L.layerGroup().addTo(_map);
-    _layerGroups[t.id] = lg;
+    if (!_layerGroups[t.id]) {
+      _layerGroups[t.id] = L.layerGroup().addTo(_map);
+    }
   }
-  // Also a group for type 0 (невідомо) in case not listed
   if (!_layerGroups[0]) {
     _layerGroups[0] = L.layerGroup().addTo(_map);
   }
-
   // chips rendered after placeMarkers() so counts are available
 }
 
@@ -165,10 +177,16 @@ function renderTypeChips() {
     chip.style.setProperty("--chip-color", t.color || "#6b7280");
     chip.style.background = `${t.color || "#6b7280"}33`;
 
-    // Icon img (load async, set src later)
+    // Icon — milsymbol preferred, SVG file fallback
     const img = document.createElement("img");
-    img.width = 18; img.height = 18;
-    getIconUrl(t.icon_filename, t.color || "#6b7280").then(u => img.src = u);
+    img.width = 22; img.height = 22;
+    if (t.icon_sidc) {
+      const info = getSidcIcon(t.icon_sidc);
+      if (info) img.src = info.url;
+      else getIconUrl(t.icon_filename, t.color || "#6b7280").then(u => img.src = u);
+    } else {
+      getIconUrl(t.icon_filename, t.color || "#6b7280").then(u => img.src = u);
+    }
     chip.appendChild(img);
 
     const label = document.createElement("span");
@@ -183,7 +201,7 @@ function renderTypeChips() {
 }
 
 function toggleTypeChip(typeId) {
-  _allHidden = false; // clicking a chip always un-hides
+  _allHidden = false;
   if (_activeTypeIds.has(typeId)) {
     _activeTypeIds.delete(typeId);
   } else {
@@ -201,7 +219,7 @@ function updateChipStates() {
   });
   const allBtn = document.querySelector(".type-chip-all");
   if (allBtn) {
-    allBtn.textContent   = _allHidden ? "Показати всі" : "Всі";
+    allBtn.textContent      = _allHidden ? "Показати всі" : "Всі";
     allBtn.style.background = allActive ? "rgba(255,255,255,.12)" : "transparent";
   }
 }
@@ -209,7 +227,7 @@ function updateChipStates() {
 function applyTypeFilter() {
   let visible = 0;
   const showAll = _activeTypeIds.size === 0 && !_allHidden;
-  for (const { row, marker, typeId } of _allMarkers) {
+  for (const { marker, typeId } of _allMarkers) {
     const show = !_allHidden && (showAll || _activeTypeIds.has(typeId));
     if (show) {
       if (!_map.hasLayer(marker)) marker.addTo(_map);
@@ -237,22 +255,21 @@ async function loadConclusions() {
 async function placeMarkers() {
   _allMarkers = [];
 
-  // Batch: resolve all icon URLs first
   const typeMap = {};
   for (const t of _types) typeMap[t.id] = t;
 
-  const iconUrls = {};
+  // Pre-resolve icon data for all unique type IDs
+  const iconData = {};
   const uniqueTypeIds = [...new Set(_rows.map(r => r.type_id))];
   await Promise.all(uniqueTypeIds.map(async tid => {
-    const t = typeMap[tid] || { color: "#6b7280", icon_filename: "" };
-    iconUrls[tid] = await getIconUrl(t.icon_filename, t.color);
+    iconData[tid] = await resolveIconData(typeMap[tid]);
   }));
 
   const bounds = [];
 
   for (const row of _rows) {
-    const iconBlobUrl = iconUrls[row.type_id] || await getIconUrl("", "#6b7280");
-    const leafIcon = makeLeafletIcon(iconBlobUrl);
+    const data = iconData[row.type_id] || await resolveIconData(null);
+    const leafIcon = makeLeafletIcon(data.url, data.w, data.h);
 
     for (const mgrsStr of row.mgrs) {
       const ll = mgrsToLatLng(mgrsStr);
@@ -274,7 +291,7 @@ async function placeMarkers() {
   if (bounds.length > 0) {
     _map.fitBounds(bounds, { padding: [48, 48], maxZoom: 14 });
   }
-  renderTypeChips();          // chips built after markers → counts are known
+  renderTypeChips();
   updateCountBadge(_allMarkers.length);
 }
 
@@ -289,14 +306,20 @@ function openDetailPanel(row, clickedMgrs) {
   const panel = document.getElementById("rightPanel");
   panel.classList.add("open");
 
-  const typeInfo = _types.find(t => t.id === row.type_id) || { type: "невідомо", color: "#6b7280", icon_filename: "" };
+  const typeInfo = _types.find(t => t.id === row.type_id) || { type: "невідомо", color: "#6b7280", icon_filename: "", icon_sidc: "" };
 
-  // Badge
+  // Badge — use milsymbol or SVG file
   const badge = document.getElementById("rpTypeBadge");
   badge.style.background = `${typeInfo.color}33`;
-  badge.style.borderColor = `${typeInfo.color}88`;
-  badge.style.border = `1px solid`;
-  badge.querySelector(".rp-badge-icon").src = iconUrl(typeInfo.icon_filename);
+  badge.style.border = `1px solid ${typeInfo.color}88`;
+  const badgeIcon = badge.querySelector(".rp-badge-icon");
+  if (typeInfo.icon_sidc) {
+    const info = getSidcIcon(typeInfo.icon_sidc);
+    if (info) { badgeIcon.src = info.url; badgeIcon.width = 24; badgeIcon.height = 24; }
+    else        badgeIcon.src = iconUrl(typeInfo.icon_filename);
+  } else {
+    badgeIcon.src = iconUrl(typeInfo.icon_filename);
+  }
   badge.querySelector(".rp-badge-label").textContent = typeInfo.type;
 
   // Meta
@@ -305,10 +328,8 @@ function openDetailPanel(row, clickedMgrs) {
   document.getElementById("rpMetaDate").textContent = dt;
   document.getElementById("rpMetaNet").textContent = freq || "—";
 
-  // Conclusion text
   document.getElementById("rpConclusionText").textContent = (row.conclusion_text || "").trim();
 
-  // Body text
   const bodySection = document.getElementById("rpBodySection");
   const bodyText = (row.body_text || "").trim();
   if (bodyText) {
@@ -318,7 +339,6 @@ function openDetailPanel(row, clickedMgrs) {
     bodySection.style.display = "none";
   }
 
-  // MGRS coords
   const coordsDiv = document.getElementById("rpCoords");
   coordsDiv.innerHTML = "";
   for (const m of row.mgrs) {
@@ -328,7 +348,6 @@ function openDetailPanel(row, clickedMgrs) {
     coordsDiv.appendChild(tag);
   }
 
-  // Hide right handle when panel is open
   document.getElementById("rightHandle").style.display = "none";
 }
 
@@ -343,7 +362,6 @@ function initTopPanel() {
   const panel  = document.getElementById("topPanel");
   const handle = document.getElementById("topHandle");
   handle.addEventListener("click", () => panel.classList.toggle("open"));
-  // Open by default
   panel.classList.add("open");
 }
 

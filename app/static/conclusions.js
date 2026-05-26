@@ -831,15 +831,129 @@
     } catch (_) { _deltaTypeOptions = []; }
   }
 
-  /* Available SVG icons for map markers (loaded once when Settings tab opens) */
-  let _availableIcons = [];
-  async function loadAvailableIcons() {
-    if (_availableIcons.length) return;
+  /* ── SIDC icons catalogue (APP-6 / MIL-STD-2525) ─────────── */
+  const _SIDC_ICONS = [
+    { l:"Піхотний підрозділ",             g:"Тактика",    s:"10061000001211000000" },
+    { l:"Укриття",                         g:"Тактика",    s:"10062500002809000000" },
+    { l:"Наземне укриття",                 g:"Тактика",    s:"10062500002810000000" },
+    { l:"Підземне укриття",                g:"Тактика",    s:"10062500002811000000" },
+    { l:"БпЛА вертикального зльоту",       g:"Тактика",    s:"10060100001104000000" },
+    { l:"Безпілотний літак",               g:"Тактика",    s:"10060100001103000000" },
+    { l:"БПЛА/БПАК/ДПЛА",                 g:"Тактика",    s:"10062500001821000000" },
+    { l:"Безпілотний наземний ТЗ",         g:"Тактика",    s:"10061500001201050000" },
+    { l:"Спостережний пункт / застава",    g:"Тактика",    s:"10062500001601000000" },
+    { l:"Пункт рекогностування",           g:"Тактика",    s:"10062500001602010000" },
+    { l:"Командування",                    g:"Тактика",    s:"10061000001100000000" },
+    { l:"Вогнева позиція",                 g:"Тактика",    s:"10062500002501000000" },
+    { l:"Наметовий табір",                 g:"Тактика",    s:"10062000001119000000" },
+    { l:"Опорний пункт",                   g:"Тактика",    s:"10062500001512030000" },
+    { l:"Укріплений рубіж",                g:"Тактика",    s:"10062500002909000000" },
+    { l:"Район зосередження",              g:"Тактика",    s:"10062500001502000000" },
+    { l:"Наземна споруда",                 g:"Тактика",    s:"10062000000000000000" },
+    { l:"Підрозділ БпЛА",                  g:"Тактика",    s:"10061000001219000000" },
+    { l:"Дистанційно пілотований апарат",  g:"Тактика",    s:"10060120001103000000" },
+    { l:"Орієнтир для засобів ураження",   g:"Тактика",    s:"10062500001603000000" },
+    { l:"Малорозмірна або одиночна ціль",  g:"Тактика",    s:"10062500002406010000" },
+    { l:"Піхотинець (о/с)",                g:"Тактика",    s:"10062700001101010000" },
+    { l:"Снайперський підрозділ",          g:"Тактика",    s:"10061000001215000000" },
+    { l:"Підрозділ розмінування",          g:"Тактика",    s:"10061000001414000000" },
+    { l:"Підрозділ супутникового зв'язку", g:"Тактика",    s:"10061000001110040000" },
+    { l:"Інженерна техніка та обладнання", g:"Техніка",    s:"10061500001300000000" },
+    { l:"ВАТ (важка авто техніка)",        g:"Техніка",    s:"10061500001408000000" },
+    { l:"Мала вантажівка",                 g:"Техніка",    s:"10061500001604020000" },
+    { l:"Вантажівка підв. прохідності",    g:"Техніка",    s:"10061500001408000000" },
+    { l:"ЛАТ (легка авто техніка)",        g:"Техніка",    s:"10061500001601000000" },
+    { l:"ББМ",                             g:"Техніка",    s:"10061500001201010000" },
+    { l:"Бронеавтомобіль",                 g:"Техніка",    s:"10061500001201050000" },
+    { l:"БТР",                             g:"Техніка",    s:"10061500001201010000" },
+    { l:"Танк",                            g:"Техніка",    s:"10061500001202000000" },
+    { l:"Паливозаправник",                 g:"Техніка",    s:"10061500001409000000" },
+    { l:"Автомобіль",                      g:"Техніка",    s:"10061500001401000000" },
+    { l:"Невеликий автобус",               g:"Техніка",    s:"10061500001603020000" },
+    { l:"Великий автобус",                 g:"Техніка",    s:"10061500001603030000" },
+    { l:"Гелікоптер",                      g:"Техніка",    s:"10060100001102000000" },
+    { l:"Літак",                           g:"Техніка",    s:"10060100001101000000" },
+    { l:"Сухопутна ОВТ",                   g:"Техніка",    s:"10061500000000000000" },
+    { l:"Медевак",                         g:"Логістика",  s:"10062500003211000000" },
+    { l:"Склад боєприпасів",               g:"Логістика",  s:"10062000001103000000" },
+    { l:"Склад/пункт зберігання майна",    g:"Логістика",  s:"10062000001120000000" },
+    { l:"Склад ПММ",                       g:"Логістика",  s:"10061000001620000000" },
+    { l:"Схованка",                        g:"Логістика",  s:"10062000001117000000" },
+    { l:"Міст",                            g:"Логістика",  s:"10061500001301000000" },
+    { l:"Електростанція",                  g:"Логістика",  s:"10062000001205020000" },
+    { l:"Генераторна установка",           g:"Логістика",  s:"10061500002007000000" },
+    { l:"Транспортний засіб",              g:"Логістика",  s:"10061500001200000000" },
+    { l:"ТЗ тилового забезпечення",        g:"Логістика",  s:"10061500001201090000" },
+    { l:"Тягач",                           g:"Логістика",  s:"10061500001412000000" },
+    { l:"Екскаватор",                      g:"Логістика",  s:"10061500001314000000" },
+    { l:"Позашляховик (SUV)",              g:"Логістика",  s:"10061500001604010000" },
+    { l:"Пікап",                           g:"Логістика",  s:"10061500001602010000" },
+    { l:"Джип",                            g:"Логістика",  s:"10061500001605000000" },
+    { l:"Мотоцикл",                        g:"Логістика",  s:"10051500001200000000" },
+    { l:"Квадроцикл",                      g:"Логістика",  s:"10061500001605010000" },
+    { l:"Багі",                            g:"Логістика",  s:"10061500001605000000" },
+    { l:"Точка на маршруті",               g:"Логістика",  s:"10062500001318000000" },
+    { l:"Пункт загального постачання",     g:"Логістика",  s:"10062500003217000000" },
+    { l:"Пункт управління",                g:"Логістика",  s:"10062500001301000000" },
+    { l:"Орієнтир (точка інтересу)",       g:"Логістика",  s:"10012500001313000000" },
+    { l:"ПТРК",                            g:"Артилерія",  s:"10061500001112000000" },
+    { l:"Міномет",                         g:"Артилерія",  s:"10061500001114000000" },
+    { l:"САУ",                             g:"Артилерія",  s:"10061500331109000000" },
+    { l:"РСЗВ",                            g:"Артилерія",  s:"10061500001116000000" },
+    { l:"Гаубиця",                         g:"Артилерія",  s:"10061500001109000000" },
+    { l:"Підрозділ польової артилерії",    g:"Артилерія",  s:"10061000001303000030" },
+    { l:"Пускова установка ЗРК",          g:"ППО",         s:"10061500001111000000" },
+    { l:"Зенітна гармата",                 g:"ППО",         s:"10061500001105000000" },
+    { l:"Радіоелектронна боротьба (РЕБ)", g:"РТО",         s:"10061000001505000000" },
+    { l:"Бойова камера",                   g:"РТО",         s:"10061000001112000000" },
+    { l:"Створення перешкод",              g:"РТО",         s:"10061000001505040000" },
+    { l:"Антена",                          g:"РТО",         s:"10061500002001000000" },
+    { l:"Телекомунікаційна вежа",          g:"РТО",         s:"10062000001212030000" },
+    { l:"Антена радіопередавача",          g:"РТО",         s:"10061000001101000000" },
+    { l:"Пожежа",                          g:"Подія",       s:"10064000001400000000" },
+    { l:"Дим",                             g:"Подія",       s:"10064000001402000000" },
+    { l:"Вибух",                           g:"Подія",       s:"10064000001106000000" },
+    { l:"Вибух мінометного снаряда",       g:"Подія",       s:"10064000001106040000" },
+    { l:"Вибух бомби",                     g:"Подія",       s:"10064000001106060000" },
+    { l:"Вибух ракети",                    g:"Подія",       s:"10064000001106050000" },
+    { l:"Транспортний інцидент",           g:"Подія",       s:"10064000001600000000" },
+    { l:"Точка виявлення ракети",          g:"Подія",       s:"10062500002111000000" },
+    { l:"Стрілянина",                      g:"Подія",       s:"10064000001104000000" },
+    { l:"Точка злету/посадки БпЛА",       g:"Подія",       s:"10051000001206000000" },
+    { l:"Загиблий",                        g:"Подія",       s:"10064000001101210000" },
+    { l:"Полонений",                       g:"Подія",       s:"10050100001400000000" },
+    { l:"Кулемет",                         g:"Зброя",       s:"10061500001102000000" },
+    { l:"Протитанкова гармата",            g:"Зброя",       s:"10061500001106000000" },
+    { l:"Протитанкова міна (ПТМ)",        g:"Зброя",       s:"10061500002103000000" },
+    { l:"Міна",                            g:"Зброя",       s:"10061500002101000000" },
+    { l:"Протипіхотна міна",               g:"Зброя",       s:"10062500002802000000" },
+    { l:"Точка влучання",                  g:"Зброя",       s:"10062500002108000000" },
+    { l:"Гранатомет",                      g:"Зброя",       s:"10061500001103000000" },
+    { l:"Військовий бойовий корабель",     g:"ВМС",         s:"10063000001200000000" },
+    { l:"Військовий надводний засіб",      g:"ВМС",         s:"10063000001100000000" },
+    { l:"Військовий небойовий корабель",   g:"ВМС",         s:"10063000001300000000" },
+    { l:"Цивільний надводний засіб",       g:"ВМС",         s:"10013000001400000000" },
+  ];
+
+  /* ── milsymbol helpers ───────────────────────────────────── */
+  const _sidcBlobCache = {};
+
+  function sidcToBlobUrl(sidc) {
+    if (!sidc || !window.ms) return null;
+    if (_sidcBlobCache[sidc]) return _sidcBlobCache[sidc];
     try {
-      const r = await fetch("/api/conclusions/icons");
-      const d = await r.json();
-      _availableIcons = d.ok ? (d.icons || []) : [];
-    } catch (_) { _availableIcons = []; }
+      const sym = new ms.Symbol(sidc, { size: 40 });
+      const svg = sym.asSVG();
+      const blob = new Blob([svg], { type: "image/svg+xml" });
+      const url  = URL.createObjectURL(blob);
+      _sidcBlobCache[sidc] = url;
+      return url;
+    } catch (_) { return null; }
+  }
+
+  function sidcLabel(sidc) {
+    const entry = _SIDC_ICONS.find(e => e.s === sidc);
+    return entry ? entry.l : sidc;
   }
 
   /* ──────────────────────────────────────────────
@@ -882,7 +996,7 @@
     typesLoader.style.display = "";
     typesList.innerHTML = "";
     try {
-      await Promise.all([loadDeltaTypeOptions(), loadAvailableIcons()]);
+      await loadDeltaTypeOptions();
       const [typesRes, settingsRes] = await Promise.all([
         fetch("/api/conclusions/types"),
         fetch("/api/settings?keys=delta_send_enabled,delta_chat_id,delta_platform,delta_chat_name"),
@@ -1050,13 +1164,8 @@
       `<option value="${escapeHtml(opt.value)}"${opt.value === typeObj.delta_type ? " selected" : ""}>${escapeHtml(opt.value)}</option>`
     ).join("");
 
-    // Build icon options
-    const iconOptionsHtml = [
-      `<option value="">— без іконки (за замовчуванням) —</option>`,
-      ..._availableIcons.map(f =>
-        `<option value="${escapeHtml(f)}"${f === typeObj.icon_filename ? " selected" : ""}>${escapeHtml(f)}</option>`
-      )
-    ].join("");
+    // Resolve current SIDC label for display
+    const curSidcLabel = typeObj.icon_sidc ? sidcLabel(typeObj.icon_sidc) : "";
 
     card.innerHTML = `
       <div class="cn-type-card__head">
@@ -1081,12 +1190,22 @@
         }
       </div>
 
-      <!-- Icon selector -->
-      <div style="display:flex;align-items:center;gap:8px;margin:6px 0 2px">
-        <span class="small" style="opacity:.7;white-space:nowrap">Іконка на карті:</span>
-        <select class="cn-icon-sel" style="flex:1;font-size:12px;padding:2px 6px">${iconOptionsHtml}</select>
-        <img class="cn-icon-preview" src="${typeObj.icon_filename ? `/static/icons/${escapeHtml(typeObj.icon_filename)}` : '/static/icons/default.svg'}"
-             width="22" height="22" style="flex-shrink:0;opacity:.85" alt="" />
+      <!-- SIDC icon picker -->
+      <div class="cn-sidc-row">
+        <span class="small" style="opacity:.7;white-space:nowrap;flex-shrink:0">Іконка на карті:</span>
+        <img class="cn-sidc-img" width="44" height="44" alt=""
+             style="flex-shrink:0;${typeObj.icon_sidc ? '' : 'display:none'}" />
+        <span class="cn-sidc-lbl small"
+              style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85">
+          ${escapeHtml(curSidcLabel || "— без іконки (за замовчуванням) —")}
+        </span>
+        <button type="button" class="secondary cn-sidc-pick-btn"
+                style="font-size:11px;padding:3px 10px;white-space:nowrap;flex-shrink:0">Обрати</button>
+        ${typeObj.icon_sidc
+          ? `<button type="button" class="secondary cn-sidc-clear-btn"
+                     style="font-size:11px;padding:3px 8px;opacity:.7;flex-shrink:0"
+                     title="Очистити іконку">✕</button>`
+          : ""}
       </div>
 
       <div class="small" style="opacity:.7;margin:6px 0 4px">Ключові слова:</div>
@@ -1155,14 +1274,57 @@
       await patchTypeColor(typeObj.id, colorInp.value, card);
     });
 
-    // ── Icon selector handler ──
-    const iconSel     = card.querySelector(".cn-icon-sel");
-    const iconPreview = card.querySelector(".cn-icon-preview");
-    if (iconSel && iconPreview) {
-      iconSel.addEventListener("change", () => {
-        const fn = iconSel.value;
-        iconPreview.src = fn ? `/static/icons/${fn}` : "/static/icons/default.svg";
-        patchTypeIcon(typeObj.id, fn);
+    // ── SIDC picker handlers ──
+    const sidcImg      = card.querySelector(".cn-sidc-img");
+    const sidcLbl      = card.querySelector(".cn-sidc-lbl");
+    const sidcPickBtn  = card.querySelector(".cn-sidc-pick-btn");
+    let   sidcClearBtn = card.querySelector(".cn-sidc-clear-btn");
+
+    // Render initial SIDC preview
+    if (typeObj.icon_sidc && sidcImg) {
+      const blobUrl = sidcToBlobUrl(typeObj.icon_sidc);
+      if (blobUrl) sidcImg.src = blobUrl;
+    }
+
+    function applySidc(sidc, label) {
+      typeObj.icon_sidc = sidc;
+      if (sidcImg) {
+        const blobUrl = sidc ? sidcToBlobUrl(sidc) : null;
+        sidcImg.src            = blobUrl || "";
+        sidcImg.style.display  = blobUrl ? "" : "none";
+      }
+      if (sidcLbl) sidcLbl.textContent = label || "— без іконки (за замовчуванням) —";
+      // Toggle clear button
+      if (sidc && !sidcClearBtn) {
+        sidcClearBtn = document.createElement("button");
+        sidcClearBtn.type      = "button";
+        sidcClearBtn.className = "secondary cn-sidc-clear-btn";
+        sidcClearBtn.style.cssText = "font-size:11px;padding:3px 8px;opacity:.7;flex-shrink:0";
+        sidcClearBtn.title     = "Очистити іконку";
+        sidcClearBtn.textContent = "✕";
+        sidcClearBtn.addEventListener("click", () => {
+          applySidc("", "");
+          patchTypeSidc(typeObj.id, "");
+        });
+        card.querySelector(".cn-sidc-row").appendChild(sidcClearBtn);
+      } else if (!sidc && sidcClearBtn) {
+        sidcClearBtn.remove();
+        sidcClearBtn = null;
+      }
+    }
+
+    if (sidcPickBtn) {
+      sidcPickBtn.addEventListener("click", () => {
+        openSidcPicker((sidc, label) => {
+          applySidc(sidc, label);
+          patchTypeSidc(typeObj.id, sidc);
+        });
+      });
+    }
+    if (sidcClearBtn) {
+      sidcClearBtn.addEventListener("click", () => {
+        applySidc("", "");
+        patchTypeSidc(typeObj.id, "");
       });
     }
 
@@ -1306,15 +1468,15 @@
     }
   }
 
-  /* ─── patch icon ─── */
-  async function patchTypeIcon(typeId, iconFilename) {
+  /* ─── patch sidc ─── */
+  async function patchTypeSidc(typeId, sidc) {
     const typeObj = state.settings.types.find((t) => t.id === typeId);
-    if (typeObj) typeObj.icon_filename = iconFilename;
+    if (typeObj) typeObj.icon_sidc = sidc;
     try {
       const res = await fetch(`/api/conclusions/types/${typeId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ icon_filename: iconFilename }),
+        body:    JSON.stringify({ icon_sidc: sidc }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -1324,6 +1486,86 @@
       toast("Помилка: " + err.message, "error");
     }
   }
+
+  /* ─── SIDC picker modal ─── */
+  let _sidcModalCallback = null;
+
+  function openSidcPicker(callback) {
+    _sidcModalCallback = callback;
+    const modal = document.getElementById("cnSidcModal");
+    if (!modal) return;
+    const search = document.getElementById("cnSidcSearch");
+    if (search) search.value = "";
+    renderSidcGrid("");
+    modal.classList.remove("hidden");
+    modal.removeAttribute("aria-hidden");
+    if (search) setTimeout(() => search.focus(), 50);
+  }
+
+  function closeSidcModal() {
+    const modal = document.getElementById("cnSidcModal");
+    if (modal) { modal.classList.add("hidden"); modal.setAttribute("aria-hidden", "true"); }
+    _sidcModalCallback = null;
+  }
+
+  function renderSidcGrid(query) {
+    const grid = document.getElementById("cnSidcGrid");
+    if (!grid) return;
+
+    const q = (query || "").toLowerCase().trim();
+    const filtered = q ? _SIDC_ICONS.filter(e => e.l.toLowerCase().includes(q)) : _SIDC_ICONS;
+
+    const groups = {};
+    for (const entry of filtered) {
+      (groups[entry.g] = groups[entry.g] || []).push(entry);
+    }
+
+    grid.innerHTML = "";
+    for (const [groupName, entries] of Object.entries(groups)) {
+      const hdr = document.createElement("div");
+      hdr.className   = "cn-sidc-group-header";
+      hdr.textContent = groupName;
+      grid.appendChild(hdr);
+
+      const row = document.createElement("div");
+      row.className = "cn-sidc-group-row";
+
+      for (const entry of entries) {
+        const item = document.createElement("div");
+        item.className = "cn-sidc-item";
+        item.title     = entry.l;
+
+        const img = document.createElement("img");
+        img.width = 44; img.height = 44; img.alt = "";
+        const blobUrl = sidcToBlobUrl(entry.s);
+        if (blobUrl) img.src = blobUrl;
+
+        const lbl = document.createElement("span");
+        lbl.className   = "cn-sidc-item-lbl";
+        lbl.textContent = entry.l;
+
+        item.appendChild(img);
+        item.appendChild(lbl);
+        item.addEventListener("click", () => {
+          const cb = _sidcModalCallback;
+          closeSidcModal();
+          if (cb) cb(entry.s, entry.l);
+        });
+        row.appendChild(item);
+      }
+      grid.appendChild(row);
+    }
+  }
+
+  // Wire up SIDC modal controls
+  (function initSidcModal() {
+    const closeBtn  = document.getElementById("cnSidcModalClose");
+    const backdrop  = document.getElementById("cnSidcBackdrop");
+    const searchInp = document.getElementById("cnSidcSearch");
+    if (closeBtn)  closeBtn.addEventListener("click",  closeSidcModal);
+    if (backdrop)  backdrop.addEventListener("click",  closeSidcModal);
+    if (searchInp) searchInp.addEventListener("input", () => renderSidcGrid(searchInp.value));
+  })();
 
   /* ─── patch name ─── */
   async function patchTypeName(typeId, name, nameSpan) {

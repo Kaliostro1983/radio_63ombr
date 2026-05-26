@@ -1543,8 +1543,10 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         "sended INTEGER NOT NULL DEFAULT 0",
     )
 
-    # --- conclusion_types: icon_filename for map markers ---
+    # --- conclusion_types: icon_filename for map markers (legacy SVG files) ---
     _ensure_column(conn, "conclusion_types", "icon_filename", "icon_filename TEXT NOT NULL DEFAULT ''")
+    # --- conclusion_types: icon_sidc — APP-6/MIL-STD-2525 SIDC code for milsymbol ---
+    _ensure_column(conn, "conclusion_types", "icon_sidc", "icon_sidc TEXT NOT NULL DEFAULT ''")
 
 
 def get_db() -> sqlite3.Connection:

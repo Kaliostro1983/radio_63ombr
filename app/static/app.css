@@ -3607,3 +3607,67 @@ button.secondary{
   border-radius: 2px;
   flex-shrink: 0;
 }
+
+/* ── SIDC icon picker ──────────────────────────────────────── */
+.cn-sidc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+
+.cn-sidc-group-header {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+.cn-sidc-group-header:first-child { border-top: none; padding-top: 2px; }
+
+.cn-sidc-group-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.cn-sidc-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 72px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.cn-sidc-item:hover {
+  background: var(--card-hover, rgba(255,255,255,.07));
+  border-color: var(--border);
+}
+.cn-sidc-item:active { background: rgba(255,255,255,.12); }
+
+.cn-sidc-item img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.cn-sidc-item-lbl {
+  font-size: 10px;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--text-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}

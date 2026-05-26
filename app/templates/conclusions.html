@@ -435,6 +435,24 @@
   </div>
 </div>
 
+<!-- SIDC icon picker modal -->
+<div id="cnSidcModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" id="cnSidcBackdrop"></div>
+  <div class="modal-card" role="dialog" aria-modal="true"
+       style="max-width:700px;height:80vh;display:flex;flex-direction:column;overflow:hidden">
+    <div class="modal-head" style="flex-shrink:0">
+      <div style="font-weight:700">Обрати іконку (APP-6 / MIL-STD-2525)</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="cnSidcSearch" type="search" placeholder="Пошук…" autocomplete="off"
+               style="width:220px" />
+        <button class="secondary" type="button" id="cnSidcModalClose">✕</button>
+      </div>
+    </div>
+    <div id="cnSidcGrid" class="modal-body"
+         style="overflow-y:auto;flex:1;padding:10px 14px 16px"></div>
+  </div>
+</div>
+
 <!-- Delete type confirm modal -->
 <div id="cnDeleteModal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" id="cnDeleteBackdrop"></div>
@@ -459,6 +477,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/conclusions.js?v=18" defer></script>
+<!-- Military symbol library (APP-6 / MIL-STD-2525) -->
+<script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
+<script src="/static/conclusions.js?v=19" defer></script>
 <script src="/static/quick_conclusions.js?v=12" defer></script>
 {% endblock %}
