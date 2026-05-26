@@ -342,9 +342,21 @@
     // Populate Тип select
     const cdmType = $("cdmType");
     if (cdmType) {
-      const currentType = typeObj.delta_type || (_deltaTypeOptions[0] && _deltaTypeOptions[0].value) || "";
-      // Check BEFORE setting innerHTML (after — browser auto-selects first option,
-      // so cdmType.value is never empty and the old fallback never triggered)
+      // Derive type label from SIDC icon (normalize pos-4 to '6' — library stores Hostile)
+      const iconSidc = typeObj.icon_sidc || "";
+      const normSidc = iconSidc.length >= 4
+        ? iconSidc.slice(0, 3) + "6" + iconSidc.slice(4)
+        : iconSidc;
+      const sidcEntry = normSidc ? _SIDC_ICONS.find(e => e.s === normSidc) : null;
+      const sidcIconLabel = sidcEntry ? sidcEntry.l : "";
+
+      // Priority: SIDC icon label → stored delta_type → first dropdown option
+      const currentType = sidcIconLabel
+        || typeObj.delta_type
+        || (_deltaTypeOptions[0] && _deltaTypeOptions[0].value)
+        || "";
+
+      // Prepend currentType if it is not present in the options list
       const hasMatch = _deltaTypeOptions.some(opt => opt.value === currentType);
       const opts = (hasMatch || !currentType)
         ? _deltaTypeOptions
