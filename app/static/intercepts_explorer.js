@@ -1071,15 +1071,8 @@
     loadIntercepts();
   });
 
-  mainCard.addEventListener("click", async function (event) {
-    const loadMoreHit = event.target.closest("#interceptsLoadMoreBtn");
-    if (loadMoreHit) {
-      event.preventDefault();
-      loadMoreIntercepts();
-      return;
-    }
-
-    async function runLandmarkSearch(panel) {
+  /* ── Shared landmark search (used by mainCard and mounted cards) ── */
+  async function runLandmarkSearch(panel) {
       if (!panel) return;
       const input = panel.querySelector(".ie-lm-name-input");
       const out = panel.querySelector(".intercepts-lm-panel__result");
@@ -1175,6 +1168,14 @@
         console.error(error);
         out.innerHTML = `<div class="intercepts-lm-panel__hint">Помилка пошуку</div>`;
       }
+    }
+
+  mainCard.addEventListener("click", async function (event) {
+    const loadMoreHit = event.target.closest("#interceptsLoadMoreBtn");
+    if (loadMoreHit) {
+      event.preventDefault();
+      loadMoreIntercepts();
+      return;
     }
 
     const copyBtn = event.target.closest(".intercepts-copy-btn");
@@ -1471,6 +1472,184 @@
       }
     }).observe(paneView, { attributes: true, attributeFilter: ["class"] });
   }
+
+  /* ─────────────────────────────────────────────────────────
+     Public API: mount a single intercept card into any container.
+     Used by the Monitoring / Висновок tabs in monitor.js.
+  ───────────────────────────────────────────────────────── */
+
+  /**
+   * Attach the same event delegation used by mainCard to any container.
+   * Handlers work via event.target.closest() so they are container-agnostic.
+   */
+  function _attachCardEvents(container) {
+    if (container.__cardEventsAttached) return;
+    container.__cardEventsAttached = true;
+
+    container.addEventListener("click", async function (event) {
+      const copyBtn = event.target.closest(".intercepts-copy-btn");
+      if (copyBtn) {
+        const messageId = Number(copyBtn.dataset.messageId || 0);
+        if (!messageId) return;
+        const text = buildInterceptCopyText(messageId);
+        if (!text) return;
+        const ok = await copyTextToClipboard(text);
+        if (window.appToast) window.appToast(ok ? "Скопійовано в буфер." : "Не вдалося скопіювати.", ok ? "success" : "error", 1600);
+        return;
+      }
+
+      const chipClick = event.target.closest(".callsign-chip--clickable");
+      if (chipClick && !event.target.closest(".callsign-chip__remove")) {
+        const editor = chipClick.closest(".intercepts-inline-editor");
+        const messageId = editor ? Number(editor.dataset.messageId || 0) : 0;
+        const callsignId = Number(chipClick.dataset.id || 0);
+        if (callsignId && window.openCallsignEditModalById) window.openCallsignEditModalById(callsignId, { messageId });
+        return;
+      }
+
+      const removeBtn = event.target.closest(".callsign-chip__remove");
+      if (removeBtn) {
+        const chip = removeBtn.closest(".callsign-chip");
+        const editor = removeBtn.closest(".intercepts-inline-editor");
+        if (!chip || !editor) return;
+        const messageId = Number(editor.dataset.messageId || 0);
+        const callsignId = Number(chip.dataset.id || 0);
+        const role = String(chip.dataset.role || "");
+        if (messageId && callsignId && role) await deleteCallsign(messageId, callsignId, role);
+        return;
+      }
+
+      const autocompleteBtn = event.target.closest(".callsign-autocomplete__item");
+      if (autocompleteBtn && state.autocompleteInput) {
+        const name = String(autocompleteBtn.dataset.name || "").trim();
+        const input = state.autocompleteInput;
+        const messageId = Number(input.dataset.messageId || 0);
+        const role = String(input.dataset.role || "").trim();
+        if (name && messageId && role) await addCallsign(messageId, role, name);
+        return;
+      }
+
+      const lmSearchBtn = event.target.closest(".ie-lm-search-btn");
+      if (lmSearchBtn) { await runLandmarkSearch(lmSearchBtn.closest(".intercepts-lm-panel")); return; }
+
+      const lmCreateBtn = event.target.closest(".ie-lm-create-btn");
+      if (lmCreateBtn) { if (typeof window.openLandmarkCreateModal === "function") window.openLandmarkCreateModal(); return; }
+
+      const lmChip = event.target.closest(".intercepts-lm-chip");
+      if (lmChip) {
+        const landmarkId = Number(lmChip.dataset.lmId || 0);
+        if (landmarkId && typeof window.openLandmarkEditModalById === "function") {
+          try { await window.openLandmarkEditModalById(landmarkId); } catch (e) { console.error(e); }
+        }
+        return;
+      }
+    });
+
+    container.addEventListener("input", function (event) {
+      const input = event.target.closest(".callsign-input");
+      if (input) showAutocomplete(input);
+    });
+
+    container.addEventListener("keydown", async function (event) {
+      const lmInput = event.target.closest(".ie-lm-name-input");
+      if (lmInput && event.key === "Enter") {
+        event.preventDefault();
+        const panel = lmInput.closest(".intercepts-lm-panel");
+        const btn = panel ? panel.querySelector(".ie-lm-search-btn") : null;
+        if (btn) btn.click();
+        return;
+      }
+
+      const input = event.target.closest(".callsign-input");
+      if (!input) return;
+
+      if (event.key === "ArrowDown" && state.autocompleteItems.length) {
+        event.preventDefault();
+        state.autocompleteIndex = (state.autocompleteIndex + 1) % state.autocompleteItems.length;
+        highlightAutocomplete(); return;
+      }
+      if (event.key === "ArrowUp" && state.autocompleteItems.length) {
+        event.preventDefault();
+        state.autocompleteIndex = (state.autocompleteIndex - 1 + state.autocompleteItems.length) % state.autocompleteItems.length;
+        highlightAutocomplete(); return;
+      }
+      if (event.key === "Escape") { closeAutocomplete(); return; }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const messageId = Number(input.dataset.messageId || 0);
+        const role = String(input.dataset.role || "").trim();
+        let name = input.value.trim();
+        if (state.autocompleteIndex >= 0 && state.autocompleteItems[state.autocompleteIndex]) {
+          name = String(state.autocompleteItems[state.autocompleteIndex].name || "").trim();
+        }
+        if (messageId && role && name) await addCallsign(messageId, role, name);
+      }
+    });
+
+    container.addEventListener("submit", async function (event) {
+      const formEl = event.target.closest(".intercepts-comment-form");
+      if (!formEl) return;
+      event.preventDefault();
+      const messageId = Number(formEl.dataset.messageId || 0);
+      const textarea = formEl.querySelector('textarea[name="comment"]');
+      const comment = textarea ? textarea.value : "";
+      if (messageId) await saveComment(messageId, comment);
+    });
+  }
+
+  /**
+   * Fetch and render a single intercept card into `container`.
+   * Attaches all event handlers (callsigns, landmarks, comment, copy).
+   * Called by monitor.js when displaying an intercept in Monitoring / Висновок.
+   */
+  window.interceptsExplorerMountCard = async function (messageId, container) {
+    if (!container) return;
+    container.innerHTML = '<div class="intercepts-main-card__empty">Завантаження…</div>';
+
+    try {
+      const res  = await fetch(`/api/intercepts-explorer/${messageId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "HTTP " + res.status);
+
+      const apiItem = data.item;
+
+      /* Ensure item is in state.items (needed by renderInterceptCardHtml) */
+      if (!state.items.find((x) => Number(x.id) === Number(apiItem.id))) {
+        state.items.push({
+          id:              apiItem.id,
+          network_id:      apiItem.network_id,
+          created_at:      apiItem.created_at  || "",
+          received_at:     apiItem.received_at  || "",
+          text:            apiItem.text         || "",
+          comment:         apiItem.comment      || "",
+          net_description: apiItem.net_description || "",
+          network:         apiItem.network      || {},
+        });
+      }
+
+      /* Store full detail (callsigns) */
+      state.detailById[apiItem.id] = {
+        id:         apiItem.id,
+        network_id: apiItem.network_id,
+        text:       apiItem.text    || "",
+        comment:    apiItem.comment || "",
+        callsigns:  apiItem.callsigns || [],
+      };
+      state.landmarkMatchesByMessageId[apiItem.id] =
+        state.landmarkMatchesByMessageId[apiItem.id] || [];
+
+      /* Render */
+      const item = state.items.find((x) => Number(x.id) === Number(apiItem.id));
+      container.innerHTML = renderInterceptCardHtml(item);
+
+      /* Wire up all events */
+      _attachCardEvents(container);
+
+    } catch (e) {
+      container.innerHTML = `<div class="intercepts-main-card__empty">Помилка: ${escapeHtml(String(e.message || e))}</div>`;
+    }
+  };
 
   loadIntercepts();
 })();

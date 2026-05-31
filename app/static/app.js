@@ -130,4 +130,58 @@ document.addEventListener("DOMContentLoaded", () => {
   makeAllExclusive(document.querySelector('select[name="chat_ids"]'));
   makeAllExclusive(document.querySelector('select[name="group_ids"]'));
   if (window.appTouchStatus) window.appTouchStatus();
+  initSidebar();
 });
+
+// ── Sidebar state management ──────────────────────────────────
+(function() {
+  var CYCLE  = ["full", "compact", "hidden"];
+
+  // SVG path content for each state's toggle button
+  var TOGGLE_ICON = {
+    full:    '<polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>',  // »» compress
+    compact: '<polyline points="9 18 15 12 9 6"/><line x1="19" y1="6" x2="19" y2="18"/>', // › hide
+    hidden:  '<polyline points="15 18 9 12 15 6"/><polyline points="8 18 2 12 8 6"/>',     // «« show (fallback)
+  };
+  var TOGGLE_LABEL = { full: "Компакт", compact: "Сховати", hidden: "Відкрити" };
+  var TOGGLE_TITLE = {
+    full:    "Згорнути до іконок",
+    compact: "Сховати меню",
+    hidden:  "Відкрити меню",
+  };
+
+  window.initSidebar = function() {
+    var toggleBtn  = document.getElementById("sidebarToggleBtn");
+    var pullTab    = document.getElementById("sidebarPullTab");
+    var toggleIcon = document.getElementById("sidebarToggleIcon");
+
+    if (!toggleBtn) return;
+
+    function getState() {
+      return document.documentElement.getAttribute("data-sidebar") || "full";
+    }
+
+    function applyState(s) {
+      if (CYCLE.indexOf(s) === -1) s = "full";
+      document.documentElement.setAttribute("data-sidebar", s);
+      localStorage.setItem("sidebarState", s);
+      if (toggleIcon) toggleIcon.innerHTML = TOGGLE_ICON[s] || TOGGLE_ICON.full;
+      var lbl = toggleBtn.querySelector(".sidebar-toggle-label");
+      if (lbl) lbl.textContent = TOGGLE_LABEL[s] || "";
+      toggleBtn.title = TOGGLE_TITLE[s] || "";
+    }
+
+    toggleBtn.addEventListener("click", function() {
+      var idx  = CYCLE.indexOf(getState());
+      var next = CYCLE[(idx + 1) % CYCLE.length];
+      applyState(next);
+    });
+
+    if (pullTab) {
+      pullTab.addEventListener("click", function() { applyState("full"); });
+    }
+
+    // Sync button appearance to the already-applied state (set by anti-FOUC script)
+    applyState(getState());
+  };
+})();

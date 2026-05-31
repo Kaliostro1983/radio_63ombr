@@ -37,6 +37,27 @@
       >
         Орієнтири
       </button>
+      <button
+        id="itTabMonitor"
+        type="button"
+        class="tab-btn {% if active_tab == 'monitor' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'monitor' %}true{% else %}false{% endif %}"
+        aria-controls="itPaneMonitor"
+      >
+        Моніторинг
+        <span class="mon-unread-badge" id="monUnreadBadge"></span>
+      </button>
+      <button
+        id="itTabConclusion"
+        type="button"
+        class="tab-btn {% if active_tab == 'conclusion' %}active{% endif %}"
+        role="tab"
+        aria-selected="{% if active_tab == 'conclusion' %}true{% else %}false{% endif %}"
+        aria-controls="itPaneConclusion"
+      >
+        Висновок
+      </button>
     </div>
 
     <div class="tab-panel-wrap">
@@ -128,6 +149,140 @@
           style="width:100%; height: calc(100vh - 220px); min-height: 760px; border:0; border-radius:12px; background:var(--bg);"
         ></iframe>
       </section>
+
+      <!-- ── Моніторинг ── -->
+      <section
+        id="itPaneMonitor"
+        class="tab-panel {% if active_tab != 'monitor' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="itTabMonitor"
+      >
+        <div class="monitor-layout monitor-layout--2col">
+
+          <!-- Left: playlist (20%) -->
+          <div class="monitor-left">
+            <div class="mon-playlist" id="monPlaylist">
+              <div class="mon-empty">Завантаження…</div>
+            </div>
+            <button class="mon-show-more secondary hidden" id="monShowMoreBtn">Показати ще</button>
+            <!-- Settings strip: icon-only buttons (up/down/check/gear) -->
+            <div class="mon-settings">
+              <button class="mon-set-btn" id="monPlaylistPrev" title="Вгору (новіше)">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 10 8 5 12 10"/></svg>
+              </button>
+              <button class="mon-set-btn" id="monPlaylistNext" title="Вниз (старіше)">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 11 12 6"/></svg>
+              </button>
+              <button class="mon-set-btn" id="monMarkAllBtn" title="Позначити всі як прочитані">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
+              </button>
+              <button class="mon-set-btn" id="monSettingsBtn" title="Налаштування тегів">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Intercept detail — full remaining width -->
+          <div class="monitor-middle monitor-middle--full">
+            <!-- Icon toolbar -->
+            <div class="mon-middle-toolbar">
+              <div class="mon-toolbar-nav">
+                <button class="mon-toolbar-btn" id="monNavPrev" title="Новіше">
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 7 15 13"/></svg>
+                </button>
+                <button class="mon-toolbar-btn" id="monNavNext" title="Старіше">
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 7 10 13 15 7"/></svg>
+                </button>
+              </div>
+              <div class="mon-toolbar-actions">
+                <button class="mon-toolbar-btn" id="monOpenNetBtn" title="Відкрити р/м" style="display:none">
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3h6v6M10 10L17 3M8 5H4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-4"/></svg>
+                </button>
+                <!-- Share: send intercept to multiple recipients -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--share" id="monShareBtn" title="Поширити" style="font-size:14px">⤴</button>
+                <!-- Open Висновок tab with this intercept pre-filled -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--conclusion" id="monOpenConclusion" title="Оформити аналітичний висновок" style="font-size:13px">✍</button>
+              </div>
+            </div>
+            <!-- Detail -->
+            <div id="monDetail" class="mon-detail-area">
+              <div class="mon-empty">Оберіть перехоплення зі списку</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── Висновок ── -->
+      <section
+        id="itPaneConclusion"
+        class="tab-panel {% if active_tab != 'conclusion' %}hidden{% endif %}"
+        role="tabpanel"
+        aria-labelledby="itTabConclusion"
+      >
+        <div class="conclusion-layout">
+
+          <!-- Left 40%: intercept + conclusion + send -->
+          <div class="conclusion-left">
+
+            <!-- Toolbar -->
+            <div class="mon-middle-toolbar">
+              <span class="mon-anal-label" style="padding:0 6px">Перехоплення</span>
+            </div>
+
+            <!-- Intercept detail (mirrors monitoring selection) -->
+            <div id="conclDetail" class="mon-detail-area">
+              <div class="mon-empty">Оберіть перехоплення у вкладці «Моніторинг»</div>
+            </div>
+
+            <!-- Conclusion -->
+            <div class="mon-anal-conclusion">
+              <div class="mon-anal-toolbar">
+                <span class="mon-anal-label">Аналітичний висновок</span>
+                <div class="mon-anal-toolbar-btns">
+                  <button id="conclTemplatesBtn" class="secondary mon-anal-sm-btn">🗂 Шаблони</button>
+                  <button id="conclPasteBtn" class="secondary mon-anal-sm-btn" title="Вставити дані перехоплення">📋 Вставити</button>
+                  <button id="conclClearBtn" class="secondary mon-anal-sm-btn" title="Очистити">✕</button>
+                </div>
+              </div>
+              <textarea id="conclText" class="mon-conclusion-ta"
+                        placeholder="Введіть аналітичний висновок…"></textarea>
+            </div>
+
+            <!-- Send bar -->
+            <div class="mon-send-bar">
+              <button id="conclPlatformBtn" class="mon-send-platform-btn" title="Платформа" style="background:#3a76f0">S</button>
+              <div class="mon-send-middle">
+                <input id="conclChatInput" class="mon-send-chat-input"
+                       type="text" placeholder="Назва чату або групи…"
+                       autocomplete="off" spellcheck="false">
+                <div id="conclChatDrop" class="mon-send-chat-drop hidden"></div>
+              </div>
+              <button id="conclSendBtn" class="mon-send-submit-btn" disabled>▶</button>
+            </div>
+
+          </div><!-- /conclusion-left -->
+
+          <!-- Right 60%: coordinate + map -->
+          <div class="conclusion-right">
+            <div class="mon-anal-coord-bar">
+              <input id="conclCoordInput" type="text" class="mon-coord-input"
+                     placeholder="MGRS координата" autocomplete="off" spellcheck="false">
+              <button id="conclCoordCopyBtn" class="secondary mon-anal-icon-btn" title="Копіювати координату">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="5" y="5" width="9" height="9" rx="2"/><path d="M2 11V3a2 2 0 012-2h8"/>
+                </svg>
+              </button>
+            </div>
+            <div id="conclMap" class="mon-anal-map"></div>
+          </div><!-- /conclusion-right -->
+
+        </div>
+      </section>
+
+        </div>
+      </section>
+
     </div>
   </section>
 </section>
@@ -188,49 +343,69 @@
 </script>
 <script>
   (function () {
-    const tabSearch = document.getElementById("itTabSearch");
-    const tabView = document.getElementById("itTabView");
-    const tabLm = document.getElementById("itTabLm");
-    const paneSearch = document.getElementById("itPaneSearch");
-    const paneView = document.getElementById("itPaneView");
-    const paneLm = document.getElementById("itPaneLm");
-    if (!tabSearch || !tabView || !tabLm || !paneSearch || !paneView || !paneLm) return;
+    const tabSearch     = document.getElementById("itTabSearch");
+    const tabView       = document.getElementById("itTabView");
+    const tabLm         = document.getElementById("itTabLm");
+    const tabMonitor    = document.getElementById("itTabMonitor");
+    const tabConclusion = document.getElementById("itTabConclusion");
+    const paneSearch     = document.getElementById("itPaneSearch");
+    const paneView       = document.getElementById("itPaneView");
+    const paneLm         = document.getElementById("itPaneLm");
+    const paneMonitor    = document.getElementById("itPaneMonitor");
+    const paneConclusion = document.getElementById("itPaneConclusion");
+    if (!tabSearch || !tabView || !tabLm || !tabMonitor) return;
+
+    const TABS = [
+      { tab: tabSearch,     pane: paneSearch,     id: "search" },
+      { tab: tabView,       pane: paneView,       id: "view" },
+      { tab: tabLm,         pane: paneLm,         id: "landmarks" },
+      { tab: tabMonitor,    pane: paneMonitor,    id: "monitor" },
+      { tab: tabConclusion, pane: paneConclusion, id: "conclusion" },
+    ];
+
+    let _monitorInited    = false;
+    let _conclusionInited = false;
 
     function setTab(which) {
-      const isSearch = which === "search";
-      const isView = which === "view";
-      const isLm = which === "landmarks";
+      TABS.forEach(({ tab, pane, id }) => {
+        const active = id === which;
+        tab?.classList.toggle("active", active);
+        tab?.setAttribute("aria-selected", active ? "true" : "false");
+        pane?.classList.toggle("hidden", !active);
+      });
 
-      tabSearch.classList.toggle("active", isSearch);
-      tabView.classList.toggle("active", isView);
-      tabLm.classList.toggle("active", isLm);
-
-      tabSearch.setAttribute("aria-selected", isSearch ? "true" : "false");
-      tabView.setAttribute("aria-selected", isView ? "true" : "false");
-      tabLm.setAttribute("aria-selected", isLm ? "true" : "false");
-
-      paneSearch.classList.toggle("hidden", !isSearch);
-      paneView.classList.toggle("hidden", !isView);
-      paneLm.classList.toggle("hidden", !isLm);
+      if (which === "monitor") {
+        if (!_monitorInited) { _monitorInited = true; if (window.initMonitor) window.initMonitor(); }
+        else { if (window.resumeMonitor) window.resumeMonitor(); }
+      } else if (which === "conclusion") {
+        if (!_conclusionInited) { _conclusionInited = true; if (window.initConclusionPanel) window.initConclusionPanel(); }
+        else { if (window.resumeConclusionPanel) window.resumeConclusionPanel(); }
+        if (which !== "monitor") { if (window.pauseMonitor) window.pauseMonitor(); }
+      } else {
+        if (window.pauseMonitor) window.pauseMonitor();
+      }
     }
 
-    tabSearch.addEventListener("click", () => setTab("search"));
-    tabView.addEventListener("click", () => setTab("view"));
-    tabLm.addEventListener("click", () => setTab("landmarks"));
+    TABS.forEach(({ tab, id }) => tab.addEventListener("click", () => setTab(id)));
+
+    // Expose setTab so monitor.js can switch to Висновок tab programmatically
+    window.itSetTab = setTab;
 
     window.interceptsExplorerFocusLandmarksTab = function (nameQuery) {
       setTab("landmarks");
       const iframe = document.getElementById("itLandmarksIframe");
       if (!iframe) return;
       const q = String(nameQuery || "").trim();
-      const url = q
-        ? `/landmarks?embed=1&name=${encodeURIComponent(q)}`
-        : "/landmarks?embed=1";
-      iframe.src = url;
+      iframe.src = q ? `/landmarks?embed=1&name=${encodeURIComponent(q)}` : "/landmarks?embed=1";
     };
+
+    // Auto-open monitor tab if URL says so
+    const qs = new URLSearchParams(location.search);
+    if ((qs.get("tab") || "").toLowerCase() === "monitor") setTab("monitor");
   })();
 </script>
-<script src="/static/intercepts_explorer.js?v=20"></script>
+<script src="/static/intercepts_explorer.js?v=21"></script>
+<script src="/static/monitor.js?v=22"></script>
 <script src="/static/landmarks.js?v=13" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>
 <script src="/static/networks_autocomplete.js?v=3" defer></script>

@@ -657,9 +657,11 @@ def intercepts_explorer_detail(message_id: int):
                 c.name,
                 c.comment,
                 c.callsign_status_id AS status_id,
-                mc.role
+                mc.role,
+                cs.icon AS status_icon
             FROM message_callsigns mc
             JOIN callsigns c ON c.id = mc.callsign_id
+            LEFT JOIN callsign_statuses cs ON cs.id = c.callsign_status_id
             WHERE mc.message_id = ?
             ORDER BY mc.rowid ASC, c.id ASC
             """,
@@ -684,11 +686,12 @@ def intercepts_explorer_detail(message_id: int):
                     },
                     "callsigns": [
                         {
-                            "id": row["id"],
-                            "name": row["name"] or "",
-                            "comment": row["comment"] or "",
-                            "status_id": row["status_id"],
-                            "role": row["role"] or "",
+                            "id":          row["id"],
+                            "name":        row["name"] or "",
+                            "comment":     row["comment"] or "",
+                            "status_id":   row["status_id"],
+                            "role":        row["role"] or "",
+                            "status_icon": row["status_icon"] or "",
                         }
                         for row in callsign_rows
                     ],
@@ -1307,6 +1310,94 @@ def intercepts_explorer_delete_callsign(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Monitoring playlist endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/api/monitor/playlist")
+def monitor_playlist(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    since: str | None = Query(None),
+):
+    """Return playlist items for the monitoring tab, newest first."""
+    conn = get_conn()
+    try:
+        where = [
+            "COALESCE(m.is_valid, 1) = 1",
+            "coalesce(m.content_type, 'intercept') = 'intercept'",
+        ]
+        params: list[object] = []
+
+        if since:
+            where.append("m.created_at > ?")
+            params.append(since)
+
+        where_sql = " AND ".join(where)
+
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM messages m WHERE {where_sql}", params
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            f"""
+            SELECT m.id, m.created_at, COALESCE(m.is_read, 0) AS is_read,
+                   n.frequency, n.mask, n.unit,
+                   substr(m.body_text, 1, 120) AS body_preview
+            FROM messages m
+            LEFT JOIN networks n ON n.id = m.network_id
+            WHERE {where_sql}
+            ORDER BY m.created_at DESC, m.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            params + [limit, offset],
+        ).fetchall()
+
+        items = [
+            {
+                "id":           int(r["id"]),
+                "created_at":   r["created_at"] or "",
+                "is_read":      int(r["is_read"]),
+                "frequency":    r["frequency"] or "",
+                "mask":         r["mask"] or "",
+                "unit":         r["unit"] or "",
+                "body_preview": r["body_preview"] or "",
+            }
+            for r in rows
+        ]
+        return {"ok": True, "total": int(total), "items": items}
+    finally:
+        conn.close()
+
+
+@router.patch("/api/monitor/{message_id}/read")
+def monitor_mark_read(message_id: int):
+    """Mark a single intercept message as read."""
+    conn = get_conn()
+    try:
+        conn.execute("UPDATE messages SET is_read = 1 WHERE id = ?", (message_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.post("/api/monitor/read-all")
+def monitor_mark_all_read():
+    """Mark all intercept messages as read."""
+    conn = get_conn()
+    try:
+        count = conn.execute(
+            """UPDATE messages SET is_read = 1
+               WHERE is_read = 0 AND COALESCE(is_valid, 1) = 1
+                 AND coalesce(content_type, 'intercept') = 'intercept'"""
+        ).rowcount
+        conn.commit()
+        return {"ok": True, "count": count}
     finally:
         conn.close()
 

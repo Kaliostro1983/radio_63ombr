@@ -89,10 +89,14 @@ a:hover{
   text-align:center;
   display:flex;
   flex-direction:column;
-  position:sticky;
+  position:fixed;
+  left:0;
   top:0;
   height:100vh;
   overflow:auto;
+  overflow-x:hidden;
+  z-index:200;
+  transition:width .22s ease,transform .22s ease;
 }
 
 .brand{
@@ -135,12 +139,14 @@ a:hover{
 }
 
 .nav a{
-  display:block;
-  padding:10px 10px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px;
   border-radius:10px;
   margin:6px 0;
   color:var(--fg);
-  text-align:center;
+  text-align:left;
 }
 
 .nav a.active{
@@ -152,11 +158,88 @@ a:hover{
   margin-top:auto !important;
 }
 
-.main{
-  flex:1;
-  padding:20px;
+/* =========================
+   03.01 SIDEBAR – ICONS & STATES
+========================= */
+
+.nav-icon{
+  width:18px;
+  height:18px;
+  flex-shrink:0;
 }
 
+/* ── Compact: icons only ── */
+html[data-sidebar="compact"] .sidebar{ width:60px; }
+html[data-sidebar="compact"] .nav-label{ display:none; }
+html[data-sidebar="compact"] .nav a{ justify-content:center; padding:10px 0; }
+html[data-sidebar="compact"] .brand-avatar-wrap{ width:40px; height:40px; }
+html[data-sidebar="compact"] .main{ margin-left:60px; }
+html[data-sidebar="compact"] .sidebar-toggle-label{ display:none; }
+
+/* ── Hidden: off left edge ── */
+html[data-sidebar="hidden"] .sidebar{ transform:translateX(-100%); }
+html[data-sidebar="hidden"] .main{ margin-left:0; }
+
+/* ── Sidebar toggle button ── */
+.sidebar-toggle-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  width:100%;
+  padding:8px 10px;
+  margin-top:auto;
+  background:none;
+  border:1px solid transparent;
+  border-radius:8px;
+  color:var(--muted);
+  cursor:pointer;
+  font-size:12px;
+  transition:background .15s,color .15s,border-color .15s;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.sidebar-toggle-btn:hover{
+  background:var(--bg);
+  border-color:var(--border);
+  color:var(--fg);
+}
+
+/* ── Pull tab (shown only when sidebar is hidden) ── */
+.sidebar-pull-tab{
+  display:none;
+  position:fixed;
+  left:0;
+  top:50%;
+  transform:translateY(-50%);
+  width:20px;
+  height:56px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-left:none;
+  border-radius:0 8px 8px 0;
+  cursor:pointer;
+  align-items:center;
+  justify-content:center;
+  z-index:201;
+  color:var(--muted);
+  transition:background .15s,color .15s;
+}
+.sidebar-pull-tab:hover{
+  background:var(--bg);
+  color:var(--fg);
+}
+html[data-sidebar="hidden"] .sidebar-pull-tab{ display:flex; }
+
+.main{
+  flex:1;
+  min-width:0;
+  padding:12px 20px 20px;
+  margin-left:240px;
+  transition:margin-left .22s ease;
+}
+
+/* Status bar: default (horizontal, in main) */
 .app-statusbar{
   display:flex;
   align-items:center;
@@ -167,6 +250,40 @@ a:hover{
   background:color-mix(in srgb, var(--card) 75%, var(--bg) 25%);
   margin-bottom:12px;
 }
+
+/* ── Sidebar footer statusbar ── */
+.sidebar-statusbar{
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+  padding:8px 12px;
+  border:none;
+  border-top:1px solid var(--border);
+  border-radius:0;
+  background:none;
+  margin-bottom:0;
+}
+.sb-status-row{
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.sb-status-row--meta,
+.sb-status-row--update{
+  opacity:.55;
+}
+.sb-status-label{ font-size:11px; }
+
+/* Compact: hide meta rows, keep only dot + status */
+html[data-sidebar="compact"] .sidebar-statusbar .sb-status-row--meta,
+html[data-sidebar="compact"] .sidebar-statusbar .sb-status-row--update,
+html[data-sidebar="compact"] .sidebar-statusbar .sb-status-label{ display:none; }
+html[data-sidebar="compact"] .sidebar-statusbar{ padding:6px 0; justify-content:center; align-items:center; }
+
+/* ── Hide page title headings (increase working area) ── */
+.main > * > h1:first-child,
+.main > * > h2:first-child,
+h2.pel-title { display:none; }
 
 .app-statusbar__dot{
   width:8px;
@@ -3784,4 +3901,901 @@ button.secondary{
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   word-break: break-word;
+}
+
+/* =========================
+   MONITOR – Моніторинг tab
+========================= */
+
+.monitor-layout{
+  display:flex;
+  height:calc(100vh - 210px);
+  min-height:480px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  background:var(--card);
+}
+
+/* ── Left column (20%) ── */
+.monitor-left{
+  width:20%;
+  min-width:160px;
+  max-width:260px;
+  display:flex;
+  flex-direction:column;
+  border-right:1px solid var(--border);
+  background:var(--bg);
+}
+
+.mon-playlist{
+  flex:1;
+  overflow-y:auto;
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+/* ── Thumbnail card — single line ── */
+.mon-thumb{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:12px 10px;
+  border-radius:4px;
+  cursor:pointer;
+  border:1px solid var(--border);
+  background:var(--card);
+  transition:background .15s,border-color .15s;
+  user-select:none;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.mon-thumb:hover{
+  background:var(--bg);
+  border-color:color-mix(in srgb,var(--accent) 40%,var(--border));
+}
+.mon-thumb--unread{
+  background:color-mix(in srgb,#f59e0b 18%,var(--card));
+  border-color:color-mix(in srgb,#f59e0b 45%,var(--border));
+}
+.mon-thumb--unread:hover{
+  background:color-mix(in srgb,#f59e0b 28%,var(--card));
+}
+.mon-thumb--active{
+  border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,var(--card));
+}
+.mon-thumb-time{
+  font-family:monospace;
+  font-size:12px;
+  opacity:.55;
+  flex-shrink:0;
+}
+.mon-thumb-freq{
+  font-weight:600;
+  font-size:13px;
+  flex:1;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* ── Settings strip: icon-only buttons ── */
+.mon-settings{
+  padding:6px 8px;
+  border-top:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-around;
+  gap:4px;
+  flex-shrink:0;
+}
+.mon-set-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex:1;
+  height:30px;
+  border-radius:6px;
+  border:1px solid transparent;
+  background:none;
+  cursor:pointer;
+  color:var(--muted);
+  transition:background .12s,color .12s,border-color .12s;
+}
+.mon-set-btn:hover{
+  background:var(--bg);
+  border-color:var(--border);
+  color:var(--fg);
+}
+.mon-unread-badge{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  height:20px;
+  padding:0 6px;
+  background:#f59e0b;
+  color:#000;
+  border-radius:10px;
+  font-size:11px;
+  font-weight:700;
+  flex-shrink:0;
+}
+
+/* "Показати ще" button */
+.mon-show-more{
+  width:100%;
+  margin-top:2px;
+  font-size:12px;
+  padding:6px;
+}
+
+/* 2-column monitoring layout: middle takes remaining space */
+.monitor-layout--2col .monitor-middle{
+  width:auto;
+  flex:1;
+  border-right:none;
+}
+
+/* ── Middle column: detail + conclusion + send (35%) ── */
+.monitor-middle{
+  width:35%;
+  min-width:260px;
+  display:flex;
+  flex-direction:column;
+  background:var(--card);
+  border-right:1px solid var(--border);
+  overflow:hidden;
+}
+/* Intercept detail scrolls inside middle column */
+.mon-detail-area{
+  flex:1;
+  overflow-y:auto;
+  position:relative;
+  min-height:0;
+}
+
+/* ── Висновок tab layout ── */
+.conclusion-layout{
+  display:flex;
+  height:calc(100vh - 210px);
+  min-height:480px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  background:var(--card);
+}
+.conclusion-left{
+  width:40%;
+  min-width:260px;
+  display:flex;
+  flex-direction:column;
+  border-right:1px solid var(--border);
+  overflow:hidden;
+}
+.conclusion-right{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* ── Right column: coordinate + map (55%) ── */
+.monitor-analytics{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* Empty / loading states */
+.mon-empty,.mon-detail-loading,.mon-detail-error{
+  padding:60px 24px;
+  text-align:center;
+  opacity:.4;
+  font-size:14px;
+}
+
+/* ═════════════════════════════════════════
+   Analytics column (third panel)
+═════════════════════════════════════════ */
+
+/* 1. Coordinate input bar */
+.mon-anal-coord-bar{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.mon-coord-input{
+  flex:1;
+  font-family:monospace;
+  font-size:13px;
+  padding:6px 10px;
+}
+.mon-anal-icon-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  padding:0;
+  flex-shrink:0;
+}
+
+/* 2. Map — fills remaining height in analytics column */
+.mon-anal-map{
+  flex:1;
+  min-height:0;
+}
+
+/* 3. Conclusion area */
+.mon-anal-conclusion{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  border-bottom:1px solid var(--border);
+}
+.mon-anal-toolbar{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.mon-anal-label{
+  font-size:11px;
+  font-weight:600;
+  opacity:.55;
+  text-transform:uppercase;
+  letter-spacing:.4px;
+  flex:1;
+}
+.mon-anal-toolbar-btns{
+  display:flex;
+  gap:4px;
+}
+.mon-anal-sm-btn{
+  font-size:11px;
+  padding:3px 8px !important;
+  height:26px;
+}
+.mon-conclusion-ta{
+  flex:1;
+  resize:none;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  padding:8px 10px;
+  margin:0 8px 8px;
+  font-size:13px;
+  line-height:1.6;
+  outline:none;
+  min-height:0;
+  box-sizing:border-box;
+  width:calc(100% - 16px);
+  transition:border-color .15s;
+}
+.mon-conclusion-ta:focus{
+  border-color:color-mix(in srgb,var(--accent) 60%,var(--border));
+  background:color-mix(in srgb,var(--accent) 3%,var(--bg));
+}
+
+/* 4. Send bar — green platform | dark chat | orange send */
+.mon-send-bar{
+  display:flex;
+  align-items:stretch;
+  flex-shrink:0;
+  height:42px;
+  border-top:1px solid var(--border);
+}
+
+/* Platform button (green) */
+.mon-send-platform-btn{
+  width:42px;
+  flex-shrink:0;
+  background:#16a34a;
+  color:#fff;
+  font-size:15px;
+  font-weight:800;
+  border:none;
+  border-radius:0;
+  cursor:pointer;
+  transition:background .12s;
+}
+.mon-send-platform-btn:hover{ background:#15803d; }
+
+/* Middle: chat picker */
+.mon-send-middle{
+  flex:1;
+  position:relative;
+  min-width:0;
+}
+/* Chat text input (replaces picker div) */
+.mon-send-chat-input{
+  width:100%;
+  height:100%;
+  padding:0 10px;
+  background:color-mix(in srgb,var(--bg) 60%,var(--card));
+  border:none;
+  border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+  border-radius:0;
+  font-size:13px;
+  color:var(--fg);
+  outline:none;
+  box-sizing:border-box;
+}
+.mon-send-chat-input:focus{
+  background:color-mix(in srgb,var(--accent) 6%,var(--bg));
+  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+}
+.mon-send-chat-input::placeholder{ opacity:.45; }
+
+/* Chat dropdown */
+.mon-send-chat-drop{
+  position:absolute;
+  bottom:calc(100% + 1px);
+  left:0;
+  right:0;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:8px 8px 0 0;
+  max-height:200px;
+  overflow-y:auto;
+  z-index:50;
+  box-shadow:0 -4px 16px rgba(0,0,0,.2);
+}
+.mon-chat-drop-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px 12px;
+  cursor:pointer;
+  font-size:13px;
+  transition:background .1s;
+}
+.mon-chat-drop-item:hover{ background:var(--bg); }
+.mon-chat-drop-type{
+  font-size:10px;
+  opacity:.45;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  flex-shrink:0;
+  margin-left:8px;
+}
+
+/* Send button (orange) */
+.mon-send-submit-btn{
+  width:48px;
+  flex-shrink:0;
+  background:#f59e0b;
+  color:#fff;
+  font-size:16px;
+  font-weight:700;
+  border:none;
+  border-radius:0;
+  cursor:pointer;
+  transition:background .12s;
+}
+.mon-send-submit-btn:disabled{ opacity:.45; cursor:not-allowed; }
+.mon-send-submit-btn:not(:disabled):hover{ background:#d97706; }
+
+/* Templates modal */
+.mon-tmpl-cats{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:14px;
+}
+.mon-tmpl-cat-btn{
+  padding:5px 12px;
+  border-radius:20px;
+  border:1px solid var(--border);
+  background:var(--bg);
+  cursor:pointer;
+  font-size:13px;
+  transition:background .12s,border-color .12s;
+}
+.mon-tmpl-cat-btn.active,
+.mon-tmpl-cat-btn:hover{
+  background:color-mix(in srgb,var(--accent) 15%,var(--bg));
+  border-color:var(--accent);
+}
+.mon-tmpl-texts{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.mon-tmpl-text-btn{
+  text-align:left;
+  padding:8px 12px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:var(--card);
+  cursor:pointer;
+  font-size:13px;
+  line-height:1.5;
+  transition:background .12s;
+}
+.mon-tmpl-text-btn:hover{
+  background:color-mix(in srgb,var(--accent) 10%,var(--card));
+  border-color:var(--accent);
+}
+.mon-tmpl-edit-row{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  margin-top:8px;
+}
+.mon-tmpl-edit-row input{ flex:1; font-size:13px; }
+
+/* ── Middle column icon toolbar ── */
+.mon-middle-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:4px 8px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+  gap:4px;
+  background:var(--card);
+}
+.mon-toolbar-nav{
+  display:flex;
+  align-items:center;
+  gap:2px;
+}
+.mon-toolbar-actions{
+  display:flex;
+  align-items:center;
+  gap:2px;
+}
+.mon-toolbar-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  border-radius:6px;
+  border:1px solid transparent;
+  background:none;
+  cursor:pointer;
+  color:var(--muted);
+  transition:background .12s,color .12s,border-color .12s;
+}
+.mon-toolbar-btn:hover{
+  background:var(--bg);
+  border-color:var(--border);
+  color:var(--fg);
+}
+.mon-toolbar-btn--accent:hover{
+  background:color-mix(in srgb,var(--accent) 15%,var(--bg));
+  border-color:color-mix(in srgb,var(--accent) 40%,var(--border));
+  color:var(--accent);
+}
+
+/* Share button */
+.mon-toolbar-btn--share{
+  color:var(--fg);
+  opacity:.6;
+  border-color:var(--border);
+  background:var(--card);
+}
+.mon-toolbar-btn--share:hover{ opacity:1; background:var(--bg); }
+
+/* Conclusion button — accent colour */
+.mon-toolbar-btn--conclusion{
+  color:var(--accent);
+  border-color:var(--accent);
+  background:var(--card);
+  opacity:.8;
+}
+.mon-toolbar-btn--conclusion:hover{ opacity:1; background:var(--bg); }
+.mon-toolbar-pos{
+  font-size:11px;
+  opacity:.45;
+  min-width:40px;
+  text-align:center;
+  font-family:monospace;
+}
+
+/* ── Detail panel: intercept-text layout ── */
+
+/* "+" button: floating top-right */
+.mon-analyse-btn{
+  position:absolute;
+  top:12px;
+  right:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:none;
+  color:var(--muted);
+  font-size:18px;
+  cursor:pointer;
+  transition:background .12s,color .12s,border-color .12s;
+  z-index:1;
+}
+.mon-analyse-btn:hover{
+  background:color-mix(in srgb,var(--accent) 15%,var(--card));
+  border-color:var(--accent);
+  color:var(--accent);
+}
+
+/* Content area */
+.mon-detail-area{ position:relative; }
+.mon-detail-content{
+  padding:14px 18px 18px;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.mon-detail-datetime{
+  font-size:12px;
+  opacity:.45;
+  margin-bottom:3px;
+}
+/* Frequency: bold */
+.mon-detail-freq-big{
+  font-size:15px;
+  font-weight:700;
+  margin-bottom:1px;
+}
+/* Network name (р/м): bold */
+.mon-detail-netdesc-row{
+  font-size:13px;
+  font-weight:700;
+}
+.mon-detail-unit{
+  font-size:12px;
+  font-weight:400;
+  opacity:.45;
+}
+
+/* Callsign chips */
+.mon-detail-callsigns{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:8px;
+}
+
+/* Status icon inside chip */
+.mon-cs-status-icon{
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  object-fit:cover;
+  vertical-align:middle;
+  margin-right:5px;
+  flex-shrink:0;
+}
+
+/* Divider before body text */
+.mon-detail-divider{
+  height:1px;
+  background:var(--border);
+  margin:10px 0 8px;
+}
+
+/* Body text */
+.mon-detail-body{
+  font-size:14px;
+  line-height:1.75;
+}
+.mon-body-line{ margin:2px 0; }
+.mon-body-line--speech{
+  padding-left:10px;
+  border-left:2px solid var(--accent);
+  margin:3px 0;
+}
+.mon-cs-tag{
+  padding:3px 10px;
+  border-radius:20px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  font-size:12px;
+  cursor:pointer;
+  transition:background .12s,border-color .12s;
+}
+.mon-cs-tag:hover{
+  background:color-mix(in srgb,var(--accent) 12%,var(--bg));
+  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+}
+
+/* ── Clickable links in detail ── */
+.mon-freq-link{
+  color:inherit;
+  text-decoration:none;
+  border-bottom:1px dashed color-mix(in srgb,var(--fg) 35%,transparent);
+  transition:border-color .12s,color .12s;
+}
+.mon-freq-link:hover{ color:var(--accent); border-bottom-color:var(--accent); }
+
+.mon-netdesc-link{
+  color:inherit;
+  text-decoration:none;
+}
+.mon-netdesc-link:hover{ text-decoration:underline; color:var(--accent); }
+
+/* ── Detail head: right side with date + "+" button ── */
+.mon-detail-head-right{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+
+/* .mon-analyse-btn defined above in detail panel section */
+
+/* ── Share modal rows ── */
+.mon-share-rows{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow:visible;  /* do not clip absolute dropdown */
+}
+.mon-share-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  height:40px;
+}
+.mon-share-row .mon-send-platform-btn{
+  border-radius:6px;
+}
+.mon-share-input-wrap{
+  flex:1;
+  position:relative;
+  min-width:0;
+  height:100%;
+}
+.mon-share-chat-in{
+  width:100%;
+  height:100%;
+  padding:0 10px;
+  box-sizing:border-box;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  font-size:13px;
+  color:var(--fg);
+  outline:none;
+}
+.mon-share-chat-in:focus{
+  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+}
+.mon-share-drop{
+  position:absolute;
+  bottom:calc(100% + 4px);
+  left:0;
+  right:0;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:8px;
+  max-height:180px;
+  overflow-y:auto;
+  z-index:60;
+  box-shadow:0 -4px 16px rgba(0,0,0,.2);
+}
+.mon-share-chk{
+  width:16px;
+  height:16px;
+  flex-shrink:0;
+  cursor:pointer;
+  accent-color:var(--accent);
+}
+
+/* ── Tag icons in thumbnail ── */
+.mon-thumb-tags{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  flex-shrink:0;
+}
+.mon-tag-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  height:20px;
+  padding:0 4px;
+  border-radius:5px;
+  font-size:12px;
+  font-weight:700;
+  line-height:1;
+  /* Solid bg so icons stay visible regardless of thumbnail background */
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--fg);
+  cursor:default;
+  letter-spacing:.3px;
+  flex-shrink:0;
+}
+
+/* ── Tags table in settings modal ── */
+.mon-tags-table{
+  width:100%;
+  border-collapse:collapse;
+}
+.mon-tags-table th{
+  text-align:left;
+  padding:4px 8px;
+  font-size:11px;
+  opacity:.55;
+  font-weight:600;
+  border-bottom:1px solid var(--border);
+}
+.mon-tags-table td{
+  padding:4px 6px;
+  vertical-align:middle;
+}
+.mon-tags-table tr:not(:last-child) td{ border-bottom:1px solid color-mix(in srgb,var(--border) 50%,transparent); }
+.mon-tag-icon-in{ width:48px; text-align:center; font-size:16px; }
+.mon-tag-name-in{ width:100%; }
+.mon-tag-kw-in  { width:100%; }
+.mon-tag-del-btn{ padding:3px 8px; font-size:12px; }
+
+/* ═════════════════════════════════════════
+   Analytical panel — right-side drawer
+   (same pattern as conclusions map panel)
+═════════════════════════════════════════ */
+
+/* Outer container: full-height, fixed to right edge */
+.analysis-panel{
+  position:fixed;
+  top:0;
+  right:0;
+  bottom:0;
+  width:360px;
+  z-index:300;
+  display:flex;
+  align-items:center;
+  pointer-events:none;
+}
+
+/* ── Handle tab (always visible, sticks out to the left) ── */
+.analysis-panel-handle{
+  position:absolute;
+  left:0;
+  top:50%;
+  transform:translateX(-100%) translateY(-50%);
+  writing-mode:vertical-lr;
+  padding:14px 7px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-right:none;
+  border-radius:8px 0 0 8px;
+  cursor:pointer;
+  pointer-events:all;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.05em;
+  color:var(--muted);
+  user-select:none;
+  transition:background .15s,color .15s;
+  box-shadow:-2px 0 8px rgba(0,0,0,.12);
+}
+.analysis-panel-handle:hover{
+  background:var(--bg);
+  color:var(--fg);
+}
+
+/* ── Content (slides in from right) ── */
+.analysis-panel-content{
+  position:absolute;
+  top:0; right:0; bottom:0;
+  width:100%;
+  transform:translateX(100%);
+  transition:transform .25s ease;
+  pointer-events:none;
+  display:flex;
+  flex-direction:column;
+  background:var(--card);
+  border-left:1px solid var(--border);
+  box-shadow:-4px 0 20px rgba(0,0,0,.15);
+}
+.analysis-panel.open .analysis-panel-content{
+  transform:translateX(0);
+  pointer-events:all;
+}
+
+/* ── Header with nav buttons ── */
+.analysis-panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 14px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+  gap:8px;
+}
+.analysis-panel-title{
+  font-weight:700;
+  font-size:13px;
+  opacity:.7;
+}
+
+/* Navigation << / >> */
+.ap-nav{
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+.ap-nav-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:30px;
+  height:28px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:none;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:700;
+  color:var(--muted);
+  transition:background .12s,color .12s;
+}
+.ap-nav-btn:hover{ background:var(--bg); color:var(--fg); }
+.ap-nav-pos{
+  font-size:11px;
+  opacity:.5;
+  min-width:44px;
+  text-align:center;
+  font-family:monospace;
+}
+
+/* ── Body ── */
+.analysis-panel-body{
+  flex:1;
+  overflow-y:auto;
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.ap-field{ display:flex; flex-direction:column; gap:3px; }
+.ap-field-label{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  opacity:.45;
+}
+.ap-field-val{
+  font-size:13px;
+  line-height:1.5;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:6px 10px;
+}
+.ap-field-val--text{
+  white-space:pre-wrap;
+  max-height:220px;
+  overflow-y:auto;
+}
+.ap-placeholder{
+  margin-top:auto;
+  padding:14px;
+  text-align:center;
+  font-size:12px;
+  opacity:.32;
+  border:1px dashed var(--border);
+  border-radius:6px;
 }

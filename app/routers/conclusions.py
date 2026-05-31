@@ -133,7 +133,8 @@ def api_conclusions_list(
                 n.frequency,
                 n.mask,
                 n.unit,
-                msg.body_text
+                msg.body_text,
+                msg.net_description
             FROM analytical_conclusions ac
             LEFT JOIN conclusion_types ct  ON ct.id  = ac.type_id
             LEFT JOIN networks n           ON n.id   = ac.network_id
@@ -158,6 +159,7 @@ def api_conclusions_list(
             "created_at":      r["created_at"] or "",
             "conclusion_text": r["conclusion_text"] or "",
             "body_text":       r["body_text"] or "",
+            "net_description": r["net_description"] or "",
             "mgrs":            mgrs,
             "type_id":         int(r["type_id"]) if r["type_id"] is not None else 0,
             "type_label":      r["type_label"] or "невідомо",

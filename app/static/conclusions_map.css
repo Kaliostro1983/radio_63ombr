@@ -281,6 +281,13 @@ html, body {
   color: #93c5fd;
   border-radius: 6px;
   padding: 2px 7px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s, border-color .15s;
+}
+.rp-coord-tag:hover {
+  background: rgba(59, 130, 246, .34);
+  border-color: rgba(59, 130, 246, .65);
 }
 
 /* empty state */

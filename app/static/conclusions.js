@@ -324,6 +324,16 @@
     badge.textContent        = typeLabel || "невідомо";
     badge.dataset.typeId     = typeId;
     badge.style.cssText      = colorStyle(typeColor || "#6b7280");
+    // Sync state.view.rows so Delta modal reads the updated type_id
+    const acId = tr ? parseInt(tr.dataset.acId, 10) : NaN;
+    if (!isNaN(acId)) {
+      const rowObj = state.view.rows.find((r) => r.id === acId);
+      if (rowObj) {
+        rowObj.type_id    = typeId;
+        rowObj.type_label = typeLabel || "невідомо";
+        rowObj.type_color = typeColor || "#6b7280";
+      }
+    }
   }
 
   /* ──────────────────────────────────────────────
@@ -332,7 +342,12 @@
   async function openDeltaModal(row) {
     _deltaModalRow = row;
 
-    const typeObj = state.view.types.find((t) => t.id === row.type_id) || {};
+    // Always fetch fresh type data so icon/settings changes are reflected immediately
+    await refreshTypesCache();
+
+    const typeObj = state.view.types.find((t) => t.id === row.type_id)
+                 || state.settings.types.find((t) => t.id === row.type_id)
+                 || {};
 
     // Populate Тип input from SIDC icon label
     const cdmType      = $("cdmType");
@@ -445,7 +460,30 @@
 
     const conclusion = (_deltaModalRow.conclusion_text || "").trim();
     const body       = (_deltaModalRow.body_text       || "").trim();
-    const text       = [lines.join("\n"), conclusion, body].filter(Boolean).join("\n\n");
+
+    // ── Intercept header (шапка перехоплення) ──────────────────────────────
+    // Line 1: formatted created_at  "2026-05-26 06:32:49" → "26.05.2026, 06:32:49"
+    let createdAtFmt = "";
+    const _dtm = (_deltaModalRow.created_at || "").match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2}:\d{2})/);
+    if (_dtm) createdAtFmt = `${_dtm[3]}.${_dtm[2]}.${_dtm[1]}, ${_dtm[4]}`;
+
+    // Line 2: frequency
+    const _freq = (_deltaModalRow.frequency || "").trim();
+
+    // Line 3: net_description (stored with emoji, e.g. "🪵 БПЛА | укх р/м …")
+    const _netDesc = (_deltaModalRow.net_description || "").trim();
+
+    // Line 4: mask (may be empty)
+    const _mask = (_deltaModalRow.mask || "").trim();
+
+    // Line 5: first callsign from body_text — first token after "— "
+    const _csMatch = body.match(/—\s*(\S+)/);
+    const _firstCS = _csMatch ? _csMatch[1].replace(/,$/, "").toUpperCase() : "";
+
+    const header = [createdAtFmt, _freq, _netDesc, _mask, _firstCS].filter(Boolean).join("\n");
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const text = [lines.join("\n"), conclusion, header, body].filter(Boolean).join("\n\n");
 
     if (!cnSettingsChatId) {
       toast("Оберіть цільовий чат у вкладці «Налаштування»", "warn");

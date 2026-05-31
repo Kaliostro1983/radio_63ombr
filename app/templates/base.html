@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>{{ app_name }}</title>
   <script>
-    // Apply saved theme before CSS paints to avoid light/dark flicker.
+    // Apply saved theme + sidebar state before CSS paints (avoids flicker).
     (function () {
       try {
         var savedTheme = localStorage.getItem("theme");
-        if (savedTheme) {
-          document.documentElement.setAttribute("data-theme", savedTheme);
-        }
+        if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
+        var savedSidebar = localStorage.getItem("sidebarState") || "full";
+        document.documentElement.setAttribute("data-sidebar", savedSidebar);
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=25"/>
+  <link rel="stylesheet" href="/static/app.css?v=46"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <script src="/static/app.js" defer></script>
   {% block extra_head %}{% endblock %}
@@ -23,7 +23,7 @@
 <body>
 <div class="layout">
   {% if request.query_params.get("embed") != "1" %}
-  <aside class="sidebar">
+  <aside class="sidebar" id="appSidebar">
     <a
       href="/home"
       class="brand-avatar-link"
@@ -45,35 +45,78 @@
       </div>
     </a>
     <div class="nav">
-      <a href="/home" class="{% if request.url.path.startswith('/home') %}active{% endif %}">Головна</a>
-      <a href="/networks" class="{% if request.url.path.startswith('/networks') %}active{% endif %}">Радіомережі</a>
-      <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}">Перехоплення</a>
-      <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}">Позивні</a>
-      <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}">Пеленгація</a>
-      <a href="/conclusions" class="{% if request.url.path.startswith('/conclusions') %}active{% endif %}">Висновки</a>
-      <a href="/import-export" class="{% if request.url.path.startswith('/import-export') %}active{% endif %}">Імпорт/Експорт</a>
-      <a href="/faq" class="{% if request.url.path.startswith('/faq') %}active{% endif %}">FAQ</a>
+      <a href="/home" class="{% if request.url.path.startswith('/home') %}active{% endif %}" title="Головна">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="nav-label">Головна</span>
+      </a>
+      <a href="/networks" class="{% if request.url.path.startswith('/networks') %}active{% endif %}" title="Радіомережі">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>
+        <span class="nav-label">Радіомережі</span>
+      </a>
+      <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}" title="Перехоплення">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg>
+        <span class="nav-label">Перехоплення</span>
+      </a>
+      <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}" title="Позивні">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="nav-label">Позивні</span>
+      </a>
+      <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}" title="Пеленгація">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+        <span class="nav-label">Пеленгація</span>
+      </a>
+      <a href="/conclusions" class="{% if request.url.path.startswith('/conclusions') %}active{% endif %}" title="Висновки">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+        <span class="nav-label">Висновки</span>
+      </a>
+      <a href="/import-export" class="{% if request.url.path.startswith('/import-export') %}active{% endif %}" title="Імпорт/Експорт">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+        <span class="nav-label">Імпорт/Експорт</span>
+      </a>
+      <a href="/faq" class="{% if request.url.path.startswith('/faq') %}active{% endif %}" title="FAQ">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+        <span class="nav-label">FAQ</span>
+      </a>
     </div>
 
+    <!-- Sidebar state toggle (cycles: full → compact → hidden) -->
+    <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Згорнути до іконок">
+      <svg id="sidebarToggleIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
+      </svg>
+      <span class="sidebar-toggle-label">Компакт</span>
+    </button>
+
+    <!-- Status bar moved to sidebar footer -->
+    {% if request.query_params.get("embed") != "1" %}
+    <div class="app-statusbar sidebar-statusbar" role="status" aria-live="polite">
+      <div class="sb-status-row">
+        <span class="app-statusbar__dot" aria-hidden="true"></span>
+        <span class="app-statusbar__text sb-status-label">Система активна</span>
+      </div>
+      <div class="sb-status-row sb-status-row--meta">
+        <a href="/changelog" target="_blank" class="app-statusbar__version">v{{ app_version }}</a>
+        {% set _git_rev = get_app_git_revision() %}
+        {% if _git_rev[0] %}
+        <span class="app-statusbar__sep">•</span>
+        <span class="app-statusbar__rev"{% if _git_rev[1] %} title="Git {{ _git_rev[1] }}"{% endif %}>{{ _git_rev[0] }}</span>
+        {% endif %}
+      </div>
+      <div class="sb-status-row sb-status-row--update">
+        <span id="appLastUpdate" class="app-statusbar__text">Оновлено щойно</span>
+      </div>
+    </div>
+    {% endif %}
+
   </aside>
+
+  <!-- Pull tab: shown when sidebar is hidden -->
+  <div class="sidebar-pull-tab" id="sidebarPullTab" title="Відкрити меню">
+    <svg viewBox="0 0 10 16" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 2 8 8 3 14"/></svg>
+  </div>
   {% endif %}
 
   <main class="main">
-    {% if request.query_params.get("embed") != "1" %}
-    <div class="app-statusbar" role="status" aria-live="polite">
-      <span class="app-statusbar__dot" aria-hidden="true"></span>
-      <span class="app-statusbar__text">Система активна</span>
-      <span class="app-statusbar__sep">•</span>
-      <a href="/changelog" target="_blank" class="app-statusbar__version">v{{ app_version }}</a>
-      {% set _git_rev = get_app_git_revision() %}
-      {% if _git_rev[0] %}
-      <span class="app-statusbar__sep">•</span>
-      <span class="app-statusbar__rev"{% if _git_rev[1] %} title="Git {{ _git_rev[1] }}"{% endif %}>{{ _git_rev[0] }}</span>
-      {% endif %}
-      <span class="app-statusbar__sep">•</span>
-      <span id="appLastUpdate" class="app-statusbar__text">Оновлено щойно</span>
-    </div>
-    {% endif %}
     {% block content %}{% endblock %}
   </main>
 </div>

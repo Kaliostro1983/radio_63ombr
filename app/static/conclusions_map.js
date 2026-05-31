@@ -32,6 +32,28 @@ function mgrsToLatLng(mgrsStr) {
   return null;
 }
 
+// ── Toast notification ────────────────────────────────────────
+function mapToast(msg) {
+  let el = document.getElementById("mapToastEl");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "mapToastEl";
+    el.style.cssText = [
+      "position:fixed", "bottom:24px", "left:50%", "transform:translateX(-50%)",
+      "background:#1e293b", "color:#e2e8f0", "font-size:13px",
+      "padding:8px 18px", "border-radius:20px",
+      "box-shadow:0 4px 16px rgba(0,0,0,.55)",
+      "pointer-events:none", "z-index:9999",
+      "transition:opacity .25s", "opacity:0",
+    ].join(";");
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = "1";
+  clearTimeout(el._tid);
+  el._tid = setTimeout(() => { el.style.opacity = "0"; }, 1800);
+}
+
 // ── Icon URL builder (legacy SVG files) ───────────────────────
 function iconUrl(filename) {
   return filename ? `/static/icons/${filename}` : `/static/icons/default.svg`;
@@ -352,6 +374,22 @@ function openDetailPanel(row, clickedMgrs) {
     const tag = document.createElement("span");
     tag.className = "rp-coord-tag" + (m === clickedMgrs ? " active" : "");
     tag.textContent = m;
+    tag.title = "Натисніть, щоб скопіювати";
+    tag.addEventListener("click", () => {
+      navigator.clipboard.writeText(m).then(() => {
+        mapToast(`✓ Скопійовано: ${m}`);
+      }).catch(() => {
+        // Fallback for non-HTTPS or blocked clipboard
+        const ta = document.createElement("textarea");
+        ta.value = m;
+        ta.style.cssText = "position:fixed;opacity:0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        mapToast(`✓ Скопійовано: ${m}`);
+      });
+    });
     coordsDiv.appendChild(tag);
   }
 
