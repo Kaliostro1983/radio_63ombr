@@ -188,6 +188,137 @@ def api_conclusions_list(
 
 
 # ---------------------------------------------------------------------------
+# Cross-group conclusion comparison ("Аналітика 63" vs "Батальйони 63")
+# ---------------------------------------------------------------------------
+
+@router.get("/api/conclusions/compare")
+def api_conclusions_compare(date_from: str = "", date_to: str = ""):
+    """Compare analytical conclusions from the two source groups over a period.
+
+    Conclusions are matched by the intercept they reference — the key is
+    (network_id, created_at), i.e. the intercept's frequency + datetime.
+    "Аналітика 63" rows come from `analytical_conclusions`; "Батальйони 63"
+    rows from the isolated `battalion_conclusions` table.
+
+    date_from / date_to filter on the intercept datetime. When omitted they
+    default to (now − 8h) … now. One row is returned per unique intercept that
+    has at least one conclusion, sorted by intercept datetime ascending, with a
+    `category`:
+        "only_one" — conclusion present in only one group;
+        "match"    — both groups, identical MGRS set;
+        "diff"     — both groups, at least one differing MGRS coordinate.
+    """
+    now = datetime.now()
+    start = _parse_filter_dt(date_from, "00:00:00") if date_from \
+        else (now - timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+    end = _parse_filter_dt(date_to, "23:59:59") if date_to \
+        else now.strftime("%Y-%m-%d %H:%M:%S")
+
+    rows: Dict[tuple, Dict[str, Any]] = {}
+
+    def _slot(network_id, created_at, freq, unit) -> Dict[str, Any]:
+        key = (
+            int(network_id) if network_id is not None else 0,
+            str(created_at or "").replace("T", " "),
+        )
+        if key not in rows:
+            rows[key] = {
+                "created_at":      key[1],
+                "frequency":       freq or "",
+                "unit":            unit or "",
+                "net_description": "",
+                "body_text":       "",
+                "intercept_text":  "",
+                "analytics":       [],
+                "battalions":      [],
+            }
+        return rows[key]
+
+    def _mgrs(raw) -> list:
+        try:
+            return json.loads(raw or "[]")
+        except Exception:
+            return []
+
+    with get_conn() as conn:
+        a_rows = conn.execute(
+            """
+            SELECT ac.network_id, ac.created_at, ac.conclusion_text, ac.mgrs_json,
+                   msg.body_text, msg.net_description, n.frequency, n.unit
+            FROM analytical_conclusions ac
+            LEFT JOIN messages msg ON msg.id = ac.message_id
+            LEFT JOIN networks n   ON n.id   = ac.network_id
+            WHERE REPLACE(ac.created_at,'T',' ') >= ?
+              AND REPLACE(ac.created_at,'T',' ') <= ?
+            """,
+            (start, end),
+        ).fetchall()
+        b_rows = conn.execute(
+            """
+            SELECT bc.network_id, bc.created_at, bc.conclusion_text, bc.mgrs_json,
+                   bc.intercept_text, bc.source_marker, n.frequency, n.unit
+            FROM battalion_conclusions bc
+            LEFT JOIN networks n ON n.id = bc.network_id
+            WHERE REPLACE(bc.created_at,'T',' ') >= ?
+              AND REPLACE(bc.created_at,'T',' ') <= ?
+            """,
+            (start, end),
+        ).fetchall()
+
+    for r in a_rows:
+        slot = _slot(r["network_id"], r["created_at"], r["frequency"], r["unit"])
+        slot["analytics"].append({
+            "conclusion_text": r["conclusion_text"] or "",
+            "mgrs":            _mgrs(r["mgrs_json"]),
+        })
+        if not slot["net_description"] and not slot["body_text"]:
+            slot["net_description"] = r["net_description"] or ""
+            slot["body_text"]       = r["body_text"] or ""
+
+    for r in b_rows:
+        slot = _slot(r["network_id"], r["created_at"], r["frequency"], r["unit"])
+        slot["battalions"].append({
+            "conclusion_text": r["conclusion_text"] or "",
+            "mgrs":            _mgrs(r["mgrs_json"]),
+            "source_marker":   r["source_marker"] or "",
+        })
+        if not slot["intercept_text"]:
+            slot["intercept_text"] = r["intercept_text"] or ""
+
+    out: List[Dict[str, Any]] = []
+    for slot in rows.values():
+        a, b = slot["analytics"], slot["battalions"]
+        a_set = {m for c in a for m in c["mgrs"]}
+        b_set = {m for c in b for m in c["mgrs"]}
+        if a and b:
+            category = "match" if a_set == b_set else "diff"
+        else:
+            category = "only_one"
+
+        parts = [p for p in (slot["net_description"], slot["body_text"]) if p]
+        intercept = "\n\n".join(parts) if parts else slot["intercept_text"]
+
+        out.append({
+            "created_at":     slot["created_at"],
+            "frequency":      slot["frequency"],
+            "unit":           slot["unit"],
+            "intercept_text": intercept,
+            "analytics":      a,
+            "battalions":     b,
+            "category":       category,
+        })
+
+    out.sort(key=lambda x: x["created_at"])
+    return {
+        "ok": True,
+        "rows": out,
+        "total": len(out),
+        "date_from": start,
+        "date_to": end,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Conclusion types CRUD
 # ---------------------------------------------------------------------------
 

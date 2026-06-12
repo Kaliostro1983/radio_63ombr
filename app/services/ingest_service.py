@@ -40,6 +40,7 @@ from app.services.callsign_service import link_message_callsigns
 from app.services.ingest_store import (
     find_duplicate_message,
     insert_analytical_conclusion,
+    insert_battalion_conclusion,
     insert_ingest_message,
     insert_message,
     mark_duplicate_content,
@@ -645,6 +646,85 @@ def _run_ingest_pipeline(
     created_at = to_sql_dt(published_at_text) or received_at
     if platform == "xlsx":
         received_at = created_at
+
+    # "Батальйони 63" conclusions are fully isolated: resolve the network
+    # (read-only lookup) and store ONLY in battalion_conclusions for the
+    # comparison report. No messages row, no callsign graph, no type
+    # classification, not shown on the map, never auto-sent to Delta.
+    if (
+        message_format == "analytical_type"
+        and parsed.get("analytical_source_side") == "battalions"
+    ):
+        try:
+            network_id = ensure_network(
+                cur,
+                frequency=frequency,
+                mask=mask,
+                now_dt=received_at,
+                unit=unit,
+                zone=zone,
+            )
+        except NetworkNotFoundError as e:
+            log.notice(
+                "Battalion conclusion skipped: network not found %s",
+                _intercept_log_ctx(parsed, raw_text),
+                extra={
+                    "ingest_id": ingest_id,
+                    "frequency": e.frequency,
+                    "mask": e.mask,
+                    "reason": "network_not_found",
+                },
+            )
+            mark_parse_error(cur, ingest_id, str(e))
+            return {
+                "ok": True,
+                "ingest_id": ingest_id,
+                "skipped": True,
+                "reason": "network_not_found",
+                "details": {"frequency": e.frequency, "mask": e.mask},
+                "actions": actions,
+            }
+
+        conclusion_text = parsed.get("analytical_conclusion") or ""
+        mgrs_list = list(parsed.get("analytical_mgrs") or [])
+        intercept_text = parsed.get("analytical_tail_text") or body_text or ""
+        source_marker = parsed.get("analytical_source_marker") or ""
+
+        bc_id = insert_battalion_conclusion(
+            cur,
+            network_id=network_id,
+            created_at=created_at,
+            conclusion_text=conclusion_text,
+            mgrs_list=mgrs_list,
+            source_marker=source_marker,
+            intercept_text=intercept_text,
+            received_at=received_at,
+        )
+        cur.execute(
+            "UPDATE ingest_messages SET reviewed_at = ? WHERE id = ?",
+            (now_sql(), ingest_id),
+        )
+        log.info(
+            "Battalion conclusion stored (isolated)",
+            extra={
+                "ingest_id": ingest_id,
+                "battalion_conclusion_id": bc_id,
+                "network_id": network_id,
+                "source_marker": source_marker,
+            },
+        )
+        return {
+            "ok": True,
+            "ingest_id": ingest_id,
+            "battalion_conclusion_id": bc_id,
+            "parsed": {
+                "message_format": "analytical_type",
+                "source_side": "battalions",
+                "source_marker": source_marker,
+                "network_id": network_id,
+            },
+            "actions": actions,
+        }
 
     try:
         network_id = ensure_network(

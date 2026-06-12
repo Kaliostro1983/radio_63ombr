@@ -389,3 +389,46 @@ def insert_analytical_conclusion(
         function="insert_analytical_conclusion",
     )
     return {"id": int(cur.lastrowid or 0), "type_id": type_id}
+
+
+def insert_battalion_conclusion(
+    cur,
+    *,
+    network_id: int,
+    created_at: str,
+    conclusion_text: str,
+    mgrs_list: List[str],
+    source_marker: str,
+    intercept_text: str,
+    received_at: Optional[str] = None,
+) -> int:
+    """Persist an isolated "Батальйони 63" conclusion for comparison.
+
+    Unlike `insert_analytical_conclusion`, this does NOT link to `messages`,
+    does NOT classify (no type_id) and is never read by the map/list/Delta
+    paths — the row exists only for the cross-group comparison report and is
+    matched to analytics conclusions by (network_id, created_at).
+
+    Uses INSERT OR IGNORE keyed on
+    (network_id, created_at, source_marker, conclusion_text) so re-ingesting
+    the same message is idempotent while still allowing several distinct
+    conclusions per intercept (e.g. ОБТВР and 60 ОМБр).
+
+    Returns:
+        int: inserted `battalion_conclusions.id`, or 0 if the row already existed.
+    """
+    safe_execute(
+        cur,
+        """
+        INSERT OR IGNORE INTO battalion_conclusions
+            (network_id, created_at, conclusion_text, mgrs_json,
+             source_marker, intercept_text, received_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (network_id, created_at, conclusion_text,
+         json.dumps(mgrs_list, ensure_ascii=False),
+         source_marker or "", intercept_text or "", received_at),
+        module="app.services.ingest_store",
+        function="insert_battalion_conclusion",
+    )
+    return int(cur.lastrowid or 0)

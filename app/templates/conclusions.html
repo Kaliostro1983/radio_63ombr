@@ -34,6 +34,25 @@
   }
   /* Перегляд при is_embed=false — це основний контент, без обмежень */
   #cnPaneView { display: block; }
+
+  /* ===== Порівняння висновків (модалка) ===== */
+  .cn-cmp-legend { display:flex; gap:12px; margin:2px 0 12px; flex-wrap:wrap; align-items:center; }
+  .cn-cmp-key { padding:2px 8px; border-radius:4px; border:1px solid var(--border); }
+  .cn-cmp--match { background: color-mix(in srgb,#16a34a 18%,var(--card)); border-color: color-mix(in srgb,#16a34a 45%,var(--border)); }
+  .cn-cmp--diff  { background: color-mix(in srgb,#dc2626 16%,var(--card)); border-color: color-mix(in srgb,#dc2626 45%,var(--border)); }
+  .cn-cmp--only  { background: var(--card); }
+  .cn-cmp-table { width:100%; border-collapse:collapse; }
+  .cn-cmp-table th { text-align:left; padding:6px 10px; border-bottom:1px solid var(--border); }
+  .cn-cmp-table td { vertical-align:top; padding:8px 10px; border-top:1px solid var(--border); }
+  .cn-cmp-row--match td { background: color-mix(in srgb,#16a34a 10%, transparent); }
+  .cn-cmp-row--diff  td { background: color-mix(in srgb,#dc2626 10%, transparent); }
+  .cn-cmp-meta { font-size:.8em; opacity:.6; margin-bottom:4px; }
+  .cn-cmp-intercept { white-space:pre-wrap; font-size:.86em; opacity:.92; }
+  .cn-cmp-concl { white-space:pre-wrap; }
+  .cn-cmp-concl + .cn-cmp-concl { margin-top:8px; border-top:1px dashed var(--border); padding-top:8px; }
+  .cn-cmp-marker { font-size:.72em; opacity:.6; text-transform:uppercase; }
+  .cn-cmp-mgrs { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.82em; opacity:.85; margin-top:3px; }
+  .cn-cmp-empty-cell { opacity:.35; }
 </style>
 <div class="page">
   {% if not is_embed %}
@@ -42,6 +61,7 @@
       <h1>Висновки</h1>
     </div>
     <div class="cn-page-actions">
+      <button id="cnOpenCompare" type="button" class="secondary">Порівняння</button>
       <button id="cnOpenSettings" type="button" class="secondary">Налаштування</button>
     </div>
   </div>
@@ -217,6 +237,62 @@
         </div><!-- /cn-modal-body -->
       </div><!-- /cn-modal-card -->
       </div><!-- /cnModalSettings -->
+
+      <!-- ===== Modal: Порівняння висновків ===== -->
+      <div id="cnCompareModal" class="modal hidden cn-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-cn-compare-close></div>
+      <div class="modal-card cn-modal-card" role="dialog" aria-modal="true" aria-labelledby="cnCompareTitle">
+        <div class="modal-head">
+          <div id="cnCompareTitle" class="modal-title">Порівняння висновків · «Аналітика 63» ↔ «Батальйони 63»</div>
+          <button type="button" class="secondary" data-cn-compare-close style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body cn-modal-body">
+
+          <form id="cnCompareFilter" class="cn-filter-bar" autocomplete="off" style="margin-bottom:8px">
+            <div class="field cn-filter-field--dt">
+              <label for="cnCmpFrom">Від</label>
+              <input id="cnCmpFrom" type="datetime-local" />
+            </div>
+            <div class="field cn-filter-field--dt">
+              <label for="cnCmpTo">До</label>
+              <input id="cnCmpTo" type="datetime-local" />
+            </div>
+            <div class="cn-filter-actions">
+              <label>&nbsp;</label>
+              <div class="cn-filter-btns">
+                <button type="submit" id="cnCmpShowBtn">Показати</button>
+                <div class="cn-count-field" title="Кількість перехоплень">
+                  <span id="cnCmpCount">—</span>
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <div class="cn-cmp-legend small">
+            <span class="cn-cmp-key cn-cmp--match">Координати збігаються</span>
+            <span class="cn-cmp-key cn-cmp--diff">Координати відрізняються</span>
+            <span class="cn-cmp-key cn-cmp--only">Лише в одній групі</span>
+          </div>
+
+          <div id="cnCmpLoader" class="small" style="opacity:.6; display:none">Завантаження…</div>
+          <div id="cnCmpEmpty"  class="small" style="opacity:.6; display:none">Немає висновків за період.</div>
+
+          <div style="overflow-x:auto">
+            <table id="cnCmpTable" class="cn-cmp-table" style="display:none">
+              <thead>
+                <tr>
+                  <th style="width:34%">Перехоплення</th>
+                  <th style="width:33%">Аналітика 63</th>
+                  <th style="width:33%">Батальйони 63</th>
+                </tr>
+              </thead>
+              <tbody id="cnCmpBody"></tbody>
+            </table>
+          </div>
+
+        </div><!-- /cn-modal-body -->
+      </div><!-- /cn-modal-card -->
+      </div><!-- /cnCompareModal -->
 
       {% if is_embed %}
       <!-- ===== ШВИДКО (рендеримо лише в embed-режимі — використовується як iframe з /monitor) ===== -->
@@ -508,4 +584,5 @@
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
 <script src="/static/conclusions.js?v=23" defer></script>
 <script src="/static/quick_conclusions.js?v=16" defer></script>
+<script src="/static/conclusions_compare.js?v=1" defer></script>
 {% endblock %}

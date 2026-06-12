@@ -3,8 +3,16 @@
 Analytical message contract:
 1) analytical conclusion text (required);
 2) coordinates block (optional, MGRS-like forms);
-3) standard separator with brigade marker (`63 ОМБр`);
+3) unit separator line with a brigade/unit marker;
 4) template intercept that is parsed by `parse_template_intercept`.
+
+The separator marker also identifies the *source side* of the conclusion:
+
+- "------- 🦁 63 ОМБр 🦁 -------"        → side="analytics63" (group "Аналітика 63")
+- "---------- ꑭ ОБТВР ꑭ ----------"     → side="battalions"  (group "Батальйони 63")
+- "---------- ꑭ 60 ОМБр ꑭ ----------"   → side="battalions"  (group "Батальйони 63")
+
+Both ОБТВР and 60 ОМБр are sub-sources of the single "Батальйони 63" side.
 """
 
 from __future__ import annotations
@@ -15,23 +23,49 @@ from typing import Any, Dict
 from app.core.intercept_parser import parse_template_intercept
 
 
-# Matches the brigade/unit separator line that divides analytical preamble
-# from the standard template header.  Covers known variants:
-# "------- 🐻 63 ОМБр 🐻 -------"  and  "---------- ꑭ ОБТВР ꑭ ----------"
-RE_63_OMBR = re.compile(r"(63\s*омбр|обтвр)", flags=re.IGNORECASE)
+# Separator markers that divide the analytical preamble from the standard
+# template header.  The matched marker identifies the conclusion source side.
+RE_SEP_ANALYTICS = re.compile(r"63\s*омбр", flags=re.IGNORECASE)
+RE_SEP_BATTALION = re.compile(r"(обтвр|60\s*омбр)", flags=re.IGNORECASE)
+# Any known separator marker (used to locate the dividing line).
+RE_SEPARATOR = re.compile(r"(63\s*омбр|60\s*омбр|обтвр)", flags=re.IGNORECASE)
+
 RE_MGRS_ANY = re.compile(
     r"\b(\d{1,2})\s*([C-HJ-NP-X])\s*([A-HJ-NP-Z]{2})\s*(\d{2,5})\s*(\d{2,5})\b",
     flags=re.IGNORECASE,
 )
 
 
-def _split_analytical_blocks(text: str) -> tuple[str, str]:
-    """Split message into (preface, template_tail) by first 63 ОМБр separator."""
+def _detect_source(line: str) -> tuple[str, str]:
+    """Map a separator line to (source_side, source_marker).
+
+    Returns ("", "") when the line carries no known marker.
+    Battalion markers are checked first so "60 ОМБр" is not confused with
+    the analytics "63 ОМБр" marker.
+    """
+    text = str(line or "")
+    if RE_SEP_BATTALION.search(text):
+        marker = "obtvr" if re.search(r"обтвр", text, flags=re.IGNORECASE) else "60ombr"
+        return "battalions", marker
+    if RE_SEP_ANALYTICS.search(text):
+        return "analytics63", "63ombr"
+    return "", ""
+
+
+def _split_analytical_blocks(text: str) -> tuple[str, str, str, str]:
+    """Split message by the first known separator line.
+
+    Returns (preface, template_tail, source_side, source_marker).
+    All strings are empty when no separator is found.
+    """
     lines = (text or "").splitlines()
     for idx, line in enumerate(lines):
-        if RE_63_OMBR.search(str(line or "")):
-            return "\n".join(lines[:idx]).strip(), "\n".join(lines[idx + 1 :]).strip()
-    return "", ""
+        if RE_SEPARATOR.search(str(line or "")):
+            side, marker = _detect_source(line)
+            preface = "\n".join(lines[:idx]).strip()
+            tail = "\n".join(lines[idx + 1 :]).strip()
+            return preface, tail, side, marker
+    return "", "", "", ""
 
 
 def _normalize_mgrs(zone: str, band: str, sq: str, easting: str, northing: str) -> str:
@@ -84,7 +118,7 @@ def _extract_analytical_conclusion_and_mgrs(preface: str) -> tuple[str, list[str
 
 def is_analytical_intercept(text: str) -> bool:
     """Detect analytical intercept with required 4-block structure."""
-    preface, tail = _split_analytical_blocks(text)
+    preface, tail, _side, _marker = _split_analytical_blocks(text)
     if not preface or not tail:
         return False
 
@@ -97,8 +131,17 @@ def is_analytical_intercept(text: str) -> bool:
 
 
 def parse_analytical_intercept(text: str) -> Dict[str, Any]:
-    """Parse analytical intercept into template schema + analytical metadata."""
-    preface, tail = _split_analytical_blocks(text)
+    """Parse analytical intercept into template schema + analytical metadata.
+
+    Adds the following analytical fields on success:
+        analytical_conclusion   — conclusion text (coordinates stripped);
+        analytical_mgrs         — list of normalized MGRS coordinate strings;
+        analytical_source_side  — "analytics63" | "battalions";
+        analytical_source_marker— "63ombr" | "obtvr" | "60ombr";
+        analytical_tail_text    — raw template intercept text under the separator;
+        source_message_format   — "analytical_type".
+    """
+    preface, tail, source_side, source_marker = _split_analytical_blocks(text)
     if not preface:
         return {"ok": False, "error": "analytical_preface_not_found"}
     if not tail:
@@ -115,5 +158,8 @@ def parse_analytical_intercept(text: str) -> Dict[str, Any]:
     out: Dict[str, Any] = dict(parsed)
     out["analytical_conclusion"] = conclusion
     out["analytical_mgrs"] = mgrs_codes
+    out["analytical_source_side"] = source_side or "analytics63"
+    out["analytical_source_marker"] = source_marker or "63ombr"
+    out["analytical_tail_text"] = tail
     out["source_message_format"] = "analytical_type"
     return out

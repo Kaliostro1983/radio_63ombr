@@ -381,6 +381,26 @@ CREATE TABLE IF NOT EXISTS analytical_conclusions (
 CREATE INDEX IF NOT EXISTS idx_analytical_conclusions_network_dt
     ON analytical_conclusions(network_id, created_at DESC);
 
+-- Isolated store for "Батальйони 63" conclusions (separators ОБТВР / 60 ОМБр).
+-- Used ONLY for the cross-group comparison report; kept out of the operational
+-- pipeline (no messages link, no callsign graph, no classification, no map, no
+-- Delta). Matched to analytical_conclusions by (network_id, created_at).
+CREATE TABLE IF NOT EXISTS battalion_conclusions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    network_id      INTEGER NOT NULL,
+    created_at      TEXT NOT NULL,
+    conclusion_text TEXT NOT NULL,
+    mgrs_json       TEXT NOT NULL DEFAULT '[]',
+    source_marker   TEXT NOT NULL DEFAULT '',
+    intercept_text  TEXT NOT NULL DEFAULT '',
+    received_at     TEXT,
+    UNIQUE(network_id, created_at, source_marker, conclusion_text),
+    FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_battalion_conclusions_network_dt
+    ON battalion_conclusions(network_id, created_at DESC);
+
 -- Custom map labels placed on the quick-conclusions Leaflet map.
 -- name  – display text (shown on the satellite map)
 -- mgrs  – MGRS coordinate string (e.g. "37U DQ 29050 28377")
@@ -879,6 +899,41 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_analytical_conclusions_network_dt"
         " ON analytical_conclusions(network_id, created_at DESC)",
         stage="create_index:analytical_conclusions_network_dt",
+    )
+
+    # --- battalion_conclusions: isolated store for "Батальйони 63" conclusions. ---
+    # These come from a different source side (separators ОБТВР / 60 ОМБр) and are
+    # used ONLY for the cross-group comparison report. They are intentionally kept
+    # out of the operational pipeline: no link into `messages`, no callsign graph,
+    # no type classification, not shown on the map and not auto-sent to Delta.
+    # Matching against analytical_conclusions is by (network_id, created_at), i.e.
+    # the intercept's frequency + datetime. Multiple rows per intercept are allowed
+    # (e.g. ОБТВР and 60 ОМБр, or several analysts) — they are shown stacked.
+    safe_execute(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS battalion_conclusions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            network_id      INTEGER NOT NULL,
+            created_at      TEXT NOT NULL,
+            conclusion_text TEXT NOT NULL,
+            mgrs_json       TEXT NOT NULL DEFAULT '[]',
+            source_marker   TEXT NOT NULL DEFAULT '',
+            intercept_text  TEXT NOT NULL DEFAULT '',
+            received_at     TEXT,
+            UNIQUE(network_id, created_at, source_marker, conclusion_text),
+            FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
+        )
+        """,
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="create_table:battalion_conclusions",
+    )
+    _try_ddl(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_battalion_conclusions_network_dt"
+        " ON battalion_conclusions(network_id, created_at DESC)",
+        stage="create_index:battalion_conclusions_network_dt",
     )
 
     # Drop deprecated etalons columns (idempotent: skipped if column does not exist).
