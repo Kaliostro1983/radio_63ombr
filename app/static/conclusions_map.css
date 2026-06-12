@@ -320,10 +320,20 @@ html, body {
 }
 
 .cm-icon img {
-  width: 36px;
-  height: 36px;
+  /* Розмір задається inline-атрибутами width/height з makeLeafletIcon —
+   * щоб iconAnchor у Leaflet відповідав фактично відображеному.
+   *
+   * Замість drop-shadow (накопичується темною плямою при перекритті
+   * іконок) — легкий світлий контур через CSS drop-shadow з білим/світло-
+   * сірим кольором і малим радіусом. Кілька шарів дає тонке обведення
+   * у всі боки. */
   display: block;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,.55));
+  filter:
+    drop-shadow( 0    0    0.3px rgba(255,255,255,.95))
+    drop-shadow( 0.3px 0    0.3px rgba(255,255,255,.95))
+    drop-shadow(-0.3px 0    0.3px rgba(255,255,255,.95))
+    drop-shadow( 0    0.3px 0.3px rgba(255,255,255,.95))
+    drop-shadow( 0   -0.3px 0.3px rgba(255,255,255,.95));
 }
 
 /* ── Loading / error overlay ────────────────────────────────── */
@@ -361,7 +371,195 @@ html, body {
 }
 #markerCount.hidden { opacity: 0; }
 
+/* ── Display options panel (Частоти / Підрозділ) ────────────── */
+#cmDisplayOpts {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.cm-opt-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.cm-opt-chk input { margin: 0; }
+
+/* Кольорові кружечки з номером підрозділу (режим «Підрозділ») */
+.cm-unit-icon { background: transparent !important; border: 0 !important; }
+.cm-unit-circle {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.25);
+  text-shadow: 0 1px 2px rgba(0,0,0,.65);
+  white-space: nowrap;
+}
+
+/* Підпис частоти біля маркера (Leaflet tooltip permanent) */
+.leaflet-tooltip.cm-freq-label {
+  background: rgba(0,0,0,.65);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.leaflet-tooltip.cm-freq-label::before { display: none; }
+
 /* ── Scrollbar style for right panel ─────────────────────────── */
 .rp-body::-webkit-scrollbar { width: 5px; }
 .rp-body::-webkit-scrollbar-track { background: transparent; }
 .rp-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
+
+/* =========================
+   Cluster picker — модалка для накладених маркерів
+========================= */
+
+.cm-cluster-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cm-cluster-picker.hidden { display: none; }
+
+.cm-cluster-picker__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .55);
+  backdrop-filter: blur(6px);
+}
+
+.cm-cluster-picker__card {
+  position: relative;
+  width: min(420px, 92vw);
+  max-height: 80vh;
+  background: rgba(15, 23, 42, .96);
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cm-cluster-picker__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, .15);
+}
+.cm-cluster-picker__title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.cm-cluster-picker__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.cm-cluster-picker__sub span {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+.cm-cluster-picker__close {
+  background: transparent;
+  border: 0;
+  color: #cbd5e1;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+}
+.cm-cluster-picker__close:hover { color: #fff; }
+
+.cm-cluster-picker__list {
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cm-cluster-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: rgba(30, 41, 59, .55);
+  margin-bottom: 6px;
+  transition: background .12s, border-color .12s;
+}
+.cm-cluster-item:hover {
+  background: rgba(30, 64, 175, .35);
+  border-color: rgba(59, 130, 246, .5);
+}
+.cm-cluster-item__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cm-cluster-item__icon img {
+  max-width: 36px;
+  max-height: 36px;
+  display: block;
+}
+.cm-cluster-item__body {
+  flex: 1;
+  min-width: 0;
+}
+.cm-cluster-item__title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #f1f5f9;
+  word-break: break-word;
+}
+.cm-cluster-item__sub {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.cm-cluster-item__meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+.cm-cluster-item__meta-label {
+  display: block;
+  color: #64748b;
+  font-size: 10px;
+  margin-bottom: 1px;
+}

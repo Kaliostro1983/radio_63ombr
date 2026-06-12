@@ -74,22 +74,53 @@
       .replace(/"/g, "&quot;");
   }
 
-  // ─── Tab switching ────────────────────────────────────────────────────────
+  // ─── Modal-based navigation ───────────────────────────────────────────────
+  // Чат-бот — основний контент сторінки. XLSX-завантажувач у модалці,
+  // що відкривається кнопкою «XLSX» у шапці.
 
-  const tabBtns  = document.querySelectorAll(".tabs-nav .tab-btn");
-  const tabPanes = document.querySelectorAll(".tab-panel");
-
-  tabBtns.forEach(btn => {
-    btn.addEventListener("click", () => {
-      tabBtns.forEach(b => { b.classList.remove("active"); b.setAttribute("aria-selected", "false"); });
-      tabPanes.forEach(p => p.classList.add("hidden"));
-      btn.classList.add("active");
-      btn.setAttribute("aria-selected", "true");
-      const pane = document.getElementById(btn.getAttribute("aria-controls"));
-      if (pane) pane.classList.remove("hidden");
-      if (btn.id === "ieTabBot") loadErrors();
+  const ieModals = {
+    xlsx:     { el: document.getElementById("ieModalXlsx"),     iframeId: null,                       iframeSrc: null },
+    akademik: { el: document.getElementById("ieModalAkademik"), iframeId: "ieModalAkademikFrame",     iframeSrc: "/networks?tab=akademik&embed=1" },
+  };
+  function openIeModal(which) {
+    const m = ieModals[which];
+    if (!m || !m.el) return;
+    if (m.iframeId && m.iframeSrc) {
+      const ifr = document.getElementById(m.iframeId);
+      if (ifr) ifr.src = `${m.iframeSrc}${m.iframeSrc.includes("?") ? "&" : "?"}_=${Date.now()}`;
+    }
+    m.el.classList.remove("hidden");
+    m.el.removeAttribute("aria-hidden");
+  }
+  function closeIeModal(which) {
+    const m = ieModals[which];
+    if (!m || !m.el) return;
+    m.el.classList.add("hidden");
+    m.el.setAttribute("aria-hidden", "true");
+    if (m.iframeId) {
+      const ifr = document.getElementById(m.iframeId);
+      if (ifr) ifr.src = "about:blank";
+    }
+  }
+  document.getElementById("ieOpenXlsx")?.addEventListener("click",     () => openIeModal("xlsx"));
+  document.getElementById("ieOpenAkademik")?.addEventListener("click", () => openIeModal("akademik"));
+  document.querySelectorAll("[data-ie-modal-close]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      const which = el.getAttribute("data-ie-modal-close");
+      if (which) { e.stopPropagation(); closeIeModal(which); }
     });
   });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    Object.keys(ieModals).forEach((k) => {
+      const m = ieModals[k];
+      if (m.el && !m.el.classList.contains("hidden")) closeIeModal(k);
+    });
+  });
+
+  // Авто-завантаження звіту по помилках чат-боту перенесено в самий кінець
+  // IIFE: інакше loadErrors() торкає const botLoader/botOnlyNew/… ще до
+  // їх оголошення → TDZ ReferenceError, який глушиться в async-функції.
 
   // ─── XLSX Upload ─────────────────────────────────────────────────────────
 
@@ -370,5 +401,9 @@
       if (btn) { btn.disabled = false; btn.textContent = "▶"; }
     }
   }
+
+  // Авто-завантаження звіту "Чат-бот" — у самому кінці IIFE, коли всі
+  // const-залежності (botLoader, botOnlyNew, …) вже ініціалізовані.
+  loadErrors();
 
 })();

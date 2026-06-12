@@ -501,3 +501,155 @@
     width: 220px;
   }
 }
+/* =========================
+   Map block (Звіт-таб)
+   Фільтр + Leaflet карта + send-bar (Швидко-style)
+========================= */
+
+.pel-mapblock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  margin-bottom: 18px;
+}
+
+.pel-mapblock-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.pel-mapblock-quick {
+  display: flex;
+  gap: 6px;
+  margin-right: 6px;
+}
+
+.pel-mapblock-quick-btn {
+  min-width: 64px;
+}
+
+.pel-mapblock-dt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Лічильник "Знайдено: N" — overlay у лівому верхньому куті карти.
+ * Зміщений вправо від zoom-кнопок Leaflet (вони ~30px ширини + 10px поля). */
+.pel-mapblock-count {
+  position: absolute;
+  top: 12px; left: 52px;
+  z-index: 500;
+  padding: 6px 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  background: rgba(20,24,30,.82);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  pointer-events: none;  /* не перекривати клік по тайлах */
+  white-space: nowrap;
+}
+
+/* Контейнер мапи (для абсолютно-розміщеної кнопки копіювання) */
+.pel-mapblock-mapwrap {
+  position: relative;
+  width: 100%;
+}
+
+.pel-mapblock-map {
+  width: 100%;
+  height: 634px;          /* 480 + 20% → 576; +10% → 634 */
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* Leaflet 1.9.4 додає клас .leaflet-touch-drag, який ставить
+ *   touch-action: pan-x pan-y
+ * на контейнер. На Windows-Chrome (де ontouchstart існує навіть без
+ * сенсорного екрану) це призводить до того, що браузер обробляє pan
+ * нативно і Leaflet НЕ отримує mousedown → drag мишкою не працює.
+ * Форсуємо touch-action: none, щоб JS-обробник у Leaflet ловив подію. */
+.pel-mapblock-map.leaflet-touch-drag,
+.pel-mapblock-map .leaflet-container { touch-action: none !important; }
+
+/* Send-bar інлайново у рядку фільтра (праворуч від «Показати») */
+.pel-mapblock-sendbar {
+  flex: 0 0 auto;
+  min-width: 280px;
+  max-width: 380px;
+}
+
+/* Чекбокс «Частоти» */
+.pel-mapblock-freq-chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--fg);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.pel-mapblock-freq-chk input { margin: 0; }
+
+/* Кнопка «Скопіювати карту» поверх мапи (правий верхній кут) */
+.pel-mapblock-copybtn {
+  position: absolute;
+  top: 10px; right: 10px;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  background: rgba(20,24,30,.82);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  transition: background .12s, border-color .12s;
+}
+.pel-mapblock-copybtn:hover {
+  background: rgba(20,24,30,.95);
+  border-color: var(--accent,#f59e0b);
+}
+
+/* Підписи частот біля маркерів (Leaflet tooltip permanent) */
+.leaflet-tooltip.pel-freq-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(20,24,30,.82);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.22);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.45);
+}
+.leaflet-tooltip.pel-freq-label::before { display: none; }   /* без хвостика */
+
+.pel-mapblock-icon {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+.pel-mapblock-icon img {
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.55));
+}

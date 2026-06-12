@@ -36,6 +36,10 @@ SENDER_PREFIX_RE = re.compile(r"^відправник\s*:", flags=re.IGNORECASE)
 RECIPIENTS_IN_HEADER_RE = re.compile(r"отримувач(?:\s*\(\s*і\s*\))?\s*:?", flags=re.IGNORECASE)
 SENDER_IN_HEADER_RE = re.compile(r"відправник\s*:?", flags=re.IGNORECASE)
 
+# Group-separator detector — line like "------- 🦁 63 ОМБр 🦁 -------".
+# Tolerant: any dashes (≥3) + "63 ОМБр" фрагмент кирилицею.
+SEPARATOR_RE = re.compile(r"-{3,}.*63\s*ОМБр.*-{3,}", flags=re.IGNORECASE)
+
 
 def _split_recipient_chunks(values: list[str]) -> list[str]:
     """Split recipient chunks into individual recipient tokens.
@@ -160,9 +164,37 @@ def parse_structured_intercept(raw_text: str) -> dict:
 
     body = "\n".join(body_lines).strip()
 
+    # Fallback: повідомлення з преамбулою — справжній заголовок з аліасом
+    # йде ПІСЛЯ роздільника "------- 🦁 63 ОМБр 🦁 -------". Шукаємо такий
+    # рядок і додаємо наступні 1-2 непорожні як кандидатів.
+    alias_candidates: list[str] = []
+    if header_line_1:
+        alias_candidates.append(header_line_1)
+    if header_line_2 and header_line_2 != header_line_1:
+        alias_candidates.append(header_line_2)
+    for i, line in enumerate(nonempty_lines):
+        if SEPARATOR_RE.search(line):
+            # Беремо до 2 рядків після сепаратора, які ще не датою/отрим./відпр.
+            taken = 0
+            for j in range(i + 1, len(nonempty_lines)):
+                cand = nonempty_lines[j].strip()
+                if not cand:
+                    continue
+                if DATETIME_RE.search(cand):
+                    break
+                if RECIPIENTS_PREFIX_RE.match(cand) or SENDER_PREFIX_RE.match(cand):
+                    break
+                if cand not in alias_candidates:
+                    alias_candidates.append(cand)
+                taken += 1
+                if taken >= 2:
+                    break
+            break
+
     return {
         "header_line_1": header_line_1,
         "header_line_2": header_line_2,
+        "alias_candidates": alias_candidates,
         "published_at_text": published_at,
         "sender_raw": sender,
         "recipients_raw": recipients,

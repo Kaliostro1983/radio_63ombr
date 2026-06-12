@@ -492,6 +492,8 @@ def intercepts_explorer_list(
                 params.extend([like_value, like_value, like_value, like_value, like_value])
 
         if callsign_raw:
+            # Позивні зберігаються у верхньому регістрі; SQLite lower()/upper()
+            # не обробляють кирилицю, тому нормалізуємо запит через Python str.upper().
             where.append(
                 """
                 EXISTS (
@@ -499,11 +501,11 @@ def intercepts_explorer_list(
                     FROM message_callsigns mc
                     JOIN callsigns c ON c.id = mc.callsign_id
                     WHERE mc.message_id = m.id
-                      AND lower(c.name) = lower(?)
+                      AND c.name = ?
                 )
                 """
             )
-            params.append(callsign_raw)
+            params.append(callsign_raw.upper())
 
         where_sql = " AND ".join(where)
 
@@ -639,9 +641,12 @@ def intercepts_explorer_detail(message_id: int):
                 n.frequency,
                 n.mask,
                 n.unit,
-                n.zone
+                n.zone,
+                n.group_id   AS network_group_id,
+                g.name       AS network_group_name
             FROM messages m
             JOIN networks n ON n.id = m.network_id
+            LEFT JOIN groups g ON g.id = n.group_id
             WHERE m.id = ? AND m.is_valid = 1 AND coalesce(m.content_type, 'intercept') = 'intercept'
             """,
             (message_id,),
@@ -679,10 +684,13 @@ def intercepts_explorer_detail(message_id: int):
                     "comment": message_row["comment"] or "",
                     "net_description": message_row["net_description"] or "",
                     "network": {
-                        "frequency": message_row["frequency"] or "",
-                        "mask": message_row["mask"] or "",
-                        "unit": message_row["unit"] or "",
-                        "zone": message_row["zone"] or "",
+                        "id":         message_row["network_id"],
+                        "frequency":  message_row["frequency"] or "",
+                        "mask":       message_row["mask"] or "",
+                        "unit":       message_row["unit"] or "",
+                        "zone":       message_row["zone"] or "",
+                        "group_id":   message_row["network_group_id"],
+                        "group_name": message_row["network_group_name"] or "",
                     },
                     "callsigns": [
                         {
@@ -1320,11 +1328,24 @@ def intercepts_explorer_delete_callsign(
 
 @router.get("/api/monitor/playlist")
 def monitor_playlist(
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     since: str | None = Query(None),
+    since_id: int | None = Query(None),
+    min_id: int | None = Query(None),
 ):
-    """Return playlist items for the monitoring tab, newest first."""
+    """Return playlist items for the monitoring tab, newest first.
+
+    Pagination/poll cursor:
+        - ``min_id``: ID-based cursor for POLLING. Returns ALL rows with
+          ``id > min_id`` (i.e. inserted into DB after last poll), regardless of
+          their ``created_at``. Necessary because SWBot writes messages with
+          ``created_at`` parsed from the message body — a freshly-inserted row
+          can have a past timestamp (a «late arriver»), and a created_at-based
+          cursor would never pick it up.
+        - ``since`` + ``since_id``: legacy tuple cursor on ``(created_at, id)``.
+        - ``since`` alone: legacy ``created_at > since``.
+    """
     conn = get_conn()
     try:
         where = [
@@ -1332,8 +1353,18 @@ def monitor_playlist(
             "coalesce(m.content_type, 'intercept') = 'intercept'",
         ]
         params: list[object] = []
+        order_by = "m.created_at DESC, m.id DESC"
 
-        if since:
+        if min_id is not None:
+            where.append("m.id > ?")
+            params.append(int(min_id))
+            # Order by id desc for predictable cursor advancement (max returned
+            # id becomes the next min_id; nothing is missed across batches).
+            order_by = "m.id DESC"
+        elif since and since_id is not None:
+            where.append("(m.created_at > ? OR (m.created_at = ? AND m.id > ?))")
+            params.extend([since, since, int(since_id)])
+        elif since:
             where.append("m.created_at > ?")
             params.append(since)
 
@@ -1351,7 +1382,7 @@ def monitor_playlist(
             FROM messages m
             LEFT JOIN networks n ON n.id = m.network_id
             WHERE {where_sql}
-            ORDER BY m.created_at DESC, m.id DESC
+            ORDER BY {order_by}
             LIMIT ? OFFSET ?
             """,
             params + [limit, offset],

@@ -1,58 +1,69 @@
 {% extends "base.html" %}
 
+{% set is_embed = request.query_params.get("embed") == "1" %}
 {% set active_tab = (request.query_params.get("tab") or "view")|lower %}
 {% if active_tab not in ["view", "settings", "quick"] %}
   {% set active_tab = "view" %}
 {% endif %}
 
 {% block content %}
+<style>
+  .cn-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .cn-page-header h1 { margin: 0; }
+  .cn-page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cn-shell { display: block; }
+  .cn-modal { z-index: 9999 !important; }
+  .cn-modal-card {
+    width: 95vw;
+    max-width: 1180px;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    margin: 16px auto;
+  }
+  .cn-modal-body {
+    overflow-y: auto;
+    padding: 14px 18px;
+  }
+  /* Перегляд при is_embed=false — це основний контент, без обмежень */
+  #cnPaneView { display: block; }
+</style>
 <div class="page">
-  <div class="page-header">
-    <h1>Висновки</h1>
-    <div class="small">Аналітичні висновки з перехоплень.</div>
+  {% if not is_embed %}
+  <div class="page-header cn-page-header">
+    <div class="cn-page-header__title">
+      <h1>Висновки</h1>
+    </div>
+    <div class="cn-page-actions">
+      <button id="cnOpenSettings" type="button" class="secondary">Налаштування</button>
+    </div>
   </div>
 
-  <section class="tabs-shell">
-    <div class="tabs-nav" role="tablist" aria-label="Вкладки Висновки">
-      <button
-        id="cnTabView"
-        type="button"
-        class="tab-btn {% if active_tab == 'view' %}active{% endif %}"
-        role="tab"
-        aria-selected="{% if active_tab == 'view' %}true{% else %}false{% endif %}"
-        aria-controls="cnPaneView"
-        data-tab="view"
-      >Перегляд</button>
+  <!-- Legacy tab buttons (приховані) — лишаємо для зворотньої сумісності
+       з existing activateTab/data-tab логікою в conclusions.js. -->
+  <div class="cn-legacy-tabs" hidden aria-hidden="true">
+    <button id="cnTabView"     type="button" data-tab="view"></button>
+    <button id="cnTabSettings" type="button" data-tab="settings"></button>
+    <button id="cnTabQuick"    type="button" data-tab="quick"></button>
+  </div>
+  {% endif %}
 
-      <button
-        id="cnTabSettings"
-        type="button"
-        class="tab-btn {% if active_tab == 'settings' %}active{% endif %}"
-        role="tab"
-        aria-selected="{% if active_tab == 'settings' %}true{% else %}false{% endif %}"
-        aria-controls="cnPaneSettings"
-        data-tab="settings"
-      >Налаштування</button>
-
-      <button
-        id="cnTabQuick"
-        type="button"
-        class="tab-btn {% if active_tab == 'quick' %}active{% endif %}"
-        role="tab"
-        aria-selected="{% if active_tab == 'quick' %}true{% else %}false{% endif %}"
-        aria-controls="cnPaneQuick"
-        data-tab="quick"
-      >Швидко</button>
-    </div>
-
+  <section class="cn-shell">
     <div class="tab-panel-wrap">
 
-      <!-- ===== ПЕРЕГЛЯД TAB ===== -->
+      <!-- ===== ПЕРЕГЛЯД (основний контент) ===== -->
       <section
         id="cnPaneView"
-        class="tab-panel {% if active_tab != 'view' %}hidden{% endif %}"
-        role="tabpanel"
-        aria-labelledby="cnTabView"
+        class="{% if is_embed %}hidden{% endif %}"
+        role="region"
+        aria-label="Перегляд"
       >
         <div class="tab-panel-section">
 
@@ -153,12 +164,19 @@
         </div>
       </section>
 
-      <!-- ===== НАЛАШТУВАННЯ TAB ===== -->
+      <!-- ===== Modal: Налаштування ===== -->
+      <div id="cnModalSettings" class="modal hidden cn-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-cn-modal-close="settings"></div>
+      <div class="modal-card cn-modal-card" role="dialog" aria-modal="true" aria-labelledby="cnModalSettingsTitle">
+        <div class="modal-head">
+          <div id="cnModalSettingsTitle" class="modal-title">Налаштування</div>
+          <button type="button" class="secondary" data-cn-modal-close="settings" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body cn-modal-body">
       <section
         id="cnPaneSettings"
-        class="tab-panel {% if active_tab != 'settings' %}hidden{% endif %}"
-        role="tabpanel"
-        aria-labelledby="cnTabSettings"
+        role="region"
+        aria-label="Налаштування"
       >
         <div class="tab-panel-section">
 
@@ -196,34 +214,37 @@
 
         </div>
       </section>
+        </div><!-- /cn-modal-body -->
+      </div><!-- /cn-modal-card -->
+      </div><!-- /cnModalSettings -->
 
-      <!-- ===== ШВИДКО TAB ===== -->
+      {% if is_embed %}
+      <!-- ===== ШВИДКО (рендеримо лише в embed-режимі — використовується як iframe з /monitor) ===== -->
       <section
         id="cnPaneQuick"
-        class="tab-panel {% if active_tab != 'quick' %}hidden{% endif %}"
-        role="tabpanel"
-        aria-labelledby="cnTabQuick"
+        role="region"
+        aria-label="Швидко"
       >
         <div class="tab-panel-section">
 
-          <!-- Row 1: Conclusion type selector -->
-          <div class="field">
-            <label class="small">Тип висновку</label>
-            <div id="qcConclBtns" class="qc-btn-row">
-              <span class="small" style="opacity:.5">Завантаження…</span>
+          <!-- Row 1+2: Conclusion type + Point selectors in one row -->
+          <div class="qc-selector-row">
+            <div class="field">
+              <label class="small">Тип висновку</label>
+              <div id="qcConclBtns" class="qc-btn-row">
+                <span class="small" style="opacity:.5">Завантаження…</span>
+              </div>
             </div>
-          </div>
-
-          <!-- Row 2: Point selector -->
-          <div class="field" style="margin-top:10px">
-            <label class="small">Точка</label>
-            <div id="qcPointBtns" class="qc-btn-row">
-              <span class="small" style="opacity:.5">Завантаження…</span>
+            <div class="field">
+              <label class="small">Точка</label>
+              <div id="qcPointBtns" class="qc-btn-row">
+                <span class="small" style="opacity:.5">Завантаження…</span>
+              </div>
             </div>
           </div>
 
           <!-- Two-column containers -->
-          <div class="qc-containers">
+          <div class="qc-containers" style="margin-top:8px">
 
             <!-- LEFT: send bar + textarea -->
             <div class="qc-editor-col">
@@ -280,50 +301,50 @@
 
           </div><!-- /qc-containers -->
 
-          <!-- ── Management blocks ── -->
-          <hr style="margin:28px 0 20px; border:none; border-top:1px solid var(--border)">
-          <div class="qc-mgmt-cols">
+          <!-- ── Management blocks (під спойлером) ── -->
+          <details class="qc-mgmt-details" style="margin-top:24px">
+            <summary class="qc-mgmt-summary">Налаштування</summary>
 
-            <!-- Типи висновків -->
-            <div class="qc-mgmt-block">
-              <div class="qc-mgmt-head">
-                <strong>Типи висновків</strong>
-                <button type="button" id="qcAddConclBtn" class="secondary" style="padding:4px 10px; font-size:.82rem">+ Додати</button>
-              </div>
-              <div id="qcConclErr" class="small" style="color:var(--danger);display:none;margin-bottom:6px"></div>
-              <div id="qcConclList" class="qc-mgmt-list">
-                <span class="small" style="opacity:.5">Завантаження…</span>
-              </div>
-            </div>
+            <div class="qc-mgmt-cols" style="margin-top:14px">
 
-            <!-- Точки -->
-            <div class="qc-mgmt-block">
-              <div class="qc-mgmt-head">
-                <strong>Точки</strong>
-                <button type="button" id="qcAddPointBtn" class="secondary" style="padding:4px 10px; font-size:.82rem">+ Додати</button>
+              <!-- Типи висновків -->
+              <div class="qc-mgmt-block">
+                <div class="qc-mgmt-head">
+                  <strong>Типи висновків</strong>
+                  <button type="button" id="qcAddConclBtn" class="secondary" style="padding:4px 10px; font-size:.82rem">+ Додати</button>
+                </div>
+                <div id="qcConclErr" class="small" style="color:var(--danger);display:none;margin-bottom:6px"></div>
+                <div id="qcConclList" class="qc-mgmt-list">
+                  <span class="small" style="opacity:.5">Завантаження…</span>
+                </div>
               </div>
-              <div id="qcPointErr" class="small" style="color:var(--danger);display:none;margin-bottom:6px"></div>
-              <div id="qcPointList" class="qc-mgmt-list">
-                <span class="small" style="opacity:.5">Завантаження…</span>
+
+              <!-- Точки -->
+              <div class="qc-mgmt-block">
+                <div class="qc-mgmt-head">
+                  <strong>Точки</strong>
+                  <button type="button" id="qcAddPointBtn" class="secondary" style="padding:4px 10px; font-size:.82rem">+ Додати</button>
+                </div>
+                <div id="qcPointErr" class="small" style="color:var(--danger);display:none;margin-bottom:6px"></div>
+                <div id="qcPointList" class="qc-mgmt-list">
+                  <span class="small" style="opacity:.5">Завантаження…</span>
+                </div>
               </div>
-            </div>
 
-          </div><!-- /qc-mgmt-cols -->
+            </div><!-- /qc-mgmt-cols -->
+          </details>
 
-          <!-- Написи карти -->
-          <div class="qc-mgmt-block qc-mgmt-block--full">
-            <div class="qc-mgmt-head">
-              <strong>Написи карти</strong>
-              <button type="button" id="qcAddLabelBtn" class="secondary" style="padding:4px 10px; font-size:.82rem">+ Додати</button>
-            </div>
-            <div id="qcLabelErr" class="small" style="color:var(--danger);display:none;margin-bottom:6px"></div>
-            <div id="qcLabelList" class="qc-mgmt-list">
-              <span class="small" style="opacity:.5">Завантаження…</span>
-            </div>
+          <!-- Hidden stubs: API/код досі звертається до qcLabelList/Err/qcAddLabelBtn,
+               тож лишаємо приховані плейсхолдери, щоб уникнути null-помилок. -->
+          <div hidden aria-hidden="true">
+            <button type="button" id="qcAddLabelBtn"></button>
+            <div id="qcLabelErr"></div>
+            <div id="qcLabelList"></div>
           </div>
 
         </div>
       </section>
+      {% endif %}
 
     </div><!-- /tab-panel-wrap -->
   </section>
@@ -381,7 +402,6 @@
           <select id="cdmIdent">
             <option>Ворожий</option>
             <option>Дружній</option>
-            <option>Невідомий</option>
           </select>
         </div>
 
@@ -486,6 +506,6 @@
 {% block scripts %}
 <!-- Military symbol library (APP-6 / MIL-STD-2525) -->
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/conclusions.js?v=20" defer></script>
-<script src="/static/quick_conclusions.js?v=12" defer></script>
+<script src="/static/conclusions.js?v=23" defer></script>
+<script src="/static/quick_conclusions.js?v=16" defer></script>
 {% endblock %}

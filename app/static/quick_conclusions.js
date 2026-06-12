@@ -21,6 +21,7 @@
   let activeConclusion = null;
   let activePoints     = [];
   let qcMap            = null;
+  let qcTileLayer      = null;
   let qcMarkers        = [];
   let qcLabelMarkers   = [];
   let mapReady         = false;
@@ -147,9 +148,12 @@
       attributionControl: false,
     });
 
-    window.L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 18, crossOrigin: "anonymous" }
+    // Google hybrid із crossOrigin — тайли вантажаться як CORS-чисті, тож
+    // html2canvas НЕ перезавантажує їх під час зйомки (на великій площі саме
+    // цей storm перезавантажень упирався в imageTimeout → «Timed out»).
+    qcTileLayer = window.L.tileLayer(
+      "https://mt1.google.com/vt/lyrs=y&hl=uk&x={x}&y={y}&z={z}",
+      { maxZoom: 20, attribution: "Google", crossOrigin: "anonymous" }
     ).addTo(qcMap);
 
     window.L.control.attribution({ prefix: false })
@@ -293,6 +297,17 @@
     });
   }
 
+  /* Чекати, поки тайл-шар довантажить усі видимі тайли (з фолбеком по часу). */
+  function waitForTiles(maxMs) {
+    return new Promise(function (resolve) {
+      if (!qcTileLayer || !qcTileLayer.isLoading || !qcTileLayer.isLoading()) { resolve(); return; }
+      let done = false;
+      const finish = function () { if (done) return; done = true; resolve(); };
+      qcTileLayer.once("load", finish);
+      setTimeout(finish, maxMs || 6000);
+    });
+  }
+
   async function onCopyMap() {
     if (!mapDiv) return;
     if (!window.html2canvas) {
@@ -300,9 +315,11 @@
       catch (e) { toast("Не вдалося завантажити бібліотеку скріншоту", "error", 3500); return; }
     }
     if (qcMap) qcMap.invalidateSize();
+    await waitForTiles(6000);          // дочекатися тайлів перед зйомкою
     try {
       const canvas = await window.html2canvas(mapDiv, {
-        useCORS: true, allowTaint: false, logging: false, imageTimeout: 15000,
+        // imageTimeout:0 — прибрати таймаут (тайли вже CORS-завантажені, повтор не потрібен)
+        useCORS: true, allowTaint: false, logging: false, imageTimeout: 0,
       });
       canvas.toBlob(async function (blob) {
         if (!blob) { toast("Не вдалося створити зображення", "error"); return; }
@@ -507,8 +524,9 @@
         if (window.html2canvas) {
           try {
             if (qcMap) qcMap.invalidateSize();
+            await waitForTiles(6000);
             const canvas = await window.html2canvas(mapDiv, {
-              useCORS: true, allowTaint: false, logging: false, imageTimeout: 15000,
+              useCORS: true, allowTaint: false, logging: false, imageTimeout: 0,
             });
             const MAX_W = 1200;
             let out = canvas;
@@ -943,6 +961,16 @@
     if (quickPanel && !quickPanel.classList.contains("hidden") && window.L) {
       setTimeout(initMap, 50);
     }
+
+    // Команда із зовнішнього вікна (вкладка «Моніторинг» → «Швидкий висновок»):
+    // очистити інпут+маркери карти і вставити переданий текст.
+    window.addEventListener("message", function (e) {
+      const d = e && e.data;
+      if (!d || d.type !== "qc:reset-and-paste") return;
+      if (textarea) { textarea.value = String(d.text || ""); }
+      clearMapMarkers();
+      if (qcMap) qcMap.invalidateSize();
+    });
   }
 
   if (document.readyState === "loading") {

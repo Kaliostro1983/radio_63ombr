@@ -24,9 +24,9 @@ HEADER_AT_START_RE = re.compile(
     ^\s*
     (?P<freq>\d{2,3}(?:[.,]\d{1,4})?)
     \s*[/\\|,:;]\s*
-    (?P<date>\d{2}[./-]\d{2}[./-]\d{4})
+    (?P<date>\d{2}[./-]\d{2}[./-]\d{2,4})   # DD.MM.YY або DD.MM.YYYY
     \s*,?\s*
-    (?P<time>\d{1,2}[.:]\d{2})
+    (?P<time>\d{1,2}[.:]\d{2}(?:[.:]\d{2})?) # HH.MM, HH:MM, HH.MM.SS, HH:MM:SS
     \b
     """,
     flags=re.IGNORECASE | re.VERBOSE,
@@ -41,11 +41,21 @@ def _normalize_dt_text(date_raw: str, time_raw: str) -> str:
     if len(date_parts) != 3:
         raise ValueError("peleng_header_date_invalid")
     dd, mm, yyyy = date_parts
-    hh_mm = re.split(r"[.:]", time_raw.strip())
-    if len(hh_mm) != 2:
+    # 2-значний рік ("26") → припускаємо 20XX ("2026"). Жоден існуючий
+    # peleng-кейс на час правки не містить дату до 2000-х.
+    if len(yyyy) == 2:
+        yyyy = "20" + yyyy
+    elif len(yyyy) != 4:
+        raise ValueError("peleng_header_date_invalid")
+    time_parts = re.split(r"[.:]", time_raw.strip())
+    if len(time_parts) == 2:
+        hh, minute = time_parts
+        ss = "00"
+    elif len(time_parts) == 3:
+        hh, minute, ss = time_parts
+    else:
         raise ValueError("peleng_header_time_invalid")
-    hh, minute = hh_mm
-    return f"{dd.zfill(2)}.{mm.zfill(2)}.{yyyy} {hh.zfill(2)}:{minute.zfill(2)}:00"
+    return f"{dd.zfill(2)}.{mm.zfill(2)}.{yyyy} {hh.zfill(2)}:{minute.zfill(2)}:{ss.zfill(2)}"
 
 
 def _normalize_point_line(line: str) -> str:

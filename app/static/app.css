@@ -321,6 +321,7 @@ h2.pel-title { display:none; }
   position:fixed;
   right:18px;
   bottom:18px;
+  z-index:2000;
   display:flex;
   flex-direction:column;
   gap:8px;
@@ -1150,12 +1151,15 @@ button.secondary{
   padding:14px;
 }
 
-/* Callsigns modal — flex column so head/foot stay fixed, body scrolls */
+/* Callsigns modal — flex column so head/foot stay fixed, body scrolls.
+ * Збільшено висоту (~15% бонусу проти попереднього: 100vh - 120 → 100vh - 20)
+ * та зменшено верхній відступ (60px → 10px), щоб модалка з'являлась вище. */
 .cs-modal-card{
   max-width:560px;
   display:flex;
   flex-direction:column;
-  max-height:calc(100vh - 120px);
+  max-height:calc(100vh - 20px);
+  margin:10px auto;
 }
 
 .cs-modal-card .modal-body{
@@ -1333,7 +1337,8 @@ button.secondary{
     margin:18px 10px;
   }
   .cs-modal-card{
-    max-height:calc(100vh - 36px);
+    max-height:calc(100vh - 20px);
+    margin:10px auto;
   }
 
   .tabs-nav{
@@ -1450,10 +1455,11 @@ button.secondary{
 .intercepts-page{
   display:flex;
   flex-direction:column;
-  gap:16px;
+  gap:6px;
   min-width:0;
 }
 
+.intercepts-page h1,
 .intercepts-page h2{
   margin:0;
 }
@@ -1463,6 +1469,36 @@ button.secondary{
   grid-template-columns: 220px 220px 110px 220px auto;
   gap:12px;
   align-items:end;
+}
+
+/* Автокомпліт поля "Позивний" */
+.cs-filter-ac-drop{
+  position:absolute;
+  top:calc(100% + 2px);
+  left:0; right:0;
+  z-index:200;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:8px;
+  max-height:240px;
+  overflow-y:auto;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+.cs-filter-ac-drop.hidden{ display:none; }
+.cs-filter-ac-item{
+  display:block;
+  width:100%;
+  text-align:left;
+  padding:7px 12px;
+  border:none;
+  background:transparent;
+  color:var(--fg);
+  font-size:13px;
+  cursor:pointer;
+}
+.cs-filter-ac-item:hover,
+.cs-filter-ac-item.is-active{
+  background:color-mix(in srgb, var(--accent) 14%, var(--card));
 }
 
 .intercepts-filter-form .field{
@@ -1803,10 +1839,14 @@ button.secondary{
 
 .lm-modal-grid {
   display: grid;
-  grid-template-columns: 1fr minmax(240px, 340px);
+  grid-template-columns: 1fr 1fr;     /* 50/50 — мапа максимально широка */
   gap: 16px;
   align-items: start;
 }
+/* Запобігає переповненню grid-дитини інпутами/селектами (без min-width:0
+   1fr-колонка може розпиратися від довгих placeholder/option і поглинати другу). */
+.lm-modal-form,
+.lm-modal-map-col { min-width: 0; }
 
 @media (max-width: 820px) {
   .lm-modal-grid {
@@ -1893,7 +1933,7 @@ button.secondary{
 
 .landmark-modal-map {
   width: 100%;
-  height: 260px;
+  height: 440px;
   border-radius: 12px;
   border: 1px solid var(--border);
   overflow: hidden;
@@ -2211,7 +2251,7 @@ button.secondary{
 }
 
 .intercept-card__text {
-  font-size: 14px;
+  font-size: 20px;
   line-height: 1.45;
   color: #eef4ff;
   white-space: pre-wrap;
@@ -3194,6 +3234,15 @@ button.secondary{
   min-height: 540px;
 }
 
+/* Тип висновку + Точка в одному рядку */
+.qc-selector-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.qc-selector-row > .field { flex: 1 1 0; min-width: 220px; }
+
 .qc-editor-col {
   flex: 1 1 0;
   display: flex;
@@ -3521,6 +3570,24 @@ button.secondary{
   width: 100%;
   margin-top: 16px;
 }
+
+/* Налаштування під спойлером (Швидко-таб) */
+.qc-mgmt-details {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+}
+.qc-mgmt-summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 4px 0;
+  user-select: none;
+  font-size: .95rem;
+  letter-spacing: .02em;
+}
+.qc-mgmt-summary:hover { color: var(--accent); }
+.qc-mgmt-details[open] .qc-mgmt-summary { margin-bottom: 4px; }
 
 /* Custom map label rendered on Leaflet satellite map */
 .qc-map-label-icon {
@@ -3909,19 +3976,20 @@ button.secondary{
 
 .monitor-layout{
   display:flex;
-  height:calc(100vh - 210px);
-  min-height:480px;
+  /* (100vh - 210px) * 1.1 + 50px, × 0.93 ≈ -7% від колишнього розміру.
+   * Розписано покомпонентно щоб calc лишився читабельним. */
+  height:calc((100vh - 210px) * 1.023 + 46px);
+  min-height:538px;
   border:1px solid var(--border);
   border-radius:12px;
   overflow:hidden;
   background:var(--card);
 }
 
-/* ── Left column (20%) ── */
+/* ── Left column (фіксована ширина: інакше теги-іконки виштовхуються за межі) ── */
 .monitor-left{
-  width:20%;
-  min-width:160px;
-  max-width:260px;
+  width:260px;
+  flex:0 0 260px;
   display:flex;
   flex-direction:column;
   border-right:1px solid var(--border);
@@ -3977,6 +4045,7 @@ button.secondary{
   font-weight:600;
   font-size:13px;
   flex:1;
+  min-width:0;             /* без цього ellipsis не спрацьовує у flex-дитини */
   overflow:hidden;
   text-overflow:ellipsis;
 }
@@ -3996,7 +4065,7 @@ button.secondary{
   align-items:center;
   justify-content:center;
   flex:1;
-  height:30px;
+  height:38px;
   border-radius:6px;
   border:1px solid transparent;
   background:none;
@@ -4004,6 +4073,7 @@ button.secondary{
   color:var(--muted);
   transition:background .12s,color .12s,border-color .12s;
 }
+.mon-set-btn svg{ width:20px; height:20px; }
 .mon-set-btn:hover{
   background:var(--bg);
   border-color:var(--border);
@@ -4023,6 +4093,27 @@ button.secondary{
   font-weight:700;
   flex-shrink:0;
 }
+
+/* Видимий індикатор непрочитаних у mon-settings рядку під плейлистом. */
+.mon-unread-inline{
+  margin-left:auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:24px;
+  height:24px;
+  padding:0 8px;
+  background:#ef4444;
+  color:#fff;
+  border-radius:12px;
+  font-size:12px;
+  font-weight:700;
+  line-height:1;
+  cursor:default;
+  user-select:none;
+  box-shadow:0 1px 3px rgba(0,0,0,.35);
+}
+.mon-unread-inline.hidden{ display:none; }
 
 /* "Показати ще" button */
 .mon-show-more{
@@ -4060,8 +4151,8 @@ button.secondary{
 /* ── Висновок tab layout ── */
 .conclusion-layout{
   display:flex;
-  height:calc(100vh - 210px);
-  min-height:480px;
+  height:calc((100vh - 210px) * 1.1 + 50px);
+  min-height:578px;
   border:1px solid var(--border);
   border-radius:12px;
   overflow:hidden;
@@ -4115,12 +4206,82 @@ button.secondary{
   border-bottom:1px solid var(--border);
   flex-shrink:0;
 }
+.concl-coord-wrap{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+/* Контейнер чіпів — прихований коли порожній */
+.concl-coord-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+}
+.concl-coord-chips:empty{ display:none; }
+/* Кожен чіп */
+.concl-coord-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  height:28px;
+  padding:0 8px;
+  background:var(--bg);
+  border:1.5px solid var(--accent,#f59e0b);
+  border-radius:6px;
+  font-family:monospace;
+  font-size:12px;
+  color:var(--fg);
+  box-sizing:border-box;
+  max-width:100%;
+}
+.concl-coord-chip-text{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  letter-spacing:.3px;
+}
+.concl-coord-chip-close{
+  background:none;
+  border:none;
+  color:var(--fg);
+  font-size:14px;
+  line-height:1;
+  padding:0 2px;
+  cursor:pointer;
+  opacity:.5;
+  flex-shrink:0;
+  transition:opacity .12s;
+}
+.concl-coord-chip-close:hover{ opacity:1; }
+.concl-coord-chip--square{
+  border-color:#ef4444;
+}
+.concl-coord-chip--palette{
+  border-color:#f59e0b;
+}
 .mon-coord-input{
   flex:1;
   font-family:monospace;
   font-size:13px;
   padding:6px 10px;
+  width:100%;
 }
+
+/* Мітка квадрата на карті */
+.concl-square-label.leaflet-tooltip{
+  background:#ef4444;
+  border:none;
+  border-radius:4px;
+  color:#fff;
+  font-family:monospace;
+  font-size:12px;
+  font-weight:700;
+  padding:2px 7px;
+  box-shadow:0 2px 6px rgba(0,0,0,.4);
+}
+.concl-square-label.leaflet-tooltip::before{ display:none; }
 .mon-anal-icon-btn{
   display:flex;
   align-items:center;
@@ -4132,27 +4293,348 @@ button.secondary{
 }
 
 /* 2. Map — fills remaining height in analytics column */
+.concl-map-wrap{
+  position:relative;
+  flex:1;
+  min-height:0;
+  display:flex;
+}
 .mon-anal-map{
   flex:1;
   min-height:0;
 }
+/* Кнопки-інструменти поверх карти */
+.concl-map-tool-btn{
+  position:absolute;
+  top:10px; right:10px;
+  z-index:500;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:36px; height:36px;
+  padding:0;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:8px;
+  background:rgba(20,24,30,.82);
+  color:#fff;
+  cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+  transition:background .12s, border-color .12s;
+}
+.concl-map-tool-btn:hover{
+  background:rgba(20,24,30,.95);
+  border-color:var(--accent,#f59e0b);
+}
+.concl-map-tool-btn--add{ top:54px; }
 
-/* 3. Conclusion area */
-.mon-anal-conclusion{
-  flex:1;
+/* Меню "+" */
+.concl-map-add-menu{
+  position:absolute;
+  top:54px; right:54px;
+  z-index:600;
   display:flex;
   flex-direction:column;
-  min-height:0;
-  border-bottom:1px solid var(--border);
+  gap:2px;
+  padding:5px;
+  background:rgba(20,24,30,.96);
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:10px;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);
 }
-.mon-anal-toolbar{
+.concl-map-add-menu.hidden{ display:none; }
+.concl-map-add-menu button{
+  display:block;
+  text-align:left;
+  white-space:nowrap;
+  padding:7px 14px;
+  border:none;
+  border-radius:6px;
+  background:transparent;
+  color:#fff;
+  font-size:13px;
+  cursor:pointer;
+}
+.concl-map-add-menu button:hover{ background:rgba(255,255,255,.12); }
+
+/* Якорі редагування */
+.concl-anchor{
+  width:14px; height:14px;
+  border-radius:50%;
+  box-sizing:border-box;
+  cursor:pointer;
+}
+.concl-anchor--vertex,
+.concl-anchor--end{
+  background:#ef4444;
+  border:2px solid #fff;
+  box-shadow:0 0 3px rgba(0,0,0,.5);
+}
+.concl-anchor--mid{
+  background:#fff;
+  border:2px solid #ef4444;
+  width:12px; height:12px;
+  opacity:.85;
+}
+/* Червона точка в центрі квадрата */
+.concl-square-dot{
+  width:12px; height:12px;
+  border-radius:50%;
+  background:#ef4444;
+  border:2px solid #fff;
+  box-shadow:0 0 3px rgba(0,0,0,.5);
+}
+
+/* Ручка видалення елемента */
+.concl-del-handle{
+  width:18px; height:18px;
+  border-radius:50%;
+  background:#dc2626;
+  border:2px solid #fff;
+  color:#fff;
+  font-size:13px;
+  font-weight:700;
+  line-height:14px;
+  text-align:center;
+  cursor:pointer;
+  box-shadow:0 1px 4px rgba(0,0,0,.5);
+}
+.concl-del-handle:hover{ background:#ef4444; }
+
+/* Вістря стрілки (SVG-трикутник, вершина при (22,13), дивиться вправо при rotate(0)) */
+.concl-arrowhead{
+  display:block;
+  transform-origin:22px 13px;
+  overflow:visible;
+}
+
+/* Результати пошуку орієнтира */
+.concl-lm-results{
+  margin-top:8px;
+  max-height:320px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.concl-lm-item{
+  text-align:left;
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--card);
+  color:var(--fg);
+  font-size:13px;
+  cursor:pointer;
+}
+.concl-lm-item:hover{
+  background:color-mix(in srgb, var(--accent) 12%, var(--card));
+  border-color:var(--accent);
+}
+
+/* ── Conclusion map click popup ── */
+.concl-map-popup .leaflet-popup-content-wrapper{
+  background:var(--card,#1e2329);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+  padding:0;
+  color:var(--fg,#e2e8f0);
+}
+.concl-map-popup .leaflet-popup-content{
+  margin:0;
+  width:auto !important;
+}
+.concl-map-popup .leaflet-popup-tip{
+  background:var(--card,#1e2329);
+}
+.concl-cp{
+  position:relative;
+  padding:10px 12px;
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  min-width:220px;
+}
+.concl-cp-close{
+  position:absolute;
+  top:6px; right:8px;
+  background:none;
+  border:none;
+  color:var(--fg,#e2e8f0);
+  font-size:16px;
+  cursor:pointer;
+  opacity:.5;
+  padding:0;
+  line-height:1;
+  transition:opacity .12s;
+}
+.concl-cp-close:hover{ opacity:1; }
+.concl-cp-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 12px;
+  border:1.5px solid #f59e0b;
+  border-radius:8px;
+  background:transparent;
+  color:#f59e0b;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.4px;
+  cursor:pointer;
+  transition:background .12s;
+}
+.concl-cp-btn:hover{ background:rgba(245,158,11,.12); }
+.concl-cp-delete{
+  border-color:#ef4444;
+  color:#ef4444;
+}
+.concl-cp-delete:hover{ background:rgba(239,68,68,.12); }
+.concl-cp-coord-row{
   display:flex;
   align-items:center;
   gap:6px;
-  padding:6px 10px;
-  border-bottom:1px solid var(--border);
+}
+.concl-cp-coord{
+  flex:1;
+  font-family:monospace;
+  font-size:12px;
+  letter-spacing:.5px;
+  padding:4px 2px;
+  cursor:pointer;
+  opacity:.85;
+  user-select:none;
+  transition:opacity .12s;
+}
+.concl-cp-coord:hover{ opacity:1; text-decoration:underline dotted; }
+/* Формат-кнопка: невидима рамка і фон, виглядає як текст */
+.concl-cp-fmt{
+  padding:2px 4px;
+  border:none;
+  background:transparent;
+  color:rgba(255,255,255,.45);
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+  white-space:nowrap;
+  letter-spacing:.3px;
+  transition:color .12s;
+}
+.concl-cp-fmt:hover{ color:rgba(255,255,255,.8); }
+
+/* 3. Conclusion area — textarea з overlay-кнопками */
+.concl-ta-wrap{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  flex:1;
+  min-height:120px;
+  max-height:280px;
+  padding:8px 8px 0;
+}
+/* Висновок — фіксовано ~4 рядки */
+.concl-ta-wrap--conclusion{
+  flex:0 0 auto;
+  min-height:0;
+  max-height:none;
+}
+textarea.concl-ta--4{ flex:0 0 auto; height:calc((4 * 1.6em * 1.69 + 18px) / 2); resize:none; }
+/* Координати — фіксовано ~5 рядків */
+.concl-ta-wrap--coords{
+  flex:0 0 auto;
+  min-height:0;
+  max-height:none;
+  padding-top:6px;
+}
+textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2); resize:none; }
+.concl-ta-wrap--intercept{
+  flex:1;
+  min-height:90px;
+  max-height:none;
+  padding-top:6px;
+}
+.concl-ta-overlay-btns{
+  position:absolute;
+  top:14px;
+  right:14px;
+  display:flex;
+  gap:4px;
+  z-index:10;
+}
+.concl-overlay-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:26px;
+  height:26px;
+  padding:0;
+  font-size:13px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:color-mix(in srgb,var(--card) 80%,transparent);
+  backdrop-filter:blur(4px);
+  color:var(--fg);
+  cursor:pointer;
+  opacity:.7;
+  transition:opacity .15s, border-color .15s;
+}
+.concl-overlay-btn:hover{
+  opacity:1;
+  border-color:var(--accent);
+}
+/* Shared text-field style for textarea + separator */
+.mon-conclusion-ta,
+.concl-sep-input{
+  font-family: monospace;
+  font-size:13px;
+  line-height:1.6;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:6px;
+  color:var(--fg);
+  outline:none;
+  transition:border-color .15s;
+  box-sizing:border-box;
+}
+/* Override для лівої колонки «Висновок»: sans-serif + +10% розміру.
+ * Працює для всіх текстових полів у .conclusion-left, не зачіпаючи
+ * аналогічні поля в інших місцях (напр. Швидко). */
+.conclusion-left .mon-conclusion-ta,
+.conclusion-left .concl-sep-input,
+.conclusion-left .mon-send-chat-input{
+  font-family: inherit;
+  font-size: 15.7px;   /* 13px × 1.21 = +21% сумарно (два кроки по +10%) */
+}
+
+.mon-conclusion-ta{
+  flex:1;
+  resize:none;
+  padding:8px 38px 8px 10px;
+  min-height:0;
+  width:100%;
+}
+.mon-conclusion-ta:focus{
+  border-color:color-mix(in srgb,var(--accent) 60%,var(--border));
+  background:color-mix(in srgb,var(--accent) 3%,var(--bg));
+}
+
+/* Separator */
+.concl-sep-wrap{
+  padding:0 8px 6px;
   flex-shrink:0;
 }
+.concl-sep-input{
+  width:100%;
+  text-align:center;
+  font-weight:600;
+  letter-spacing:.5px;
+  padding:6px 10px;
+  cursor:default;
+}
+
+/* Legacy — keep for compatibility */
+.mon-anal-conclusion{ display:none; }
+.mon-anal-toolbar{ display:none; }
 .mon-anal-label{
   font-size:11px;
   font-weight:600;
@@ -4161,34 +4643,11 @@ button.secondary{
   letter-spacing:.4px;
   flex:1;
 }
-.mon-anal-toolbar-btns{
-  display:flex;
-  gap:4px;
-}
+.mon-anal-toolbar-btns{ display:flex; gap:4px; }
 .mon-anal-sm-btn{
   font-size:11px;
   padding:3px 8px !important;
   height:26px;
-}
-.mon-conclusion-ta{
-  flex:1;
-  resize:none;
-  border:1px solid var(--border);
-  border-radius:6px;
-  background:var(--bg);
-  padding:8px 10px;
-  margin:0 8px 8px;
-  font-size:13px;
-  line-height:1.6;
-  outline:none;
-  min-height:0;
-  box-sizing:border-box;
-  width:calc(100% - 16px);
-  transition:border-color .15s;
-}
-.mon-conclusion-ta:focus{
-  border-color:color-mix(in srgb,var(--accent) 60%,var(--border));
-  background:color-mix(in srgb,var(--accent) 3%,var(--bg));
 }
 
 /* 4. Send bar — green platform | dark chat | orange send */
@@ -4198,6 +4657,27 @@ button.secondary{
   flex-shrink:0;
   height:42px;
   border-top:1px solid var(--border);
+}
+
+/* Send-bar у модалці «Висновок»: вирівняна по ширині з textarea «Перехоплення»
+ * (8px відступи з боків як у .concl-ta-wrap), відокремлена 6px-пропуском
+ * (так само як між textarea-обгортками), із скругленими зовнішніми кутами.
+ * УВАГА: тут НЕ можна ставити overflow:hidden — інакше автокомпліт-дропдаун
+ * чату (position:absolute; bottom:100%) обрізається до невидимого. */
+.conclusion-left .mon-send-bar{
+  margin: 6px 8px 8px;
+  border-top: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: visible;
+}
+/* Скруглення зовнішніх кутів покладаємо на крайні кнопки замість
+ * overflow:hidden на самому контейнері. */
+.conclusion-left .mon-send-bar .mon-send-platform-btn{
+  border-radius: 7px 0 0 7px;
+}
+.conclusion-left .mon-send-bar .mon-send-submit-btn{
+  border-radius: 0 7px 7px 0;
 }
 
 /* Platform button (green) */
@@ -4291,54 +4771,201 @@ button.secondary{
 .mon-send-submit-btn:disabled{ opacity:.45; cursor:not-allowed; }
 .mon-send-submit-btn:not(:disabled):hover{ background:#d97706; }
 
-/* Templates modal */
-.mon-tmpl-cats{
+/* Templates modal — flat chip design */
+.mon-tmpl-card{ max-width:700px; }
+.mon-tmpl-body{
   display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-  margin-bottom:14px;
+  flex-direction:column;
+  gap:14px;
+  max-height:52vh;
+  overflow-y:auto;
+  padding:12px 16px;
 }
-.mon-tmpl-cat-btn{
-  padding:5px 12px;
-  border-radius:20px;
+.mon-tmpl-section{ display:flex; flex-direction:column; gap:6px; }
+.mon-tmpl-cat-header{ display:flex; align-items:center; gap:5px; }
+.mon-tmpl-cat-name{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  opacity:.6;
+}
+.mon-tmpl-close-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  padding:0;
   border:1px solid var(--border);
-  background:var(--bg);
+  border-radius:8px;
+  background:transparent;
+  color:var(--fg);
   cursor:pointer;
-  font-size:13px;
-  transition:background .12s,border-color .12s;
+  flex-shrink:0;
+  transition:background .12s, border-color .12s;
 }
-.mon-tmpl-cat-btn.active,
-.mon-tmpl-cat-btn:hover{
-  background:color-mix(in srgb,var(--accent) 15%,var(--bg));
+.mon-tmpl-close-btn:hover{
+  background:var(--bg-elevated);
+  border-color:color-mix(in srgb,var(--danger) 50%,var(--border));
+  color:var(--danger);
+}
+.mon-tmpl-add-chip-btn{
+  font-size:16px;
+  width:22px; height:22px;
+  padding:0 !important;
+  line-height:1;
+  border-radius:6px;
+  flex-shrink:0;
+}
+.mon-tmpl-del-cat-btn{
+  font-size:13px;
+  width:22px; height:22px;
+  padding:0 !important;
+  line-height:1;
+  border-radius:6px;
+  color:var(--danger);
+  border-color:color-mix(in srgb,var(--danger) 30%,var(--border));
+  flex-shrink:0;
+  opacity:.5;
+  transition:opacity .12s;
+}
+.mon-tmpl-del-cat-btn:hover{ opacity:1; }
+.mon-tmpl-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.mon-tmpl-chip{
+  padding:5px 14px;
+  border:1px solid var(--border);
+  border-radius:20px;
+  background:var(--card);
+  color:var(--fg);
+  font-size:13px;
+  cursor:pointer;
+  max-width:360px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  transition:background .12s, border-color .12s;
+}
+.mon-tmpl-chip:hover{
+  background:color-mix(in srgb,var(--accent) 12%,var(--card));
   border-color:var(--accent);
 }
-.mon-tmpl-texts{
+.mon-tmpl-no-items{ font-size:12px; opacity:.35; }
+.mon-tmpl-add-cat-btn{
+  font-size:12px;
+  font-weight:700;
+  color:var(--accent);
+  border-color:var(--accent);
+  border-radius:20px;
+  padding:5px 14px;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+/* Default template section */
+.mon-tmpl-default-section{
   display:flex;
   flex-direction:column;
   gap:6px;
 }
-.mon-tmpl-text-btn{
-  text-align:left;
-  padding:8px 12px;
-  border-radius:6px;
+.mon-tmpl-default-ta{
+  width:100%;
+  box-sizing:border-box;
+  min-height:100px;
+  resize:vertical;
   border:1px solid var(--border);
-  background:var(--card);
-  cursor:pointer;
+  border-radius:6px;
+  background:var(--bg);
+  padding:8px 10px;
   font-size:13px;
-  line-height:1.5;
-  transition:background .12s;
+  font-family:monospace;
+  color:var(--fg);
+  outline:none;
+  line-height:1.6;
+  transition:border-color .15s;
 }
-.mon-tmpl-text-btn:hover{
-  background:color-mix(in srgb,var(--accent) 10%,var(--card));
-  border-color:var(--accent);
+.mon-tmpl-default-ta:focus{
+  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
 }
-.mon-tmpl-edit-row{
+.mon-tmpl-divider{
+  border:none;
+  border-top:1px solid var(--border);
+  margin:4px 0;
+}
+
+.mon-tmpl-edit-panel{
+  border-top:1px solid var(--border);
+  padding:10px 16px 12px;
+}
+.mon-tmpl-edit-head{
   display:flex;
-  gap:6px;
   align-items:center;
-  margin-top:8px;
+  justify-content:space-between;
+  margin-bottom:8px;
 }
-.mon-tmpl-edit-row input{ flex:1; font-size:13px; }
+.mon-tmpl-autodetect{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  font-weight:600;
+  color:var(--fg);
+  cursor:pointer;
+  user-select:none;
+  white-space:nowrap;
+}
+.mon-tmpl-autodetect input{ accent-color:var(--accent); cursor:pointer; }
+.mon-tmpl-edit-kw{
+  width:100%;
+  box-sizing:border-box;
+  margin-top:8px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  padding:7px 10px;
+  font-size:12px;
+  color:var(--fg);
+  outline:none;
+  transition:border-color .15s;
+}
+.mon-tmpl-edit-kw:focus{
+  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+}
+.mon-tmpl-edit-name{
+  width:100%;
+  box-sizing:border-box;
+  margin-bottom:8px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  padding:7px 10px;
+  font-size:13px;
+  font-weight:600;
+  color:var(--fg);
+  outline:none;
+  transition:border-color .15s;
+}
+.mon-tmpl-edit-name:focus{
+  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+}
+.mon-tmpl-edit-ta{
+  width:100%;
+  box-sizing:border-box;
+  min-height:80px;
+  resize:vertical;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  padding:8px 10px;
+  font-size:13px;
+  font-family:inherit;
+  color:var(--fg);
+  outline:none;
+  transition:border-color .15s;
+}
+.mon-tmpl-edit-ta:focus{
+  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+}
 
 /* ── Middle column icon toolbar ── */
 .mon-middle-toolbar{
@@ -4393,6 +5020,15 @@ button.secondary{
   background:var(--card);
 }
 .mon-toolbar-btn--share:hover{ opacity:1; background:var(--bg); }
+
+/* Navigation icons (Search/View/Landmarks) — той самий вигляд, що Share */
+.mon-toolbar-btn--nav{
+  color:var(--fg);
+  opacity:.6;
+  border-color:var(--border);
+  background:var(--card);
+}
+.mon-toolbar-btn--nav:hover{ opacity:1; background:var(--bg); }
 
 /* Conclusion button — accent colour */
 .mon-toolbar-btn--conclusion{
@@ -4495,8 +5131,8 @@ button.secondary{
 
 /* Body text */
 .mon-detail-body{
-  font-size:14px;
-  line-height:1.75;
+  font-size:28px;          /* раніше 14 — збільшено вдвічі */
+  line-height:1.55;
 }
 .mon-body-line{ margin:2px 0; }
 .mon-body-line--speech{
@@ -4543,55 +5179,19 @@ button.secondary{
 
 /* .mon-analyse-btn defined above in detail panel section */
 
-/* ── Share modal rows ── */
+/* ── Share rows ── */
 .mon-share-rows{
   display:flex;
   flex-direction:column;
   gap:8px;
-  overflow:visible;  /* do not clip absolute dropdown */
+  overflow:visible;
 }
 .mon-share-row{
   display:flex;
   align-items:center;
-  gap:8px;
-  height:40px;
-}
-.mon-share-row .mon-send-platform-btn{
-  border-radius:6px;
-}
-.mon-share-input-wrap{
-  flex:1;
-  position:relative;
-  min-width:0;
-  height:100%;
-}
-.mon-share-chat-in{
-  width:100%;
-  height:100%;
-  padding:0 10px;
-  box-sizing:border-box;
-  border:1px solid var(--border);
-  border-radius:6px;
-  background:var(--bg);
-  font-size:13px;
-  color:var(--fg);
-  outline:none;
-}
-.mon-share-chat-in:focus{
-  border-color:color-mix(in srgb,var(--accent) 50%,var(--border));
-}
-.mon-share-drop{
-  position:absolute;
-  bottom:calc(100% + 4px);
-  left:0;
-  right:0;
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:8px;
-  max-height:180px;
-  overflow-y:auto;
-  z-index:60;
-  box-shadow:0 -4px 16px rgba(0,0,0,.2);
+  gap:10px;
+  height:42px;
+  position:relative;   /* щоб .mon-share-drop (абсолютний) позиціонувався відносно рядка */
 }
 .mon-share-chk{
   width:16px;
@@ -4599,6 +5199,118 @@ button.secondary{
   flex-shrink:0;
   cursor:pointer;
   accent-color:var(--accent);
+}
+/* Unified bar: [platform][input][del] as one element */
+.mon-share-bar{
+  flex:1;
+  display:flex;
+  align-items:stretch;
+  height:42px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  min-width:0;
+}
+.mon-share-platform-btn{
+  width:42px;
+  flex-shrink:0;
+  color:#fff;
+  font-size:15px;
+  font-weight:800;
+  border:none;
+  border-radius:9px 0 0 9px;
+  cursor:pointer;
+  transition:filter .12s;
+}
+.mon-share-platform-btn:hover{ filter:brightness(1.12); }
+.mon-share-middle{
+  flex:1;
+  position:relative;
+  min-width:0;
+}
+.mon-share-chat-in{
+  width:100%;
+  height:100%;
+  padding:0 10px;
+  box-sizing:border-box;
+  border:none;
+  border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+  border-radius:0;
+  background:color-mix(in srgb,var(--bg) 60%,var(--card));
+  font-size:13px;
+  color:var(--fg);
+  outline:none;
+}
+.mon-share-chat-in:focus{
+  background:color-mix(in srgb,var(--accent) 6%,var(--bg));
+  border-left-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+  border-right-color:color-mix(in srgb,var(--accent) 50%,var(--border));
+}
+.mon-share-chat-in::placeholder{ opacity:.45; }
+.mon-share-del-btn{
+  width:42px;
+  flex-shrink:0;
+  background:#dc2626;
+  color:#fff;
+  font-size:16px;
+  border:none;
+  border-radius:0 9px 9px 0;
+  cursor:pointer;
+  transition:filter .12s;
+}
+.mon-share-del-btn:hover{ filter:brightness(1.15); }
+.mon-share-drop{
+  position:absolute;
+  top:calc(100% + 2px);
+  /* Сусід .mon-share-bar; позиція відносно .mon-share-row.
+     Лівий відступ = чекбокс (≈18px) + gap. Підстраховуємо ширину «від чекбоксу до правого краю». */
+  left:30px;
+  right:0;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:8px;
+  max-height:180px;
+  overflow-y:auto;
+  z-index:360;
+  box-shadow:0 4px 16px rgba(0,0,0,.3);
+}
+
+/* ── Share popover panel ── */
+.mon-share-panel{
+  position:fixed;
+  z-index:300;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  width:340px;
+  box-shadow:0 8px 32px rgba(0,0,0,.35);
+}
+.mon-share-panel .mon-share-rows{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.mon-share-panel .mon-share-row{
+  height:40px;
+}
+.mon-share-err{
+  font-size:12px;
+  color:var(--danger, #f87171);
+  margin-top:8px;
+  padding:6px 8px;
+  background:color-mix(in srgb, var(--danger, #ef4444) 10%, var(--card));
+  border:1px solid color-mix(in srgb, var(--danger, #ef4444) 30%, var(--border));
+  border-radius:6px;
+}
+.mon-share-panel-foot{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid var(--border);
 }
 
 /* ── Tag icons in thumbnail ── */
@@ -4798,4 +5510,277 @@ button.secondary{
   opacity:.32;
   border:1px dashed var(--border);
   border-radius:6px;
+}
+
+/* ===== Палітри: висувна панель, список, діалог імпорту, збіги ===== */
+.concl-map-tool-btn--pal{ top:84px; }
+.pal-panel{
+  position:absolute; top:0; right:0; bottom:0; width:320px; max-width:80%;
+  background:var(--card,#fff); border-left:1px solid var(--border,#d0d5dd);
+  box-shadow:-6px 0 18px rgba(0,0,0,.12); z-index:1200;
+  display:flex; flex-direction:column; transform:translateX(0);
+  transition:transform .18s ease;
+}
+.pal-panel.hidden{ transform:translateX(105%); pointer-events:none; }
+.pal-panel-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 12px; border-bottom:1px solid var(--border,#e5e7eb); font-size:14px;
+}
+.pal-x{ background:none; border:none; cursor:pointer; color:var(--fg,#111);
+  padding:4px; border-radius:6px; display:inline-flex; opacity:.85; }
+.pal-x:hover{ background:rgba(127,127,127,.18); opacity:1; }
+.pal-section{ padding:10px 12px; border-bottom:1px solid var(--border,#3a3f47); }
+.pal-section--grow{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }
+.pal-section-title{ display:flex; align-items:center; justify-content:space-between;
+  font-size:12px; font-weight:700; color:#7aa7ff; margin-bottom:8px;
+  text-transform:uppercase; letter-spacing:.04em; }
+.pal-scope-row{ margin-bottom:8px; }
+.pal-select{ width:100%; padding:5px 8px; border:1px solid var(--border,#d0d5dd);
+  border-radius:6px; font-size:13px; background:#fff; color:#111; }
+.pal-select::placeholder{ color:#98a2b3; }
+.pal-check{ display:flex; align-items:center; gap:6px; font-size:12.5px;
+  color:var(--fg,#111); margin-top:5px; cursor:pointer; }
+.pal-btn{ border:1px solid var(--border,#d0d5dd); background:#fff; cursor:pointer;
+  font-size:12px; padding:4px 9px; border-radius:6px; color:#1f2937; }
+.pal-btn:hover{ background:#eef2f7; }
+.pal-btn--add{ background:#1e8e3e; border-color:#1e8e3e; color:#fff; }
+.pal-btn--add:hover{ background:#187233; }
+.pal-btn--danger{ color:#d92d20; border-color:#f0b4ad; }
+.pal-btn--danger:hover{ background:#fef3f2; }
+.pal-list{ flex:1 1 auto; overflow-y:auto; min-height:0; display:flex;
+  flex-direction:column; gap:7px; }
+.pal-empty{ color:var(--muted,#98a2b3); font-size:12.5px; padding:8px 2px; }
+.pal-item{ border:1px solid var(--border,#e5e7eb); border-radius:8px; padding:8px 9px;
+  display:flex; flex-direction:column; gap:5px; }
+.pal-item.is-archived{ opacity:.6; }
+.pal-item-top{ display:flex; align-items:center; gap:7px; }
+.pal-item-check{ flex:0 0 auto; }
+.pal-item-name{ flex:1 1 auto; font-size:13px; font-weight:600; line-height:1.2;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pal-item-meta{ font-size:11px; color:var(--muted,#888); display:flex;
+  flex-wrap:wrap; gap:8px; }
+.pal-item-units{ display:flex; flex-wrap:wrap; gap:4px; }
+.pal-unit-chip{ font-size:10.5px; background:#eef2ff; color:#3538cd;
+  border-radius:10px; padding:1px 7px; }
+.pal-item-actions{ display:flex; gap:6px; }
+.pal-stale{ color:#b54708; }
+/* Список збігів пошуку точки над картою */
+.pal-match-list{ position:absolute; top:8px; left:8px; z-index:1100;
+  background:var(--card,#fff); border:1px solid var(--border,#d0d5dd);
+  border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.16);
+  max-height:46%; overflow-y:auto; min-width:190px; max-width:60%; padding:5px; }
+.pal-match-row{ display:flex; align-items:center; gap:8px; padding:4px 7px;
+  font-size:12.5px; cursor:pointer; border-radius:5px; }
+.pal-match-row:hover{ background:rgba(0,0,0,.05); }
+.pal-match-dot{ width:10px; height:10px; border-radius:50%; flex:0 0 auto;
+  border:1px solid rgba(0,0,0,.25); }
+.pal-match-code{ font-weight:600; }
+.pal-match-pal{ color:var(--muted,#888); font-size:11px; margin-left:auto; }
+/* Діалог імпорту */
+.pal-dialog{ position:absolute; inset:0; z-index:1300; display:flex;
+  align-items:center; justify-content:center; background:rgba(0,0,0,.35); }
+.pal-dialog-card{ background:var(--card,#fff); border-radius:10px; width:86%;
+  max-width:420px; max-height:88%; display:flex; flex-direction:column;
+  box-shadow:0 10px 30px rgba(0,0,0,.25); }
+.pal-dialog-head{ display:flex; align-items:center; justify-content:space-between;
+  padding:11px 14px; border-bottom:1px solid var(--border,#eee); }
+.pal-dialog-body{ padding:12px 14px; overflow-y:auto; font-size:13px; }
+.pal-dialog-foot{ padding:10px 14px; border-top:1px solid var(--border,#eee);
+  display:flex; justify-content:flex-end; gap:8px; }
+.pal-region-prev{ display:flex; align-items:center; gap:7px; padding:3px 0; font-size:12.5px; }
+.pal-dup-warn{ background:#fffaeb; border:1px solid #fec84b; border-radius:7px;
+  padding:8px 10px; margin:8px 0; font-size:12.5px; color:#93370d; }
+.pal-dup-warn label{ display:flex; align-items:center; gap:6px; margin-top:5px; }
+.pal-region-label{ /* divIcon підпис області на карті */
+  font-size:11px; font-weight:700; color:#111; text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;
+  white-space:nowrap; pointer-events:none; text-align:center; }
+
+/* Маркер-варіант палітрового пошуку + підпис коду */
+.pal-variant-dot{ width:14px; height:14px; border-radius:50%;
+  border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.5); cursor:pointer; }
+.pal-variant-tip.leaflet-tooltip{ background:rgba(17,17,17,.82); color:#fff;
+  border:none; border-radius:4px; padding:1px 6px; font-size:11px; font-weight:700;
+  box-shadow:0 1px 4px rgba(0,0,0,.4); }
+.pal-variant-tip.leaflet-tooltip-top::before{ border-top-color:rgba(17,17,17,.82); }
+
+/* ── Landmark modal: map editor overlay buttons ── */
+.lm-modal-map-wrap{ position:relative; }
+.lm-modal-map-addbtn{
+  position:absolute; top:8px; right:8px; z-index:500;
+  width:32px; height:32px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--card,#222); color:var(--fg,#fff);
+  border:1px solid var(--border,#3a3f47); border-radius:6px;
+  cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.4);
+}
+.lm-modal-map-addbtn:hover{ background:color-mix(in srgb,var(--accent,#3b82f6) 18%,var(--card,#222)); }
+.lm-modal-map-addbtn.is-active{ background:var(--accent,#3b82f6); color:#fff; border-color:var(--accent,#3b82f6); }
+.lm-modal-map-clearbtn{ top:46px; }
+.lm-anchor{
+  width:14px; height:14px; border-radius:50%;
+  background:#fbbf24; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.5);
+  cursor:move;
+}
+.lm-anchor--mid{ background:#fff; border:2px solid #fbbf24; opacity:.75; }
+.landmark-modal-map.is-drawing{ cursor:crosshair; }
+
+/* ── Landmark types: inline-керування біля селекта «Тип» ── */
+.lm-type-manage-btn{
+  background:none; border:none; cursor:pointer;
+  padding:2px 4px; border-radius:4px;
+  color:var(--muted,#888); opacity:.7;
+  display:inline-flex; align-items:center;
+}
+.lm-type-manage-btn:hover{ opacity:1; background:rgba(127,127,127,.15); color:var(--fg,#fff); }
+.lm-type-manage-panel{
+  position:absolute; top:100%; left:0; right:0; z-index:50;
+  margin-top:4px;
+  background:var(--card,#222); border:1px solid var(--border,#3a3f47); border-radius:8px;
+  padding:8px; box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+.lm-type-manage-add{ display:flex; gap:6px; margin-bottom:6px; }
+.lm-type-manage-add input{
+  flex:1; padding:5px 8px; font-size:13px;
+  background:#fff; color:#111;
+  border:1px solid var(--border,#d0d5dd); border-radius:6px;
+}
+.lm-type-manage-add input::placeholder{ color:#98a2b3; }
+.lm-type-manage-add-btn{
+  width:30px; padding:0; background:#1e8e3e; color:#fff;
+  border:1px solid #1e8e3e; border-radius:6px; cursor:pointer;
+  font-size:16px; font-weight:700;
+}
+.lm-type-manage-add-btn:hover{ background:#187233; }
+.lm-type-manage-list{ display:flex; flex-direction:column; gap:3px; max-height:180px; overflow-y:auto; }
+.lm-type-manage-row{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:4px 6px; border-radius:5px; font-size:13px;
+  background:rgba(127,127,127,.08);
+}
+.lm-type-manage-row span.is-system{ opacity:.55; font-style:italic; }
+.lm-type-manage-row-meta{ font-size:11px; color:var(--muted,#888); margin-left:8px; }
+.lm-type-manage-del-btn{
+  background:none; border:none; color:#f87171; cursor:pointer;
+  font-size:14px; padding:2px 6px; border-radius:4px;
+}
+.lm-type-manage-del-btn:hover{ background:rgba(248,113,113,.18); }
+.lm-type-manage-del-btn:disabled{ opacity:.3; cursor:not-allowed; background:none; }
+.lm-type-manage-err{ color:#f87171; margin-top:4px; }
+
+/* ── Dictionary side panel (off-canvas, slides from the right) ─────── */
+.dict-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  max-width: 96vw;
+  height: 100vh;
+  background: var(--card);
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 18px rgba(0,0,0,.35);
+  z-index: 9000;
+  transform: translateX(100%);
+  transition: transform .22s ease;
+  display: flex;
+  flex-direction: column;
+}
+.dict-panel.open { transform: translateX(0); }
+.dict-panel__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.dict-panel__title { font-weight: 700; font-size: 15px; }
+.dict-panel__close { padding: 4px 10px; font-size: 14px; }
+.dict-panel__body { padding: 12px 14px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+
+.dict-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.dict-scope-row { margin-top: 4px; }
+.dict-input {
+  flex: 1 1 auto; min-width: 0;
+  padding: 7px 10px; font-size: 14px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--input-bg); color: var(--text);
+}
+.dict-icon-btn {
+  flex: 0 0 auto;
+  padding: 6px 10px; font-size: 15px; line-height: 1;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card); color: var(--text); cursor: pointer;
+}
+.dict-icon-btn:hover { background: var(--hover, rgba(255,255,255,.05)); }
+.dict-icon-btn--accent { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+
+.dict-check-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; margin: 6px 0 10px; cursor: pointer;
+}
+
+.dict-ac-wrap { position: relative; flex: 1 1 auto; min-width: 0; }
+.dict-ac-drop {
+  position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+  max-height: 240px; overflow-y: auto;
+  z-index: 30; box-shadow: 0 4px 12px rgba(0,0,0,.25);
+}
+.dict-ac-drop.hidden { display: none; }
+.dict-ac-item { padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.dict-ac-item:last-child { border-bottom: 0; }
+.dict-ac-item:hover { background: var(--hover, rgba(255,255,255,.06)); }
+.dict-ac-item__primary { font-weight: 600; }
+.dict-ac-item__sub { margin-top: 1px; }
+
+.dict-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.dict-list__empty { padding: 10px 4px; }
+.dict-item {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; background: var(--input-bg, var(--card));
+}
+.dict-item__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 4px;
+}
+.dict-item__term { font-weight: 700; font-size: 15px; }
+.dict-item__edit { padding: 2px 8px; font-size: 13px; line-height: 1.3; }
+.dict-item__def { font-size: 14px; line-height: 1.45; opacity: .92; white-space: pre-wrap; }
+.dict-item__meta { margin-top: 6px; }
+
+/* Edit modal card — same z-index family as .it-modal so it sits on top */
+#dictEditModal { z-index: 10500; }
+.dict-edit-card { max-width: 540px; width: 95vw; }
+
+/* ── Палітри: редагування кольорів регіонів ─────────────────────────── */
+.pal-edit-list { display: flex; flex-direction: column; gap: 8px; }
+.pal-edit-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 8px;
+  background: var(--input-bg, rgba(255,255,255,.03));
+}
+.pal-edit-color {
+  width: 36px; height: 36px; flex: 0 0 auto;
+  padding: 0; border: 1px solid var(--border); border-radius: 6px;
+  background: transparent; cursor: pointer;
+}
+.pal-edit-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.pal-edit-color::-webkit-color-swatch { border: none; border-radius: 4px; }
+.pal-edit-label { display: flex; flex-direction: column; min-width: 0; }
+.pal-edit-label-main { font-weight: 600; font-size: 14px; }
+.pal-edit-label-meta { font-size: 11px; opacity: .55; margin-top: 2px; }
+
+/* ── Peleng: кольорові кола з номером підрозділу (режим «Підрозділ») ── */
+.pel-unit-icon { background: transparent !important; border: 0 !important; }
+.pel-unit-circle {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.25);
+  text-shadow: 0 1px 2px rgba(0,0,0,.65);
+  white-space: nowrap;
 }

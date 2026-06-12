@@ -122,7 +122,17 @@
     });
   }
 
-  setupNetworkFreqLookup(document.getElementById("netSearchQuery"));
+  // Networks page: коли користувач обирає р/м з випадаючого автокомпліту,
+  // навігуємо одразу на /networks?pick={id} — це не сабмітить форму
+  // /networks/search (через яку могла б повертатись 0/багато збігів, без
+  // авто-відкриття модалки) і гарантує, що модалка "Картка р/м" відкриється
+  // саме з обраною мережею.
+  setupNetworkFreqLookup(
+    document.getElementById("netSearchQuery"),
+    function (it) {
+      if (it && it.id) window.location.href = "/networks?pick=" + encodeURIComponent(it.id);
+    }
+  );
   setupNetworkFreqLookup(document.getElementById("etalonsFreqQuery"));
 
   // Intercepts explorer — dispatch JS submit event (not form.submit which bypasses listeners)

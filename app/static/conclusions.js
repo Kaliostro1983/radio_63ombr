@@ -15,6 +15,28 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
   function toast(msg, type) { if (window.appToast) window.appToast(msg, type); }
+
+  /** Fill empty numbered rows ("1.", "2.", …) with MGRS points in document order.
+   *  Used when building the Delta post text so an analytical conclusion's route
+   *  numbering shows the actual coordinates instead of bare digits. */
+  function _fillRoutePoints(text, mgrsList) {
+    if (!text || !mgrsList || !mgrsList.length) return text;
+    const points = mgrsList
+      .map((m) => String(m || "").replace(/\s+/g, ""))
+      .filter(Boolean);
+    if (!points.length) return text;
+    const re = /^(\s*\d+\.)\s*$/;
+    const lines = text.split("\n");
+    let idx = 0;
+    for (let i = 0; i < lines.length && idx < points.length; i++) {
+      const m = lines[i].match(re);
+      if (m) {
+        lines[i] = `${m[1]} ${points[idx]}`;
+        idx++;
+      }
+    }
+    return lines.join("\n");
+  }
   function pad2(n) { return String(n).padStart(2, "0"); }
   function localDatetimeString(d) {
     return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}` +
@@ -71,10 +93,18 @@
   }
 
   /* ──────────────────────────────────────────────
-   *  TAB SWITCHING
+   *  TAB / MODAL SWITCHING
+   *  Налаштування винесено в модалку; Перегляд — основний контент.
    * ────────────────────────────────────────────── */
   const tabBtns = document.querySelectorAll(".tab-btn[data-tab]");
   const tabPanels = { view: $("cnPaneView"), settings: $("cnPaneSettings"), quick: $("cnPaneQuick") };
+
+  function _setSettingsModal(open) {
+    const m = $("cnModalSettings");
+    if (!m) return;
+    m.classList.toggle("hidden", !open);
+    m.setAttribute("aria-hidden", open ? "false" : "true");
+  }
 
   function activateTab(name) {
     tabBtns.forEach((btn) => {
@@ -82,17 +112,47 @@
       btn.classList.toggle("active", active);
       btn.setAttribute("aria-selected", active ? "true" : "false");
     });
+
+    if (name === "settings") {
+      _setSettingsModal(true);
+      if (!state.settings.loaded) loadTypes();
+      return;
+    }
+
+    if (name === "view") {
+      _setSettingsModal(false);
+      if (!state.view.loaded) {
+        loadNetworksForFilter();
+        loadTypesForFilter();
+      }
+      return;
+    }
+
+    // "quick" та інші (тільки в embed) — оригінальна логіка
     Object.entries(tabPanels).forEach(([k, el]) => {
       if (el) el.classList.toggle("hidden", k !== name);
     });
-    if (name === "view" && !state.view.loaded) {
-      loadNetworksForFilter();
-      loadTypesForFilter();
-    }
-    if (name === "settings" && !state.settings.loaded) loadTypes();
   }
 
   tabBtns.forEach((btn) => btn.addEventListener("click", () => activateTab(btn.dataset.tab)));
+
+  // Header button → відкриває модалку Налаштування
+  const cnOpenSettingsBtn = $("cnOpenSettings");
+  if (cnOpenSettingsBtn) {
+    cnOpenSettingsBtn.addEventListener("click", () => activateTab("settings"));
+  }
+
+  // Закриття модалки Налаштування: X / backdrop
+  document.querySelectorAll('[data-cn-modal-close="settings"]').forEach((el) => {
+    el.addEventListener("click", () => _setSettingsModal(false));
+  });
+  // Esc закриває модалку Налаштування (Delta modal має свій окремий Esc-handler нижче)
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const m = $("cnModalSettings");
+      if (m && !m.classList.contains("hidden")) _setSettingsModal(false);
+    }
+  });
 
   /* ──────────────────────────────────────────────
    *  ПЕРЕГЛЯД — DOM refs
@@ -373,11 +433,11 @@
     }
     if (cdmSendBtn) cdmSendBtn.disabled = !hasIcon;
 
-    // Ідентифікація
+    // Ідентифікація — лише два канонічні значення.
+    // Будь-яке legacy ('Невизначений', 'Невідомий', порожнє…) трактуємо як «Дружній»,
+    // окрім явного «Ворожий» (відповідає чекбоксу в Налаштуваннях).
     const cdmIdent = $("cdmIdent");
-    // Map legacy "Невизначений" → "Дружній"; default to "Ворожий"
-    const _rawIdent = typeObj.delta_identification || "Ворожий";
-    if (cdmIdent) cdmIdent.value = (_rawIdent === "Невизначений" ? "Дружній" : _rawIdent);
+    if (cdmIdent) cdmIdent.value = (typeObj.delta_identification === "Ворожий") ? "Ворожий" : "Дружній";
 
     // Джерело
     const cdmSource = $("cdmSource");
@@ -458,7 +518,10 @@
     if (radius)  lines.push(`Радіус дії: ${radius}`);
     if (mgrs)    lines.push(`MGRS: ${mgrs}`);
 
-    const conclusion = (_deltaModalRow.conclusion_text || "").trim();
+    const conclusion = _fillRoutePoints(
+      (_deltaModalRow.conclusion_text || "").trim(),
+      _deltaModalRow.mgrs || [],
+    );
     const body       = (_deltaModalRow.body_text       || "").trim();
 
     // ── Intercept header (шапка перехоплення) ──────────────────────────────
@@ -1750,11 +1813,22 @@
 
   /* ──────────────────────────────────────────────
    *  INITIAL
+   *  Перегляд — головний контент і одразу завантажується ("ніби клацнули Показати").
+   *  Налаштування — відкривається в модалці за кліком "Налаштування" в шапці.
+   *  ?tab=settings у URL — відкриваємо модалку одразу при заході.
+   *  embed-режим (cnPaneQuick присутній) — нічого не авто-завантажуємо.
    * ────────────────────────────────────────────── */
-  const activeBtn  = document.querySelector(".tab-btn[data-tab].active");
-  const initialTab = activeBtn ? activeBtn.dataset.tab : "view";
+  const isEmbedMode = !!$("cnPaneQuick");
+  const urlTab = new URLSearchParams(location.search).get("tab");
 
-  if (initialTab === "view") { loadNetworksForFilter(); loadTypesForFilter(); }
-  else if (initialTab === "settings") loadTypes();
+  if (isEmbedMode) {
+    // У embed (iframe /conclusions?tab=quick&embed=1) — quick_conclusions.js
+    // самостійно піклується про свою ініціалізацію.
+  } else {
+    loadNetworksForFilter();
+    loadTypesForFilter();
+    loadConclusions();
+    if (urlTab === "settings") activateTab("settings");
+  }
 
 })();

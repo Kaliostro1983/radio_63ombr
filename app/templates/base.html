@@ -15,9 +15,9 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=46"/>
+  <link rel="stylesheet" href="/static/app.css?v=104"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=2" defer></script>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -269,6 +269,10 @@
                 <input id="lmEditIsActive" type="checkbox" checked />
                 <span>Активний</span>
               </label>
+              <label class="small lm-active-label" style="cursor:pointer; white-space:nowrap">
+                <input id="lmEditIsPermanent" type="checkbox" checked />
+                <span>Постійний</span>
+              </label>
             </div>
           </div>
 
@@ -277,9 +281,24 @@
               <label for="lmEditGeomId">Тип геометрії</label>
               <select id="lmEditGeomId"></select>
             </div>
-            <div class="field">
-              <label for="lmEditTypeId">Тип</label>
+            <div class="field lm-type-field" style="position:relative">
+              <label for="lmEditTypeId" style="display:flex; align-items:center; justify-content:space-between">
+                <span>Тип</span>
+                <button type="button" id="lmTypeManageBtn" class="lm-type-manage-btn" title="Керувати типами">
+                  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+                  </svg>
+                </button>
+              </label>
               <select id="lmEditTypeId"></select>
+              <div id="lmTypeManagePanel" class="lm-type-manage-panel hidden">
+                <div class="lm-type-manage-add">
+                  <input id="lmTypeManageName" type="text" placeholder="Назва нового типу…" autocomplete="off" maxlength="80">
+                  <button type="button" id="lmTypeManageAddBtn" class="lm-type-manage-add-btn" title="Додати">+</button>
+                </div>
+                <div id="lmTypeManageList" class="lm-type-manage-list"></div>
+                <div id="lmTypeManageErr" class="small lm-type-manage-err" style="display:none"></div>
+              </div>
             </div>
           </div>
 
@@ -301,13 +320,10 @@
           </div>
 
           <div class="field hidden" id="lmEditWktWrap">
-            <label for="lmEditLocationWkt">Геометрія (WKT)</label>
-            <div class="lm-coord-input-row lm-coord-input-row--wkt">
-              <textarea id="lmEditLocationWkt" rows="2" class="lm-modal-textarea"></textarea>
-              <button type="button" id="lmEditCopyWkt" class="secondary lm-coord-copy-btn" aria-label="Копіювати геометрію WKT">
-                Копіювати
-              </button>
-            </div>
+            <p class="small lm-modal-wkt-hint" style="opacity:.7">
+              Для «Зони» / «Кривої» додавайте точки в графічному редакторі на карті: натисніть «+», далі клікайте по карті. Якори можна перетягувати; Ctrl+клік — видалити вершину.
+            </p>
+            <textarea id="lmEditLocationWkt" rows="2" class="lm-modal-textarea hidden"></textarea>
           </div>
 
           <div class="field">
@@ -318,8 +334,20 @@
 
         <div class="lm-modal-map-col">
           <label>Мапа</label>
-          <div id="lmEditMap" class="landmark-modal-map"></div>
-          <p class="small lm-modal-map-hint">Перегляд геометрії (WGS84). Для «точки» введіть MGRS зліва.</p>
+          <div class="lm-modal-map-wrap">
+            <div id="lmEditMap" class="landmark-modal-map"></div>
+            <button type="button" id="lmEditMapAddBtn" class="lm-modal-map-addbtn hidden" title="Додати вершину">
+              <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/>
+              </svg>
+            </button>
+            <button type="button" id="lmEditMapClearBtn" class="lm-modal-map-addbtn lm-modal-map-clearbtn hidden" title="Очистити геометрію">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/>
+              </svg>
+            </button>
+          </div>
+          <p class="small lm-modal-map-hint" id="lmEditMapHint">Перегляд геометрії (WGS84). Для «точки» введіть MGRS зліва.</p>
         </div>
       </div>
 
@@ -340,7 +368,8 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
-<script src="/static/callsign_modal.js?v=10" defer></script>
+<script src="https://unpkg.com/proj4@2.11.0/dist/proj4.js" defer></script>
+<script src="/static/callsign_modal.js?v=13" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -2,61 +2,39 @@
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <h1>Позивні</h1>
-    <div class="small">Редагування — тільки через модальне вікно.</div>
+  <div class="page-header callsigns-page-header">
+    <div class="callsigns-page-header__title">
+      <h1>Позивні</h1>
+      <div class="small">Граф зв'язків позивних. Редагування — тільки через модалки.</div>
+    </div>
+    <div class="callsigns-page-actions">
+      <button id="csOpenFreq"   type="button" class="secondary">Позивні р/м</button>
+      <button id="csOpenSearch" type="button" class="secondary">Пошук/правка</button>
+      <button id="csOpenWanted" type="button" class="secondary">Розшук</button>
+    </div>
   </div>
 
-  <section class="tabs-shell callsigns-tabs-shell">
-    <div class="tabs-nav callsigns-tabs-nav" role="tablist" aria-label="Режими сторінки Позивні">
-      <button
-        id="csTabFreq"
-        type="button"
-        class="tab-btn active"
-        role="tab"
-        aria-selected="true"
-        aria-controls="csPaneFreq"
-      >
-        Позивні р/м
-      </button>
+  <!-- Legacy tab buttons (приховані) — лишаємо для зворотньої сумісності
+       з existing setTab-логікою та для URL ?tab=X. -->
+  <div class="callsigns-legacy-tabs" hidden aria-hidden="true">
+    <button id="csTabFreq"   type="button"></button>
+    <button id="csTabSearch" type="button"></button>
+    <button id="csTabLinks"  type="button"></button>
+    <button id="csTabWanted" type="button"></button>
+  </div>
 
-      <button
-        id="csTabSearch"
-        type="button"
-        class="tab-btn"
-        role="tab"
-        aria-selected="false"
-        aria-controls="csPaneSearch"
-      >
-        Пошук/правка
-      </button>
-
-      <button
-        id="csTabLinks"
-        type="button"
-        class="tab-btn"
-        role="tab"
-        aria-selected="false"
-        aria-controls="csPaneLinks"
-      >
-        Зв'язки
-      </button>
-
-      <button
-        id="csTabWanted"
-        type="button"
-        class="tab-btn"
-        role="tab"
-        aria-selected="false"
-        aria-controls="csPaneWanted"
-      >
-        Розшук
-      </button>
-    </div>
-
+  <section class="callsigns-shell">
     <div class="tab-panel-wrap">
-      <!-- TAB: by frequency -->
-      <section id="csPaneFreq" class="tab-panel callsigns-tab-panel" role="tabpanel" aria-labelledby="csTabFreq">
+      <!-- ── Modal: Позивні р/м (by frequency) ─────────────────── -->
+      <div id="csModalFreq" class="modal hidden callsigns-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-cs-modal-close="freq"></div>
+      <div class="modal-card callsigns-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Позивні р/м</div>
+          <button type="button" class="secondary" data-cs-modal-close="freq" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body callsigns-modal-body">
+      <section id="csPaneFreq" role="region" aria-label="Позивні р/м">
         <div class="tab-panel-section callsigns-toolbar">
           <div class="row callsigns-form-row">
             <div class="callsigns-field callsigns-field-frequency">
@@ -102,13 +80,23 @@
           </div>
         </div>
       </section>
+        </div><!-- /callsigns-modal-body -->
+      </div><!-- /callsigns-modal-card -->
+      </div><!-- /csModalFreq -->
 
-      <!-- TAB: search/edit -->
+      <!-- ── Modal: Пошук/правка ───────────────────────────────── -->
+      <div id="csModalSearch" class="modal hidden callsigns-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-cs-modal-close="search"></div>
+      <div class="modal-card callsigns-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Пошук / правка</div>
+          <button type="button" class="secondary" data-cs-modal-close="search" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body callsigns-modal-body">
       <section
         id="csPaneSearch"
-        class="tab-panel callsigns-tab-panel hidden"
-        role="tabpanel"
-        aria-labelledby="csTabSearch"
+        role="region"
+        aria-label="Пошук / правка"
       >
         <div class="tab-panel-section callsigns-toolbar">
           <div class="row callsigns-form-row">
@@ -149,13 +137,15 @@
           </div>
         </div>
       </section>
+        </div><!-- /callsigns-modal-body -->
+      </div><!-- /callsigns-modal-card -->
+      </div><!-- /csModalSearch -->
 
-      <!-- TAB: links graph -->
+      <!-- ── Зв'язки (основний контент сторінки) ───────────────── -->
       <section
         id="csPaneLinks"
-        class="tab-panel callsigns-tab-panel hidden"
-        role="tabpanel"
-        aria-labelledby="csTabLinks"
+        role="region"
+        aria-label="Зв'язки"
       >
         <div class="tab-panel-section callsigns-toolbar">
           <div class="row callsigns-form-row">
@@ -200,12 +190,20 @@
           <div id="csLinkGraphOut" class="net-graph-out"></div>
         </div>
       </section>
-      <!-- TAB: wanted (callsigns without status) -->
+
+      <!-- ── Modal: Розшук ─────────────────────────────────────── -->
+      <div id="csModalWanted" class="modal hidden callsigns-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-cs-modal-close="wanted"></div>
+      <div class="modal-card callsigns-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Розшук</div>
+          <button type="button" class="secondary" data-cs-modal-close="wanted" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body callsigns-modal-body">
       <section
         id="csPaneWanted"
-        class="tab-panel callsigns-tab-panel hidden"
-        role="tabpanel"
-        aria-labelledby="csTabWanted"
+        role="region"
+        aria-label="Розшук"
       >
         <div class="tab-panel-section callsigns-toolbar">
           <div class="row callsigns-form-row">
@@ -259,10 +257,78 @@
           </div>
         </div>
       </section>
-    </div>
+        </div><!-- /callsigns-modal-body -->
+      </div><!-- /callsigns-modal-card -->
+      </div><!-- /csModalWanted -->
+
+      <!-- ── Modal: Перехоплення (iframe → /intercepts-explorer?embed=1) ─── -->
+      <!-- Викликається з модалки позивного (#csModal → кнопка "Перехоплення"). -->
+      <div id="csModalIntercepts" class="modal hidden cs-iframe-modal" aria-hidden="true">
+        <div class="modal-backdrop" data-cs-modal-close="intercepts"></div>
+        <div class="modal-card cs-iframe-modal-card" role="dialog" aria-modal="true" aria-labelledby="csModalInterceptsTitle">
+          <div class="modal-head">
+            <div id="csModalInterceptsTitle" class="modal-title">Перехоплення</div>
+            <button type="button" class="secondary" data-cs-modal-close="intercepts" style="padding:4px 10px">✕</button>
+          </div>
+          <div class="modal-body" style="padding:0">
+            <iframe id="csModalInterceptsFrame" src="about:blank" title="Перехоплення"
+                    style="width:100%; height:82vh; border:0; display:block; background:var(--bg)"></iframe>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab-panel-wrap -->
   </section>
 </div>
 
-<script src="/static/callsigns.js?v=8" defer></script>
-<script src="/static/networks_autocomplete.js?v=3" defer></script>
+<style>
+/* Header style like Home */
+.callsigns-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.callsigns-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Modal cards — широкі та scrollable */
+.callsigns-modal-card {
+  width: 95vw;
+  max-width: 1180px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.callsigns-modal-body {
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+.callsigns-modal-body > section { min-width: 0; }
+
+/* Iframe-модалка Перехоплень (csModalIntercepts) — широка картка без padding,
+ * висота розрахована на iframe ~82vh. */
+.cs-iframe-modal-card {
+  width: 95vw;
+  max-width: 1320px;
+  max-height: 96vh;
+  display: flex;
+  flex-direction: column;
+}
+.cs-iframe-modal .modal-body { padding: 0; overflow: hidden; }
+
+/* Модалка #csModal на /callsigns відкривається з #csModalSearch (z-index 50);
+ * щоб csModal не ховалась за csModalSearch, бампаємо її z-index. */
+#csModal { z-index: 200; }
+/* csModalIntercepts відкривається з #csModal — піднімаємо ще вище. */
+#csModalIntercepts { z-index: 300; }
+</style>
+
+<script src="/static/callsigns.js?v=10" defer></script>
+<script src="/static/networks_autocomplete.js?v=4" defer></script>
 {% endblock %}

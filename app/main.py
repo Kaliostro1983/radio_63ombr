@@ -43,10 +43,12 @@ from app.routers.landmarks import router as landmarks_router
 from app.routers.ingest import router as ingest_router
 from app.routers.import_export import router as import_export_router
 from app.routers.conclusions import router as conclusions_router
+from app.routers.dictionary import router as dictionary_router
 from app.routers.push import router as push_router
 from app.routers.casualties import router as casualties_router
 from app.routers.faq import router as faq_router
 from app.routers.overview import router as overview_router
+from app.routers.palettes import router as palettes_router
 from app.services.landmark_match_service import start_landmark_match_worker
 
 from fastapi.templating import Jinja2Templates
@@ -97,9 +99,11 @@ def create_app() -> FastAPI:
     app.include_router(reports_router)
     app.include_router(landmarks_router)
     app.include_router(conclusions_router)
+    app.include_router(dictionary_router)
     app.include_router(push_router)
     app.include_router(casualties_router)
     app.include_router(overview_router)
+    app.include_router(palettes_router)
     app.include_router(faq_router)
 
 

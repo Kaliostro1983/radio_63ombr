@@ -71,6 +71,36 @@
     const ss = String(now.getSeconds()).padStart(2, "0");
     el.textContent = `Оновлено ${hh}:${mm}:${ss}`;
   };
+
+  /**
+   * Шар 3: повідомити сервер про передранній фейл, поки помилка ще
+   * відома (toast зникає, console чистимо — без цього сліду не буде).
+   * Викликати в catch перед toast'ом.  Best-effort (fire-and-forget).
+   *
+   *   reportClientError({
+   *     action:   "send"|"screenshot"|"fetch_chats"|...,
+   *     category: "network"|"timeout"|"screenshot_failed"|"permission"|"unknown",
+   *     detail:   <error.message>,
+   *     extra:    { platform, chat_id, image_size, ... }
+   *   })
+   */
+  window.reportClientError = function(opts){
+    try {
+      const p = opts || {};
+      fetch("/api/client-errors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          page:       location.pathname,
+          action:     String(p.action || ""),
+          category:   String(p.category || "unknown"),
+          detail:     String(p.detail || ""),
+          extra:      p.extra || {},
+          user_agent: navigator.userAgent,
+        }),
+      }).catch(() => {});
+    } catch(_){}
+  };
 })();
 
 function makeAllExclusive(selectEl) {

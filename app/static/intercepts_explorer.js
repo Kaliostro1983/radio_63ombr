@@ -376,6 +376,13 @@
               data-message-id="${detail.id}"
               placeholder="Позивний + Enter"
               autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
             >
           </div>
           <div class="compact-role-chips">
@@ -726,7 +733,9 @@
       }
 
       closeAutocomplete();
+      state._lastRole = role;
       renderList();
+      _refreshMountedCard(messageId);
       focusCallsignInput(messageId, role);
     } catch (error) {
       console.error(error);
@@ -770,7 +779,9 @@
         state.detailById[messageId].callsigns = data.callsigns || [];
       }
 
+      state._lastRole = role;
       renderList();
+      _refreshMountedCard(messageId);
       focusCallsignInput(messageId, role);
     } catch (error) {
       console.error(error);
@@ -871,6 +882,13 @@
               data-message-id="${messageId}"
               placeholder="${items.length ? "" : "Позивний + Enter"}"
               autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
             >
           </div>
         </div>
@@ -1004,16 +1022,16 @@
   }
 
   function updateCallsignIconInCard(messageId, callsignId, statusId) {
-    const editor = mainCard.querySelector(
-      ".intercepts-inline-editor[data-message-id=\"" + messageId + "\"]"
-    );
-    if (!editor) return;
-    const chip = editor.querySelector(".callsign-chip[data-id=\"" + callsignId + "\"]");
-    if (!chip) return;
-    const icon = chip.querySelector(".callsign-chip__icon");
-    if (!icon) return;
+    // Картка може бути одночасно і в mainCard (Перегляд), і у замонтованих
+    // _mountedCards (Моніторинг). Шукаємо ВСІ збіги по селектору,
+    // інакше іконка оновиться лише на одній з них.
     const sid = (statusId != null && statusId !== "") ? statusId : "_default";
-    icon.src = "/static/icons/callsign_statuses/" + sid + ".svg";
+    const selector =
+      '.intercepts-inline-editor[data-message-id="' + messageId + '"] ' +
+      '.callsign-chip[data-id="' + callsignId + '"] .callsign-chip__icon';
+    document.querySelectorAll(selector).forEach((icon) => {
+      icon.src = "/static/icons/callsign_statuses/" + sid + ".svg";
+    });
   }
 
   function onCallsignModalSaved(ev) {
@@ -1047,21 +1065,47 @@
   function focusCallsignInput(messageId, role) {
     // `renderList()` re-creates inline editors and inputs, which makes the
     // browser drop focus. Restore focus to the input after re-render.
-    requestAnimationFrame(function () {
+    // На Моніторингу картка змонтована в окремому контейнері, але інпут з
+    // .callsign-input може існувати ОДНОЧАСНО в mainCard (Перегляд) і у
+    // mounted-картці. Беремо querySelectorAll і фокусуємо ПЕРШИЙ ВИДИМИЙ —
+    // інакше фокус ловить інпут на прихованому табі.
+    const tryFocus = function () {
       const selector =
         '.callsign-input[data-message-id="' +
         String(messageId) +
         '"][data-role="' +
         String(role) +
         '"]';
-      const inputEl = document.querySelector(selector);
-      if (!inputEl) return;
-
-      inputEl.focus();
+      const all = document.querySelectorAll(selector);
+      let inputEl = null;
+      for (const el of all) {
+        if (el.offsetParent !== null) { inputEl = el; break; }
+      }
+      // Fallback: якщо жоден не пройшов offsetParent-перевірку (буває коли
+      // інпут у щойно перерендереному модальному вікні з position:fixed
+      // батьком — браузер тимчасово рапортує offsetParent=null), беремо
+      // просто перший знайдений елемент.
+      if (!inputEl && all.length) inputEl = all[0];
+      if (!inputEl) return false;
+      if (document.activeElement === inputEl) return true; // вже сфокусовано
+      try { inputEl.focus({ preventScroll: false }); } catch (_) { inputEl.focus(); }
       try {
         const v = String(inputEl.value || "");
         inputEl.setSelectionRange(v.length, v.length);
       } catch {}
+      return document.activeElement === inputEl;
+    };
+
+    // Три фази спроб, щоб подолати:
+    //  - innerHTML-перерендер (rAF — після того, як DOM застосовано);
+    //  - microtask-черга з focusout-ами після Enter (setTimeout 0);
+    //  - відкладені reflow / повторні рендери (setTimeout 60ms).
+    requestAnimationFrame(function () {
+      if (tryFocus()) return;
+      setTimeout(function () {
+        if (tryFocus()) return;
+        setTimeout(tryFocus, 60);
+      }, 0);
     });
   }
 
@@ -1255,7 +1299,9 @@
       const role = String(input.dataset.role || "").trim();
 
       if (name && messageId && role) {
+        const scope = input.closest("#itModalView, #itPaneMonitor, .modal-card") || document;
         await addCallsign(messageId, role, name);
+        _refocusInputInScope(scope, messageId, role);
       }
     }
 
@@ -1406,10 +1452,94 @@
       }
 
       if (messageId && role && name) {
+        // Захоплюємо логічний контейнер ДО addCallsign — після перерендеру
+        // фокус треба повернути САМЕ в той інпут, де користувач набирав,
+        // а не в його дубль у іншій панелі (Monitor mounted vs View modal).
+        const scope = input.closest("#itModalView, #itPaneMonitor, .modal-card") || document;
         await addCallsign(messageId, role, name);
+        _refocusInputInScope(scope, messageId, role);
       }
     }
   });
+
+  /** Re-focus the callsign input inside a known scope, defending against
+   *  re-render race conditions AND late asynchronous focus theft.
+   *  - Up to 10 attempts spaced by 50ms (covers ~500ms of rebuild noise).
+   *  - On successful focus, installs a focusout watchdog for ~600ms that
+   *    immediately re-focuses if focus is removed (e.g., by a delayed
+   *    `refreshCallsignsOnHover` re-render). */
+  function _refocusInputInScope(scope, messageId, role) {
+    const selector =
+      '.callsign-input[data-message-id="' + String(messageId) +
+      '"][data-role="' + String(role) + '"]';
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    function tryFocus() {
+      attempts += 1;
+      const target = (scope || document).querySelector(selector);
+      if (!target) {
+        if (attempts < maxAttempts) setTimeout(tryFocus, 50);
+        return;
+      }
+      if (document.activeElement === target) {
+        _installFocusWatchdog(target, 600);
+        return;
+      }
+      try { target.focus({ preventScroll: false }); } catch (_) { target.focus(); }
+      try {
+        const v = String(target.value || "");
+        target.setSelectionRange(v.length, v.length);
+      } catch {}
+      if (document.activeElement === target) {
+        _installFocusWatchdog(target, 600);
+      } else if (attempts < maxAttempts) {
+        setTimeout(tryFocus, 50);
+      }
+    }
+
+    requestAnimationFrame(tryFocus);
+  }
+
+  /** Захист від «віддачі фокусу» після rebuild: якщо протягом durationMs
+   *  фокус залишає `input`, повертаємо його назад. Захищає від випадків,
+   *  коли асинхронний re-render знімає фокус після того, як ми його встановили. */
+  function _installFocusWatchdog(input, durationMs) {
+    let alive = true;
+    const startedAt = Date.now();
+    function onFocusOut() {
+      if (!alive) return;
+      if (Date.now() - startedAt > durationMs) {
+        alive = false;
+        input.removeEventListener("focusout", onFocusOut);
+        return;
+      }
+      // Невелика затримка, щоб rebuild завершився.
+      requestAnimationFrame(function () {
+        if (!alive) return;
+        // Спочатку пробуємо той самий input; якщо він вже не в DOM —
+        // шукаємо новий з тими ж data-атрибутами.
+        let target = input;
+        if (!document.body.contains(target)) {
+          const mid = input.dataset && input.dataset.messageId;
+          const role = input.dataset && input.dataset.role;
+          if (mid && role) {
+            target = document.querySelector(
+              '.callsign-input[data-message-id="' + mid + '"][data-role="' + role + '"]'
+            );
+          }
+        }
+        if (target && document.body.contains(target)) {
+          try { target.focus(); } catch (_) {}
+        }
+      });
+    }
+    input.addEventListener("focusout", onFocusOut);
+    setTimeout(function () {
+      alive = false;
+      input.removeEventListener("focusout", onFocusOut);
+    }, durationMs);
+  }
 
   mainCard.addEventListener("submit", async function (event) {
     const formEl = event.target.closest(".intercepts-comment-form");
@@ -1474,6 +1604,26 @@
   }
 
   /* ─────────────────────────────────────────────────────────
+     Registry of cards mounted outside mainCard (Monitoring/Висновок tabs).
+     Key: messageId (Number), Value: container element.
+     Used to re-render mounted cards after callsign changes.
+  ───────────────────────────────────────────────────────── */
+  const _mountedCards = new Map();
+
+  function _refreshMountedCard(messageId) {
+    const container = _mountedCards.get(Number(messageId));
+    if (!container || !document.body.contains(container)) {
+      _mountedCards.delete(Number(messageId));
+      return;
+    }
+    const item = state.items.find((x) => Number(x.id) === Number(messageId));
+    if (!item) return;
+    container.innerHTML = renderInterceptCardHtml(item);
+    _attachCardEvents(container);
+    focusCallsignInput(messageId, state._lastRole || "");
+  }
+
+  /* ─────────────────────────────────────────────────────────
      Public API: mount a single intercept card into any container.
      Used by the Monitoring / Висновок tabs in monitor.js.
   ───────────────────────────────────────────────────────── */
@@ -1525,7 +1675,11 @@
         const input = state.autocompleteInput;
         const messageId = Number(input.dataset.messageId || 0);
         const role = String(input.dataset.role || "").trim();
-        if (name && messageId && role) await addCallsign(messageId, role, name);
+        if (name && messageId && role) {
+          const scope = input.closest("#itModalView, #itPaneMonitor, .modal-card") || document;
+          await addCallsign(messageId, role, name);
+          _refocusInputInScope(scope, messageId, role);
+        }
         return;
       }
 
@@ -1583,7 +1737,11 @@
         if (state.autocompleteIndex >= 0 && state.autocompleteItems[state.autocompleteIndex]) {
           name = String(state.autocompleteItems[state.autocompleteIndex].name || "").trim();
         }
-        if (messageId && role && name) await addCallsign(messageId, role, name);
+        if (messageId && role && name) {
+          const scope = input.closest("#itModalView, #itPaneMonitor, .modal-card") || document;
+          await addCallsign(messageId, role, name);
+          _refocusInputInScope(scope, messageId, role);
+        }
       }
     });
 
@@ -1605,6 +1763,7 @@
    */
   window.interceptsExplorerMountCard = async function (messageId, container) {
     if (!container) return;
+    _mountedCards.set(Number(messageId), container);
     container.innerHTML = '<div class="intercepts-main-card__empty">Завантаження…</div>';
 
     try {
