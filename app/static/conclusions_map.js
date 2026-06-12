@@ -17,6 +17,40 @@ let _hiddenTypeIds = new Set(); // types hidden individually; empty = all visibl
 let _allHidden     = false;     // true = all markers hidden via "Сховати всі"
 let _layerGroups = {};      // typeId → L.LayerGroup
 let _allMarkers  = [];      // [{row, marker, typeId}]
+let _showFreq    = false;   // чекбокс «Частоти» — підпис біля кожного маркера
+let _showUnit    = false;   // чекбокс «Підрозділ» — кольорове коло з номером
+
+/** Витягнути НОМЕР бригади/полка з опису р/м (порт з peleng.js). */
+function extractUnitNumber(unitText) {
+  const s = String(unitText || "");
+  if (!s) return null;
+  const MARKERS = "(?:омсбр|мсбр|обр|омбр|обмбр|обмп|мсп|мп|тп|тбр|мбр|мсд|тд|обз|орб|оемб|оп|полк|бригад)";
+  const re = new RegExp("(\\d{1,3})\\s*" + MARKERS, "i");
+  const m = s.match(re);
+  if (m) return m[1];
+  const fallback = s.match(/\b(\d{1,3})\b/);
+  return fallback ? fallback[1] : null;
+}
+
+/** Сталий колір номера підрозділу через HSL "золотий кут". */
+function colorForUnit(num) {
+  const n = Number(num);
+  if (!isFinite(n) || n <= 0) return "#6b7280";
+  const hue = (n * 137.508) % 360;
+  return `hsl(${hue.toFixed(1)}, 70%, 45%)`;
+}
+
+/** Leaflet divIcon кольорового кола з номером підрозділу. */
+function makeUnitIcon(unitNum) {
+  const color = colorForUnit(unitNum);
+  return L.divIcon({
+    className: "cm-unit-icon",
+    html: `<div class="cm-unit-circle" style="background:${color}">${String(unitNum || "?")}</div>`,
+    iconSize:    [34, 34],
+    iconAnchor:  [17, 17],
+    popupAnchor: [0, -17],
+  });
+}
 
 // ── MGRS helper ───────────────────────────────────────────────
 function mgrsToLatLng(mgrsStr) {
@@ -30,6 +64,28 @@ function mgrsToLatLng(mgrsStr) {
     }
   } catch (_) {}
   return null;
+}
+
+// ── Toast notification ────────────────────────────────────────
+function mapToast(msg) {
+  let el = document.getElementById("mapToastEl");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "mapToastEl";
+    el.style.cssText = [
+      "position:fixed", "bottom:24px", "left:50%", "transform:translateX(-50%)",
+      "background:#1e293b", "color:#e2e8f0", "font-size:13px",
+      "padding:8px 18px", "border-radius:20px",
+      "box-shadow:0 4px 16px rgba(0,0,0,.55)",
+      "pointer-events:none", "z-index:9999",
+      "transition:opacity .25s", "opacity:0",
+    ].join(";");
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = "1";
+  clearTimeout(el._tid);
+  el._tid = setTimeout(() => { el.style.opacity = "0"; }, 1800);
 }
 
 // ── Icon URL builder (legacy SVG files) ───────────────────────
@@ -65,16 +121,26 @@ async function getIconUrl(filename, color) {
 // Cache: sidc → { url, w, h }
 const _sidcCache = {};
 
+// Усі іконки на карті рендеримо в 60% від «рідного» розміру milsymbol.
+// Окремо керуємо саме візуальним масштабом, бо параметр size: у milsymbol
+// масштабує не лінійно (через obvedення/тіні), і самого size:32 виявилось
+// замало (зменшились лише fallback-кружечки, а SIDC лишились великими).
+const SIDC_DISPLAY_SCALE = 0.75;
+
 function getSidcIcon(sidc) {
   if (!sidc || !window.ms) return null;
   if (_sidcCache[sidc]) return _sidcCache[sidc];
   try {
-    const sym = new ms.Symbol(sidc, { size: 40 });
+    const sym = new ms.Symbol(sidc, { size: 32 });
     const sz  = sym.getSize();
     const svg = sym.asSVG();
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const url  = URL.createObjectURL(blob);
-    const result = { url, w: Math.round(sz.width), h: Math.round(sz.height) };
+    const result = {
+      url,
+      w: Math.max(8, Math.round(sz.width  * SIDC_DISPLAY_SCALE)),
+      h: Math.max(8, Math.round(sz.height * SIDC_DISPLAY_SCALE)),
+    };
     _sidcCache[sidc] = result;
     return result;
   } catch (_) {
@@ -84,7 +150,7 @@ function getSidcIcon(sidc) {
 
 // ── Build Leaflet DivIcon ─────────────────────────────────────
 function makeLeafletIcon(imgUrl, w, h) {
-  const sw = w || 36, sh = h || 36;
+  const sw = w || 22, sh = h || 22;
   return L.divIcon({
     className: "cm-icon",
     html: `<img src="${imgUrl}" alt="" width="${sw}" height="${sh}">`,
@@ -104,7 +170,7 @@ async function resolveIconData(typeObj) {
   const color = (typeObj && typeObj.color) || "#6b7280";
   const filename = (typeObj && typeObj.icon_filename) || "";
   const url = await getIconUrl(filename, color);
-  return { url, w: 36, h: 36 };
+  return { url, w: 22, h: 22 };
 }
 
 // ── Map initialisation ────────────────────────────────────────
@@ -120,7 +186,7 @@ function initMap() {
     { attribution: "Esri", maxZoom: 19 }
   ).addTo(_map);
 
-  _map.on("click", () => closeRightPanel());
+  _map.on("click", () => { closeRightPanel(); closeClusterPicker(); });
 }
 
 // ── Load types ────────────────────────────────────────────────
@@ -259,7 +325,12 @@ async function loadConclusions() {
 }
 
 // ── Place markers on the map ──────────────────────────────────
-async function placeMarkers() {
+async function placeMarkers(opts) {
+  const skipFit = opts && opts.skipFit;
+  // Прибираємо старі маркери (якщо це перерендер після зміни чекбокса).
+  for (const m of _allMarkers) {
+    try { m.marker.remove(); } catch (_) {}
+  }
   _allMarkers = [];
 
   const typeMap = {};
@@ -276,26 +347,44 @@ async function placeMarkers() {
 
   for (const row of _rows) {
     const data = iconData[row.type_id] || await resolveIconData(null);
-    const leafIcon = makeLeafletIcon(data.url, data.w, data.h);
+    const defaultIcon = makeLeafletIcon(data.url, data.w, data.h);
+    // Якщо вмикнено «Підрозділ» і номер вдалося розпізнати з опису р/м —
+    // використовуємо кольорове коло. Інакше fallback на стандартну SIDC.
+    let icon = defaultIcon;
+    let unitNum = null;
+    if (_showUnit) {
+      unitNum = extractUnitNumber(row.unit);
+      if (unitNum) icon = makeUnitIcon(unitNum);
+    }
 
     for (const mgrsStr of row.mgrs) {
       const ll = mgrsToLatLng(mgrsStr);
       if (!ll) continue;
 
       bounds.push(ll);
-      const marker = L.marker(ll, { icon: leafIcon });
+      const marker = L.marker(ll, { icon });
+
+      // Підпис частоти (праворуч, постійний) — лише якщо чекбокс «Частоти» on.
+      if (_showFreq && row.frequency) {
+        marker.bindTooltip(String(row.frequency), {
+          permanent: true,
+          direction: "right",
+          offset: [12, 0],
+          className: "cm-freq-label",
+        });
+      }
 
       marker.on("click", (e) => {
         L.DomEvent.stopPropagation(e);
-        openDetailPanel(row, mgrsStr);
+        handleMarkerClick(row, mgrsStr, marker);
       });
 
       marker.addTo(_map);
-      _allMarkers.push({ row, marker, typeId: row.type_id });
+      _allMarkers.push({ row, marker, mgrs: mgrsStr, typeId: row.type_id });
     }
   }
 
-  if (bounds.length > 0) {
+  if (!skipFit && bounds.length > 0) {
     _map.fitBounds(bounds, { padding: [48, 48], maxZoom: 14 });
   }
   renderTypeChips();
@@ -307,6 +396,113 @@ function updateCountBadge(n) {
   badge.textContent = `${n} точок`;
   badge.classList.toggle("hidden", n === 0);
 }
+
+// ── Cluster picker ─────────────────────────────────────────────
+// Якщо в радіусі CLUSTER_RADIUS_PX від клікнутого маркера є інші маркери —
+// показуємо модалку «Оберіть необхідний об'єкт» замість того, щоб мовчки
+// відкривати лише верхній (Leaflet піднімає останній доданий на клік).
+const CLUSTER_RADIUS_PX = 16;
+
+function findNearbyMarkers(target) {
+  if (!_map || !_allMarkers.length) return [target];
+  const targetPt = _map.latLngToContainerPoint(target.marker.getLatLng());
+  const out = [];
+  for (const m of _allMarkers) {
+    if (!_map.hasLayer(m.marker)) continue;
+    const p = _map.latLngToContainerPoint(m.marker.getLatLng());
+    const dx = p.x - targetPt.x, dy = p.y - targetPt.y;
+    if (Math.sqrt(dx * dx + dy * dy) <= CLUSTER_RADIUS_PX) out.push(m);
+  }
+  return out;
+}
+
+function handleMarkerClick(row, mgrsStr, marker) {
+  const me = _allMarkers.find(m => m.marker === marker)
+          || { row, marker, mgrs: mgrsStr, typeId: row.type_id };
+  const nearby = findNearbyMarkers(me);
+  if (nearby.length <= 1) {
+    closeClusterPicker();
+    openDetailPanel(row, mgrsStr);
+    return;
+  }
+  openClusterPicker(nearby);
+}
+
+function openClusterPicker(items) {
+  const root = document.getElementById("cmClusterPicker");
+  const list = document.getElementById("cmClusterList");
+  const count = document.getElementById("cmClusterCount");
+  if (!root || !list || !count) return;
+  count.textContent = String(items.length);
+
+  list.innerHTML = "";
+  const typeMap = {};
+  for (const t of _types) typeMap[t.id] = t;
+
+  for (const it of items) {
+    const r = it.row;
+    const type = typeMap[r.type_id] || { type: "невідомо", color: "#6b7280", icon_filename: "", icon_sidc: "" };
+
+    const created = (r.created_at || "").replace("T", " ").slice(0, 16);
+    const detected = (r.detected_at || r.received_at || "").replace("T", " ").slice(0, 16);
+    const freq = [r.frequency, r.mask].filter(Boolean).join(" / ");
+    const unit = r.unit || "";
+
+    const item = document.createElement("div");
+    item.className = "cm-cluster-item";
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "cm-cluster-item__icon";
+    const img = document.createElement("img");
+    if (type.icon_sidc) {
+      const info = getSidcIcon(type.icon_sidc);
+      if (info) { img.src = info.url; img.width = 36; img.height = 36; }
+      else { img.src = iconUrl(type.icon_filename); }
+    } else {
+      img.src = iconUrl(type.icon_filename);
+    }
+    iconWrap.appendChild(img);
+
+    const body = document.createElement("div");
+    body.className = "cm-cluster-item__body";
+    const title = document.createElement("div");
+    title.className = "cm-cluster-item__title";
+    title.textContent = [freq, type.type].filter(Boolean).join(" / ") || "—";
+    const sub = document.createElement("div");
+    sub.className = "cm-cluster-item__sub";
+    sub.textContent = unit || "—";
+    const meta = document.createElement("div");
+    meta.className = "cm-cluster-item__meta";
+    meta.innerHTML =
+      `<div><span class="cm-cluster-item__meta-label">Створення</span>${created || "—"}</div>` +
+      `<div><span class="cm-cluster-item__meta-label">Виявлення</span>${detected || "—"}</div>`;
+    body.appendChild(title);
+    body.appendChild(sub);
+    body.appendChild(meta);
+
+    item.appendChild(iconWrap);
+    item.appendChild(body);
+    item.addEventListener("click", () => {
+      closeClusterPicker();
+      openDetailPanel(it.row, it.mgrs);
+    });
+    list.appendChild(item);
+  }
+
+  root.classList.remove("hidden");
+}
+
+function closeClusterPicker() {
+  document.getElementById("cmClusterPicker")?.classList.add("hidden");
+}
+
+// Wire close handlers (backdrop + X button) once at load
+document.addEventListener("click", (e) => {
+  if (e.target.closest?.("[data-cm-cluster-close]")) closeClusterPicker();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeClusterPicker();
+});
 
 // ── Right detail panel ────────────────────────────────────────
 function openDetailPanel(row, clickedMgrs) {
@@ -352,6 +548,22 @@ function openDetailPanel(row, clickedMgrs) {
     const tag = document.createElement("span");
     tag.className = "rp-coord-tag" + (m === clickedMgrs ? " active" : "");
     tag.textContent = m;
+    tag.title = "Натисніть, щоб скопіювати";
+    tag.addEventListener("click", () => {
+      navigator.clipboard.writeText(m).then(() => {
+        mapToast(`✓ Скопійовано: ${m}`);
+      }).catch(() => {
+        // Fallback for non-HTTPS or blocked clipboard
+        const ta = document.createElement("textarea");
+        ta.value = m;
+        ta.style.cssText = "position:fixed;opacity:0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        mapToast(`✓ Скопійовано: ${m}`);
+      });
+    });
     coordsDiv.appendChild(tag);
   }
 
@@ -386,6 +598,26 @@ async function main() {
   } catch (err) {
     overlay.textContent = `Помилка: ${err.message}`;
     return;
+  }
+
+  // Чекбокси «Частоти» / «Підрозділ» — перемальовують маркери без повторного fetch.
+  const freqChk = document.getElementById("cmShowFreqChk");
+  if (freqChk) {
+    freqChk.checked = false;
+    _showFreq = false;
+    freqChk.addEventListener("change", async () => {
+      _showFreq = freqChk.checked;
+      await placeMarkers({ skipFit: true });
+    });
+  }
+  const unitChk = document.getElementById("cmShowUnitChk");
+  if (unitChk) {
+    unitChk.checked = false;
+    _showUnit = false;
+    unitChk.addEventListener("change", async () => {
+      _showUnit = unitChk.checked;
+      await placeMarkers({ skipFit: true });
+    });
   }
 
   overlay.classList.add("hidden");

@@ -1,62 +1,127 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% set active_tab = (request.query_params.get("tab") or "view")|lower %}
+{% set active_tab = (request.query_params.get("tab") or "monitor")|lower %}
+{% set is_embed = request.query_params.get("embed") == "1" %}
+
+{% if is_embed %}
+<style>
+  /* embed=1 — сторінка вбудована як iframe (наприклад, у модалці на /home).
+     Прибираємо шапку, моніторинг, обгортки модалок — і робимо ту модалку,
+     яку відкриваємо по ?tab=, наскрізним вікном. */
+  body { background: var(--bg); margin: 0; }
+  .site-header, .site-footer, .top-nav, .nav-bar, .global-nav { display: none !important; }
+  .it-page-header { display: none !important; }
+  #itPaneMonitor { display: none !important; }
+  /* Модалка, яку відкриває ?tab=… — повноекранно, без backdrop, без шапки */
+  .it-modal:not(.hidden) .modal-card {
+    max-width: none; width: 100%; max-height: none; height: 100vh; border-radius: 0; margin: 0;
+  }
+  .it-modal:not(.hidden) .modal-backdrop { display: none !important; }
+  .it-modal:not(.hidden) .modal-head { display: none; }
+
+  /* У embed-iframe робоча ширина ≈1180px (modal-card 1200px − borders).
+     Це нижче кількох глобальних брейкпойнтів, через які картка перехоплення
+     перетікає в один стовпець (текст ⇄ позивні):
+       app.css:1683 — .intercepts-workspace      @ 1100px
+       app.css:2204 — .intercept-card__body      @ 1200px
+       app.css:2374 — .intercept-card__body--compact @ 1200px
+     В embed скидаємо їх до 760px, щоб у модалці на /home завжди було 2
+     контейнери поруч. */
+  @media (max-width: 1200px) {
+    .intercept-card__body          { grid-template-columns: minmax(0, 1.9fr) minmax(300px, 0.9fr) !important; }
+    .intercept-card__body--compact { grid-template-columns: minmax(0, 1.7fr) 300px !important; }
+    .intercept-card__right--compact { order: initial !important; }
+  }
+  @media (max-width: 1100px) {
+    .intercepts-workspace {
+      grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr) !important;
+    }
+    .intercepts-main-card,
+    .intercepts-side-card { min-height: 0 !important; }
+  }
+  @media (max-width: 760px) {
+    .intercepts-workspace          { grid-template-columns: 1fr !important; }
+    .intercept-card__body          { grid-template-columns: 1fr !important; }
+    .intercept-card__body--compact { grid-template-columns: 1fr !important; }
+  }
+
+  /* Callsign-модалка (#csModal: .modal → z-index:50) у embed ховається під
+     View-модалкою (.it-modal → z-index:9999). Піднімаємо її НАД View, щоб
+     клік по позивному всередині View показав модалку позивного. */
+  #csModal { z-index: 100000 !important; }
+
+  /* Текст самого перехоплення в картці — у embed вдвічі більший
+     (15px → 30px і 14px → 28px для компактного варіанту). */
+  .intercept-card__text { font-size: 30px !important; line-height: 1.45 !important; }
+  .intercept-card__body--compact .intercept-card__text { font-size: 28px !important; }
+</style>
+{% endif %}
+
 <section class="intercepts-page">
-  <h2>Перехоплення</h2>
-
-  <section class="tabs-shell">
-    <div class="tabs-nav" role="tablist" aria-label="Вкладки сторінки Перехоплення">
-      <button
-        id="itTabSearch"
-        type="button"
-        class="tab-btn {% if active_tab == 'search' %}active{% endif %}"
-        role="tab"
-        aria-selected="{% if active_tab == 'search' %}true{% else %}false{% endif %}"
-        aria-controls="itPaneSearch"
-      >
-        Пошук
-      </button>
-      <button
-        id="itTabView"
-        type="button"
-        class="tab-btn {% if active_tab == 'view' %}active{% endif %}"
-        role="tab"
-        aria-selected="{% if active_tab == 'view' %}true{% else %}false{% endif %}"
-        aria-controls="itPaneView"
-      >
-        Перегляд
-      </button>
-      <button
-        id="itTabLm"
-        type="button"
-        class="tab-btn {% if active_tab == 'landmarks' %}active{% endif %}"
-        role="tab"
-        aria-selected="{% if active_tab == 'landmarks' %}true{% else %}false{% endif %}"
-        aria-controls="itPaneLm"
-      >
-        Орієнтири
-      </button>
+  <div class="page-header it-page-header">
+    <div class="it-page-header__title">
+      <h1>Перехоплення</h1>
     </div>
+    <div class="it-page-actions">
+      <!-- «Висновок» і «Швидко» прибрано — дублюються іконками ✍/⚡ у тулбарі.
+           «Пошук», «Перегляд», «Орієнтири» переїхали у тулбар як піктограми. -->
+    </div>
+  </div>
 
+  <!-- Legacy tab buttons (приховані) — лишаємо для зворотньої сумісності
+       з existing setTab-логікою (window.itSetTab) та для контейнера
+       #monUnreadBadge, який оновлюється з monitor.js. -->
+  <div class="it-legacy-tabs" hidden aria-hidden="true">
+    <button id="itTabSearch"     type="button"></button>
+    <button id="itTabView"       type="button"></button>
+    <button id="itTabLm"         type="button"></button>
+    <button id="itTabMonitor"    type="button">
+      <span class="mon-unread-badge" id="monUnreadBadge"></span>
+    </button>
+    <button id="itTabConclusion" type="button"></button>
+    <button id="itTabQuick"      type="button"></button>
+  </div>
+
+  <section class="it-shell">
     <div class="tab-panel-wrap">
+
+      <!-- ── Modal: Пошук ─────────────────────────────────────── -->
+      <div id="itModalSearch" class="modal hidden it-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-it-modal-close="search"></div>
+      <div class="modal-card it-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Пошук</div>
+          <button type="button" class="secondary" data-it-modal-close="search" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body it-modal-body" style="padding:0">
       <section
         id="itPaneSearch"
-        class="tab-panel {% if active_tab != 'search' %}hidden{% endif %}"
-        role="tabpanel"
-        aria-labelledby="itTabSearch"
+        role="region"
+        aria-label="Пошук"
       >
         <iframe
           src="/intercepts?embed=1"
-          style="width:100%; height: calc(100vh - 220px); min-height: 760px; border:0; border-radius:12px; background:var(--bg);"
+          style="width:100%; height: 78vh; border:0; background:var(--bg); display:block;"
         ></iframe>
       </section>
+        </div><!-- /it-modal-body -->
+      </div><!-- /it-modal-card -->
+      </div><!-- /itModalSearch -->
 
+      <!-- ── Modal: Перегляд ──────────────────────────────────── -->
+      <div id="itModalView" class="modal hidden it-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-it-modal-close="view"></div>
+      <div class="modal-card it-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Перегляд</div>
+          <button type="button" class="secondary" data-it-modal-close="view" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body it-modal-body">
       <section
         id="itPaneView"
-        class="tab-panel {% if active_tab != 'view' %}hidden{% endif %}"
-        role="tabpanel"
-        aria-labelledby="itTabView"
+        role="region"
+        aria-label="Перегляд"
       >
         <form id="interceptsFilterForm" class="intercepts-filter-form" autocomplete="off">
           <div class="field">
@@ -84,13 +149,16 @@
 
           <div class="field">
             <label for="callsignQuery">Позивний</label>
-            <input
-              id="callsignQuery"
-              name="callsign"
-              type="text"
-              placeholder="Усі позивні"
-              autocomplete="off"
-            >
+            <div class="cs-filter-ac-wrap" style="position:relative">
+              <input
+                id="callsignQuery"
+                name="callsign"
+                type="text"
+                placeholder="Усі позивні"
+                autocomplete="off"
+              >
+              <div id="callsignAcDrop" class="cs-filter-ac-drop hidden"></div>
+            </div>
           </div>
 
           <div class="field field-btn">
@@ -114,23 +182,422 @@
           </article>
         </section>
       </section>
+        </div><!-- /it-modal-body -->
+      </div><!-- /it-modal-card -->
+      </div><!-- /itModalView -->
 
+      <!-- ── Modal: Орієнтири ─────────────────────────────────── -->
+      <div id="itModalLm" class="modal hidden it-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-it-modal-close="landmarks"></div>
+      <div class="modal-card it-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Орієнтири</div>
+          <button type="button" class="secondary" data-it-modal-close="landmarks" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body it-modal-body" style="padding:0">
       <section
         id="itPaneLm"
-        class="tab-panel {% if active_tab != 'landmarks' %}hidden{% endif %}"
-        role="tabpanel"
-        aria-labelledby="itTabLm"
+        role="region"
+        aria-label="Орієнтири"
       >
         <iframe
           id="itLandmarksIframe"
           src="/landmarks?embed=1"
           title="Орієнтири"
-          style="width:100%; height: calc(100vh - 220px); min-height: 760px; border:0; border-radius:12px; background:var(--bg);"
+          style="width:100%; height: 78vh; border:0; background:var(--bg); display:block;"
         ></iframe>
       </section>
-    </div>
-  </section>
+        </div><!-- /it-modal-body -->
+      </div><!-- /it-modal-card -->
+      </div><!-- /itModalLm -->
+
+      <!-- ── Моніторинг (основний контент сторінки) ───────────── -->
+      <section
+        id="itPaneMonitor"
+        role="region"
+        aria-label="Моніторинг"
+      >
+        <div class="monitor-layout monitor-layout--2col">
+
+          <!-- Left: playlist (20%) -->
+          <div class="monitor-left">
+            <div class="mon-playlist" id="monPlaylist">
+              <div class="mon-empty">Завантаження…</div>
+            </div>
+            <button class="mon-show-more secondary hidden" id="monShowMoreBtn">Показати ще</button>
+            <!-- Settings strip: icon-only buttons (up/down/check/gear) -->
+            <div class="mon-settings">
+              <button class="mon-set-btn" id="monPlaylistPrev" title="Вгору (новіше)">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 10 8 5 12 10"/></svg>
+              </button>
+              <button class="mon-set-btn" id="monPlaylistNext" title="Вниз (старіше)">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 11 12 6"/></svg>
+              </button>
+              <button class="mon-set-btn" id="monMarkAllBtn" title="Позначити всі як прочитані">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 8 6 12 14 4"/></svg>
+              </button>
+              <button class="mon-set-btn" id="monSettingsBtn" title="Налаштування тегів">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+              </button>
+              <span id="monUnreadInline" class="mon-unread-inline hidden" title="Непрочитані повідомлення"></span>
+            </div>
+          </div>
+
+          <!-- Intercept detail — full remaining width -->
+          <div class="monitor-middle monitor-middle--full">
+            <!-- Icon toolbar -->
+            <div class="mon-middle-toolbar">
+              <div class="mon-toolbar-nav">
+                <button class="mon-toolbar-btn" id="monNavPrev" title="Новіше">
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 7 15 13"/></svg>
+                </button>
+                <button class="mon-toolbar-btn" id="monNavNext" title="Старіше">
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 7 10 13 15 7"/></svg>
+                </button>
+              </div>
+              <div class="mon-toolbar-actions">
+                <button class="mon-toolbar-btn" id="monOpenNetBtn" title="Відкрити р/м" style="display:none">
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3h6v6M10 10L17 3M8 5H4a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1v-4"/></svg>
+                </button>
+                <!-- Пошук / Перегляд / Орієнтири — піктограми (emoji), що відкривають однойменні модалки -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenSearchIcon" title="Пошук" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('search')">🔍</button>
+                <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenViewIcon" title="Перегляд" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('view')">📋</button>
+                <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenLmIcon" title="Орієнтири" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('landmarks')">📍</button>
+                <!-- Share: send intercept to multiple recipients -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--share" id="monShareBtn" title="Поширити" style="font-size:14px">⤴</button>
+                <!-- Open Висновок tab with this intercept pre-filled -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--conclusion" id="monOpenConclusion" title="Оформити аналітичний висновок" style="font-size:13px">✍</button>
+                <!-- Open Швидко tab with this intercept pre-filled -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--quick" id="monOpenQuick" title="Швидкий висновок" style="font-size:13px">⚡</button>
+                <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenDictionary" title="Словник" style="font-size:14px">📖</button>
+              </div>
+            </div>
+            <!-- Detail -->
+            <div id="monDetail" class="mon-detail-area">
+              <div class="mon-empty">Оберіть перехоплення зі списку</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── Modal: Висновок ──────────────────────────────────── -->
+      <div id="itModalConclusion" class="modal hidden it-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-it-modal-close="conclusion"></div>
+      <div class="modal-card it-modal-card it-modal-card--xl" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Висновок</div>
+          <button type="button" class="secondary" data-it-modal-close="conclusion" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body it-modal-body">
+      <section
+        id="itPaneConclusion"
+        role="region"
+        aria-label="Висновок"
+      >
+        <div class="conclusion-layout">
+
+          <!-- Left 40%: conclusion + separator + intercept + send -->
+          <div class="conclusion-left">
+
+            <!-- 1. Textarea "Висновок" з overlay-кнопками -->
+            <div class="concl-ta-wrap concl-ta-wrap--conclusion">
+              <div class="concl-ta-overlay-btns">
+                <button id="conclTemplatesBtn" class="concl-overlay-btn" title="Шаблони висновків">🗂</button>
+                <button id="conclCopyBtn"      class="concl-overlay-btn" title="Копіювати висновок + координати + роздільник + перехоплення">📋</button>
+                <button id="conclShareBtn"     class="concl-overlay-btn" title="Поширити (надіслати кільком отримувачам)">⤴</button>
+              </div>
+              <textarea id="conclText" class="mon-conclusion-ta concl-ta--4"
+                        placeholder="Введіть аналітичний висновок…"></textarea>
+            </div>
+
+            <!-- 1b. Textarea "Координати" (авто-заповнення з об'єктів карти) -->
+            <div class="concl-ta-wrap concl-ta-wrap--coords">
+              <textarea id="conclCoords" class="mon-conclusion-ta concl-ta--5"
+                        placeholder="Координати об'єктів з карти…"></textarea>
+            </div>
+
+            <!-- 2. Роздільник -->
+            <div class="concl-sep-wrap">
+              <input id="conclSepInput" class="concl-sep-input" type="text"
+                     value="-------  🦁 63 ОМБр 🦁 -------" readonly>
+            </div>
+
+            <!-- 3. Textarea "Перехоплення" (авто-заповнення) -->
+            <div class="concl-ta-wrap concl-ta-wrap--intercept">
+              <div class="concl-ta-overlay-btns">
+                <button id="conclPasteInterceptBtn" class="concl-overlay-btn" title="Вставити перехоплення з буфера й згенерувати висновок">
+                  <svg viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="3" width="10" height="13" rx="1.4"/>
+                    <rect x="6" y="1.5" width="6" height="3" rx="0.8"/>
+                  </svg>
+                </button>
+                <button id="conclFindSquareBtn" class="concl-overlay-btn" title="Знайти квадрат (два двозначні числа)">
+                  <svg viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2.5" y="2.5" width="8" height="8" rx="1"/>
+                    <circle cx="11" cy="11" r="3.3"/><line x1="13.4" y1="13.4" x2="16" y2="16"/>
+                  </svg>
+                </button>
+                <button id="conclFindCoordBtn" class="concl-overlay-btn" title="Знайти координати (УСК-2000, два п'ятизначні числа)">
+                  <svg viewBox="0 0 18 18" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <text x="1.5" y="9" font-size="8" font-weight="700" fill="currentColor" stroke="none">XY</text>
+                    <circle cx="11" cy="11" r="3.3"/><line x1="13.4" y1="13.4" x2="16" y2="16"/>
+                  </svg>
+                </button>
+              </div>
+              <textarea id="conclInterceptTa" class="mon-conclusion-ta"
+                        placeholder="Оберіть перехоплення у вкладці «Моніторинг» або вставте текст вручну…"></textarea>
+            </div>
+
+            <!-- 4. Send bar -->
+            <div class="mon-send-bar">
+              <button id="conclPlatformBtn" class="mon-send-platform-btn" title="Платформа" style="background:#3a76f0">S</button>
+              <div class="mon-send-middle">
+                <input id="conclChatInput" class="mon-send-chat-input"
+                       type="text" placeholder="Назва чату або групи…"
+                       autocomplete="off" spellcheck="false">
+                <div id="conclChatDrop" class="mon-send-chat-drop hidden"></div>
+              </div>
+              <button id="conclSendBtn" class="mon-send-submit-btn" disabled>▶</button>
+            </div>
+
+          </div><!-- /conclusion-left -->
+
+          <!-- Right 60%: coordinate + map -->
+          <div class="conclusion-right">
+            <div class="mon-anal-coord-bar">
+              <div class="concl-coord-wrap" id="conclCoordWrap">
+                <!-- Чіпи фіксованих точок (множинні) -->
+                <div id="conclCoordChips" class="concl-coord-chips"></div>
+                <!-- Інпут для введення MGRS / квадратів -->
+                <input id="conclCoordInput" type="text" class="mon-coord-input"
+                       placeholder="MGRS / УСК-2000 / квадрат / код палітри (Т-3, А-3*) + Enter"
+                       autocomplete="off" spellcheck="false">
+              </div>
+              <button id="conclCoordClearBtn" class="secondary mon-anal-icon-btn" title="Очистити всі введені дані">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/>
+                </svg>
+              </button>
+            </div>
+            <div class="concl-map-wrap">
+              <div id="conclMap" class="mon-anal-map"></div>
+              <!-- Кнопка копіювання карти (поверх зображення) -->
+              <button id="conclMapCopyBtn" class="concl-map-tool-btn" title="Скопіювати карту з об'єктами">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="5" y="5" width="9" height="9" rx="2"/><path d="M2 11V3a2 2 0 012-2h8"/>
+                </svg>
+              </button>
+              <!-- Кнопка "+" — додати елемент на карту -->
+              <button id="conclMapAddBtn" class="concl-map-tool-btn concl-map-tool-btn--add" title="Додати елемент на карту">
+                <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/>
+                </svg>
+              </button>
+              <!-- Меню вибору елемента -->
+              <div id="conclMapAddMenu" class="concl-map-add-menu hidden">
+                <button type="button" data-tool="arrow">↗ Стрілка</button>
+                <button type="button" data-tool="landmark">📍 Орієнтир</button>
+                <button type="button" data-tool="zone">⬠ Зона</button>
+              </div>
+
+              <!-- Кнопка-перемикач висувної панелі палітр -->
+              <button id="palPanelBtn" class="concl-map-tool-btn concl-map-tool-btn--pal" title="Палітри">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="8" r="6.2"/><circle cx="5.4" cy="6" r="0.9" fill="currentColor"/>
+                  <circle cx="8.4" cy="4.8" r="0.9" fill="currentColor"/><circle cx="10.6" cy="7" r="0.9" fill="currentColor"/>
+                  <circle cx="6" cy="10.4" r="0.9" fill="currentColor"/>
+                </svg>
+              </button>
+
+              <!-- Висувна права панель: адміністрування + scope пошуку -->
+              <aside id="palPanel" class="pal-panel hidden" aria-hidden="true">
+                <div class="pal-panel-head">
+                  <strong>Палітри</strong>
+                  <button id="palPanelClose" class="pal-x" title="Закрити" type="button">
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                      <line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <!-- Налаштування пошуку (scope) -->
+                <div class="pal-section">
+                  <div class="pal-section-title">Пошук</div>
+                  <div class="pal-scope-row">
+                    <select id="palUnitFilter" class="pal-select"><option value="">Усі підрозділи</option></select>
+                  </div>
+                  <label class="pal-check"><input type="checkbox" id="palIncludeArchived"> Розширений пошук (+архів)</label>
+                </div>
+
+                <!-- Адміністрування -->
+                <div class="pal-section pal-section--grow">
+                  <div class="pal-section-title">
+                    <span>Палітри</span>
+                    <button id="palImportBtn" class="pal-btn pal-btn--add" type="button">+ Імпорт</button>
+                  </div>
+                  <div id="palList" class="pal-list"><div class="pal-empty">Завантаження…</div></div>
+                </div>
+
+                <input id="palFileInput" type="file" accept=".kml,.kmz,.geojson,.json,.ldk" hidden>
+              </aside>
+
+              <!-- Список збігів пошуку точки (над картою) -->
+              <div id="palMatchList" class="pal-match-list hidden"></div>
+
+              <!-- Діалог підтвердження імпорту (аналіз дублів) -->
+              <div id="palImportDialog" class="pal-dialog hidden">
+                <div class="pal-dialog-card">
+                  <div class="pal-dialog-head">
+                    <strong>Імпорт палітри</strong>
+                    <button id="palImportCancel" class="pal-x" type="button">
+                      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <div id="palImportBody" class="pal-dialog-body"></div>
+                  <div class="pal-dialog-foot">
+                    <button id="palImportConfirm" class="pal-btn pal-btn--add" type="button">Імпортувати</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Діалог редагування кольорів палітри -->
+              <div id="palEditDialog" class="pal-dialog hidden">
+                <div class="pal-dialog-card">
+                  <div class="pal-dialog-head">
+                    <strong id="palEditTitle">Редагувати кольори</strong>
+                    <button id="palEditCancel" class="pal-x" type="button">
+                      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <div id="palEditBody" class="pal-dialog-body"></div>
+                  <div class="pal-dialog-foot">
+                    <button id="palEditSave" class="pal-btn pal-btn--add" type="button">Зберегти</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /conclusion-right -->
+
+        </div>
+      </section>
+        </div><!-- /it-modal-body -->
+      </div><!-- /it-modal-card -->
+      </div><!-- /itModalConclusion -->
+
+      <!-- ── Modal: Швидко ───────────────────────────────────── -->
+      <div id="itModalQuick" class="modal hidden it-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-it-modal-close="quick"></div>
+      <div class="modal-card it-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Швидко</div>
+          <button type="button" class="secondary" data-it-modal-close="quick" style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body it-modal-body" style="padding:0">
+      <section
+        id="itPaneQuick"
+        role="region"
+        aria-label="Швидко"
+      >
+        <iframe
+          src="/conclusions?tab=quick&embed=1"
+          title="Швидко"
+          style="width:100%; height: 95vh; border:0; background:var(--bg); display:block;"
+        ></iframe>
+      </section>
+        </div><!-- /it-modal-body -->
+      </div><!-- /it-modal-card -->
+      </div><!-- /itModalQuick -->
+
+    </div><!-- /tab-panel-wrap -->
+  </section><!-- /it-shell -->
 </section>
+
+<!-- ─── Dictionary side panel (off-canvas, slides from the right edge) ─── -->
+<aside id="dictPanel" class="dict-panel" aria-hidden="true" aria-label="Словник">
+  <div class="dict-panel__head">
+    <div class="dict-panel__title">📖 Словник</div>
+    <button type="button" id="dictPanelClose" class="dict-panel__close secondary" title="Сховати">✕</button>
+  </div>
+
+  <div class="dict-panel__body">
+
+    <!-- Search row -->
+    <div class="dict-row">
+      <input id="dictSearchInput" type="text" class="dict-input" placeholder="Пошук терміна…" autocomplete="off" />
+      <button type="button" id="dictSearchBtn" class="dict-icon-btn" title="Шукати">🔍</button>
+    </div>
+
+    <!-- Розширений пошук checkbox -->
+    <label class="dict-check-row" title="При вимкненому — шукаємо в рамках р/м активного перехоплення; при увімкненому — у всіх р/м групи.">
+      <input id="dictScopeGroup" type="checkbox" />
+      <span>Розширений пошук (по групі)</span>
+    </label>
+
+    <!-- Scope picker: network OR group autocomplete + add button -->
+    <div class="dict-row dict-scope-row">
+      <div class="dict-ac-wrap">
+        <input id="dictScopeInput" type="text" class="dict-input" placeholder="—" autocomplete="off" />
+        <div id="dictScopeDrop" class="dict-ac-drop hidden"></div>
+        <input type="hidden" id="dictScopeId" value="" />
+      </div>
+      <button type="button" id="dictAddBtn" class="dict-icon-btn dict-icon-btn--accent" title="Додати слово">+</button>
+    </div>
+
+    <!-- Results list -->
+    <div id="dictList" class="dict-list">
+      <div class="dict-list__empty small" style="opacity:.55">Завантаження…</div>
+    </div>
+
+  </div>
+</aside>
+
+<!-- ── Modal: add/edit dictionary term ──────────────────────────────── -->
+<div id="dictEditModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-dict-modal-close="1"></div>
+  <div class="modal-card dict-edit-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div id="dictEditTitle" class="modal-title">Новий термін</div>
+      <button type="button" class="secondary" data-dict-modal-close="1" style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px 24px">
+      <input type="hidden" id="dictEditId" value="" />
+
+      <div class="field" style="margin-bottom:12px">
+        <label for="dictEditTerm">Термін</label>
+        <input id="dictEditTerm" type="text" autocomplete="off" placeholder="напр., квадр" />
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label for="dictEditDefinition">Пояснення</label>
+        <textarea id="dictEditDefinition" rows="4" placeholder="Опис, контекст, синоніми…"></textarea>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label for="dictEditNetworkInput">Радіомережа</label>
+        <div class="dict-ac-wrap">
+          <input id="dictEditNetworkInput" type="text" autocomplete="off" placeholder="Пошук частоти / маски / підрозділу…" />
+          <div id="dictEditNetworkDrop" class="dict-ac-drop hidden"></div>
+          <input type="hidden" id="dictEditNetworkId" value="" />
+        </div>
+        <div class="small" style="opacity:.55; margin-top:6px">
+          Перенесення між р/м — просто оберіть іншу р/м у цьому полі.
+        </div>
+      </div>
+
+      <div id="dictEditErr" class="small" style="color:var(--danger); display:none; margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" id="dictEditDeleteBtn" class="secondary" style="margin-right:auto; display:none">Видалити</button>
+      <button type="button" id="dictEditSaveBtn">Зберегти</button>
+      <button type="button" class="secondary" data-dict-modal-close="1">Скасувати</button>
+    </div>
+  </div>
+</div>
 
 <div id="xlsxImportModal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" data-close="1"></div>
@@ -187,52 +654,316 @@
   })();
 </script>
 <script>
+  /* Автокомпліт поля "Позивний" у фільтрі */
   (function () {
-    const tabSearch = document.getElementById("itTabSearch");
-    const tabView = document.getElementById("itTabView");
-    const tabLm = document.getElementById("itTabLm");
-    const paneSearch = document.getElementById("itPaneSearch");
-    const paneView = document.getElementById("itPaneView");
-    const paneLm = document.getElementById("itPaneLm");
-    if (!tabSearch || !tabView || !tabLm || !paneSearch || !paneView || !paneLm) return;
+    const input = document.getElementById("callsignQuery");
+    const drop  = document.getElementById("callsignAcDrop");
+    const form  = document.getElementById("interceptsFilterForm");
+    if (!input || !drop) return;
 
-    function setTab(which) {
-      const isSearch = which === "search";
-      const isView = which === "view";
-      const isLm = which === "landmarks";
+    let items = [];
+    let idx = -1;
+    let timer = null;
 
-      tabSearch.classList.toggle("active", isSearch);
-      tabView.classList.toggle("active", isView);
-      tabLm.classList.toggle("active", isLm);
+    function esc(s){ return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
-      tabSearch.setAttribute("aria-selected", isSearch ? "true" : "false");
-      tabView.setAttribute("aria-selected", isView ? "true" : "false");
-      tabLm.setAttribute("aria-selected", isLm ? "true" : "false");
+    function close(){ drop.classList.add("hidden"); drop.innerHTML = ""; items = []; idx = -1; }
 
-      paneSearch.classList.toggle("hidden", !isSearch);
-      paneView.classList.toggle("hidden", !isView);
-      paneLm.classList.toggle("hidden", !isLm);
+    function render(){
+      if (!items.length){ close(); return; }
+      drop.innerHTML = items.map((it,i) =>
+        `<button type="button" class="cs-filter-ac-item${i===idx?" is-active":""}" data-name="${esc(it.name)}">${esc(it.name)}</button>`
+      ).join("");
+      drop.classList.remove("hidden");
     }
 
-    tabSearch.addEventListener("click", () => setTab("search"));
-    tabView.addEventListener("click", () => setTab("view"));
-    tabLm.addEventListener("click", () => setTab("landmarks"));
+    async function fetchItems(q){
+      try {
+        const r = await fetch(`/api/callsigns/autocomplete?q=${encodeURIComponent(q)}&limit=12`, { headers:{Accept:"application/json"} });
+        if (!r.ok){ close(); return; }
+        const d = await r.json();
+        // унікальні за іменем
+        const seen = new Set();
+        items = (Array.isArray(d.items)?d.items:[]).filter(it => {
+          const n = String(it.name||"").trim();
+          if (!n || seen.has(n)) return false; seen.add(n); return true;
+        });
+        idx = -1;
+        render();
+      } catch(_){ close(); }
+    }
+
+    input.addEventListener("input", () => {
+      const q = input.value.trim();
+      clearTimeout(timer);
+      if (q.length < 2){ close(); return; }
+      timer = setTimeout(() => fetchItems(q), 180);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (drop.classList.contains("hidden")) return;
+      if (e.key === "ArrowDown"){ e.preventDefault(); idx = (idx+1) % items.length; render(); }
+      else if (e.key === "ArrowUp"){ e.preventDefault(); idx = (idx-1+items.length) % items.length; render(); }
+      else if (e.key === "Enter"){
+        if (idx >= 0 && items[idx]){ e.preventDefault(); input.value = items[idx].name; close(); }
+      } else if (e.key === "Escape"){ close(); }
+    });
+
+    drop.addEventListener("mousedown", (e) => {
+      const btn = e.target.closest(".cs-filter-ac-item");
+      if (!btn) return;
+      e.preventDefault();
+      input.value = btn.dataset.name || "";
+      close();
+      if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event("submit", {cancelable:true, bubbles:true}));
+    });
+
+    input.addEventListener("blur", () => setTimeout(close, 150));
+  })();
+</script>
+<script>
+  (function () {
+    const tabSearch     = document.getElementById("itTabSearch");
+    const tabView       = document.getElementById("itTabView");
+    const tabLm         = document.getElementById("itTabLm");
+    const tabMonitor    = document.getElementById("itTabMonitor");
+    const tabConclusion = document.getElementById("itTabConclusion");
+    const tabQuick      = document.getElementById("itTabQuick");
+    const paneSearch     = document.getElementById("itPaneSearch");
+    const paneView       = document.getElementById("itPaneView");
+    const paneLm         = document.getElementById("itPaneLm");
+    const paneMonitor    = document.getElementById("itPaneMonitor");
+    const paneConclusion = document.getElementById("itPaneConclusion");
+    const paneQuick      = document.getElementById("itPaneQuick");
+    if (!tabSearch || !tabView || !tabLm || !tabMonitor) return;
+
+    // ── Modal-based navigation ──────────────────────────────────
+    //  Моніторинг — основний контент сторінки, видимий завжди.
+    //  Інші п'ять вкладок винесені у модалки, які відкриваються
+    //  кнопками з шапки. Existing setTab-API (window.itSetTab,
+    //  pause/resume Monitor, init Conclusion) перевикористовується.
+    const modalMap = {
+      search:     document.getElementById("itModalSearch"),
+      view:       document.getElementById("itModalView"),
+      landmarks:  document.getElementById("itModalLm"),
+      conclusion: document.getElementById("itModalConclusion"),
+      quick:      document.getElementById("itModalQuick"),
+    };
+
+    let _monitorInited    = false;
+    let _conclusionInited = false;
+    let _initialMonitorBoot = false;
+
+    function isAnyModalOpen() {
+      return Object.values(modalMap).some(m => m && !m.classList.contains("hidden"));
+    }
+
+    function openItModal(which) {
+      const m = modalMap[which];
+      if (!m) return;
+      m.classList.remove("hidden");
+      m.removeAttribute("aria-hidden");
+      if (window.pauseMonitor) window.pauseMonitor();
+      if (which === "conclusion") {
+        if (!_conclusionInited) { _conclusionInited = true; if (window.initConclusionPanel) window.initConclusionPanel(); }
+        else { if (window.resumeConclusionPanel) window.resumeConclusionPanel(); }
+      }
+    }
+
+    function closeItModal(which) {
+      const m = modalMap[which];
+      if (!m) return;
+      m.classList.add("hidden");
+      m.setAttribute("aria-hidden", "true");
+      // При закритті будь-якої модалки — повертаємось до Моніторингу.
+      if (!isAnyModalOpen() && window.resumeMonitor) window.resumeMonitor();
+    }
+
+    function bootMonitor() {
+      if (_initialMonitorBoot) return;
+      _initialMonitorBoot = true;
+      _monitorInited = true;
+      if (window.initMonitor) window.initMonitor();
+    }
+
+    // Legacy API: window.itSetTab (використовується в monitor.js,
+    // наприклад для switch на Висновок чи Швидко) → відкриває модалку.
+    function setTab(which) {
+      if (which === "monitor") {
+        // Закрити всі модалки і повернутись до Моніторингу.
+        Object.keys(modalMap).forEach((k) => closeItModal(k));
+        if (!_monitorInited) bootMonitor();
+        else if (window.resumeMonitor) window.resumeMonitor();
+        return;
+      }
+      if (which in modalMap) openItModal(which);
+    }
+    window.itSetTab = setTab;
+
+    // Header buttons
+    document.getElementById("itOpenSearch")?.addEventListener("click",     () => openItModal("search"));
+    document.getElementById("itOpenView")?.addEventListener("click",       () => openItModal("view"));
+    document.getElementById("itOpenLm")?.addEventListener("click",         () => openItModal("landmarks"));
+    document.getElementById("itOpenConclusion")?.addEventListener("click", () => openItModal("conclusion"));
+    document.getElementById("itOpenQuick")?.addEventListener("click",      () => openItModal("quick"));
+
+    // Close handlers (X / backdrop)
+    document.querySelectorAll("[data-it-modal-close]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        const which = el.getAttribute("data-it-modal-close");
+        if (which) { e.stopPropagation(); closeItModal(which); }
+      });
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      for (const k of ["search","view","landmarks","conclusion","quick"]) {
+        const m = modalMap[k];
+        if (m && !m.classList.contains("hidden")) { closeItModal(k); break; }
+      }
+    });
 
     window.interceptsExplorerFocusLandmarksTab = function (nameQuery) {
-      setTab("landmarks");
+      openItModal("landmarks");
       const iframe = document.getElementById("itLandmarksIframe");
       if (!iframe) return;
       const q = String(nameQuery || "").trim();
-      const url = q
-        ? `/landmarks?embed=1&name=${encodeURIComponent(q)}`
-        : "/landmarks?embed=1";
-      iframe.src = url;
+      iframe.src = q ? `/landmarks?embed=1&name=${encodeURIComponent(q)}` : "/landmarks?embed=1";
     };
+
+    // Boot Monitor + URL-handling — відкладаємо до DOMContentLoaded.
+    // Інакше window.initMonitor ще не існує (monitor.js завантажується
+    // ПІСЛЯ цього inline-script у блоці scripts).
+    function _doBoot() {
+      const qs = new URLSearchParams(location.search);
+      const isEmbedMode = qs.get("embed") === "1";
+
+      // У embed (iframe з /home) — Monitor пропускаємо, фокус на одній модалці.
+      if (!isEmbedMode) bootMonitor();
+
+      const tabFromUrl = (qs.get("tab") || "").toLowerCase();
+      if (tabFromUrl in modalMap) {
+        openItModal(tabFromUrl);
+      }
+
+      // В embed-режимі під tab=view — автозаповнюємо форму з URL-параметрів
+      // (period_start, period_end, network, callsign) і одразу сабмітимо.
+      if (isEmbedMode && tabFromUrl === "view") {
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+        setVal("periodStart",   qs.get("period_start") || "");
+        setVal("periodEnd",     qs.get("period_end")   || "");
+        setVal("networkQuery",  qs.get("network")      || "");
+        setVal("callsignQuery", qs.get("callsign")     || "");
+        const form = document.getElementById("interceptsFilterForm");
+        if (form) {
+          if (typeof form.requestSubmit === "function") form.requestSubmit();
+          else form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+        }
+      }
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", _doBoot);
+    } else {
+      _doBoot();
+    }
   })();
 </script>
-<script src="/static/intercepts_explorer.js?v=20"></script>
+<style>
+/* ── Header style like Home ──────────────────────────────── */
+.it-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 0;          /* основний відступ керується .intercepts-page gap */
+}
+.it-page-header__title h1 { margin: 0; line-height: 1.1; }
+.it-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Modal cards — широкі та scrollable ──────────────────── */
+.it-modal-card {
+  width: 95vw;
+  max-width: 1180px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+/* XL варіант — для Висновку (карта + редактор).
+ * Вирівняно по верхньому краю (margin-top: 12px). Висота 86vh × 1.10 ≈ 95vh
+ * (+10% від попередньої ітерації). */
+.it-modal-card--xl {
+  margin: 12px auto;
+  max-width: 1480px;
+  max-height: 95vh;
+}
+
+/* Textarea «Висновок» (concl-ta--4) — збільшено втричі (0.45 → 1.35). */
+.it-modal-card--xl textarea.concl-ta--4 {
+  height: calc((4 * 1.6em * 1.69 + 18px) / 2 * 1.35);
+}
+/* Textarea «Координати» (concl-ta--5) — збільшено вдвічі (0.4 → 0.8). */
+.it-modal-card--xl textarea.concl-ta--5 {
+  height: calc((5 * 1.6em * 2.25 + 18px) / 2 * 0.8);
+}
+/* Textarea «Перехоплення» — зменшено на 30% (58vh → 41vh), щоб звільнити
+ * простір під збільшені поля «Висновок» і «Координати». */
+.it-modal-card--xl .concl-ta-wrap--intercept {
+  flex: 1 1 auto;
+  max-height: 41vh;
+  min-height: 0;
+}
+
+/* Швидко-модалка: +10% висоти від базової it-modal-card (92vh з margin
+ * 60px auto). Підіймаємо угору й даємо більше місця. */
+#itModalQuick .it-modal-card {
+  margin: 8px auto;
+  max-height: 96vh;
+}
+.it-modal-body {
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+.it-modal-body > section { min-width: 0; }
+
+/* ── Підняти модалки над Leaflet (z-index: 800) та над спільною
+ *    callsign-модалкою (#csModal має .modal → z-index: 50). ─── */
+.it-modal { z-index: 9999 !important; }
+
+/* Без цього override .tab-panel-wrap (position:relative; z-index:1) створює
+ * стек-контекст, у якому всі модалки .it-modal обмежені до z-index:1 від
+ * кореня сторінки — і #csModal (z-index:50, рівень body) опиняється над ними. */
+.intercepts-page .tab-panel-wrap {
+  position: static;
+  z-index: auto;
+}
+
+/* Модалки, які створюються ДИНАМІЧНО через monitor.js і відкриваються
+ * поверх "Висновку" (.it-modal має z-index: 9999), мусять мати z-index
+ * вище — інакше вони невидимі під батьківською модалкою. */
+#monTemplatesModal { z-index: 10500 !important; }
+
+/* Модалка редагування орієнтира — лежить у base.html (дефолтний z-index: 50).
+ * У флоу "Перегляд → Орієнтири → клік на варіант" вона має відкритись ПОВЕРХ
+ * .it-modal (z-index 9999), а не позаду неї. */
+#lmModal { z-index: 10500 !important; }
+
+/* Модалка позивного (#csModal, base.html, дефолтний z-index:50) у флоу
+ * "Перегляд → клік на чіп позивного" має відкритись ПОВЕРХ .it-modal (9999). */
+#csModal { z-index: 10500 !important; }
+
+/* Модалка вибору орієнтира (створюється динамічно в monitor.js → openLandmarkPicker)
+ * — у флоу "Висновок → Додати → Орієнтир" має бути ПОВЕРХ .it-modal. */
+#conclLmPicker { z-index: 10500 !important; }
+</style>
+<script src="/static/intercepts_explorer.js?v=27"></script>
+<script src="/static/monitor.js?v=97"></script>
 <script src="/static/landmarks.js?v=13" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>
-<script src="/static/networks_autocomplete.js?v=3" defer></script>
+<script src="/static/networks_autocomplete.js?v=4" defer></script>
+<script src="/static/dictionary.js?v=1" defer></script>
 {% endblock %}
 

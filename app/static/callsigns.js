@@ -703,27 +703,71 @@
     }
   }
 
-  function setTab(which) {
-    const isFreq   = which === "freq";
-    const isSearch = which === "search";
-    const isLinks  = which === "links";
-    const isWanted = which === "wanted";
+  // ── Modal-based navigation ────────────────────────────────────
+  //  Зв'язки — основний контент сторінки.
+  //  Позивні р/м / Пошук+правка / Розшук — модалки, що відкриваються
+  //  кнопками з шапки. Legacy setTab лишається працювати — він просто
+  //  показує/ховає модалки замість колишнього toggle .hidden на панелях.
+  const csModalMap = {
+    freq:       document.getElementById("csModalFreq"),
+    search:     document.getElementById("csModalSearch"),
+    wanted:     document.getElementById("csModalWanted"),
+    intercepts: document.getElementById("csModalIntercepts"),
+  };
 
-    if (tabFreq)   { tabFreq.classList.toggle("active",   isFreq);   tabFreq.setAttribute("aria-selected",   isFreq   ? "true" : "false"); }
-    if (tabSearch) { tabSearch.classList.toggle("active", isSearch); tabSearch.setAttribute("aria-selected", isSearch ? "true" : "false"); }
-    if (tabLinks)  { tabLinks.classList.toggle("active",  isLinks);  tabLinks.setAttribute("aria-selected",  isLinks  ? "true" : "false"); }
-    if (tabWanted) { tabWanted.classList.toggle("active", isWanted); tabWanted.setAttribute("aria-selected", isWanted ? "true" : "false"); }
-
-    if (paneFreq)   paneFreq.classList.toggle("hidden",   !isFreq);
-    if (paneSearch) paneSearch.classList.toggle("hidden", !isSearch);
-    if (paneLinks)  paneLinks.classList.toggle("hidden",  !isLinks);
-    if (paneWanted) paneWanted.classList.toggle("hidden", !isWanted);
-
-    if (!isFreq)   setInfo("");
-    if (!isSearch) setSearchInfo("");
-    if (!isLinks  && elLinkInfo)   elLinkInfo.textContent = "";
-    if (!isWanted && elWantedInfo) elWantedInfo.textContent = "";
+  function openCsModal(which) {
+    const m = csModalMap[which];
+    if (!m) return;
+    m.classList.remove("hidden");
+    m.removeAttribute("aria-hidden");
   }
+  function closeCsModal(which) {
+    const m = csModalMap[which];
+    if (!m) return;
+    m.classList.add("hidden");
+    m.setAttribute("aria-hidden", "true");
+    if (which === "freq")   setInfo("");
+    if (which === "search") setSearchInfo("");
+    if (which === "wanted" && elWantedInfo) elWantedInfo.textContent = "";
+    if (which === "intercepts") {
+      // Скидаємо src iframe, щоб не тримати ресурси у фоні.
+      const ifr = document.getElementById("csModalInterceptsFrame");
+      if (ifr) ifr.src = "about:blank";
+    }
+  }
+  function closeAllCsModals() {
+    Object.keys(csModalMap).forEach((k) => closeCsModal(k));
+  }
+
+  function setTab(which) {
+    // "links" — основний контент сторінки. Закриваємо будь-яку відкриту модалку.
+    if (which === "links") {
+      closeAllCsModals();
+      return;
+    }
+    if (which in csModalMap) {
+      openCsModal(which);
+    }
+  }
+
+  // Header buttons (нові)
+  document.getElementById("csOpenFreq")?.addEventListener("click",   () => openCsModal("freq"));
+  document.getElementById("csOpenSearch")?.addEventListener("click", () => openCsModal("search"));
+  document.getElementById("csOpenWanted")?.addEventListener("click", () => openCsModal("wanted"));
+
+  document.querySelectorAll("[data-cs-modal-close]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      const which = el.getAttribute("data-cs-modal-close");
+      if (which) { e.stopPropagation(); closeCsModal(which); }
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    for (const k of ["intercepts","freq","search","wanted"]) {
+      const m = csModalMap[k];
+      if (m && !m.classList.contains("hidden")) { closeCsModal(k); break; }
+    }
+  });
 
   async function runLinks() {
     if (!elLinkCallsignId || !elLinkCallsignId.value) {
@@ -908,6 +952,40 @@
 
     applyLinksQueryParams();
     applyFreqQueryParams();
+
+    /* ── Публічний API для callsign_modal.js ─────────────────────────
+     * Викликається з модалки позивного (#csModal → "Зв'язки" / "Перехоплення"),
+     * щоб не відкривати нову вкладку браузера, а лишатись на /callsigns. */
+    window.csOpenLinksForCallsign = async function (callsignId, callsignName) {
+      const cid = Number(callsignId || 0);
+      if (!cid) return false;
+      closeAllCsModals();
+      if (elLinkCallsignId) elLinkCallsignId.value = String(cid);
+      if (elLinkCallsign && callsignName) elLinkCallsign.value = String(callsignName).trim();
+      // Підтягуємо повну інфо про позивний (мережа/частота) і одразу тригеримо runLinks.
+      try {
+        const r = await fetch(`/api/callsigns/by-id?id=${encodeURIComponent(cid)}`);
+        const data = await r.json();
+        if (data && data.ok && data.row) {
+          if (elLinkCallsign && (data.row.name || "")) elLinkCallsign.value = String(data.row.name).trim();
+          if (elLinkNetworkId) elLinkNetworkId.value = String(data.row.network_id || "");
+          if (elLinkFreq) elLinkFreq.value = String(data.row.frequency || "").trim();
+        }
+      } catch (_) { /* ignore — все одно спробуємо runLinks по id */ }
+      await runLinks();
+      return true;
+    };
+
+    window.csOpenInterceptsModal = function (url) {
+      const m = csModalMap.intercepts;
+      const ifr = document.getElementById("csModalInterceptsFrame");
+      if (!m || !ifr) return false;
+      // Cache-bust, щоб після перезавантажень/перебирання чергу iframe тягнув свіже.
+      const sep = url.indexOf("?") >= 0 ? "&" : "?";
+      ifr.src = url + sep + "_=" + Date.now();
+      openCsModal("intercepts");
+      return true;
+    };
   });
 
   window.addEventListener("callsignModalDeleted", function () {

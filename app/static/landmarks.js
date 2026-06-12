@@ -27,6 +27,7 @@
   const editIdInput = $("lmEditId");
   const editNameInput = $("lmEditName");
   const editIsActiveInput = $("lmEditIsActive");
+  const editIsPermanentInput = $("lmEditIsPermanent");
   const editLocationMgrsInput = $("lmEditLocationMgrs");
   const editLocationWktInput = $("lmEditLocationWkt");
   const editCommentInput = $("lmEditComment");
@@ -41,10 +42,28 @@
   const editSaveBtn = $("lmEditSaveBtn");
   const copyMgrsBtn = $("lmEditCopyMgrs");
   const copyWktBtn = $("lmEditCopyWkt");
+  const mapAddBtn = $("lmEditMapAddBtn");
+  const mapClearBtn = $("lmEditMapClearBtn");
+  const mapHintEl = $("lmEditMapHint");
 
   const mapState = {
     map: null,
     layers: [],
+  };
+
+  /** Графічний редактор геометрії на мапі модалки.
+      verts — массив L.LatLng в порядку додавання;
+      mainLayer — полігон/полілінія, що візуалізує контур;
+      vAnchors — драгабельні маркери-вершини;
+      midAnchors — маркери-середини ребер (полігон), драг → нова вершина. */
+  const editor = {
+    enabled: false,
+    drawing: false,
+    geomId: 1,
+    verts: [],
+    mainLayer: null,
+    vAnchors: [],
+    midAnchors: [],
   };
 
   const state = {
@@ -82,12 +101,14 @@
   function clearEditInputs() {
     if (editNameInput) editNameInput.value = "";
     if (editIsActiveInput) editIsActiveInput.checked = true;
+    if (editIsPermanentInput) editIsPermanentInput.checked = true;
     if (editLocationMgrsInput) editLocationMgrsInput.value = "";
     if (editLocationWktInput) editLocationWktInput.value = "";
     if (editCommentInput) editCommentInput.value = "";
     if (editGroupSelect) editGroupSelect.value = "";
     if (editTypeSelect) editTypeSelect.value = "";
     if (editGeomSelect && state.geomTypes.length) editGeomSelect.value = String(state.geomTypes[0].id);
+    editor.verts = [];
     syncGeomFields();
   }
 
@@ -173,121 +194,214 @@
   }
 
   function destroyLandmarkMap() {
+    clearEditorLayers();
     if (mapState.map) {
-      try {
-        mapState.map.remove();
-      } catch {}
+      try { mapState.map.remove(); } catch {}
       mapState.map = null;
     }
     mapState.layers = [];
-    if (mapEl) mapEl.innerHTML = "";
+    editor.verts = [];
+    editor.drawing = false;
+    if (mapAddBtn) mapAddBtn.classList.remove("is-active");
+    if (mapEl) {
+      mapEl.classList.remove("is-drawing");
+      mapEl.innerHTML = "";
+    }
   }
 
-  function refreshLandmarkMap() {
-    destroyLandmarkMap();
-    if (!mapEl || !window.L) return;
+  /* ---------- Helpers ---------- */
+  function lmAnchorIcon(kind) {
+    const cls = kind === "mid" ? "lm-anchor lm-anchor--mid" : "lm-anchor";
+    return window.L.divIcon({ className: "", iconSize: [16, 16], iconAnchor: [8, 8], html: `<div class="${cls}"></div>` });
+  }
+  function midLatLng(a, b) { return window.L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2); }
 
-    const gid = Number(editGeomSelect && editGeomSelect.value ? editGeomSelect.value : 1);
-    let latlngs = [];
-    let isPoint = false;
+  function ensureMap() {
+    if (!mapEl || !window.L) return null;
+    if (mapState.map) return mapState.map;
+    mapEl.innerHTML = "";
+    const map = window.L.map(mapEl, { scrollWheelZoom: true });
+    mapState.map = map;
+    window.L.tileLayer(
+      "https://mt1.google.com/vt/lyrs=y&hl=uk&x={x}&y={y}&z={z}",
+      { maxZoom: 20, attribution: "Google" }
+    ).addTo(map);
+    // Default view (буде fit-bounds, як з'являться точки)
+    map.setView([48.5, 37.5], 9);
+    // Клік по карті → додати вершину в режимі редагування
+    map.on("click", function (e) {
+      if (editor.drawing && (editor.geomId === 2 || editor.geomId === 3)) {
+        editor.verts.push(e.latlng);
+        rebuildEditorLayers();
+        syncWktFromEditor();
+      }
+    });
+    return map;
+  }
 
+  function clearEditorLayers() {
+    const map = mapState.map;
+    if (!map) { editor.mainLayer = null; editor.vAnchors = []; editor.midAnchors = []; return; }
+    if (editor.mainLayer) { map.removeLayer(editor.mainLayer); editor.mainLayer = null; }
+    editor.vAnchors.forEach(m => map.removeLayer(m));
+    editor.midAnchors.forEach(m => map.removeLayer(m));
+    editor.vAnchors = []; editor.midAnchors = [];
+  }
+
+  function rebuildEditorLayers() {
+    const map = ensureMap(); if (!map) return;
+    clearEditorLayers();
+    if (!editor.verts.length) return;
+
+    const gid = editor.geomId;
+    const isPoly = (gid === 2);
     if (gid === 1) {
-      const ll = mgrsToLatLonBrowser(editLocationMgrsInput && editLocationMgrsInput.value);
-      if (ll) {
-        latlngs = [window.L.latLng(ll.lat, ll.lon)];
-        isPoint = true;
-      } else if (editLocationWktInput && editLocationWktInput.value) {
-        const pw = parsePointWkt(editLocationWktInput.value);
-        if (pw) {
-          latlngs = [window.L.latLng(pw.lat, pw.lon)];
-          isPoint = true;
-        }
-      }
-    } else {
-      const wkt = String(editLocationWktInput && editLocationWktInput.value ? editLocationWktInput.value : "").trim();
-      const up = wkt.toUpperCase();
-      if (up.startsWith("POINT")) {
-        const pw = parsePointWkt(wkt);
-        if (pw) {
-          latlngs = [window.L.latLng(pw.lat, pw.lon)];
-          isPoint = true;
-        }
-      } else if (up.startsWith("LINESTRING")) {
-        const inner = wkt.match(/^LINESTRING\s*\(\s*(.+)\s*\)/i);
-        if (inner) {
-          const pts = inner[1].split(",").map((p) => p.trim().split(/\s+/));
-          for (let i = 0; i < pts.length; i++) {
-            const a = pts[i];
-            if (a.length < 2) continue;
-            const lon = Number(a[0]);
-            const lat = Number(a[1]);
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-            latlngs.push(window.L.latLng(lat, lon));
-          }
-        }
-      } else {
-        const ring = parsePolygonRingLatLngs(wkt);
-        if (ring && ring.length) latlngs = ring;
-      }
-    }
-
-    if (!latlngs.length) {
-      mapEl.innerHTML = `<div class="landmark-modal-map-placeholder small">Немає координат для відображення</div>`;
+      // Точка
+      const m = window.L.circleMarker(editor.verts[0], { radius: 8, color: "#f97316", weight: 2, fillColor: "#22c55e", fillOpacity: 0.85 }).addTo(map);
+      editor.mainLayer = m;
       return;
     }
 
-    const map = window.L.map(mapEl, { scrollWheelZoom: false });
-    mapState.map = map;
+    // Зона (полігон) ≥ 3 верш або Крива (полілінія) ≥ 2 верш
+    if (isPoly && editor.verts.length >= 3) {
+      editor.mainLayer = window.L.polygon(editor.verts, { color: "#f97316", weight: 2, fillColor: "#22c55e", fillOpacity: 0.2 }).addTo(map);
+    } else if (!isPoly && editor.verts.length >= 2) {
+      editor.mainLayer = window.L.polyline(editor.verts, { color: "#f97316", weight: 3 }).addTo(map);
+    } else if (editor.verts.length === 1) {
+      editor.mainLayer = window.L.circleMarker(editor.verts[0], { radius: 5, color: "#f97316", fillColor: "#f97316", fillOpacity: 0.7 }).addTo(map);
+    }
 
-    window.L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      {
-        maxZoom: 19,
-        attribution: "Tiles &copy; Esri",
-      }
-    ).addTo(map);
-
-    if (isPoint) {
-      const m = window.L.circleMarker(latlngs[0], {
-        radius: 8,
-        color: "#f97316",
-        weight: 2,
-        fillColor: "#22c55e",
-        fillOpacity: 0.85,
+    // Якори-вершини
+    editor.verts.forEach((ll, idx) => {
+      const m = window.L.marker(ll, { icon: lmAnchorIcon("v"), draggable: true, bubblingMouseEvents: false }).addTo(map);
+      m.on("drag", e => { editor.verts[idx] = e.latlng; if (editor.mainLayer && editor.mainLayer.setLatLngs) editor.mainLayer.setLatLngs(editor.verts); updateMidAnchors(); });
+      m.on("dragend", () => syncWktFromEditor());
+      m.on("click", e => {
+        // Ctrl/Cmd-клік — видалити вершину
+        if (e.originalEvent && (e.originalEvent.ctrlKey || e.originalEvent.metaKey)) {
+          editor.verts.splice(idx, 1);
+          rebuildEditorLayers();
+          syncWktFromEditor();
+        }
       });
-      m.addTo(map);
-      mapState.layers.push(m);
-      map.setView(latlngs[0], 12);
-    } else {
-      const gid = Number(editGeomSelect && editGeomSelect.value ? editGeomSelect.value : 2);
-      const wktStr = String(editLocationWktInput && editLocationWktInput.value ? editLocationWktInput.value : "").trim();
-      const isLine = wktStr.toUpperCase().startsWith("LINESTRING") || gid === 3;
-      if (isLine && latlngs.length >= 2) {
-        const line = window.L.polyline(latlngs, {
-          color: "#f97316",
-          weight: 3,
+      editor.vAnchors.push(m);
+    });
+
+    // Серединні якори (тільки для полігону / кривої) — перетягування створює нову вершину
+    if (editor.verts.length >= 2) {
+      const n = editor.verts.length;
+      const segCnt = isPoly ? n : n - 1;
+      for (let i = 0; i < segCnt; i++) {
+        const a = editor.verts[i];
+        const b = editor.verts[(i + 1) % n];
+        const m = window.L.marker(midLatLng(a, b), { icon: lmAnchorIcon("mid"), draggable: true, bubblingMouseEvents: false }).addTo(map);
+        let inserted = false; let newIdx = -1;
+        m.on("dragstart", () => { inserted = false; });
+        m.on("drag", e => {
+          if (!inserted) {
+            newIdx = i + 1;
+            editor.verts.splice(newIdx, 0, e.latlng);
+            inserted = true;
+          } else {
+            editor.verts[newIdx] = e.latlng;
+          }
+          if (editor.mainLayer && editor.mainLayer.setLatLngs) editor.mainLayer.setLatLngs(editor.verts);
         });
-        line.addTo(map);
-        mapState.layers.push(line);
-        map.fitBounds(line.getBounds().pad(0.2));
-      } else if (latlngs.length >= 3) {
-        const poly = window.L.polygon(latlngs, {
-          color: "#f97316",
-          weight: 2,
-          fillColor: "#22c55e",
-          fillOpacity: 0.2,
-        });
-        poly.addTo(map);
-        mapState.layers.push(poly);
-        map.fitBounds(poly.getBounds().pad(0.15));
-      } else {
-        try {
-          map.remove();
-        } catch {}
-        mapState.map = null;
-        mapEl.innerHTML = `<div class="landmark-modal-map-placeholder small">Недостатньо даних для WKT</div>`;
+        m.on("dragend", () => { rebuildEditorLayers(); syncWktFromEditor(); });
+        editor.midAnchors.push(m);
       }
     }
+  }
+
+  function updateMidAnchors() {
+    const isPoly = (editor.geomId === 2);
+    const n = editor.verts.length;
+    const segCnt = isPoly ? n : n - 1;
+    editor.midAnchors.forEach((m, i) => {
+      if (i >= segCnt) return;
+      const a = editor.verts[i];
+      const b = editor.verts[(i + 1) % n];
+      m.setLatLng(midLatLng(a, b));
+    });
+  }
+
+  /* Будує WKT з editor.verts і пише в editLocationWktInput. */
+  function syncWktFromEditor() {
+    if (!editLocationWktInput) return;
+    const gid = editor.geomId;
+    if (gid === 1) {
+      if (editor.verts.length) {
+        const p = editor.verts[0];
+        editLocationWktInput.value = `POINT (${p.lng} ${p.lat})`;
+      } else {
+        editLocationWktInput.value = "";
+      }
+      return;
+    }
+    if (gid === 2 && editor.verts.length >= 3) {
+      const ring = editor.verts.concat([editor.verts[0]]).map(p => `${p.lng} ${p.lat}`).join(", ");
+      editLocationWktInput.value = `POLYGON((${ring}))`;
+      return;
+    }
+    if (gid === 3 && editor.verts.length >= 2) {
+      const line = editor.verts.map(p => `${p.lng} ${p.lat}`).join(", ");
+      editLocationWktInput.value = `LINESTRING(${line})`;
+      return;
+    }
+    editLocationWktInput.value = "";
+  }
+
+  /* Завантажує початкові вершини з збереженого WKT (для режиму редагування). */
+  function loadEditorFromWkt(wkt, gid) {
+    editor.verts = [];
+    if (!wkt) return;
+    const up = wkt.trim().toUpperCase();
+    if (up.startsWith("POINT")) {
+      const pw = parsePointWkt(wkt); if (pw) editor.verts = [window.L.latLng(pw.lat, pw.lon)];
+    } else if (up.startsWith("LINESTRING")) {
+      const m = wkt.match(/^LINESTRING\s*\(\s*(.+)\s*\)/i);
+      if (m) m[1].split(",").forEach(p => {
+        const a = p.trim().split(/\s+/); const lon = Number(a[0]), lat = Number(a[1]);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) editor.verts.push(window.L.latLng(lat, lon));
+      });
+    } else if (up.startsWith("POLYGON")) {
+      const ring = parsePolygonRingLatLngs(wkt) || [];
+      // У WKT POLYGON останній == перший — приберемо дубль для редактора
+      const arr = ring.slice();
+      if (arr.length > 1 && arr[0].lat === arr[arr.length - 1].lat && arr[0].lng === arr[arr.length - 1].lng) arr.pop();
+      editor.verts = arr;
+    }
+  }
+
+  function refreshLandmarkMap() {
+    if (!mapEl || !window.L) return;
+    const map = ensureMap(); if (!map) return;
+
+    const gid = Number(editGeomSelect && editGeomSelect.value ? editGeomSelect.value : 1);
+    editor.geomId = gid;
+
+    // Точка: вершина береться з MGRS-інпута (overrides editor.verts)
+    if (gid === 1) {
+      const ll = mgrsToLatLonBrowser(editLocationMgrsInput && editLocationMgrsInput.value);
+      if (ll) {
+        editor.verts = [window.L.latLng(ll.lat, ll.lon)];
+      } else if (!editor.verts.length && editLocationWktInput && editLocationWktInput.value) {
+        loadEditorFromWkt(editLocationWktInput.value, 1);
+      }
+    }
+    rebuildEditorLayers();
+    syncWktFromEditor();
+
+    // Авто-центр на наявних точках
+    if (editor.verts.length) {
+      if (editor.verts.length === 1) {
+        map.setView(editor.verts[0], Math.max(map.getZoom(), 12));
+      } else {
+        const g = window.L.featureGroup(editor.vAnchors);
+        try { map.fitBounds(g.getBounds().pad(0.2)); } catch {}
+      }
+    }
+    setTimeout(() => map.invalidateSize(), 50);
   }
 
   let mapRefreshTimer = null;
@@ -301,6 +415,7 @@
 
   function syncGeomFields() {
     const gid = Number(editGeomSelect && editGeomSelect.value ? editGeomSelect.value : 1);
+    editor.geomId = gid;
     if (mgrsWrap && wktWrap) {
       if (gid === 1) {
         mgrsWrap.classList.remove("hidden");
@@ -309,6 +424,20 @@
         mgrsWrap.classList.add("hidden");
         wktWrap.classList.remove("hidden");
       }
+    }
+    // Кнопки редактора видно лише для Зона/Крива
+    const isEdit = (gid === 2 || gid === 3);
+    if (mapAddBtn)   mapAddBtn.classList.toggle("hidden",   !isEdit);
+    if (mapClearBtn) mapClearBtn.classList.toggle("hidden", !isEdit);
+    if (!isEdit) {
+      editor.drawing = false;
+      if (mapAddBtn) mapAddBtn.classList.remove("is-active");
+      if (mapEl) mapEl.classList.remove("is-drawing");
+    }
+    if (mapHintEl) {
+      mapHintEl.textContent = (gid === 1)
+        ? "Перегляд геометрії (WGS84). Для «точки» введіть MGRS зліва."
+        : "Натисніть «+» і клікайте по карті, щоб додати вершини. Якори перетягуйте; Ctrl+клік — видалити вершину.";
     }
     scheduleMapRefresh();
   }
@@ -553,12 +682,100 @@
     state.types = Array.isArray(data.types) ? data.types : [];
     state.geomTypes = Array.isArray(data.geom_types) ? data.geom_types : [];
     state.unknownTypeId = data.unknown_type_id ? Number(data.unknown_type_id) : null;
+    // Лічильник використання — отримуємо паралельно, щоб показати в керуванні.
+    try {
+      const usage = await apiGet("/api/landmark-type-usage");
+      state.typeUsage = usage && usage.usage ? usage.usage : {};
+    } catch { state.typeUsage = {}; }
 
     populateSelect(groupSelect, state.groups, true, "Усі");
     populateSelect(typeSelect, state.types, true, "Усі");
     populateSelect(editGroupSelect, state.groups, true, "Без підрозділу");
     populateSelect(editTypeSelect, state.types, true, "Оберіть тип");
     populateGeomSelect(editGeomSelect, state.geomTypes);
+    renderTypeManageList();
+  }
+
+  /* ---- Type manager (inline panel) ---- */
+  function renderTypeManageList() {
+    const host = $("lmTypeManageList");
+    if (!host) return;
+    host.innerHTML = "";
+    const unk = state.unknownTypeId;
+    state.types.forEach(t => {
+      const row = document.createElement("div");
+      row.className = "lm-type-manage-row";
+      const isSystem = (t.id === unk);
+      const used = (state.typeUsage && state.typeUsage[t.id]) || 0;
+      const meta = `<span class="lm-type-manage-row-meta">${isSystem ? "системний" : (used > 0 ? "× " + used : "")}</span>`;
+      const canDel = !isSystem && used === 0;
+      row.innerHTML =
+        `<span class="${isSystem ? "is-system" : ""}">${escapeHtml(t.name)}</span>` +
+        `<span style="display:flex;align-items:center">${meta}` +
+        `<button type="button" class="lm-type-manage-del-btn" data-id="${t.id}" ${canDel ? "" : "disabled"} title="${isSystem ? "Системний — не можна видалити" : (used > 0 ? "Використовується — спершу перепризначте орієнтири" : "Видалити")}">✕</button>` +
+        `</span>`;
+      host.appendChild(row);
+    });
+    host.querySelectorAll(".lm-type-manage-del-btn").forEach(b => {
+      b.addEventListener("click", () => onDeleteType(Number(b.dataset.id)));
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  }
+
+  async function onAddType() {
+    const inp = $("lmTypeManageName");
+    const err = $("lmTypeManageErr");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    const name = (inp && inp.value || "").trim();
+    if (!name) return;
+    try {
+      await apiPost("/api/landmark-types", { name });
+      if (inp) inp.value = "";
+      await loadReference();
+      if (window.appToast) window.appToast(`Тип додано: ${name}`, "success", 1400);
+    } catch (e) {
+      if (err) { err.textContent = e.message || "Помилка"; err.style.display = "block"; }
+    }
+  }
+
+  async function onDeleteType(id) {
+    const t = state.types.find(x => x.id === id);
+    if (!t) return;
+    if (!confirm(`Видалити тип «${t.name}»?`)) return;
+    const err = $("lmTypeManageErr");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    try {
+      await apiPost(`/api/landmark-types/${id}/delete`, {});
+      await loadReference();
+      if (window.appToast) window.appToast(`Тип видалено: ${t.name}`, "success", 1400);
+    } catch (e) {
+      if (err) { err.textContent = e.message || "Помилка видалення"; err.style.display = "block"; }
+    }
+  }
+
+  function initTypeManageUi() {
+    const btn = $("lmTypeManageBtn");
+    const panel = $("lmTypeManagePanel");
+    const addBtn = $("lmTypeManageAddBtn");
+    const nameInp = $("lmTypeManageName");
+    if (!btn || !panel) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      panel.classList.toggle("hidden");
+    });
+    // Закриття при кліку поза панеллю.
+    document.addEventListener("click", (e) => {
+      if (panel.classList.contains("hidden")) return;
+      if (panel.contains(e.target) || btn.contains(e.target)) return;
+      panel.classList.add("hidden");
+    });
+    if (addBtn) addBtn.addEventListener("click", onAddType);
+    if (nameInp) nameInp.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); onAddType(); }
+    });
   }
 
   function fillEditModal(landmark) {
@@ -579,10 +796,18 @@
 
     const ig = landmark.id_geom != null ? Number(landmark.id_geom) : 1;
     if (editGeomSelect) editGeomSelect.value = String(ig);
+    editor.geomId = ig;
 
     if (editLocationMgrsInput) editLocationMgrsInput.value = landmark.location_mgrs || "";
     if (editLocationWktInput) editLocationWktInput.value = landmark.location_wkt || "";
     if (editCommentInput) editCommentInput.value = landmark.comment || "";
+    if (editIsActiveInput) editIsActiveInput.checked = landmark.is_active !== 0;
+    if (editIsPermanentInput) editIsPermanentInput.checked = landmark.is_permanent !== 0;
+
+    // Завантажити збережений WKT у редактор (для Зона/Крива/Точка без MGRS)
+    if (ig === 2 || ig === 3) {
+      loadEditorFromWkt(landmark.location_wkt || "", ig);
+    }
 
     if (
       ig === 1 &&
@@ -650,6 +875,7 @@
       const comment = String(editCommentInput?.value || "").trim();
       const isCreate = !id;
       const is_active = editIsActiveInput?.checked ? 1 : 0;
+      const is_permanent = editIsPermanentInput?.checked ? 1 : 0;
 
       if (!name) throw new Error("Назва не може бути порожньою");
 
@@ -661,6 +887,10 @@
         } else {
           location_wkt = "";
         }
+      } else if (id_geom === 2) {
+        if (editor.verts.length < 3) throw new Error("Для «Зони» потрібно щонайменше 3 вершини");
+      } else if (id_geom === 3) {
+        if (editor.verts.length < 2) throw new Error("Для «Кривої» потрібно щонайменше 2 точки");
       }
 
       const payload = {
@@ -672,6 +902,7 @@
         id_group: id_group ? Number(id_group) : null,
         comment: comment || "",
         is_active: is_active,
+        is_permanent: is_permanent,
       };
 
       if (id) {
@@ -753,12 +984,33 @@
       });
     }
 
-    if (editGeomSelect) editGeomSelect.addEventListener("change", syncGeomFields);
+    if (editGeomSelect) editGeomSelect.addEventListener("change", () => {
+      // Зміна типу геометрії скидає вершини редактора (несумісні форми).
+      editor.verts = [];
+      syncGeomFields();
+    });
+    initTypeManageUi();
     if (editLocationMgrsInput) {
       editLocationMgrsInput.addEventListener("input", scheduleMapRefresh);
     }
     if (editLocationWktInput) {
       editLocationWktInput.addEventListener("input", scheduleMapRefresh);
+    }
+    // Кнопка «+» — увімкнути режим додавання вершин по кліку на карту.
+    if (mapAddBtn) {
+      mapAddBtn.addEventListener("click", () => {
+        editor.drawing = !editor.drawing;
+        mapAddBtn.classList.toggle("is-active", editor.drawing);
+        if (mapEl) mapEl.classList.toggle("is-drawing", editor.drawing);
+      });
+    }
+    // Кнопка «✕» — очистити всі вершини редактора.
+    if (mapClearBtn) {
+      mapClearBtn.addEventListener("click", () => {
+        editor.verts = [];
+        rebuildEditorLayers();
+        syncWktFromEditor();
+      });
     }
     if (editDeleteBtn) {
       editDeleteBtn.addEventListener("click", async () => {

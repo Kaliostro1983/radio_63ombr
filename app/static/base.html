@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ app_name }}</title>
+  <script>
+    // Apply saved theme + sidebar state before CSS paints (avoids flicker).
+    (function () {
+      try {
+        var savedTheme = localStorage.getItem("theme");
+        if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
+        var savedSidebar = localStorage.getItem("sidebarState") || "full";
+        document.documentElement.setAttribute("data-sidebar", savedSidebar);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/app.css?v=49"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="/static/app.js" defer></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+<div class="layout">
+  {% if request.query_params.get("embed") != "1" %}
+  <aside class="sidebar" id="appSidebar">
+    <a
+      href="/home"
+      class="brand-avatar-link"
+      aria-label="Перемкнути тему"
+      title="Клік: День / Ніч"
+      onclick="toggleTheme(); return false;"
+    >
+      <div class="brand-avatar-wrap" aria-hidden="true">
+        <img
+          class="brand-avatar brand-avatar--light"
+          src="/static/branding/service_light.webp"
+          alt=""
+        />
+        <img
+          class="brand-avatar brand-avatar--dark"
+          src="/static/branding/service_dark.webp"
+          alt=""
+        />
+      </div>
+    </a>
+    <div class="nav">
+      <a href="/home" class="{% if request.url.path.startswith('/home') %}active{% endif %}" title="Головна">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="nav-label">Головна</span>
+      </a>
+      <a href="/networks" class="{% if request.url.path.startswith('/networks') %}active{% endif %}" title="Радіомережі">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>
+        <span class="nav-label">Радіомережі</span>
+      </a>
+      <a href="/intercepts-explorer" class="{% if request.url.path == '/intercepts-explorer' %}active{% endif %}" title="Перехоплення">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg>
+        <span class="nav-label">Перехоплення</span>
+      </a>
+      <a href="/callsigns" class="{% if request.url.path.startswith('/callsigns') %}active{% endif %}" title="Позивні">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="nav-label">Позивні</span>
+      </a>
+      <a href="/peleng" class="{% if request.url.path.startswith('/peleng') %}active{% endif %}" title="Пеленгація">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+        <span class="nav-label">Пеленгація</span>
+      </a>
+      <a href="/conclusions" class="{% if request.url.path.startswith('/conclusions') %}active{% endif %}" title="Висновки">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+        <span class="nav-label">Висновки</span>
+      </a>
+      <a href="/import-export" class="{% if request.url.path.startswith('/import-export') %}active{% endif %}" title="Імпорт/Експорт">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+        <span class="nav-label">Імпорт/Експорт</span>
+      </a>
+      <a href="/faq" class="{% if request.url.path.startswith('/faq') %}active{% endif %}" title="FAQ">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+        <span class="nav-label">FAQ</span>
+      </a>
+    </div>
+
+    <!-- Sidebar state toggle (cycles: full → compact → hidden) -->
+    <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Згорнути до іконок">
+      <svg id="sidebarToggleIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/>
+      </svg>
+      <span class="sidebar-toggle-label">Компакт</span>
+    </button>
+
+    <!-- Status bar moved to sidebar footer -->
+    {% if request.query_params.get("embed") != "1" %}
+    <div class="app-statusbar sidebar-statusbar" role="status" aria-live="polite">
+      <div class="sb-status-row">
+        <span class="app-statusbar__dot" aria-hidden="true"></span>
+        <span class="app-statusbar__text sb-status-label">Система активна</span>
+      </div>
+      <div class="sb-status-row sb-status-row--meta">
+        <a href="/changelog" target="_blank" class="app-statusbar__version">v{{ app_version }}</a>
+        {% set _git_rev = get_app_git_revision() %}
+        {% if _git_rev[0] %}
+        <span class="app-statusbar__sep">•</span>
+        <span class="app-statusbar__rev"{% if _git_rev[1] %} title="Git {{ _git_rev[1] }}"{% endif %}>{{ _git_rev[0] }}</span>
+        {% endif %}
+      </div>
+      <div class="sb-status-row sb-status-row--update">
+        <span id="appLastUpdate" class="app-statusbar__text">Оновлено щойно</span>
+      </div>
+    </div>
+    {% endif %}
+
+  </aside>
+
+  <!-- Pull tab: shown when sidebar is hidden -->
+  <div class="sidebar-pull-tab" id="sidebarPullTab" title="Відкрити меню">
+    <svg viewBox="0 0 10 16" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 2 8 8 3 14"/></svg>
+  </div>
+  {% endif %}
+
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<div id="appToastStack" class="app-toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+<!-- Shared callsign edit modal (used on /callsigns and /intercepts-explorer) -->
+<div id="csModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card cs-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Особова справа</div>
+        <div id="csModalTitle" style="font-weight:700">—</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button id="csOpenIntercepts" class="secondary" type="button">Перехоплення</button>
+        <button id="csOpenLinks" class="secondary" type="button">Зв'язки</button>
+        <button class="secondary" type="button" data-close="1">Закрити</button>
+      </div>
+    </div>
+
+    <div class="modal-body">
+      <input id="csModalId" type="hidden" />
+
+      <div class="cs-profile-top">
+
+        <div class="cs-photo-col">
+          <div class="cs-photo-wrap">
+            <img id="csModalPhoto" class="cs-photo" src="/static/photos/callsign_statuses/_default.webp" alt="Фото" />
+          </div>
+          <div class="cs-network-field">
+            <label class="small">Мережа (частота/маска або підрозділ)</label>
+            <input id="csModalNetworkQuery" type="text" placeholder="Пошук: 146.025 або ШТЗ..." />
+            <select id="csModalNetwork" style="width:100%; margin-top:6px">
+              <option value="">Невідомо</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="cs-profile-fields">
+          <div>
+            <label class="small">Позивний</label>
+            <input id="csModalName" type="text" />
+          </div>
+
+          <div style="margin-top:10px">
+            <label class="small">Статус</label>
+            <select id="csModalStatus" style="width:100%"></select>
+          </div>
+
+          <div style="margin-top:10px">
+            <label class="small">Джерело</label>
+            <select id="csModalSource" style="width:100%">
+              <option value="">— не вказано —</option>
+            </select>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="small" style="opacity:.7; margin-bottom:6px">Швидка ідентифікація</div>
+            <div id="csQuickId" class="cs-quickid-wrap"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="margin-top:10px">
+        <label class="small">Коментар</label>
+        <textarea id="csModalComment" rows="3" style="width:100%; min-height:72px"></textarea>
+      </div>
+
+      <div id="csModalErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+
+      <!-- Merge panel (hidden by default, inside modal-body so it scrolls into view) -->
+      <div id="csMergePanel" style="display:none; margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:8px; background:color-mix(in srgb, #facc15 6%, var(--card))">
+        <div class="small" style="font-weight:700; margin-bottom:6px">Злити з правильним позивним</div>
+        <div class="small" style="opacity:.75; margin-bottom:8px">
+          Всі перехоплення цього позивного буде переписано на обраний. Зв'язки мережі перебудуються автоматично.
+        </div>
+        <input id="csMergeQuery" type="text" placeholder="Введи правильний позивний…" autocomplete="off" style="width:100%; margin-bottom:6px" />
+        <div id="csMergeSuggestions" style="display:none; border:1px solid var(--border); border-radius:6px; max-height:140px; overflow-y:auto; margin-bottom:8px"></div>
+        <div style="display:flex; gap:8px; align-items:center">
+          <span class="small" style="opacity:.7">→ злити в:</span>
+          <strong id="csMergeTargetName" style="color:var(--accent)">—</strong>
+          <input id="csMergeTargetId" type="hidden" value="" />
+        </div>
+        <div id="csMergeErr" class="small" style="color:var(--danger); margin-top:6px; display:none"></div>
+        <div style="margin-top:10px; display:flex; gap:8px">
+          <button id="csMergeConfirm" type="button" style="background:#ca8a04; border-color:#ca8a04; color:#fff">Підтвердити злиття</button>
+          <button id="csMergeCancel" type="button" class="secondary">Скасувати</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button id="csDelete" type="button" class="secondary" style="border-color:#7f1d1d;color:#fecaca">Видалити</button>
+      <button id="csMerge" type="button" class="secondary" style="border-color:#854d0e;color:#fde68a" title="Злити цей (помилковий) позивний в інший, зберігши всі зв'язки">Злити з…</button>
+      <button id="csSave" type="button">Зберегти</button>
+      <button class="secondary" type="button" data-close="1">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add status mini-modal -->
+<div id="csStatusModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close-status="1"></div>
+  <div class="modal-card cs-status-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Новий статус</div>
+        <div style="font-weight:700">Додати статус</div>
+      </div>
+      <button class="secondary" type="button" data-close-status="1">Закрити</button>
+    </div>
+    <div class="modal-body">
+      <label class="small">Назва</label>
+      <input id="csNewStatusName" type="text" />
+      <div id="csNewStatusErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="csCreateStatus" type="button">Створити</button>
+      <button class="secondary" type="button" data-close-status="1">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shared landmark edit modal (/landmarks, /intercepts-explorer) -->
+<div id="lmModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close="1"></div>
+  <div class="modal-card lm-modal-card" role="dialog" aria-modal="true" aria-labelledby="lmModalTitle">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Редагування орієнтира</div>
+        <div id="lmModalTitle" style="font-weight:700">—</div>
+      </div>
+      <button class="secondary" type="button" data-close="1">Закрити</button>
+    </div>
+
+    <div class="modal-body lm-modal-body">
+      <input id="lmEditId" type="hidden" />
+
+      <div class="lm-modal-grid">
+        <div class="lm-modal-form">
+          <div class="lm-modal-row lm-modal-row--top">
+            <div class="field lm-modal-field--grow">
+              <label for="lmEditName">Назва</label>
+              <input id="lmEditName" type="text" autocomplete="off" />
+            </div>
+            <div class="field lm-modal-field--active">
+              <label class="small lm-active-label" style="cursor:pointer; white-space:nowrap">
+                <input id="lmEditIsActive" type="checkbox" checked />
+                <span>Активний</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="lm-modal-row">
+            <div class="field">
+              <label for="lmEditGeomId">Тип геометрії</label>
+              <select id="lmEditGeomId"></select>
+            </div>
+            <div class="field">
+              <label for="lmEditTypeId">Тип</label>
+              <select id="lmEditTypeId"></select>
+            </div>
+          </div>
+
+          <div class="lm-modal-row">
+            <div class="field lm-modal-field--full">
+              <label for="lmEditGroupId">Підрозділ</label>
+              <select id="lmEditGroupId"></select>
+            </div>
+          </div>
+
+          <div class="field" id="lmEditMgrsWrap">
+            <label for="lmEditLocationMgrs">Координати (MGRS)</label>
+            <div class="lm-coord-input-row">
+              <input id="lmEditLocationMgrs" type="text" autocomplete="off" placeholder="напр. 37UDQ3296626558" />
+              <button type="button" id="lmEditCopyMgrs" class="secondary lm-coord-copy-btn" aria-label="Копіювати координати">
+                Копіювати
+              </button>
+            </div>
+          </div>
+
+          <div class="field hidden" id="lmEditWktWrap">
+            <label for="lmEditLocationWkt">Геометрія (WKT)</label>
+            <div class="lm-coord-input-row lm-coord-input-row--wkt">
+              <textarea id="lmEditLocationWkt" rows="2" class="lm-modal-textarea"></textarea>
+              <button type="button" id="lmEditCopyWkt" class="secondary lm-coord-copy-btn" aria-label="Копіювати геометрію WKT">
+                Копіювати
+              </button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="lmEditComment">Коментар</label>
+            <textarea id="lmEditComment" rows="4" class="lm-modal-textarea lm-modal-textarea--comment"></textarea>
+          </div>
+        </div>
+
+        <div class="lm-modal-map-col">
+          <label>Мапа</label>
+          <div id="lmEditMap" class="landmark-modal-map"></div>
+          <p class="small lm-modal-map-hint">Перегляд геометрії (WGS84). Для «точки» введіть MGRS зліва.</p>
+        </div>
+      </div>
+
+      <div id="lmEditErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
+    </div>
+
+    <div class="modal-foot">
+      <button
+        id="lmEditDeleteBtn"
+        type="button"
+        class="secondary"
+        style="color: var(--danger); border-color: color-mix(in srgb, var(--danger) 65%, var(--border));"
+      >Видалити</button>
+      <button id="lmEditSaveBtn" type="button">Зберегти</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
+<script src="/static/callsign_modal.js?v=10" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

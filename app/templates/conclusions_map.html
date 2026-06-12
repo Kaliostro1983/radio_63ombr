@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin/>
 
   <!-- Map page styles -->
-  <link rel="stylesheet" href="/static/conclusions_map.css?v=4">
+  <link rel="stylesheet" href="/static/conclusions_map.css?v=9">
 </head>
 <body>
 
@@ -76,6 +76,33 @@
 <!-- Marker count badge -->
 <div id="markerCount" class="hidden"></div>
 
+<!-- Display options (similar to /peleng) -->
+<div id="cmDisplayOpts">
+  <label class="cm-opt-chk" title="Показати частоту біля кожної іконки">
+    <input type="checkbox" id="cmShowFreqChk">
+    <span>Частоти</span>
+  </label>
+  <label class="cm-opt-chk" title="Замість стандартних іконок — кольорові кола з номером бригади/полка з опису р/м">
+    <input type="checkbox" id="cmShowUnitChk">
+    <span>Підрозділ</span>
+  </label>
+</div>
+
+<!-- ── Cluster picker (модалка для накладених маркерів) ─── -->
+<div id="cmClusterPicker" class="cm-cluster-picker hidden" role="dialog" aria-modal="true" aria-labelledby="cmClusterTitle">
+  <div class="cm-cluster-picker__backdrop" data-cm-cluster-close="1"></div>
+  <div class="cm-cluster-picker__card">
+    <div class="cm-cluster-picker__head">
+      <div>
+        <div class="cm-cluster-picker__title" id="cmClusterTitle">Оберіть необхідний об'єкт</div>
+        <div class="cm-cluster-picker__sub">Кількість <span id="cmClusterCount">0</span></div>
+      </div>
+      <button class="cm-cluster-picker__close" data-cm-cluster-close="1" title="Закрити" aria-label="Закрити">✕</button>
+    </div>
+    <div class="cm-cluster-picker__list" id="cmClusterList"></div>
+  </div>
+</div>
+
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 <!-- MGRS library -->
@@ -97,7 +124,7 @@
 </script>
 
 <!-- Map logic -->
-<script src="/static/conclusions_map.js?v=6"></script>
+<script src="/static/conclusions_map.js?v=12"></script>
 
 </body>
 </html>

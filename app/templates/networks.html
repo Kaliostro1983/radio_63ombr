@@ -1,59 +1,66 @@
 {% extends "base.html" %}
+{% set is_embed = request.query_params.get("embed") == "1" %}
 {% block content %}
-<h2 style="margin-top:0">Радіомережа (Академік)</h2>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-<section class="tabs-shell" {% if current %}data-network-pick="{{ current.id }}"{% endif %}>
-  <div class="tabs-nav" role="tablist" aria-label="Вкладки сторінки Радіомережі">
-    <button
-      id="netTabCard"
-      type="button"
-      class="tab-btn {% if active_tab == 'card' %}active{% endif %}"
-      role="tab"
-      aria-selected="{% if active_tab == 'card' %}true{% else %}false{% endif %}"
-      aria-controls="netPaneCard"
-    >
-      Картка р/м
-    </button>
-    <button
-      id="netTabAll"
-      type="button"
-      class="tab-btn {% if active_tab == 'all' %}active{% endif %}"
-      role="tab"
-      aria-selected="{% if active_tab == 'all' %}true{% else %}false{% endif %}"
-      aria-controls="netPaneAll"
-    >
-      Усі р/м
-    </button>
-    <button
-      id="netTabEtalons"
-      type="button"
-      class="tab-btn {% if active_tab == 'etalons' %}active{% endif %}"
-      role="tab"
-      aria-selected="{% if active_tab == 'etalons' %}true{% else %}false{% endif %}"
-      aria-controls="netPaneEtalons"
-    >
-      Еталонки
-    </button>
-    <button
-      id="netTabAkademik"
-      type="button"
-      class="tab-btn {% if active_tab == 'akademik' %}active{% endif %}"
-      role="tab"
-      aria-selected="{% if active_tab == 'akademik' %}true{% else %}false{% endif %}"
-      aria-controls="netPaneAkademik"
-    >
-      Академік
-    </button>
-  </div>
+{% if is_embed %}
+<style>
+  /* embed=1 — сторінка вбудована як iframe (наприклад, у модалці на /home).
+     Прибираємо шапку та обгортки, щоб контент-модалка (#netModalCard) виглядала
+     як цільне вікно в зовнішньому контейнері. */
+  html, body { background: var(--bg); margin: 0; height: 100%; overflow: hidden; }
+  .site-header, .site-footer, .top-nav, .nav-bar, .global-nav { display: none !important; }
+  .net-page-header { display: none !important; }
+  /* Прибираємо все, що рендериться позаду модалки — інакше body iframe має
+     власну полосу прокрутки додатково до тієї, що всередині модалки. */
+  #netPaneAll { display: none !important; }
+  /* Будь-яка з трьох net-модалок (Картка, Еталонки, Академік) у embed
+     розгортається на всю ширину вікна iframe — без backdrop та шапки. */
+  .net-modal .modal-card { max-width: none; width: 100%; max-height: none; height: 100vh; border-radius: 0; margin: 0; }
+  .net-modal .modal-backdrop { display: none !important; }
+  .net-modal .modal-head { display: none; }
+</style>
+{% endif %}
 
+<div class="page-header net-page-header">
+  <div class="net-page-header__title">
+    <h1>Радіомережі</h1>
+    <div class="small">Список р/м, картки, еталонки та аліаси.</div>
+  </div>
+  <div class="net-page-actions">
+    <button id="netOpenCard"     type="button" class="secondary">Картка р/м</button>
+    <button id="netOpenEtalons"  type="button" class="secondary">Еталонки</button>
+    <button id="netOpenAkademik" type="button" class="secondary">Академік</button>
+    <button id="netOpenOcheret"  type="button" class="secondary">Очерет</button>
+  </div>
+</div>
+
+<!-- Legacy tab buttons (приховані) — лишаємо для зворотньої сумісності з
+     можливими зовнішніми залежностями та для збереження data-network-pick. -->
+<section class="tabs-shell net-legacy-shell" hidden aria-hidden="true"
+         {% if current %}data-network-pick="{{ current.id }}"{% endif %}>
+  <button id="netTabCard"     type="button"></button>
+  <button id="netTabAll"      type="button"></button>
+  <button id="netTabEtalons"  type="button"></button>
+  <button id="netTabAkademik" type="button"></button>
+</section>
+
+<section class="net-shell" {% if current %}data-network-pick="{{ current.id }}"{% endif %}>
   <div class="tab-panel-wrap">
+    <!-- ── Modal: Картка р/м ─────────────────────────────────── -->
+    <div id="netModalCard" class="modal hidden net-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-net-modal-close="card"></div>
+    <div class="modal-card net-modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div class="modal-title">Картка р/м</div>
+        <button type="button" class="secondary" data-net-modal-close="card" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body net-modal-body">
     <section
       id="netPaneCard"
-      class="tab-panel {% if active_tab != 'card' %}hidden{% endif %}"
-      role="tabpanel"
-      aria-labelledby="netTabCard"
+      role="region"
+      aria-label="Картка р/м"
     >
       {% if message %}
       <div class="notice" style="margin-bottom:12px">{{ message }}</div>
@@ -338,12 +345,15 @@
       </div>
       {% endif %}
     </section>
+      </div><!-- /net-modal-body -->
+    </div><!-- /net-modal-card -->
+    </div><!-- /netModalCard -->
 
+    <!-- ── Усі р/м (основний контент сторінки) ──────────────── -->
     <section
       id="netPaneAll"
-      class="tab-panel {% if active_tab != 'all' %}hidden{% endif %}"
-      role="tabpanel"
-      aria-labelledby="netTabAll"
+      role="region"
+      aria-label="Усі р/м"
     >
       <div class="card">
         <form method="post" action="/networks/all">
@@ -433,24 +443,43 @@
       </div>
     </section>
 
+    <!-- ── Modal: Еталонки ───────────────────────────────────── -->
+    <div id="netModalEtalons" class="modal hidden net-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-net-modal-close="etalons"></div>
+    <div class="modal-card net-modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div class="modal-title">Еталонки</div>
+        <button type="button" class="secondary" data-net-modal-close="etalons" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body net-modal-body" style="padding:0">
     <section
       id="netPaneEtalons"
-      class="tab-panel {% if active_tab != 'etalons' %}hidden{% endif %}"
-      role="tabpanel"
-      aria-labelledby="netTabEtalons"
+      role="region"
+      aria-label="Еталонки"
     >
       <iframe
         id="netEtalonsIframe"
         src="{% if current %}/etalons/panel?pick={{ current.id }}{% else %}/etalons/panel{% endif %}"
-        style="width:100%; height: calc(100vh - 260px); border:0; border-radius:12px; background:var(--bg);"
+        style="width:100%; height: 75vh; border:0; border-radius:0; background:var(--bg); display:block;"
       ></iframe>
     </section>
+      </div><!-- /net-modal-body -->
+    </div><!-- /net-modal-card -->
+    </div><!-- /netModalEtalons -->
 
+    <!-- ── Modal: Академік ───────────────────────────────────── -->
+    <div id="netModalAkademik" class="modal hidden net-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-net-modal-close="akademik"></div>
+    <div class="modal-card net-modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div class="modal-title">Академік</div>
+        <button type="button" class="secondary" data-net-modal-close="akademik" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body net-modal-body">
     <section
       id="netPaneAkademik"
-      class="tab-panel {% if active_tab != 'akademik' %}hidden{% endif %}"
-      role="tabpanel"
-      aria-labelledby="netTabAkademik"
+      role="region"
+      aria-label="Академік"
     >
       <div class="card">
         <div class="net-alias-toolbar">
@@ -481,7 +510,35 @@
         </table>
       </div>
     </section>
-  </div>
+      </div><!-- /net-modal-body -->
+    </div><!-- /net-modal-card -->
+    </div><!-- /netModalAkademik -->
+
+    <!-- ── Modal: Очерет (читабельний список частот + копія) ─────── -->
+    <div id="netModalOcheret" class="modal hidden net-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-net-modal-close="ocheret"></div>
+    <div class="modal-card net-modal-card net-modal-card--ocheret" role="dialog" aria-modal="true" aria-labelledby="netModalOcheretTitle" style="max-width:560px">
+      <div class="modal-head">
+        <div id="netModalOcheretTitle" class="modal-title">Очерет — частоти і маски</div>
+        <button type="button" class="secondary" data-net-modal-close="ocheret" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body net-modal-body">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
+          <div class="small" style="opacity:.75">
+            Список р/м зі статусом <strong>Спостерігається</strong> і чатом-джерелом <strong>Очерет</strong>.
+          </div>
+          <button type="button" id="netOcheretCopyBtn" class="secondary" title="Скопіювати" style="padding:4px 10px">📋</button>
+        </div>
+        <textarea id="netOcheretText" readonly rows="20"
+          style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical">
+        </textarea>
+        <div id="netOcheretEmpty" class="small" style="display:none; margin-top:8px; opacity:.65">Жодної р/м не знайдено.</div>
+        <div id="netOcheretError" class="small" style="display:none; margin-top:8px; color:var(--danger)"></div>
+      </div>
+    </div>
+    </div><!-- /netModalOcheret -->
+
+  </div><!-- /tab-panel-wrap -->
 </section>
 
 <!-- ── Verify modal ── -->
@@ -589,82 +646,216 @@
 
 {% block scripts %}
 <script>
+  /* Networks: модалки замість табів.
+     «Усі р/м» — основний контент сторінки, інші три — модальні вікна,
+     що відкриваються кнопками в шапці. URL ?tab=card|etalons|akademik
+     відкриває відповідну модалку; ?pick=ID додатково відкриває картку. */
   (function () {
-    const tabCard = document.getElementById("netTabCard");
-    const tabAll = document.getElementById("netTabAll");
-    const tabEtalons = document.getElementById("netTabEtalons");
-    const tabAkademik = document.getElementById("netTabAkademik");
-    const paneCard = document.getElementById("netPaneCard");
-    const paneAll = document.getElementById("netPaneAll");
-    const paneEtalons = document.getElementById("netPaneEtalons");
-    const paneAkademik = document.getElementById("netPaneAkademik");
-    if (!tabCard || !tabAll || !tabEtalons || !tabAkademik || !paneCard || !paneAll || !paneEtalons || !paneAkademik) return;
-
-    function setTab(which) {
-      const isCard = which === "card";
-      const isAll = which === "all";
-      const isEtalons = which === "etalons";
-      const isAkademik = which === "akademik";
-
-      tabCard.classList.toggle("active", isCard);
-      tabAll.classList.toggle("active", isAll);
-      tabEtalons.classList.toggle("active", isEtalons);
-      tabAkademik.classList.toggle("active", isAkademik);
-
-      tabCard.setAttribute("aria-selected", isCard ? "true" : "false");
-      tabAll.setAttribute("aria-selected", isAll ? "true" : "false");
-      tabEtalons.setAttribute("aria-selected", isEtalons ? "true" : "false");
-      tabAkademik.setAttribute("aria-selected", isAkademik ? "true" : "false");
-
-      paneCard.classList.toggle("hidden", !isCard);
-      paneAll.classList.toggle("hidden", !isAll);
-      paneEtalons.classList.toggle("hidden", !isEtalons);
-      paneAkademik.classList.toggle("hidden", !isAkademik);
-    }
+    const modals = {
+      card:     document.getElementById("netModalCard"),
+      etalons:  document.getElementById("netModalEtalons"),
+      akademik: document.getElementById("netModalAkademik"),
+      ocheret:  document.getElementById("netModalOcheret"),
+    };
+    if (!modals.card || !modals.etalons || !modals.akademik) return;
 
     function currentNetworkPick() {
-      const shell = document.querySelector("section.tabs-shell[data-network-pick]");
+      const shell = document.querySelector("section[data-network-pick]");
       return shell ? String(shell.getAttribute("data-network-pick") || "").trim() : "";
     }
 
     function syncUrlTab(tab, pick) {
       const u = new URL(window.location.href);
-      u.searchParams.set("tab", tab);
+      if (tab) u.searchParams.set("tab", tab);
+      else u.searchParams.delete("tab");
       if (pick) u.searchParams.set("pick", pick);
       const qs = u.searchParams.toString();
       history.replaceState(null, "", qs ? u.pathname + "?" + qs : u.pathname);
     }
 
-    tabCard.addEventListener("click", () => {
-      setTab("card");
-      syncUrlTab("card", currentNetworkPick());
-    });
-    tabAll.addEventListener("click", () => {
-      setTab("all");
-      syncUrlTab("all", currentNetworkPick());
-    });
-    tabEtalons.addEventListener("click", () => {
-      setTab("etalons");
-      const pick = currentNetworkPick();
-      const iframe = document.getElementById("netEtalonsIframe");
-      if (iframe && pick) {
-        const next = "/etalons/panel?pick=" + encodeURIComponent(pick);
-        try {
-          const cur = new URL(iframe.getAttribute("src") || "", window.location.origin);
-          if (cur.searchParams.get("pick") !== pick) iframe.src = next;
-        } catch (e) {
-          iframe.src = next;
+    function openModal(which) {
+      const m = modals[which];
+      if (!m) return;
+      m.classList.remove("hidden");
+      m.removeAttribute("aria-hidden");
+
+      // Окремий випадок: модалка Еталонок — підставляємо ?pick=ID
+      // в src iframe (якщо вибрана конкретна р/м і ще не виставлено).
+      if (which === "etalons") {
+        const pick = currentNetworkPick();
+        const iframe = document.getElementById("netEtalonsIframe");
+        if (iframe && pick) {
+          try {
+            const cur = new URL(iframe.getAttribute("src") || "", window.location.origin);
+            if (cur.searchParams.get("pick") !== pick) {
+              iframe.src = "/etalons/panel?pick=" + encodeURIComponent(pick);
+            }
+          } catch (e) {
+            iframe.src = "/etalons/panel?pick=" + encodeURIComponent(pick);
+          }
         }
       }
-      syncUrlTab("etalons", pick);
+
+      syncUrlTab(which, currentNetworkPick());
+    }
+
+    function closeModal(which) {
+      const m = modals[which];
+      if (!m) return;
+      m.classList.add("hidden");
+      m.setAttribute("aria-hidden", "true");
+      syncUrlTab("", currentNetworkPick());
+    }
+
+    // Header buttons
+    document.getElementById("netOpenCard")?.addEventListener("click",     () => openModal("card"));
+    document.getElementById("netOpenEtalons")?.addEventListener("click",  () => openModal("etalons"));
+    document.getElementById("netOpenAkademik")?.addEventListener("click", () => openModal("akademik"));
+    document.getElementById("netOpenOcheret")?.addEventListener("click",  () => { openModal("ocheret"); loadOcheretList(); });
+
+    // ── Очерет: завантаження списку + копія в буфер ───────────────
+    async function loadOcheretList() {
+      const ta    = document.getElementById("netOcheretText");
+      const empty = document.getElementById("netOcheretEmpty");
+      const err   = document.getElementById("netOcheretError");
+      if (!ta) return;
+      ta.value = "Завантаження…";
+      empty.style.display = "none";
+      err.style.display = "none";
+      try {
+        const resp = await fetch("/api/networks/ocheret-frequencies?format=json", {
+          headers: { Accept: "application/json" },
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        const rows = (data && data.frequencies) || [];
+        if (!rows.length) {
+          ta.value = "";
+          empty.style.display = "";
+          return;
+        }
+        // Одна колонка: частота і маска (якщо є) — кожна окремим рядком.
+        const lines = [];
+        for (const r of rows) {
+          if (r.frequency) lines.push(r.frequency);
+          if (r.mask)      lines.push(r.mask);
+        }
+        ta.value = lines.join("\n");
+      } catch (e) {
+        ta.value = "";
+        err.textContent = "Помилка завантаження: " + (e.message || e);
+        err.style.display = "";
+      }
+    }
+
+    document.getElementById("netOcheretCopyBtn")?.addEventListener("click", async () => {
+      const ta = document.getElementById("netOcheretText");
+      if (!ta) return;
+      const text = ta.value || "";
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // Fallback: select + execCommand
+          ta.removeAttribute("readonly");
+          ta.select();
+          document.execCommand("copy");
+          ta.setAttribute("readonly", "");
+          window.getSelection()?.removeAllRanges();
+        }
+        if (window.appToast) window.appToast("Скопійовано", "success", 1400);
+      } catch (e) {
+        if (window.appToast) window.appToast("Помилка копіювання", "error", 1800);
+      }
     });
-    tabAkademik.addEventListener("click", () => {
-      setTab("akademik");
-      syncUrlTab("akademik", currentNetworkPick());
+
+    // Close handlers (X / backdrop)
+    document.querySelectorAll("[data-net-modal-close]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        const which = el.getAttribute("data-net-modal-close");
+        if (which) { e.stopPropagation(); closeModal(which); }
+      });
     });
+    // Esc — close топ-most відкриту модалку
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      for (const k of ["card","etalons","akademik","ocheret"]) {
+        if (modals[k] && !modals[k].classList.contains("hidden")) { closeModal(k); break; }
+      }
+    });
+
+    // Initial state: ?pick=ID → відкриваємо картку (це класична семантика
+    // «відкрити цю р/м»). ?tab=X — відкриваємо відповідну модалку.
+    const qs = new URLSearchParams(location.search);
+    const initialTab = (qs.get("tab") || "").toLowerCase();
+    const pick = qs.get("pick");
+    if (initialTab && initialTab in modals) {
+      openModal(initialTab);
+    } else if (pick) {
+      openModal("card");
+    }
+
+    // У модалці "Картка р/м": Enter в полі частоти раніше сабмітив форму
+    // POST /networks/search → сторінка перезавантажувалась і модалка
+    // закривалась (виключення — точний 1 збіг). Перехоплюємо Enter і
+    // підставляємо AJAX-lookup: якщо є один збіг → переходимо на
+    // /networks?pick=ID (модалка відкривається з цією р/м); інакше — нічого
+    // не робимо (хай користувач уточнює запит або обере зі списку
+    // автокомпліту). Кнопка "Пошук" далі працює як раніше (повний сабміт).
+    const netSearchInput = document.getElementById("netSearchQuery");
+    if (netSearchInput) {
+      netSearchInput.addEventListener("keydown", async (e) => {
+        if (e.key !== "Enter") return;
+        if (e.defaultPrevented) return;   // вже оброблено autocomplete-ом
+        e.preventDefault();
+        const q = netSearchInput.value.trim();
+        if (!q) return;
+        try {
+          const resp = await fetch("/api/networks/lookup?q=" + encodeURIComponent(q), {
+            headers: { Accept: "application/json" },
+          });
+          if (!resp.ok) return;
+          const data = await resp.json();
+          const rows = (data && data.rows) || [];
+          if (rows.length === 1 && rows[0] && rows[0].id) {
+            window.location.href = "/networks?pick=" + rows[0].id;
+          }
+          // 0 або >1 — нічого не робимо, модалка лишається відкритою.
+        } catch (_) { /* мовчки ігноруємо помилку lookup */ }
+      });
+    }
   })();
 </script>
 <style>
+/* ── Header with header-buttons + main shell ─────────────── */
+.net-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.net-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Modal: wide card with scrollable body ───────────────── */
+.net-modal-card {
+  width: 95vw;
+  max-width: 1180px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.net-modal-body {
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+.net-modal-body > section { min-width: 0; }
+
 .verify-meta { font-size:13px; opacity:.7; margin-bottom:16px; }
 .verify-section { margin-bottom:22px; }
 .verify-section:last-child { margin-bottom:0; }
@@ -790,7 +981,7 @@
   }
 })();
 </script>
-<script src="/static/networks_autocomplete.js?v=3" defer></script>
+<script src="/static/networks_autocomplete.js?v=4" defer></script>
 <script src="/static/networks_graph.js?v=5" defer></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>

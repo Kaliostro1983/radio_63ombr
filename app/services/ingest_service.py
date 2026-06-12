@@ -22,6 +22,7 @@ the `/api/ingest/whatsapp` router.
 from __future__ import annotations
 
 import json as _json
+import re as _re
 import urllib.error as _uerr
 import urllib.request as _ureq
 from typing import Any, Dict, List
@@ -52,6 +53,46 @@ from app.services.network_service import ensure_network, NetworkNotFoundError
 from app.services.structured_intercept_service import process_structured_intercept
 
 log = get_logger("ingest_service")
+
+
+_RE_EMPTY_NUMBERED = _re.compile(r"^(\s*\d+\.)\s*$")
+
+
+def _fill_route_points(text: str, mgrs_list: List[str] | None) -> str:
+    """Inject MGRS points into empty numbered list rows ('1.', '2.', …).
+
+    Returns text unchanged if either side is empty.  Compacts MGRS (no spaces).
+    Fills in document order; extra numbers/points are left as-is.
+    """
+    if not text or not mgrs_list:
+        return text
+    points = [m.replace(" ", "") for m in mgrs_list if m]
+    if not points:
+        return text
+    lines = text.split("\n")
+    idx = 0
+    for i, line in enumerate(lines):
+        if idx >= len(points):
+            break
+        m = _RE_EMPTY_NUMBERED.match(line)
+        if m:
+            lines[i] = f"{m.group(1)} {points[idx]}"
+            idx += 1
+    return "\n".join(lines)
+
+
+def _normalize_delta_identification(value: object) -> str:
+    """Map any legacy/intermediate value to one of the two canonical states.
+
+    Rule (single source of truth = "Ворожий" checkbox in conclusion-type card):
+      - 'Ворожий'  → 'Ворожий'
+      - порожнє/NULL → 'Ворожий' (system default for not-yet-edited types)
+      - все інше ('Невизначений', 'Невідомий', 'Дружній', …) → 'Дружній'
+    """
+    v = str(value or "").strip()
+    if v == "Ворожий" or v == "":
+        return "Ворожий"
+    return "Дружній"
 
 
 def _try_delta_auto_send(
@@ -133,7 +174,7 @@ def _try_delta_auto_send(
         mgrs_compact = ", ".join(m.replace(" ", "") for m in (mgrs_list or []) if m)
 
         delta_type     = str(type_row[1] or "")
-        identification = str(type_row[2] or "")
+        identification = _normalize_delta_identification(type_row[2])
         source         = str(type_row[3] or "")
         presence       = str(type_row[4] or "")
 
@@ -150,7 +191,7 @@ def _try_delta_auto_send(
         text = "\n\n".join(
             p for p in [
                 "\n".join(header_lines),
-                (conclusion_text or "").strip(),
+                _fill_route_points((conclusion_text or "").strip(), mgrs_list),
                 (body_text or "").strip(),
             ]
             if p

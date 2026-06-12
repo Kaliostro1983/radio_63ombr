@@ -18,6 +18,20 @@ from app.core.db import get_conn
 router = APIRouter(tags=["conclusions"])
 
 
+def _normalize_delta_identification(value: object) -> str:
+    """Map any legacy value to one of two canonical states ('Ворожий' / 'Дружній').
+
+    Single source of truth = 'Ворожий' checkbox in conclusion-type card.
+    Empty/NULL → 'Ворожий' (system default for not-yet-edited types).
+    Anything else that isn't literally 'Ворожий' → 'Дружній'
+    (handles legacy 'Невизначений', 'Невідомий', etc.).
+    """
+    v = str(value or "").strip()
+    if v == "Ворожий" or v == "":
+        return "Ворожий"
+    return "Дружній"
+
+
 def _now_sql() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
@@ -133,7 +147,8 @@ def api_conclusions_list(
                 n.frequency,
                 n.mask,
                 n.unit,
-                msg.body_text
+                msg.body_text,
+                msg.net_description
             FROM analytical_conclusions ac
             LEFT JOIN conclusion_types ct  ON ct.id  = ac.type_id
             LEFT JOIN networks n           ON n.id   = ac.network_id
@@ -158,6 +173,7 @@ def api_conclusions_list(
             "created_at":      r["created_at"] or "",
             "conclusion_text": r["conclusion_text"] or "",
             "body_text":       r["body_text"] or "",
+            "net_description": r["net_description"] or "",
             "mgrs":            mgrs,
             "type_id":         int(r["type_id"]) if r["type_id"] is not None else 0,
             "type_label":      r["type_label"] or "невідомо",
@@ -200,7 +216,7 @@ def api_conclusion_types():
             "sort_order":           int(r["sort_order"]) if r["sort_order"] is not None else 0,
             "delta_auto_send":      bool(r["delta_auto_send"]) if r["delta_auto_send"] is not None else True,
             "delta_type":           r["delta_type"] or "",
-            "delta_identification": r["delta_identification"] or "Ворожий",
+            "delta_identification": _normalize_delta_identification(r["delta_identification"]),
             "delta_source":         r["delta_source"] or "Радіорозвідка (РР)",
             "delta_presence":       r["delta_presence"] or "присутній",
             "icon_filename":        r["icon_filename"] or "",
@@ -303,7 +319,7 @@ async def api_conclusion_type_update(type_id: int, request: Request):
         if "delta_type" in payload:
             delta_fields["delta_type"] = str(payload["delta_type"]).strip()
         if "delta_identification" in payload:
-            delta_fields["delta_identification"] = str(payload["delta_identification"]).strip()
+            delta_fields["delta_identification"] = _normalize_delta_identification(payload["delta_identification"])
         if "delta_source" in payload:
             delta_fields["delta_source"] = str(payload["delta_source"]).strip()
         if "delta_presence" in payload:
@@ -759,4 +775,103 @@ def api_conclusion_type_delete(type_id: int):
         conn.execute("DELETE FROM conclusion_types WHERE id = ?", (type_id,))
         conn.commit()
 
+    return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+#  Shared conclusion templates (server-side, replaces per-browser localStorage)
+# --------------------------------------------------------------------------- #
+
+_TMPL_KEY_DATA    = "concl_templates_json"
+_TMPL_KEY_AUTODET = "concl_templates_autodetect"
+_TMPL_KEY_DEFAULT = "concl_default_template"
+
+_DEFAULT_TMPL_TEXT = (
+    "%ЛОКАЦІЯ\nПротивник зі складу %ПІДРОЗДІЛ здійснює переміщення в р-ні точки:"
+)
+
+
+def _app_setting_get(conn, key: str) -> Optional[str]:
+    row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+    return None if row is None else str(row["value"])
+
+
+def _app_setting_set(conn, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+
+
+@router.get("/api/conclusion-templates")
+def api_conclusion_templates_get():
+    """Return shared conclusion templates, autodetect flag and default text."""
+    with get_conn() as conn:
+        raw = _app_setting_get(conn, _TMPL_KEY_DATA)
+        autodet = _app_setting_get(conn, _TMPL_KEY_AUTODET)
+        default_text = _app_setting_get(conn, _TMPL_KEY_DEFAULT)
+
+    try:
+        templates = json.loads(raw) if raw else None
+    except (ValueError, TypeError):
+        templates = None
+
+    return {
+        "ok": True,
+        "templates": templates,                       # None → клієнт підставить дефолтні категорії
+        "autodetect": autodet == "1",
+        "default_text": _DEFAULT_TMPL_TEXT if default_text is None else default_text,
+    }
+
+
+@router.post("/api/conclusion-templates")
+async def api_conclusion_templates_save(request: Request):
+    """Persist shared conclusion templates (whole-blob save)."""
+    payload = await request.json()
+    templates = payload.get("templates")
+    autodetect = payload.get("autodetect")
+    default_text = payload.get("default_text")
+
+    with get_conn() as conn:
+        if templates is not None:
+            _app_setting_set(conn, _TMPL_KEY_DATA, json.dumps(templates, ensure_ascii=False))
+        if autodetect is not None:
+            _app_setting_set(conn, _TMPL_KEY_AUTODET, "1" if autodetect else "0")
+        if default_text is not None:
+            _app_setting_set(conn, _TMPL_KEY_DEFAULT, str(default_text))
+        conn.commit()
+
+    return {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+#  Shared monitor tags (keyword-based filters under Monitoring playlist)
+# --------------------------------------------------------------------------- #
+
+_MON_TAGS_KEY = "monitor_tags_json"
+
+
+@router.get("/api/monitor-tags")
+def api_monitor_tags_get():
+    """Return shared monitor tags (or null → клієнт підставить DEFAULTS)."""
+    with get_conn() as conn:
+        raw = _app_setting_get(conn, _MON_TAGS_KEY)
+    try:
+        tags = json.loads(raw) if raw else None
+    except (ValueError, TypeError):
+        tags = None
+    return {"ok": True, "tags": tags}
+
+
+@router.post("/api/monitor-tags")
+async def api_monitor_tags_save(request: Request):
+    """Persist shared monitor tags (whole-list save)."""
+    payload = await request.json()
+    tags = payload.get("tags")
+    if tags is None or not isinstance(tags, list):
+        return JSONResponse({"ok": False, "error": "tags must be a list"}, status_code=400)
+    with get_conn() as conn:
+        _app_setting_set(conn, _MON_TAGS_KEY, json.dumps(tags, ensure_ascii=False))
+        conn.commit()
     return {"ok": True}

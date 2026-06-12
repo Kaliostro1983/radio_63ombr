@@ -93,18 +93,64 @@
       networkToken = "";
     }
     if (networkToken) params.set("network", networkToken);
-
-    // Open directly with final URL (sync) to avoid popup blockers and blank tabs.
+    params.set("tab", "view");
     const url = `/intercepts-explorer?${params.toString()}`;
+
+    // Якщо ми вже на /intercepts-explorer — заповнюємо форму та відкриваємо
+    // модалку «Перегляд» напряму через API сторінки. Без перезавантаження,
+    // тож активне перехоплення в Моніторингу й позивний-модалка лишаються.
+    if (window.location.pathname === "/intercepts-explorer" && typeof window.itSetTab === "function") {
+      const startEl = document.getElementById("periodStart");
+      const endEl   = document.getElementById("periodEnd");
+      const netEl   = document.getElementById("networkQuery");
+      const csEl    = document.getElementById("callsignQuery");
+      if (startEl) startEl.value = start;
+      if (endEl)   endEl.value   = end;
+      if (netEl)   netEl.value   = networkToken;
+      if (csEl)    csEl.value    = callsignName;
+      window.itSetTab("view");
+      const form = document.getElementById("interceptsFilterForm");
+      if (form && typeof form.requestSubmit === "function") {
+        try { form.requestSubmit(); } catch (_) { form.submit(); }
+      } else if (form) {
+        form.submit();
+      }
+      return;
+    }
+
+    // На /callsigns — відкриваємо iframe-модалку Перехоплень (з embed=1)
+    // прямо на сторінці, не плодимо нові вкладки браузера.
+    if (window.location.pathname === "/callsigns" && typeof window.csOpenInterceptsModal === "function") {
+      // Для embed-варіанта URL формуємо з тими ж параметрами + embed=1, щоб
+      // intercepts-explorer відрендерився без шапки і одразу відкрив "Перегляд".
+      const embedParams = new URLSearchParams(params.toString());
+      embedParams.set("embed", "1");
+      const embedUrl = `/intercepts-explorer?${embedParams.toString()}`;
+      if (window.csOpenInterceptsModal(embedUrl)) return;
+    }
+
     const w = window.open(url, "_blank", "noopener");
     if (!w) {
       showError("Браузер заблокував відкриття вкладки. Дозволь popups для цього сайту.");
     }
   }
 
-  function openLinksForCurrent() {
+  async function openLinksForCurrent() {
     const callsignId = modalId && modalId.value ? parseInt(modalId.value, 10) : 0;
     if (!callsignId) return;
+    const callsignName = (modalName && modalName.value ? String(modalName.value) : "").trim();
+
+    // На /callsigns — закриваємо відкриті модалки (csModal + csModalSearch),
+    // проставляємо фільтр у головну Зв'язки-секцію і одразу запускаємо runLinks.
+    if (window.location.pathname === "/callsigns" && typeof window.csOpenLinksForCallsign === "function") {
+      // Спочатку закриваємо саму модалку позивного — щоб користувач побачив зв'язки.
+      try { closeModal(); } catch (_) {}
+      try {
+        const ok = await window.csOpenLinksForCallsign(callsignId, callsignName);
+        if (ok) return;
+      } catch (_) { /* fall through to new-tab fallback */ }
+    }
+
     const days = 14;
     const adv = 0;
     const url = `/callsigns?tab=links&callsign_id=${encodeURIComponent(callsignId)}&days=${encodeURIComponent(days)}&advanced=${encodeURIComponent(adv)}`;

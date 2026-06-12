@@ -29,44 +29,118 @@
   const tabCasualties  = $("homeTabCasualties");
   const paneCasualties = $("homePaneCasualties");
 
-  const tabMap = {
-    activity:   { btn: tabActivity,   pane: paneActivity },
-    overview:   { btn: tabOverview,   pane: paneOverview },
-    reports:    { btn: tabReports,    pane: paneReports },
-    casualties: { btn: tabCasualties, pane: paneCasualties },
+  /* ── Modal-based navigation ───────────────────────────────────
+   *  Огляд / Звіти / Втрати тепер відкриваються як модальні вікна
+   *  через кнопки у шапці. Activity-вкладка лишається завжди видимою
+   *  як основний контент. Tab-кнопки (homeTabOverview тощо) — скриті,
+   *  але живі: модалка-opener тригерить їхній click(), щоб ініціювати
+   *  overview.js / casualties.js за існуючими bindings. */
+  const modalMap = {
+    overview:   { modal: document.getElementById("homeModalOverview"),   tabBtn: tabOverview },
+    reports:    { modal: document.getElementById("homeModalReports"),    tabBtn: tabReports },
+    casualties: { modal: document.getElementById("homeModalCasualties"), tabBtn: tabCasualties },
+    network:    { modal: document.getElementById("homeModalNetwork"),    tabBtn: null, iframeId: "homeModalNetworkFrame" },
+    intercepts: { modal: document.getElementById("homeModalIntercepts"), tabBtn: null, iframeId: "homeModalInterceptsFrame" },
   };
 
-  function setTab(which, opts) {
+  function openHomeModal(which, opts) {
     const skipHistory = opts && opts.skipHistory;
-    if (!tabMap[which]) which = "activity";
-    Object.keys(tabMap).forEach((key) => {
-      const on = key === which;
-      const { btn, pane } = tabMap[key];
-      btn.classList.toggle("active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
-      pane.classList.toggle("hidden", !on);
-    });
+    const m = modalMap[which];
+    if (!m || !m.modal) return;
+    m.modal.classList.remove("hidden");
+    m.modal.removeAttribute("aria-hidden");
+    // Триггеримо click на прихованій tab-кнопці — це активує ліниву
+    // ініціалізацію в overview.js / casualties.js (вони слухають саме її).
+    try { m.tabBtn?.click(); } catch (_) {}
     if (!skipHistory) {
       const u = new URL(location.href);
-      if (which === "activity") u.searchParams.delete("tab");
-      else u.searchParams.set("tab", which);
+      u.searchParams.set("tab", which);
+      history.replaceState(null, "", u.pathname + "?" + u.searchParams.toString() + u.hash);
+    }
+  }
+
+  function closeHomeModal(which, opts) {
+    const skipHistory = opts && opts.skipHistory;
+    const m = modalMap[which];
+    if (!m || !m.modal) return;
+    m.modal.classList.add("hidden");
+    m.modal.setAttribute("aria-hidden", "true");
+    // iframe-модалки — щоб не тримати ресурси (live-pings, мапи) у фоні,
+    // скидаємо src на закритті. Наступне відкриття перевиставить його.
+    if (m.iframeId) {
+      const ifr = document.getElementById(m.iframeId);
+      if (ifr) ifr.src = "about:blank";
+    }
+    if (!skipHistory && !m.iframeId) {
+      // Для табів (overview/reports/casualties) — синхронізуємо ?tab у URL.
+      // Iframe-модалки в URL не пишемо: вони не є «вкладкою» сторінки.
+      const u = new URL(location.href);
+      u.searchParams.delete("tab");
       const qs = u.searchParams.toString();
       history.replaceState(null, "", u.pathname + (qs ? `?${qs}` : "") + u.hash);
     }
   }
 
-  function initialTabFromUrl() {
-    const t = (new URLSearchParams(location.search).get("tab") || "").toLowerCase();
-    if (t in tabMap) return t;
-    return "activity";
+  function openHomeNetworkModal(netId) {
+    const m = modalMap.network;
+    if (!m || !m.modal) return;
+    const id = String(netId || "").trim();
+    if (!id) return;
+    const ifr = document.getElementById(m.iframeId);
+    if (ifr) ifr.src = `/networks?pick=${encodeURIComponent(id)}&embed=1&_=${Date.now()}`;
+    m.modal.classList.remove("hidden");
+    m.modal.removeAttribute("aria-hidden");
   }
 
-  setTab(initialTabFromUrl(), { skipHistory: true });
+  function openHomeInterceptsModal(dayIso, networkToken) {
+    const m = modalMap.intercepts;
+    if (!m || !m.modal) return;
+    const day = String(dayIso || "").trim();
+    if (!day) return;
+    const periodStart = `${day}T00:00`;
+    const periodEnd   = `${day}T23:59`;
+    const qs = new URLSearchParams();
+    qs.set("period_start", periodStart);
+    qs.set("period_end",   periodEnd);
+    if (networkToken) qs.set("network", String(networkToken));
+    qs.set("tab",   "view");
+    qs.set("embed", "1");
+    qs.set("_", String(Date.now()));   // cache-bust — щоб після оновлень CSS не лишався застарілий HTML iframe
+    const ifr = document.getElementById(m.iframeId);
+    if (ifr) ifr.src = `/intercepts-explorer?${qs.toString()}`;
+    m.modal.classList.remove("hidden");
+    m.modal.removeAttribute("aria-hidden");
+  }
 
-  tabOverview.addEventListener("click", () => setTab("overview"));
-  tabActivity.addEventListener("click", () => setTab("activity"));
-  tabReports.addEventListener("click", () => setTab("reports"));
-  tabCasualties?.addEventListener("click", () => setTab("casualties"));
+  function closeAllHomeModals() {
+    Object.keys(modalMap).forEach((k) => closeHomeModal(k, { skipHistory: true }));
+  }
+
+  // Header buttons → open respective modal
+  document.getElementById("homeOpenOverview")?.addEventListener("click", () => openHomeModal("overview"));
+  document.getElementById("homeOpenReports")?.addEventListener("click", () => openHomeModal("reports"));
+  document.getElementById("homeOpenCasualties")?.addEventListener("click", () => openHomeModal("casualties"));
+
+  // Close handlers: X / backdrop / Esc
+  document.querySelectorAll("[data-home-modal-close]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      const which = el.getAttribute("data-home-modal-close");
+      if (which) { e.stopPropagation(); closeHomeModal(which); }
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    Object.keys(modalMap).forEach((k) => {
+      const m = modalMap[k].modal;
+      if (m && !m.classList.contains("hidden")) closeHomeModal(k);
+    });
+  });
+
+  // Initial URL state — ?tab=X відкриває відповідну модалку.
+  const _initialTab = (window.__homeInitialTab || "").toLowerCase();
+  if (_initialTab && _initialTab in modalMap) {
+    openHomeModal(_initialTab, { skipHistory: true });
+  }
 
   function escapeHtml(value) {
     return String(value || "")
@@ -335,40 +409,20 @@
     tables.innerHTML = html;
   }
 
-  function openInterceptsForDay(dayIso, networkToken) {
-    const day = String(dayIso || "").trim(); // YYYY-MM-DD
-    if (!day) return;
-    const periodStart = `${day}T00:00`;
-    const periodEnd = `${day}T23:59`;
-    const qs = new URLSearchParams();
-    qs.set("period_start", periodStart);
-    qs.set("period_end", periodEnd);
-    if (networkToken) qs.set("network", String(networkToken));
-    const url = `/intercepts-explorer?${qs.toString()}`;
-    window.open(url, "_blank", "noopener");
-  }
-
   tables.addEventListener("click", (e) => {
     const cardLink = e.target.closest(".home-net-card-link");
     if (cardLink) {
       const netId = cardLink.getAttribute("data-net-id") || "";
-      if (netId) {
-        const url = `/networks?pick=${encodeURIComponent(netId)}`;
-        window.open(url, "_blank", "noopener");
-      }
+      if (netId) openHomeNetworkModal(netId);
       return;
     }
 
     const pill = e.target.closest(".heat-pill.is-link");
     if (!pill) return;
-    const day = pill.getAttribute("data-day") || "";
+    const day  = pill.getAttribute("data-day") || "";
     const kind = pill.getAttribute("data-kind") || "";
-    const net = pill.getAttribute("data-net") || "";
-    if (kind === "summary") {
-      openInterceptsForDay(day, "");
-      return;
-    }
-    openInterceptsForDay(day, net);
+    const net  = pill.getAttribute("data-net") || "";
+    openHomeInterceptsModal(day, kind === "summary" ? "" : net);
   });
 
   async function loadActivity() {
@@ -394,13 +448,15 @@
   }
 
   btnShow.addEventListener("click", () => {
-    setTab("activity");
+    // Activity тепер постійно видима як основний контент — просто
+    // підвантажуємо таблицю.
     loadActivity();
   });
 
-  tabActivity.addEventListener("click", () => {
-    setTimeout(loadActivity, 0);
-  });
+  // Автозавантаження при відкритті сторінки — щоб не виглядало порожньо.
+  // Викликаємо одразу після того, як DOM прив'язаний, з дефолтами
+  // (Розширений = on, Враховувати сьогодні = off, Днів = 5).
+  loadActivity();
 
   // --- Переміщення 36 мсп ---
   (function () {

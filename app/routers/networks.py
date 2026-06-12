@@ -609,6 +609,54 @@ def api_networks_verify(body: NetworkVerifyIn):
     }
 
 
+@router.get("/api/networks/ocheret-frequencies")
+def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0):
+    """Return current active "Очерет"-watched network frequencies.
+
+    Filter: `chats.name = 'Очерет'` AND `statuses.name = 'Спостерігається'`.
+    Used by operator scripts on multiple PCs that need an always-up-to-date
+    list without manually syncing a local text file.
+
+    Args:
+        format:   'json' (default) → {ok, count, frequencies:[{frequency,mask}]};
+                  'text'           → plain text, one entry per line.
+        with_mask: 1 → for text format, append mask after a tab (if present).
+
+    Returns:
+        JSONResponse or PlainTextResponse, depending on `format`.
+    """
+    from fastapi.responses import PlainTextResponse
+
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT n.frequency, COALESCE(n.mask, '') AS mask
+            FROM networks n
+            JOIN chats    c ON c.id = n.chat_id
+            JOIN statuses s ON s.id = n.status_id
+            WHERE c.name = 'Очерет' AND s.name = 'Спостерігається'
+            ORDER BY n.frequency
+            """
+        ).fetchall()
+
+    items = [{"frequency": r["frequency"] or "", "mask": r["mask"] or ""} for r in rows]
+
+    if (format or "").lower() == "text":
+        lines: list[str] = []
+        if int(with_mask or 0):
+            # Одна колонка: частота і маска (якщо є) — кожна на окремому рядку.
+            # Це збігається з виглядом модалки "Очерет" на /networks і з тим,
+            # що очікують операторські скрипти (read line-by-line).
+            for it in items:
+                if it["frequency"]: lines.append(it["frequency"])
+                if it["mask"]:      lines.append(it["mask"])
+        else:
+            lines = [it["frequency"] for it in items if it["frequency"]]
+        return PlainTextResponse("\n".join(lines), media_type="text/plain; charset=utf-8")
+
+    return JSONResponse({"ok": True, "count": len(items), "frequencies": items})
+
+
 def _fetchall(conn, sql: str, params=()):
     """Fetch all rows for a query (small helper for this router)."""
     cur = conn.execute(sql, params)

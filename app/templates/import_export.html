@@ -2,73 +2,30 @@
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <h1>Імпорт / Експорт</h1>
-    <div class="small">Завантаження даних та черга помилок чат-боту.</div>
+  <div class="page-header ie-page-header">
+    <div class="ie-page-header__title">
+      <h1>Імпорт / Експорт</h1>
+      <div class="small">Завантаження даних та черга помилок чат-боту.</div>
+    </div>
+    <div class="ie-page-actions">
+      <button id="ieOpenXlsx"     type="button" class="secondary">XLSX</button>
+      <button id="ieOpenAkademik" type="button" class="secondary">Академік</button>
+    </div>
   </div>
 
-  <section class="tabs-shell">
-    <div class="tabs-nav" role="tablist" aria-label="Вкладки Імпорт/Експорт">
-      <button
-        id="ieTabXlsx"
-        type="button"
-        class="tab-btn active"
-        role="tab"
-        aria-selected="true"
-        aria-controls="iePaneXlsx"
-      >XLSX</button>
-      <button
-        id="ieTabBot"
-        type="button"
-        class="tab-btn"
-        role="tab"
-        aria-selected="false"
-        aria-controls="iePaneBot"
-      >Чат-бот</button>
-    </div>
+  <!-- Legacy tab buttons (приховані) — лишаємо для зворотньої сумісності. -->
+  <div class="ie-legacy-tabs" hidden aria-hidden="true">
+    <button id="ieTabXlsx" type="button"></button>
+    <button id="ieTabBot"  type="button"></button>
+  </div>
 
-    <div class="tab-panel-wrap">
-
-      <!-- ── XLSX TAB ─────────────────────────────────────────── -->
-      <section
-        id="iePaneXlsx"
-        class="tab-panel"
-        role="tabpanel"
-        aria-labelledby="ieTabXlsx"
-      >
-        <div class="ie-wrap">
-          <h3 class="section-title">Імпорт перехоплень з XLSX</h3>
-          <p class="small" style="margin-bottom:16px; opacity:.8">
-            Завантаж файл <code>.xlsx</code> з повідомленнями. Після обробки буде показано результат.
-          </p>
-
-          <div class="ie-upload-row">
-            <label class="ie-file-label">
-              <input type="file" id="ieXlsxFile" accept=".xlsx" class="ie-file-input">
-              <span class="ie-file-text" id="ieXlsxFileName">Оберіть файл…</span>
-            </label>
-            <button class="btn" type="button" id="ieXlsxUploadBtn" disabled>Завантажити</button>
-          </div>
-
-          <div class="ie-progress" id="ieXlsxProgress" style="display:none">
-            <span class="ie-spinner"></span> Обробка…
-          </div>
-
-          <div id="ieXlsxResult" style="display:none">
-            <div class="ie-result-head" id="ieXlsxResultHead"></div>
-            <div class="ie-result-details" id="ieXlsxResultDetails"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── CHATBOT TAB ──────────────────────────────────────── -->
-      <section
-        id="iePaneBot"
-        class="tab-panel hidden"
-        role="tabpanel"
-        aria-labelledby="ieTabBot"
-      >
-        <div class="ie-wrap">
+  <!-- ── Основний контент: Чат-бот ───────────────────────────── -->
+  <section
+    id="iePaneBot"
+    role="region"
+    aria-label="Чат-бот"
+  >
+    <div class="ie-wrap">
 
           <!-- Top bar: checkbox + refresh -->
           <div class="ie-bot-top-bar">
@@ -114,15 +71,98 @@
             </table>
           </div>
         </div>
-      </section>
-
-    </div>
   </section>
+
+  <!-- ── Modal: XLSX ─────────────────────────────────────────── -->
+  <div id="ieModalXlsx" class="modal hidden ie-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-ie-modal-close="xlsx"></div>
+    <div class="modal-card ie-modal-card" role="dialog" aria-modal="true" aria-labelledby="ieModalXlsxTitle">
+      <div class="modal-head">
+        <div id="ieModalXlsxTitle" class="modal-title">Імпорт перехоплень з XLSX</div>
+        <button type="button" class="secondary" data-ie-modal-close="xlsx" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body ie-modal-body">
+        <section id="iePaneXlsx" role="region" aria-label="XLSX">
+          <div class="ie-wrap">
+            <p class="small" style="margin-bottom:16px; opacity:.8">
+              Завантаж файл <code>.xlsx</code> з повідомленнями. Після обробки буде показано результат.
+            </p>
+
+            <div class="ie-upload-row">
+              <label class="ie-file-label">
+                <input type="file" id="ieXlsxFile" accept=".xlsx" class="ie-file-input">
+                <span class="ie-file-text" id="ieXlsxFileName">Оберіть файл…</span>
+              </label>
+              <button class="btn" type="button" id="ieXlsxUploadBtn" disabled>Завантажити</button>
+            </div>
+
+            <div class="ie-progress" id="ieXlsxProgress" style="display:none">
+              <span class="ie-spinner"></span> Обробка…
+            </div>
+
+            <div id="ieXlsxResult" style="display:none">
+              <div class="ie-result-head" id="ieXlsxResultHead"></div>
+              <div class="ie-result-details" id="ieXlsxResultDetails"></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Академік (iframe → /networks?tab=akademik&embed=1) ─── -->
+  <div id="ieModalAkademik" class="modal hidden ie-modal ie-modal--iframe" aria-hidden="true">
+    <div class="modal-backdrop" data-ie-modal-close="akademik"></div>
+    <div class="modal-card ie-modal-card ie-modal-card--iframe" role="dialog" aria-modal="true" aria-labelledby="ieModalAkademikTitle">
+      <div class="modal-head">
+        <div id="ieModalAkademikTitle" class="modal-title">Академік</div>
+        <button type="button" class="secondary" data-ie-modal-close="akademik" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body ie-modal-body ie-modal-body--iframe" style="padding:0">
+        <iframe id="ieModalAkademikFrame" src="about:blank" title="Академік"
+                style="width:100%; height:80vh; border:0; display:block; background:var(--bg)"></iframe>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 
 {% block extra_head %}
 <style>
+/* ── Header (style like Home) ─────────────────────────────────── */
+.ie-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.ie-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Modal: wide card with scrollable body ────────────────────── */
+.ie-modal-card {
+  width: 95vw;
+  max-width: 760px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.ie-modal-body {
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+.ie-modal-body > section { min-width: 0; }
+
+/* iframe-варіант модалки — ширший і без padding у body */
+.ie-modal-card--iframe { max-width: 1200px; }
+.ie-modal-body--iframe { padding: 0; overflow: hidden; }
+
 /* ── Import/Export page ───────────────────────────────────────── */
 .ie-wrap { padding: 20px 0 32px; }
 
@@ -361,5 +401,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/import_export.js?v=5" defer></script>
+<script src="/static/import_export.js?v=8" defer></script>
 {% endblock %}

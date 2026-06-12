@@ -831,3 +831,59 @@ def peleng_report_by_period(
         return JSONResponse(status_code=500, content={"detail": str(e)})
     finally:
         db.close()
+
+
+# =========================================================
+# API: peleng points in period (JSON) — для рендеру карти у «Звіт»-табі
+# =========================================================
+@router.get("/api/peleng/points")
+def api_peleng_points(
+    from_dt: str = Query(..., description="YYYY-MM-DDTHH:MM[:SS] або з пробілом"),
+    to_dt:   str = Query(..., description="YYYY-MM-DDTHH:MM[:SS] або з пробілом"),
+):
+    """Повертає пеленги-точки за період для відображення на карті.
+
+    Кожна точка — окремий запис у відповіді з прив'язкою до batch (event_dt,
+    frequency, unit). Клієнт сам перетворює MGRS → lat/lon (window.mgrs).
+    """
+    from_n = (from_dt or "").strip().replace("T", " ")
+    to_n   = (to_dt   or "").strip().replace("T", " ")
+    if not from_n or not to_n:
+        return JSONResponse(status_code=400, content={"detail": "from_dt і to_dt обов'язкові"})
+
+    db = get_db()
+    try:
+        rows = db.execute(
+            """
+            SELECT
+                pp.id         AS point_id,
+                pp.batch_id   AS batch_id,
+                pp.mgrs       AS mgrs,
+                pb.event_dt   AS event_dt,
+                COALESCE(n.frequency, '') AS frequency,
+                COALESCE(n.unit, '')      AS unit
+            FROM peleng_points pp
+            JOIN peleng_batches pb ON pb.id = pp.batch_id
+            LEFT JOIN networks   n  ON n.id  = pb.network_id
+            WHERE REPLACE(pb.event_dt, 'T', ' ') >= ?
+              AND REPLACE(pb.event_dt, 'T', ' ') <= ?
+            ORDER BY REPLACE(pb.event_dt, 'T', ' ') ASC, pp.id ASC
+            """,
+            (from_n, to_n),
+        ).fetchall()
+        out = [
+            {
+                "point_id":  int(r["point_id"]),
+                "batch_id":  int(r["batch_id"]),
+                "event_dt":  str(r["event_dt"] or ""),
+                "frequency": str(r["frequency"] or ""),
+                "unit":      str(r["unit"] or ""),
+                "mgrs":      str(r["mgrs"] or ""),
+            }
+            for r in rows
+        ]
+        return {"ok": True, "rows": out, "total": len(out)}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+    finally:
+        db.close()

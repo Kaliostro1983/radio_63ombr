@@ -3,245 +3,342 @@
 {% block content %}
 
 <div class="pel-page">
-  <div class="pel-page-header">
-    <h2 class="pel-title">Пеленгація</h2>
+  <div class="page-header pel-page-header">
+    <div class="pel-page-header__title">
+      <h1>Пеленгація</h1>
+      <div class="small">Карта пеленгів та формування звітів.</div>
+    </div>
+    <div class="pel-page-actions">
+      <button id="pelOpenCompose" type="button" class="secondary">Оформлення</button>
+      <button id="pelOpenReport"  type="button" class="secondary">Формування звіту</button>
+      <button id="pelOpenActual"  type="button" class="secondary">Актуальне</button>
+    </div>
   </div>
 
-  <section class="tabs-shell pel-tabs-shell">
-    <div class="tabs-nav pel-tabs-nav" role="tablist" aria-label="Режими сторінки Пеленгація">
-      <button
-        id="pelTabCompose"
-        type="button"
-        class="tab-btn active"
-        role="tab"
-        aria-selected="true"
-        aria-controls="pelPaneCompose"
-      >
-        Оформлення
-      </button>
+  <!-- Legacy tab buttons (приховані) — лишаємо для зворотньої сумісності
+       з existing JS-bindings setPelengTab / pelTabReport.click тощо. -->
+  <div class="pel-legacy-tabs" hidden aria-hidden="true">
+    <button id="pelTabCompose" type="button"></button>
+    <button id="pelTabReport"  type="button"></button>
+    <button id="pelTabActual"  type="button"></button>
+  </div>
 
-      <button
-        id="pelTabReport"
-        type="button"
-        class="tab-btn"
-        role="tab"
-        aria-selected="false"
-        aria-controls="pelPaneReport"
-      >
-        Звіт
-      </button>
+  <!-- ── Основний контент: карта пеленгів ─────────────────────── -->
+  <section
+    id="pelPaneReport"
+    class="pel-tab-panel"
+    role="region"
+    aria-label="Карта пеленгів"
+  >
+    <div class="pel-wrap pel-report-wrap">
 
-      <button
-        id="pelTabActual"
-        type="button"
-        class="tab-btn"
-        role="tab"
-        aria-selected="false"
-        aria-controls="pelPaneActual"
-      >
-        Актуальне
-      </button>
-    </div>
-
-    <div class="tab-panel-wrap pel-tab-panel-wrap">
-      <section
-        id="pelPaneCompose"
-        class="tab-panel pel-tab-panel"
-        role="tabpanel"
-        aria-labelledby="pelTabCompose"
-      >
-        <div class="pel-wrap">
-          <div class="row row1">
-            <label class="lbl" for="event_date">Дата</label>
-            <input class="in in-date" type="date" id="event_date">
-
-            <label class="lbl lbl-time" for="event_time">Час</label>
-            <input class="in in-time" type="time" id="event_time">
-
-            <button class="btn btn-small" type="button" id="btn_now">C</button>
+      <div class="pel-mapblock">
+        <div class="pel-mapblock-filter">
+          <div class="pel-mapblock-quick">
+            <button class="btn btn-small pel-mapblock-quick-btn" type="button" data-hours="8">8 год</button>
+            <button class="btn btn-small pel-mapblock-quick-btn" type="button" data-hours="16">16 год</button>
+            <button class="btn btn-small pel-mapblock-quick-btn" type="button" data-hours="24">24 год</button>
           </div>
-
-          <div class="row row2">
-            <label class="lbl" for="frequency">Частота/Маска</label>
-            <input
-              class="in in-freq"
-              type="text"
-              id="frequency"
-              placeholder="145.5000 або 300.3250"
-              list="pelengFreqMasksList"
-              autocomplete="off"
-            >
-            <datalist id="pelengFreqMasksList"></datalist>
-            <button class="btn" type="button" id="btn_accept">Прийняти</button>
+          <div class="pel-mapblock-dt">
+            <label class="lbl" for="pelMapFromDt">Від</label>
+            <input class="in" type="datetime-local" id="pelMapFromDt">
           </div>
-
-          <div class="row row3">
-            <label class="lbl" for="unit">Підрозділ</label>
-            <input class="in in-unit" type="text" id="unit" value="НВ підрозділу">
-
-            <label class="lbl lbl-loc" for="location">Location</label>
-            <input class="in in-loc" type="text" id="location" value="ТОРСЬКЕ">
+          <div class="pel-mapblock-dt">
+            <label class="lbl" for="pelMapToDt">До</label>
+            <input class="in" type="datetime-local" id="pelMapToDt">
           </div>
+          <button class="btn" type="button" id="pelMapShowBtn">Показати</button>
 
-          <label class="section-title" for="mgrs_text">MGRS coordinates (кожен рядок окремо)</label>
-          <textarea class="ta ta-mgrs" id="mgrs_text" rows="5"></textarea>
-
-          <label class="section-title" for="comment">Коментар / банер</label>
-          <textarea class="ta ta-comment" id="comment" rows="2">-------  🦁 63 ОМБр 🦁 -------</textarea>
-
-          <label class="section-title" for="output">Згенероване повідомлення</label>
-          <textarea class="ta ta-out" id="output" readonly rows="8"></textarea>
-
-          <div class="row row-bottom">
-            <div class="left-btns">
-              <button class="btn" type="button" id="btn_generate">Згенерувати</button>
-              <button class="btn" type="button" id="btn_copy">Копіювати</button>
+          <!-- Send-bar (праворуч від «Показати») -->
+          <div class="qc-send-bar pel-mapblock-sendbar">
+            <button type="button" id="pelSendPlatformBtn" class="qc-platform-btn qc-platform-btn--wa" title="WhatsApp (натисни для Signal)">W</button>
+            <div class="qc-chat-ac-wrap">
+              <input id="pelSendChatInput" type="text" class="qc-chat-input" placeholder="Оберіть чат…" autocomplete="off">
+              <div id="pelSendChatDrop" class="qc-chat-drop hidden"></div>
+              <input type="hidden" id="pelSendChatId">
             </div>
+            <button type="button" id="pelSendBtn" class="qc-send-btn" title="Надіслати карту в месенджер" disabled>&#10148;</button>
           </div>
 
-          <div class="toast" id="toast" aria-live="polite"></div>
-        </div>
-      </section>
-
-      <section
-        id="pelPaneReport"
-        class="tab-panel pel-tab-panel hidden"
-        role="tabpanel"
-        aria-labelledby="pelTabReport"
-      >
-        <div class="pel-wrap pel-report-wrap">
-          <h3 class="section-title pel-section-heading">Формування звіту</h3>
-
-          <label class="section-title" for="report_source_text">
-            Текст для звіту (якщо заповнено — звіт формується з цього тексту, БД ігнорується)
+          <label class="pel-mapblock-freq-chk" title="Показати частоту біля кожної іконки">
+            <input type="checkbox" id="pelShowFreqChk">
+            <span>Частоти</span>
           </label>
-          <textarea
-            class="ta ta-report"
-            id="report_source_text"
-            rows="8"
-            placeholder="Встав сюди текст для звіту..."
-          ></textarea>
 
-          <div class="report-mode-note" id="report_mode_note">
-            Режим: вибірка з БД
-          </div>
-
-          <div class="report-toolbar">
-            <div class="report-field report-field-dt">
-              <label class="lbl" for="report_from_dt">Початковий дата/час</label>
-              <input class="in" type="datetime-local" id="report_from_dt">
-            </div>
-
-            <div class="report-field report-field-hours">
-              <label class="lbl" for="report_hours">Період, год</label>
-              <input class="in in-hours" type="number" id="report_hours" min="1" step="1" value="9">
-            </div>
-
-            <div class="report-field report-field-dt">
-              <label class="lbl" for="report_to_dt">Кінцевий дата/час</label>
-              <input class="in" type="datetime-local" id="report_to_dt">
-            </div>
-
-            <div class="report-actions">
-              <div class="report-preview" id="report_preview">Знайдено: —</div>
-              <button class="btn" type="button" id="btn_report_generate">Сформувати звіт</button>
-            </div>
-          </div>
-
-          <details class="posts-panel" id="posts_panel">
-            <summary class="posts-summary">Налаштування постів</summary>
-
-            <div class="posts-toolbar">
-              <button class="btn" type="button" id="btn_posts_add">Додати пост</button>
-              <button class="btn" type="button" id="btn_posts_save">Зберегти пости</button>
-            </div>
-
-            <div class="posts-table-wrap">
-              <table class="posts-table">
-                <thead>
-                  <tr>
-                    <th>Active</th>
-                    <th>ID</th>
-                    <th>Назва</th>
-                    <th>№ БП</th>
-                    <th>Підрозділ</th>
-                    <th>Техніка</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="posts_tbody"></tbody>
-              </table>
-            </div>
-          </details>
+          <label class="pel-mapblock-freq-chk" title="Замість стандартних іконок — кольорові кола з номером бригади/полка з опису р/м">
+            <input type="checkbox" id="pelShowUnitChk">
+            <span>Підрозділ</span>
+          </label>
         </div>
-      </section>
-      <section
-        id="pelPaneActual"
-        class="tab-panel pel-tab-panel hidden"
-        role="tabpanel"
-        aria-labelledby="pelTabActual"
-      >
-        <div class="pel-actual-wrap">
 
-          <div class="pel-actual-filter">
-            <table class="pel-thresh-table">
-              <tbody>
-                <tr>
-                  <td><input type="checkbox" id="cbActualGreen" checked></td>
-                  <td><span class="pel-status-dot dot-green"></span></td>
-                  <td>≤&nbsp;<input type="number" id="pelThreshGreenDays" class="pel-thresh-input" value="3" min="1" max="365">&nbsp;діб</td>
-                  <td id="pelThreshGreenHours" class="pel-thresh-hours">≤&nbsp;72&nbsp;год</td>
-                </tr>
-                <tr>
-                  <td><input type="checkbox" id="cbActualYellow" checked></td>
-                  <td><span class="pel-status-dot dot-yellow"></span></td>
-                  <td>≤&nbsp;<input type="number" id="pelThreshYellowDays" class="pel-thresh-input" value="8" min="1" max="365">&nbsp;діб</td>
-                  <td id="pelThreshYellowHours" class="pel-thresh-hours">≤&nbsp;192&nbsp;год</td>
-                </tr>
-                <tr>
-                  <td><input type="checkbox" id="cbActualRed" checked></td>
-                  <td><span class="pel-status-dot dot-red"></span></td>
-                  <td id="pelThreshRedDays">&gt;&nbsp;8&nbsp;діб</td>
-                  <td id="pelThreshRedHours" class="pel-thresh-hours">&gt;&nbsp;192&nbsp;год</td>
-                </tr>
-              </tbody>
-            </table>
-            <button class="btn" type="button" id="pelActualShowBtn">Показати</button>
-          </div>
-
-          <div class="pel-actual-info" id="pelActualLoader" style="display:none">Завантаження…</div>
-          <div class="pel-actual-info" id="pelActualEmpty"  style="display:none">Даних не знайдено.</div>
-
-          <div class="pel-actual-table-wrap" id="pelActualTableWrap" style="display:none">
-            <table class="pel-actual-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Частота</th>
-                  <th>Маска</th>
-                  <th>Підрозділ</th>
-                  <th>Тег</th>
-                  <th title="Перехоплень за крайні 3 доби включно з сьогодні">Перехопл. 3д</th>
-                  <th title="Пеленгів за крайні 10 днів">Пеленгів 10д</th>
-                  <th>Останній пеленг</th>
-                </tr>
-              </thead>
-              <tbody id="pelActualTbody"></tbody>
-            </table>
-          </div>
-
+        <div class="pel-mapblock-mapwrap">
+          <div class="pel-mapblock-map" id="pelMapDiv"></div>
+          <span class="pel-mapblock-count small" id="pelMapCount">Знайдено: —</span>
+          <button type="button" id="pelMapCopyBtn" class="pel-mapblock-copybtn" title="Скопіювати карту з іконками">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="5" width="9" height="9" rx="2"/><path d="M2 11V3a2 2 0 012-2h8"/>
+            </svg>
+          </button>
         </div>
-      </section>
+      </div>
 
     </div>
   </section>
+
+  <!-- ── Modal: Оформлення ────────────────────────────────────── -->
+  <div id="pelModalCompose" class="modal hidden pel-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-pel-modal-close="compose"></div>
+    <div class="modal-card pel-modal-card" role="dialog" aria-modal="true" aria-labelledby="pelModalComposeTitle">
+      <div class="modal-head">
+        <div id="pelModalComposeTitle" class="modal-title">Оформлення</div>
+        <button type="button" class="secondary" data-pel-modal-close="compose" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body pel-modal-body">
+        <section id="pelPaneCompose" role="region" aria-label="Оформлення пеленга">
+          <div class="pel-wrap">
+            <div class="row row1">
+              <label class="lbl" for="event_date">Дата</label>
+              <input class="in in-date" type="date" id="event_date">
+
+              <label class="lbl lbl-time" for="event_time">Час</label>
+              <input class="in in-time" type="time" id="event_time">
+
+              <button class="btn btn-small" type="button" id="btn_now">C</button>
+            </div>
+
+            <div class="row row2">
+              <label class="lbl" for="frequency">Частота/Маска</label>
+              <input
+                class="in in-freq"
+                type="text"
+                id="frequency"
+                placeholder="145.5000 або 300.3250"
+                list="pelengFreqMasksList"
+                autocomplete="off"
+              >
+              <datalist id="pelengFreqMasksList"></datalist>
+              <button class="btn" type="button" id="btn_accept">Прийняти</button>
+            </div>
+
+            <div class="row row3">
+              <label class="lbl" for="unit">Підрозділ</label>
+              <input class="in in-unit" type="text" id="unit" value="НВ підрозділу">
+
+              <label class="lbl lbl-loc" for="location">Location</label>
+              <input class="in in-loc" type="text" id="location" value="ТОРСЬКЕ">
+            </div>
+
+            <label class="section-title" for="mgrs_text">MGRS coordinates (кожен рядок окремо)</label>
+            <textarea class="ta ta-mgrs" id="mgrs_text" rows="5"></textarea>
+
+            <label class="section-title" for="comment">Коментар / банер</label>
+            <textarea class="ta ta-comment" id="comment" rows="2">-------  🦁 63 ОМБр 🦁 -------</textarea>
+
+            <label class="section-title" for="output">Згенероване повідомлення</label>
+            <textarea class="ta ta-out" id="output" readonly rows="8"></textarea>
+
+            <div class="row row-bottom">
+              <div class="left-btns">
+                <button class="btn" type="button" id="btn_generate">Згенерувати</button>
+                <button class="btn" type="button" id="btn_copy">Копіювати</button>
+              </div>
+            </div>
+
+            <div class="toast" id="toast" aria-live="polite"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Формування звіту ──────────────────────────────── -->
+  <div id="pelModalReport" class="modal hidden pel-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-pel-modal-close="report"></div>
+    <div class="modal-card pel-modal-card" role="dialog" aria-modal="true" aria-labelledby="pelModalReportTitle">
+      <div class="modal-head">
+        <div id="pelModalReportTitle" class="modal-title">Формування звіту</div>
+        <button type="button" class="secondary" data-pel-modal-close="report" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body pel-modal-body">
+        <section role="region" aria-label="Формування звіту">
+          <div class="pel-wrap pel-report-wrap">
+
+            <label class="section-title" for="report_source_text">
+              Текст для звіту (якщо заповнено — звіт формується з цього тексту, БД ігнорується)
+            </label>
+            <textarea
+              class="ta ta-report"
+              id="report_source_text"
+              rows="8"
+              placeholder="Встав сюди текст для звіту..."
+            ></textarea>
+
+            <div class="report-mode-note" id="report_mode_note">
+              Режим: вибірка з БД
+            </div>
+
+            <div class="report-toolbar">
+              <div class="report-field report-field-dt">
+                <label class="lbl" for="report_from_dt">Початковий дата/час</label>
+                <input class="in" type="datetime-local" id="report_from_dt">
+              </div>
+
+              <div class="report-field report-field-hours">
+                <label class="lbl" for="report_hours">Період, год</label>
+                <input class="in in-hours" type="number" id="report_hours" min="1" step="1" value="9">
+              </div>
+
+              <div class="report-field report-field-dt">
+                <label class="lbl" for="report_to_dt">Кінцевий дата/час</label>
+                <input class="in" type="datetime-local" id="report_to_dt">
+              </div>
+
+              <div class="report-actions">
+                <div class="report-preview" id="report_preview">Знайдено: —</div>
+                <button class="btn" type="button" id="btn_report_generate">Сформувати звіт</button>
+              </div>
+            </div>
+
+            <details class="posts-panel" id="posts_panel">
+              <summary class="posts-summary">Налаштування постів</summary>
+
+              <div class="posts-toolbar">
+                <button class="btn" type="button" id="btn_posts_add">Додати пост</button>
+                <button class="btn" type="button" id="btn_posts_save">Зберегти пости</button>
+              </div>
+
+              <div class="posts-table-wrap">
+                <table class="posts-table">
+                  <thead>
+                    <tr>
+                      <th>Active</th>
+                      <th>ID</th>
+                      <th>Назва</th>
+                      <th>№ БП</th>
+                      <th>Підрозділ</th>
+                      <th>Техніка</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="posts_tbody"></tbody>
+                </table>
+              </div>
+            </details>
+
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Актуальне ─────────────────────────────────────── -->
+  <div id="pelModalActual" class="modal hidden pel-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-pel-modal-close="actual"></div>
+    <div class="modal-card pel-modal-card" role="dialog" aria-modal="true" aria-labelledby="pelModalActualTitle">
+      <div class="modal-head">
+        <div id="pelModalActualTitle" class="modal-title">Актуальне</div>
+        <button type="button" class="secondary" data-pel-modal-close="actual" style="padding:4px 10px">✕</button>
+      </div>
+      <div class="modal-body pel-modal-body">
+        <section id="pelPaneActual" role="region" aria-label="Актуальне">
+          <div class="pel-actual-wrap">
+
+            <div class="pel-actual-filter">
+              <table class="pel-thresh-table">
+                <tbody>
+                  <tr>
+                    <td><input type="checkbox" id="cbActualGreen" checked></td>
+                    <td><span class="pel-status-dot dot-green"></span></td>
+                    <td>≤&nbsp;<input type="number" id="pelThreshGreenDays" class="pel-thresh-input" value="3" min="1" max="365">&nbsp;діб</td>
+                    <td id="pelThreshGreenHours" class="pel-thresh-hours">≤&nbsp;72&nbsp;год</td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" id="cbActualYellow" checked></td>
+                    <td><span class="pel-status-dot dot-yellow"></span></td>
+                    <td>≤&nbsp;<input type="number" id="pelThreshYellowDays" class="pel-thresh-input" value="8" min="1" max="365">&nbsp;діб</td>
+                    <td id="pelThreshYellowHours" class="pel-thresh-hours">≤&nbsp;192&nbsp;год</td>
+                  </tr>
+                  <tr>
+                    <td><input type="checkbox" id="cbActualRed" checked></td>
+                    <td><span class="pel-status-dot dot-red"></span></td>
+                    <td id="pelThreshRedDays">&gt;&nbsp;8&nbsp;діб</td>
+                    <td id="pelThreshRedHours" class="pel-thresh-hours">&gt;&nbsp;192&nbsp;год</td>
+                  </tr>
+                </tbody>
+              </table>
+              <button class="btn" type="button" id="pelActualShowBtn">Показати</button>
+            </div>
+
+            <div class="pel-actual-info" id="pelActualLoader" style="display:none">Завантаження…</div>
+            <div class="pel-actual-info" id="pelActualEmpty"  style="display:none">Даних не знайдено.</div>
+
+            <div class="pel-actual-table-wrap" id="pelActualTableWrap" style="display:none">
+              <table class="pel-actual-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Частота</th>
+                    <th>Маска</th>
+                    <th>Підрозділ</th>
+                    <th>Тег</th>
+                    <th title="Перехоплень за крайні 3 доби включно з сьогодні">Перехопл. 3д</th>
+                    <th title="Пеленгів за крайні 10 днів">Пеленгів 10д</th>
+                    <th>Останній пеленг</th>
+                  </tr>
+                </thead>
+                <tbody id="pelActualTbody"></tbody>
+              </table>
+            </div>
+
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/peleng.css">
+<link rel="stylesheet" href="/static/peleng.css?v=9">
+<style>
+/* Header у стилі Home */
+.pel-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.pel-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Leaflet ставить .leaflet-control на z-index: 800 — без переоприділення
+ * наша .modal (z-index: 50) тоне під керовиками карти. Підіймаємо весь
+ * шар pel-modal над будь-якими leaflet-елементами. */
+.pel-modal { z-index: 5000; }
+
+/* Modal cards — широкі та scrollable */
+.pel-modal-card {
+  width: 95vw;
+  max-width: 1180px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.pel-modal-body {
+  padding: 16px 20px 24px;
+  overflow: auto;
+}
+.pel-modal-body > section { min-width: 0; }
+</style>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/peleng.js?v=10"></script>
+<script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
+<script src="/static/peleng.js?v=28"></script>
 {% endblock %}
 {% endblock %}

@@ -278,6 +278,7 @@ def api_landmark_get(landmark_id: int):
                 l.id_geom,
                 l.comment,
                 l.is_active,
+                COALESCE(l.is_permanent, 1) AS is_permanent,
                 lt.name AS type_name,
                 g.name AS group_name,
                 lg.name AS geom_type_name
@@ -318,6 +319,7 @@ def api_landmark_get(landmark_id: int):
             "geom_type_name": str(row["geom_type_name"] or ""),
             "comment": str(row["comment"] or ""),
             "is_active": int(row["is_active"]) if row["is_active"] is not None else 1,
+            "is_permanent": int(row["is_permanent"]) if row["is_permanent"] is not None else 1,
         },
     }
 
@@ -336,6 +338,12 @@ async def api_landmark_update(request: Request, landmark_id: int):
         is_active = 1 if int(raw_is_active) != 0 else 0
     except Exception:
         is_active = 1
+
+    raw_is_permanent = payload.get("is_permanent", 1)
+    try:
+        is_permanent = 1 if int(raw_is_permanent) != 0 else 0
+    except Exception:
+        is_permanent = 1
 
     id_type = _parse_int_opt(payload.get("id_type"))
     id_group = _parse_int_opt(payload.get("id_group"))
@@ -404,6 +412,7 @@ async def api_landmark_update(request: Request, landmark_id: int):
                 id_type = ?,
                 comment = ?,
                 is_active = ?,
+                is_permanent = ?,
                 updated_at = ?
             WHERE id = ? AND is_active = 1
             """,
@@ -418,6 +427,7 @@ async def api_landmark_update(request: Request, landmark_id: int):
                 id_type,
                 comment,
                 is_active,
+                is_permanent,
                 now_iso,
                 landmark_id,
             ),
@@ -458,6 +468,12 @@ async def api_landmark_create(request: Request):
         is_active = 1 if int(raw_is_active) != 0 else 0
     except Exception:
         is_active = 1
+
+    raw_is_permanent = payload.get("is_permanent", 1)
+    try:
+        is_permanent = 1 if int(raw_is_permanent) != 0 else 0
+    except Exception:
+        is_permanent = 1
 
     id_type = _parse_int_opt(payload.get("id_type"))
     id_group = _parse_int_opt(payload.get("id_group"))
@@ -508,9 +524,9 @@ async def api_landmark_create(request: Request):
             """
             INSERT INTO landmarks (
                 name, key_word, location_wkt, location_kind, location_mgrs, id_geom, comment,
-                date_creation, updated_at, id_group, id_type, is_active
+                date_creation, updated_at, id_group, id_type, is_active, is_permanent
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -525,6 +541,7 @@ async def api_landmark_create(request: Request):
                 id_group,
                 id_type,
                 is_active,
+                is_permanent,
             ),
         )
 
@@ -584,3 +601,74 @@ async def api_landmark_delete(request: Request, landmark_id: int):
 
     return JSONResponse({"ok": True})
 
+
+
+# --------------------------------------------------------------------------- #
+#  Управління довідником landmark_types (CRUD без редагування назви).
+#  «сп» — системний дефолт, не можна видалити чи створити дубль.
+# --------------------------------------------------------------------------- #
+
+
+@router.post("/api/landmark-types")
+async def api_landmark_type_create(request: Request):
+    """Створити новий тип орієнтира."""
+    payload = await request.json()
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Назва не може бути порожньою")
+    if len(name) > 80:
+        raise HTTPException(status_code=400, detail="Занадто довга назва")
+
+    # SQLite lower() не нормалізує кирилицю — порівнюємо в Python.
+    name_norm = name.strip().lower()
+    with get_conn() as conn:
+        for r in conn.execute("SELECT id, name FROM landmark_types").fetchall():
+            if str(r["name"] or "").strip().lower() == name_norm:
+                raise HTTPException(status_code=409, detail="Тип з такою назвою вже існує")
+
+        cur = conn.execute("INSERT INTO landmark_types (name) VALUES (?)", (name,))
+        new_id = int(cur.lastrowid)
+        conn.commit()
+    return JSONResponse({"ok": True, "id": new_id, "name": name})
+
+
+@router.post("/api/landmark-types/{type_id}/delete")
+def api_landmark_type_delete(type_id: int):
+    """Видалити тип орієнтира.
+
+    Заборонено: системний «сп» (unknown default) і будь-який тип, на який
+    посилаються активні орієнтири — спершу їх треба переназначити.
+    """
+    with get_conn() as conn:
+        unknown_id = _unknown_landmark_type_id(conn)
+        if type_id == unknown_id:
+            raise HTTPException(status_code=400, detail="Системний тип не можна видалити")
+
+        row = conn.execute("SELECT id, name FROM landmark_types WHERE id = ?", (type_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Тип не знайдено")
+
+        used = conn.execute(
+            "SELECT COUNT(*) FROM landmarks WHERE id_type = ? AND is_active = 1",
+            (type_id,),
+        ).fetchone()[0]
+        if int(used or 0) > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Тип використовується {used} орієнтирами — спершу перепризначте їх",
+            )
+
+        conn.execute("DELETE FROM landmark_types WHERE id = ?", (type_id,))
+        conn.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/landmark-type-usage")
+def api_landmark_type_usage():
+    """Скільки активних орієнтирів використовує кожен тип."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id_type, COUNT(*) AS cnt FROM landmarks "
+            "WHERE is_active = 1 GROUP BY id_type"
+        ).fetchall()
+    return {"ok": True, "usage": {int(r["id_type"]): int(r["cnt"]) for r in rows}}

@@ -64,15 +64,27 @@ def process_structured_intercept(conn, raw_text: str) -> dict:
         }
 
     # Network resolution for structured intercepts is alias-based.
-    # Try header_line_1 first; fall back to header_line_2 for messages that
-    # begin with a group separator line (e.g. "------- 🐻 63 ОМБр 🐻 -------").
-    header_line_2 = (parsed.get("header_line_2") or "").strip()
-    network = get_network_by_alias_text(conn, header_line_1)
+    # Beremo послідовно усі кандидати, які парсер витяг (header_line_1,
+    # header_line_2, і рядки після "------- 63 ОМБр -------" сепаратора —
+    # для повідомлень з преамбулою на початку).
+    candidates = parsed.get("alias_candidates") or []
+    # Бек-сумісність: якщо парсер з якихось причин не повернув список — fallback.
+    if not candidates:
+        candidates = [header_line_1]
+        hl2 = (parsed.get("header_line_2") or "").strip()
+        if hl2:
+            candidates.append(hl2)
+
+    network = None
     alias_used = header_line_1
-    if not network and header_line_2:
-        network = get_network_by_alias_text(conn, header_line_2)
+    for cand in candidates:
+        cand_s = (cand or "").strip()
+        if not cand_s:
+            continue
+        network = get_network_by_alias_text(conn, cand_s)
         if network:
-            alias_used = header_line_2
+            alias_used = cand_s
+            break
 
     if not network:
         return {

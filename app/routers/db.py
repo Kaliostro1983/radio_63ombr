@@ -395,23 +395,6 @@ CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''
 );
-
--- Dictionary of slang / codewords used on radio networks.
--- A term is bound to ONE network at a time. Operators frequently switch
--- networks, so we expose a "move" operation that updates network_id rather
--- than duplicating the entry.
-CREATE TABLE IF NOT EXISTS dictionary_terms (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    term        TEXT NOT NULL,
-    definition  TEXT NOT NULL DEFAULT '',
-    network_id  INTEGER NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(network_id) REFERENCES networks(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_dictionary_terms_network ON dictionary_terms(network_id);
-CREATE INDEX IF NOT EXISTS idx_dictionary_terms_term    ON dictionary_terms(term);
-CREATE INDEX IF NOT EXISTS idx_dictionary_terms_updated ON dictionary_terms(updated_at DESC);
 """
 
 
@@ -791,17 +774,6 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         "UPDATE conclusion_types SET sort_order = id WHERE sort_order = 0 AND id > 0",
         stage="migrate:conclusion_types.sort_order",
     )
-    # Backfill legacy delta_identification values: only 'Ворожий' or 'Дружній' allowed.
-    # Anything else ('Невизначений', 'Невідомий', тощо) → 'Дружній' (відповідає UI чекбоксу).
-    _try_ddl(
-        conn,
-        "UPDATE conclusion_types SET delta_identification = 'Дружній' "
-        "WHERE delta_identification IS NOT NULL "
-        "  AND TRIM(delta_identification) <> '' "
-        "  AND TRIM(delta_identification) <> 'Ворожий' "
-        "  AND TRIM(delta_identification) <> 'Дружній'",
-        stage="migrate:conclusion_types.delta_identification_backfill",
-    )
     safe_execute(
         conn,
         "INSERT OR IGNORE INTO conclusion_types (id, type) VALUES (0, 'невідомо')",
@@ -1015,9 +987,6 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "landmarks", "location_kind", "location_kind TEXT")
     _ensure_column(conn, "landmarks", "updated_at", "updated_at TEXT")
     _ensure_column(conn, "landmarks", "is_active", "is_active INTEGER NOT NULL DEFAULT 1")
-    # Постійний орієнтир (на відміну від тимчасового). Усі наявні рядки →
-    # is_permanent=1, бо до введення прапора всі вважалися постійними.
-    _ensure_column(conn, "landmarks", "is_permanent", "is_permanent INTEGER NOT NULL DEFAULT 1")
     safe_execute(
         conn,
         """
@@ -1579,203 +1548,6 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "conclusion_types", "icon_filename", "icon_filename TEXT NOT NULL DEFAULT ''")
     # --- conclusion_types: icon_sidc — APP-6/MIL-STD-2525 SIDC code for milsymbol ---
     _ensure_column(conn, "conclusion_types", "icon_sidc", "icon_sidc TEXT NOT NULL DEFAULT ''")
-
-    # ====================================================================
-    # Palettes — імпортовані набори кодованих точок (KML/KMZ/GeoJSON).
-    # Точки групуються в одноколірні області (palette_regions); пошук іде
-    # по code_fold (розкладко-/регістронезалежний). Архів = is_archived.
-    # ====================================================================
-    # Довідник підрозділів для тегування палітр (розширюваний).
-    _try_ddl(
-        conn,
-        """
-        CREATE TABLE IF NOT EXISTS palette_units (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT NOT NULL UNIQUE,
-            sort_order INTEGER NOT NULL DEFAULT 0
-        )
-        """,
-        stage="create_table:palette_units",
-    )
-    for _pu_order, _pu_name in enumerate(
-        ["37 мсп", "31 мсп", "36 мсп", "164 омсбр", "19 тп", "67 мсд"], start=1
-    ):
-        safe_execute(
-            conn,
-            "INSERT OR IGNORE INTO palette_units (name, sort_order) VALUES (?, ?)",
-            (_pu_name, _pu_order),
-            module="app.core.db",
-            function="_run_lightweight_migrations",
-            stage=f"seed:palette_units:{_pu_name}",
-        )
-
-    _try_ddl(
-        conn,
-        """
-        CREATE TABLE IF NOT EXISTS palettes (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            name          TEXT NOT NULL,
-            source_format TEXT NOT NULL DEFAULT '',
-            source_filename TEXT NOT NULL DEFAULT '',
-            comment       TEXT NOT NULL DEFAULT '',
-            is_archived   INTEGER NOT NULL DEFAULT 0,
-            imported_at   TEXT NOT NULL,
-            last_used_at  TEXT,
-            use_count     INTEGER NOT NULL DEFAULT 0,
-            point_count   INTEGER NOT NULL DEFAULT 0,
-            min_lat REAL, min_lon REAL, max_lat REAL, max_lon REAL
-        )
-        """,
-        stage="create_table:palettes",
-    )
-    _try_ddl(
-        conn,
-        """
-        CREATE TABLE IF NOT EXISTS palette_unit_links (
-            palette_id INTEGER NOT NULL REFERENCES palettes(id) ON DELETE CASCADE,
-            unit_id    INTEGER NOT NULL REFERENCES palette_units(id) ON DELETE CASCADE,
-            PRIMARY KEY (palette_id, unit_id)
-        )
-        """,
-        stage="create_table:palette_unit_links",
-    )
-    _try_ddl(
-        conn,
-        """
-        CREATE TABLE IF NOT EXISTS palette_regions (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            palette_id  INTEGER NOT NULL REFERENCES palettes(id) ON DELETE CASCADE,
-            color       TEXT NOT NULL DEFAULT '',
-            hull_wkt    TEXT NOT NULL DEFAULT '',
-            code_prefix TEXT NOT NULL DEFAULT '',
-            num_min     INTEGER,
-            num_max     INTEGER,
-            label       TEXT NOT NULL DEFAULT '',
-            center_lat  REAL,
-            center_lon  REAL,
-            point_count INTEGER NOT NULL DEFAULT 0
-        )
-        """,
-        stage="create_table:palette_regions",
-    )
-    _try_ddl(
-        conn,
-        """
-        CREATE TABLE IF NOT EXISTS palette_points (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            palette_id  INTEGER NOT NULL REFERENCES palettes(id) ON DELETE CASCADE,
-            region_id   INTEGER REFERENCES palette_regions(id) ON DELETE SET NULL,
-            code        TEXT NOT NULL DEFAULT '',
-            code_fold   TEXT NOT NULL DEFAULT '',
-            color       TEXT NOT NULL DEFAULT '',
-            lat REAL, lon REAL,
-            mgrs TEXT NOT NULL DEFAULT '',
-            comment TEXT NOT NULL DEFAULT ''
-        )
-        """,
-        stage="create_table:palette_points",
-    )
-    _try_ddl(
-        conn,
-        """
-        CREATE TABLE IF NOT EXISTS palette_point_usage (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            point_id   INTEGER REFERENCES palette_points(id) ON DELETE SET NULL,
-            palette_id INTEGER NOT NULL REFERENCES palettes(id) ON DELETE CASCADE,
-            network_id INTEGER,
-            message_id INTEGER,
-            used_at    TEXT NOT NULL
-        )
-        """,
-        stage="create_table:palette_point_usage",
-    )
-    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_palettes_archived ON palettes(is_archived)",
-             stage="create_index:idx_palettes_archived")
-    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_palette_points_palette ON palette_points(palette_id)",
-             stage="create_index:idx_palette_points_palette")
-    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_palette_points_fold ON palette_points(code_fold)",
-             stage="create_index:idx_palette_points_fold")
-    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_palette_points_palette_fold ON palette_points(palette_id, code_fold)",
-             stage="create_index:idx_palette_points_palette_fold")
-    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_palette_regions_palette ON palette_regions(palette_id)",
-             stage="create_index:idx_palette_regions_palette")
-    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_palette_usage_network ON palette_point_usage(network_id)",
-             stage="create_index:idx_palette_usage_network")
-    _try_ddl(conn, "CREATE INDEX IF NOT EXISTS idx_palette_usage_palette ON palette_point_usage(palette_id)",
-             stage="create_index:idx_palette_usage_palette")
-    # Просторовий індекс по точках (bbox-запити для в'юпорта карти).
-    _try_ddl(
-        conn,
-        "CREATE VIRTUAL TABLE IF NOT EXISTS palette_points_rtree USING rtree("
-        "  id, min_lat, max_lat, min_lon, max_lon"
-        ")",
-        stage="create_vtable:palette_points_rtree",
-    )
-
-    # ====================================================================
-    # push_send_log — лог кожної спроби відправки в месенджер (success+fail).
-    # Дозволяє агрегувати найпоширеніші категорії помилок:
-    #   SELECT error_category, COUNT(*) FROM push_send_log
-    #    WHERE ts > datetime('now', '-7 days') AND success = 0
-    #    GROUP BY error_category ORDER BY COUNT(*) DESC;
-    # ====================================================================
-    _try_ddl(
-        conn,
-        "CREATE TABLE IF NOT EXISTS push_send_log ("
-        "  id              INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  ts              TEXT    NOT NULL DEFAULT (datetime('now')),"
-        "  request_id      TEXT    NOT NULL DEFAULT '',"
-        "  platform        TEXT    NOT NULL DEFAULT '',"
-        "  chat_id         TEXT    NOT NULL DEFAULT '',"
-        "  text_len        INTEGER NOT NULL DEFAULT 0,"
-        "  image_size      INTEGER NOT NULL DEFAULT 0,"
-        "  http_status     INTEGER NOT NULL DEFAULT 0,"
-        "  duration_ms     INTEGER NOT NULL DEFAULT 0,"
-        "  success         INTEGER NOT NULL DEFAULT 0,"
-        "  error_category  TEXT    NOT NULL DEFAULT '',"
-        "  error_detail    TEXT    NOT NULL DEFAULT ''"
-        ")",
-        stage="create_table:push_send_log",
-    )
-    _try_ddl(conn,
-             "CREATE INDEX IF NOT EXISTS idx_push_send_log_ts ON push_send_log(ts DESC)",
-             stage="create_index:idx_push_send_log_ts")
-    _try_ddl(conn,
-             "CREATE INDEX IF NOT EXISTS idx_push_send_log_category "
-             "ON push_send_log(error_category, ts DESC)",
-             stage="create_index:idx_push_send_log_category")
-    _try_ddl(conn,
-             "CREATE INDEX IF NOT EXISTS idx_push_send_log_success "
-             "ON push_send_log(success, ts DESC)",
-             stage="create_index:idx_push_send_log_success")
-
-    # ====================================================================
-    # client_error_log — клієнтські помилки до того, як вони долетіли б до
-    # серверного push_send_log (html2canvas, fetch timeout, network down).
-    # Дозволяє ловити «нічого не сталось» / «зависло перед відправкою».
-    # ====================================================================
-    _try_ddl(
-        conn,
-        "CREATE TABLE IF NOT EXISTS client_error_log ("
-        "  id              INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  ts              TEXT    NOT NULL DEFAULT (datetime('now')),"
-        "  page            TEXT    NOT NULL DEFAULT '',"
-        "  action          TEXT    NOT NULL DEFAULT '',"
-        "  error_category  TEXT    NOT NULL DEFAULT '',"
-        "  detail          TEXT    NOT NULL DEFAULT '',"
-        "  user_agent      TEXT    NOT NULL DEFAULT '',"
-        "  extra_json      TEXT    NOT NULL DEFAULT ''"
-        ")",
-        stage="create_table:client_error_log",
-    )
-    _try_ddl(conn,
-             "CREATE INDEX IF NOT EXISTS idx_client_error_log_ts "
-             "ON client_error_log(ts DESC)",
-             stage="create_index:idx_client_error_log_ts")
-    _try_ddl(conn,
-             "CREATE INDEX IF NOT EXISTS idx_client_error_log_category "
-             "ON client_error_log(error_category, ts DESC)",
-             stage="create_index:idx_client_error_log_category")
 
 
 def get_db() -> sqlite3.Connection:
