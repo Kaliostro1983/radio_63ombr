@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, UploadFile, File, Form
@@ -61,6 +61,87 @@ def api_palette_units():
             "SELECT id, name FROM palette_units ORDER BY sort_order, name"
         ).fetchall()
     return {"ok": True, "units": [{"id": int(r["id"]), "name": str(r["name"])} for r in rows]}
+
+
+def _network_conclusion_groups(conn, network_id: int, days: int) -> list:
+    """Per-conclusion MGRS point groups for a network over the last `days` days.
+
+    Returns [[mgrs, ...], ...] — one list per analytical conclusion. The client
+    converts these to lat/lon and tests them against each palette's region hulls
+    to compute the per-palette conclusion count (server has no MGRS converter).
+    """
+    if not network_id:
+        return []
+    start = (datetime.now() - timedelta(days=int(days or 10))).strftime("%Y-%m-%d %H:%M:%S")
+    rows = conn.execute(
+        "SELECT mgrs_json FROM analytical_conclusions "
+        "WHERE network_id = ? AND REPLACE(created_at,'T',' ') >= ?",
+        (int(network_id), start),
+    ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            pts = [str(m).strip() for m in json.loads(r["mgrs_json"] or "[]") if str(m).strip()]
+        except Exception:
+            pts = []
+        if pts:
+            out.append(pts)
+    return out
+
+
+@router.get("/api/palettes/for-unit")
+def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
+    """Palettes relevant to a unit, ordered narrowest → broadest, with region
+    hulls inline, plus the current network's conclusion point-groups.
+
+    A palette is relevant when its unit name is a token-boundary SUFFIX of the
+    intercept's unit (e.g. unit "1 мсб 36 мсп 67 мсд 25 ЗА" matches palettes of
+    "1 мсб 36 мсп 67 мсд 25 ЗА", then "36 мсп 67 мсд 25 ЗА", then "67 мсд 25 ЗА").
+    The client uses `regions` (WKT polygons) + `conclusion_groups` to compute,
+    per palette, how many conclusions on this frequency (last `days` days) fall
+    inside the palette, and to draw the regions when its checkbox is ticked.
+    """
+    unit = (unit or "").strip()
+    with get_conn() as conn:
+        groups = _network_conclusion_groups(conn, network_id, days)
+        if not unit:
+            return {"ok": True, "palettes": [], "conclusion_groups": groups}
+
+        spec = {}  # unit_id -> (name, specificity_len)
+        for u in conn.execute("SELECT id, name FROM palette_units").fetchall():
+            nm = (u["name"] or "").strip()
+            if nm and (unit == nm or unit.endswith(" " + nm)):
+                spec[int(u["id"])] = (nm, len(nm))
+        if not spec:
+            return {"ok": True, "palettes": [], "conclusion_groups": groups}
+
+        unit_ids = list(spec.keys())
+        ph = ",".join("?" * len(unit_ids))
+        prows = conn.execute(
+            f"""SELECT p.id, p.name, l.unit_id
+                FROM palettes p JOIN palette_unit_links l ON l.palette_id = p.id
+                WHERE p.is_archived = 0 AND l.unit_id IN ({ph})""",
+            unit_ids,
+        ).fetchall()
+
+        best = {}  # palette_id -> info (narrowest matched unit wins)
+        for r in prows:
+            pid = int(r["id"]); uid = int(r["unit_id"]); s = spec[uid][1]
+            if pid not in best or s > best[pid]["spec"]:
+                best[pid] = {"id": pid, "name": r["name"] or "", "unit": spec[uid][0], "spec": s}
+
+        palettes = []
+        for pid, info in best.items():
+            regs = conn.execute(
+                "SELECT hull_wkt FROM palette_regions "
+                "WHERE palette_id = ? AND hull_wkt IS NOT NULL AND hull_wkt <> ''",
+                (pid,),
+            ).fetchall()
+            info["regions"] = [str(r["hull_wkt"]) for r in regs]
+            palettes.append(info)
+        palettes.sort(key=lambda x: (-x["spec"], x["name"]))
+
+    return {"ok": True, "palettes": palettes, "conclusion_groups": groups}
 
 
 # --------------------------------------------------------------------------- #

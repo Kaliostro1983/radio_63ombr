@@ -199,6 +199,7 @@
   let _conclSaved = false;         // чи збережено поточний висновок у БД
   let _conclSaveWired = false;     // одноразова прив'язка save-кнопки/слухачів
   let _zoneLayers = { freq: null, unit: null };  // шари зон-«очей» (по частоті / підрозділу)
+  let _unitPalLayers = {};                       // палітра_id -> шар регіонів (перелік палітр підрозділу)
   let _conclDrawn        = [];     // [{type, layers:[...]}] — стрілки/зони/орієнтири
   let _conclBelowRenderer = null;  // canvas-рендерер нижче квадратів/точок (Зона, Орієнтир)
   let _conclAboveRenderer = null;  // canvas-рендерер вище всього (Стрілка)
@@ -934,6 +935,107 @@
   }
 
   /* ═════════════════════════════════════════
+     Палітри підрозділу (лівий нижній кут карти)
+  ═════════════════════════════════════════ */
+
+  /* WKT POLYGON → зовнішнє кільце [[lat,lon],...] (null, якщо не розпарсилось) */
+  function _parseWktPolygon(wkt) {
+    const m = String(wkt || "").match(/POLYGON\s*\(\s*\(\s*([^)]+?)\s*\)/i);
+    if (!m) return null;
+    const ring = m[1].split(",").map(pair => {
+      const xy = pair.trim().split(/\s+/);
+      const lon = parseFloat(xy[0]), lat = parseFloat(xy[1]);
+      return (isFinite(lat) && isFinite(lon)) ? [lat, lon] : null;
+    }).filter(Boolean);
+    return ring.length >= 3 ? ring : null;
+  }
+
+  /* Ray-casting: чи точка (lat,lon) всередині кільця [[lat,lon],...] */
+  function _pointInRing(lat, lon, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const yi = ring[i][0], xi = ring[i][1], yj = ring[j][0], xj = ring[j][1];
+      if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+
+  /* Скільки висновкових груп мають ≥1 точку всередині регіонів палітри */
+  function _palConclCount(regionWkts, groups) {
+    const rings = (regionWkts || []).map(_parseWktPolygon).filter(Boolean);
+    if (!rings.length || !groups || !groups.length) return 0;
+    let n = 0;
+    groups.forEach(codes => {
+      const hit = (codes || []).some(code => {
+        const ll = _mgrsToLatLon(code);
+        return ll && rings.some(r => _pointInRing(ll.lat, ll.lon, r));
+      });
+      if (hit) n++;
+    });
+    return n;
+  }
+
+  /* Увімкнути/вимкнути регіони палітри на карті */
+  function _togglePaletteRegions(pid, wkts, on) {
+    if (_unitPalLayers[pid]) {
+      try { _conclMap && _conclMap.removeLayer(_unitPalLayers[pid]); } catch (_) {}
+      _unitPalLayers[pid] = null;
+    }
+    if (!on || !_conclMap) return;
+    const layers = [];
+    (wkts || []).forEach(w => {
+      const ring = _parseWktPolygon(w);
+      if (ring) layers.push(L.polygon(ring, {
+        color: "#7c3aed", weight: 2, fillColor: "#7c3aed", fillOpacity: 0.14,
+        pane: "conclBelow", renderer: _conclBelowRenderer,
+      }));
+    });
+    if (layers.length) {
+      _unitPalLayers[pid] = L.featureGroup(layers).addTo(_conclMap);
+      try { _conclMap.fitBounds(_unitPalLayers[pid].getBounds().pad(0.2)); } catch (_) {}
+    }
+  }
+
+  function _renderConclPalettes(palettes, groups) {
+    const host = document.getElementById("conclPalList");
+    if (!host) return;
+    if (!palettes || !palettes.length) { host.classList.add("hidden"); host.innerHTML = ""; return; }
+    const rows = palettes.map(p => {
+      const cnt = _palConclCount(p.regions, groups);
+      const hot = cnt > 0 ? " cpl-cnt--hot" : "";
+      return `<label class="cpl-row" title="${_esc(p.unit || "")}">` +
+        `<input type="checkbox" data-pid="${p.id}">` +
+        `<span class="cpl-name">${_esc(p.name || "")}</span>` +
+        `<span class="cpl-cnt${hot}">${cnt}</span>` +
+        `</label>`;
+    }).join("");
+    host.innerHTML = `<div class="cpl-title">Палітри підрозділу</div>${rows}`;
+    host.classList.remove("hidden");
+    host.querySelectorAll('input[type="checkbox"][data-pid]').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const pid = parseInt(cb.getAttribute("data-pid"), 10);
+        const p = palettes.find(x => x.id === pid);
+        _togglePaletteRegions(pid, p ? p.regions : [], cb.checked);
+      });
+    });
+  }
+
+  function _loadConclPalettes() {
+    const host = document.getElementById("conclPalList");
+    if (host) { host.classList.add("hidden"); host.innerHTML = ""; }
+    Object.keys(_unitPalLayers).forEach(pid => _togglePaletteRegions(pid, [], false));
+    _unitPalLayers = {};
+    if (!_currentItem) return;
+    const unit = (_currentItem.network && _currentItem.network.unit || "").trim();
+    const nid = _currentItem.network_id || 0;
+    if (!unit) return;
+    fetch(`/api/palettes/for-unit?unit=${encodeURIComponent(unit)}&network_id=${nid}&days=10`)
+      .then(r => r.json())
+      .then(d => { if (d && d.ok) _renderConclPalettes(d.palettes || [], d.conclusion_groups || []); })
+      .catch(() => {});
+  }
+
+  /* ═════════════════════════════════════════
      Map drawing tools: Стрілка / Зона / Орієнтир
   ═════════════════════════════════════════ */
 
@@ -1400,6 +1502,8 @@
     // Зони-«очі»: скинути попередні зони й показати кнопки за наявності перехоплення
     _clearZone("freq"); _clearZone("unit");
     _showConclEyes(!!item);
+    // Палітри підрозділу: перезавантажити перелік для нового перехоплення
+    _loadConclPalettes();
   }
 
   /**
