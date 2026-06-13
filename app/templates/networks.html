@@ -296,6 +296,13 @@
       </div>
 
       {% if current %}
+      <div class="card" id="netInterceptStats" data-network-id="{{ current.id }}" style="margin-bottom:16px">
+        <div style="font-weight:800; margin-bottom:10px">Перехоплення за тиждень</div>
+        <div id="netInterceptChart" class="net-intercept-chart">
+          <div class="small" style="opacity:.6">Завантаження…</div>
+        </div>
+      </div>
+
       <div class="card" id="netCallsignGraph" data-network-id="{{ current.id }}" data-frequency="{{ current.frequency }}">
   <div style="font-weight:800; margin-bottom:10px">Позивні радіомережі</div>
   <div class="row" style="align-items:flex-end">
@@ -987,4 +994,5 @@
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
 <script src="/static/networks_peleng.js?v=2" defer></script>
 <script src="/static/networks_aliases.js?v=1" defer></script>
+<script src="/static/networks_intercepts.js?v=1" defer></script>
 {% endblock %}

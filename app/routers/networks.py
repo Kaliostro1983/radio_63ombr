@@ -210,6 +210,54 @@ def api_network_callsign_graph(network_id: int, days: int = 14):
     return {"ok": True, "nodes": nodes, "edges": edges, "meta": {"days": days_n, "start_dt": start_dt}}
 
 
+@router.get("/api/networks/{network_id}/intercept-stats")
+def api_network_intercept_stats(network_id: int, days: int = 7):
+    """Daily intercept counts for a network over the last `days` days.
+
+    "Intercept" uses the same definition as the home page: messages with
+    is_valid = 1 and content_type = 'intercept' (analytical/peleng excluded),
+    bucketed by the intercept datetime (`created_at`) date.
+
+    Returns per-date counts only (no zero-filling). `created_at` is stored in
+    local time, so the client builds the fixed N-day axis in the user's local
+    timezone and maps these counts onto it; a couple of extra days are included
+    here as a buffer for timezone edge effects.
+    """
+    try:
+        nid = int(network_id)
+    except Exception:
+        return {"ok": False, "error": "invalid network_id"}
+
+    try:
+        days_n = int(days)
+        days_n = max(1, min(days_n, 366))
+    except Exception:
+        days_n = 7
+
+    floor = (datetime.now() - timedelta(days=days_n + 2)).strftime("%Y-%m-%d 00:00:00")
+
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT date(REPLACE(created_at, 'T', ' ')) AS d, COUNT(*) AS c
+            FROM messages
+            WHERE network_id = ?
+              AND is_valid = 1
+              AND coalesce(content_type, 'intercept') = 'intercept'
+              AND REPLACE(created_at, 'T', ' ') >= ?
+            GROUP BY d
+            ORDER BY d
+            """,
+            (nid, floor),
+        ).fetchall()
+
+    return {
+        "ok": True,
+        "days": days_n,
+        "rows": [{"date": r["d"], "count": int(r["c"])} for r in rows if r["d"]],
+    }
+
+
 @router.get("/api/networks/{network_id}/peleng")
 def api_network_peleng(network_id: int, days: int = 7):
     """Return peleng batches/points for a given network.
