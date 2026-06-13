@@ -5514,6 +5514,10 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 
 /* ===== Палітри: висувна панель, список, діалог імпорту, збіги ===== */
 .concl-map-tool-btn--pal{ top:84px; }
+.concl-map-tool-btn--eye1{ top:114px; }
+.concl-map-tool-btn--eye2{ top:144px; }
+.concl-map-tool-btn--eye1.is-active{ background:#2563eb; border-color:#2563eb; color:#fff; }
+.concl-map-tool-btn--eye2.is-active{ background:#d97706; border-color:#d97706; color:#fff; }
 .pal-panel{
   position:absolute; top:0; right:0; bottom:0; width:320px; max-width:80%;
   background:var(--card,#fff); border-left:1px solid var(--border,#d0d5dd);

@@ -198,6 +198,7 @@
   let _conclFixedMarkers = [];     // [{marker, lat, lon, chipEl}] — фіксовані точки
   let _conclSaved = false;         // чи збережено поточний висновок у БД
   let _conclSaveWired = false;     // одноразова прив'язка save-кнопки/слухачів
+  let _zoneLayers = { freq: null, unit: null };  // шари зон-«очей» (по частоті / підрозділу)
   let _conclDrawn        = [];     // [{type, layers:[...]}] — стрілки/зони/орієнтири
   let _conclBelowRenderer = null;  // canvas-рендерер нижче квадратів/точок (Зона, Орієнтир)
   let _conclAboveRenderer = null;  // canvas-рендерер вище всього (Стрілка)
@@ -823,6 +824,116 @@
   }
 
   /* ═════════════════════════════════════════
+     Зони-«очі»: точки висновків по частоті / підрозділу + опукла оболонка
+  ═════════════════════════════════════════ */
+
+  function _mgrsToLatLon(code) {
+    if (typeof window.mgrs === "undefined" || !window.mgrs.toPoint) return null;
+    try {
+      const pt = window.mgrs.toPoint(String(code).replace(/\s+/g, "").toUpperCase());
+      const lat = Number(pt[1]), lon = Number(pt[0]);
+      if (isFinite(lat) && isFinite(lon)) return { lat, lon };
+    } catch (_) {}
+    return null;
+  }
+
+  /* Опукла оболонка (monotone chain). pts: [{lat,lon}] → [{lat,lon}] за контуром. */
+  function _convexHull(pts) {
+    if (pts.length < 3) return pts.slice();
+    const p = pts.slice().sort((a, b) => (a.lon - b.lon) || (a.lat - b.lat));
+    const cross = (o, a, b) => (a.lon - o.lon) * (b.lat - o.lat) - (a.lat - o.lat) * (b.lon - o.lon);
+    const lower = [];
+    for (const q of p) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+      lower.push(q);
+    }
+    const upper = [];
+    for (let i = p.length - 1; i >= 0; i--) {
+      const q = p[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+      upper.push(q);
+    }
+    lower.pop(); upper.pop();
+    return lower.concat(upper);
+  }
+
+  function _clearZone(kind) {
+    if (_zoneLayers[kind]) {
+      try { _conclMap && _conclMap.removeLayer(_zoneLayers[kind]); } catch (_) {}
+      _zoneLayers[kind] = null;
+    }
+  }
+
+  function _setEyeActive(kind, on) {
+    const btn = document.getElementById(kind === "freq" ? "conclEyeFreqBtn" : "conclEyeUnitBtn");
+    if (btn) btn.classList.toggle("is-active", !!on);
+  }
+
+  function _showConclEyes(show) {
+    ["conclEyeFreqBtn", "conclEyeUnitBtn"].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.classList.toggle("hidden", !show);
+    });
+    if (!show) { _setEyeActive("freq", false); _setEyeActive("unit", false); }
+  }
+
+  function _drawZone(kind, codes, color) {
+    _clearZone(kind);
+    if (!_conclMap) return;
+    const latlngs = [];
+    const layers = [];
+    codes.forEach(c => {
+      const ll = _mgrsToLatLon(c);
+      if (!ll) return;
+      latlngs.push(ll);
+      layers.push(L.circleMarker([ll.lat, ll.lon], {
+        radius: 4, color: color, weight: 1, fillColor: color, fillOpacity: 0.9,
+      }));
+    });
+    if (!latlngs.length) return;
+    if (latlngs.length >= 3) {
+      const hull = _convexHull(latlngs).map(p => [p.lat, p.lon]);
+      layers.unshift(L.polygon(hull, {
+        color: color, weight: 2, fillColor: color, fillOpacity: 0.12,
+        pane: "conclBelow", renderer: _conclBelowRenderer,
+      }));
+    }
+    _zoneLayers[kind] = L.layerGroup(layers).addTo(_conclMap);
+    try { _conclMap.fitBounds(L.latLngBounds(latlngs.map(p => [p.lat, p.lon])).pad(0.2)); } catch (_) {}
+  }
+
+  function _toggleZone(kind) {
+    if (!_conclMap || !_currentItem) return;
+    if (_zoneLayers[kind]) { _clearZone(kind); _setEyeActive(kind, false); return; }
+
+    let url;
+    const color = kind === "freq" ? "#2563eb" : "#d97706";
+    if (kind === "freq") {
+      if (!_currentItem.network_id) return;
+      url = `/api/conclusions/zone-points?network_id=${_currentItem.network_id}`;
+    } else {
+      const unit = (_currentItem.network && _currentItem.network.unit || "").trim();
+      if (!unit) { if (window.appToast) window.appToast("У перехоплення немає підрозділу", "warn", 2400); return; }
+      url = `/api/conclusions/zone-points?unit=${encodeURIComponent(unit)}`;
+    }
+    fetch(url)
+      .then(r => r.json())
+      .then(d => {
+        if (!d || !d.ok) {
+          if (window.appToast) window.appToast(d && d.error ? d.error : "Помилка завантаження зони", "error", 2800);
+          return;
+        }
+        if (!d.points.length) {
+          if (window.appToast) window.appToast("Немає точок у висновках", "warn", 2200);
+          return;
+        }
+        _drawZone(kind, d.points, color);
+        _setEyeActive(kind, true);
+      })
+      .catch(() => { if (window.appToast) window.appToast("Помилка завантаження зони", "error", 2800); });
+  }
+
+  /* ═════════════════════════════════════════
      Map drawing tools: Стрілка / Зона / Орієнтир
   ═════════════════════════════════════════ */
 
@@ -1090,6 +1201,10 @@
         document.getElementById(id)?.addEventListener("input", () => { _conclSaved = false; });
       });
       _initConclCloseGuard();
+
+      // Кнопки-«очі»: зони точок висновків по частоті / підрозділу
+      document.getElementById("conclEyeFreqBtn")?.addEventListener("click", () => _toggleZone("freq"));
+      document.getElementById("conclEyeUnitBtn")?.addEventListener("click", () => _toggleZone("unit"));
     }
 
     // Copy button: висновок + координати + роздільник + перехоплення (через порожній рядок)
@@ -1282,6 +1397,9 @@
     if (!ta) return;
     ta.value = item ? _buildPasteText(item) : "";
     _conclSaved = false;   // нове перехоплення → новий незбережений висновок
+    // Зони-«очі»: скинути попередні зони й показати кнопки за наявності перехоплення
+    _clearZone("freq"); _clearZone("unit");
+    _showConclEyes(!!item);
   }
 
   /**

@@ -319,6 +319,65 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
 
 
 # ---------------------------------------------------------------------------
+# Conclusion zone points (for the map "eye" overlays)
+# ---------------------------------------------------------------------------
+
+@router.get("/api/conclusions/zone-points")
+def api_conclusion_zone_points(
+    network_id: int = 0,
+    unit: str = "",
+    days: int = 0,
+):
+    """Return MGRS points from analytical conclusions for a frequency or a unit.
+
+    - network_id : points from conclusions on this exact network (= frequency).
+    - unit       : points from conclusions across ALL networks with this unit
+                   string (a unit may work on several frequencies over time).
+    Provide exactly one of them. `days` (>0) optionally limits to the last N
+    days by intercept datetime; 0 = all time. Returns a flat, de-duplicated
+    list of normalized MGRS strings.
+    """
+    unit = (unit or "").strip()
+    if not network_id and not unit:
+        return {"ok": False, "error": "network_id або unit обовʼязковий"}
+
+    wheres: List[str] = []
+    params: List[Any] = []
+    if network_id:
+        wheres.append("ac.network_id = ?")
+        params.append(int(network_id))
+    else:
+        wheres.append(
+            "ac.network_id IN (SELECT id FROM networks WHERE unit = ?)"
+        )
+        params.append(unit)
+    if days and days > 0:
+        wheres.append("REPLACE(ac.created_at,'T',' ') >= ?")
+        params.append((datetime.now() - timedelta(days=int(days))).strftime("%Y-%m-%d %H:%M:%S"))
+
+    where_sql = " AND ".join(wheres)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT ac.mgrs_json FROM analytical_conclusions ac WHERE {where_sql}",
+            params,
+        ).fetchall()
+
+    seen: set = set()
+    points: List[str] = []
+    for r in rows:
+        try:
+            for m in json.loads(r["mgrs_json"] or "[]"):
+                code = str(m).strip()
+                if code and code not in seen:
+                    seen.add(code)
+                    points.append(code)
+        except Exception:
+            continue
+
+    return {"ok": True, "points": points, "count": len(points)}
+
+
+# ---------------------------------------------------------------------------
 # Manual conclusion save (from the Висновок editor modal)
 # ---------------------------------------------------------------------------
 
