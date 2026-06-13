@@ -319,6 +319,114 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
 
 
 # ---------------------------------------------------------------------------
+# Manual conclusion save (from the Висновок editor modal)
+# ---------------------------------------------------------------------------
+
+def _classify_conclusion(conn, conclusion_text: str) -> int:
+    """Pick the best-matching conclusion type_id by keyword hits (0 = невідомо)."""
+    text = (conclusion_text or "").lower()
+    rows = conn.execute(
+        "SELECT id, keywords_json FROM conclusion_types WHERE id > 0 "
+        "ORDER BY sort_order ASC, id ASC"
+    ).fetchall()
+    best_id, best_score = 0, 0
+    for r in rows:
+        try:
+            kws = json.loads(r["keywords_json"] or "[]")
+        except Exception:
+            kws = []
+        score = sum(1 for kw in kws if kw and kw.lower() in text)
+        if score > best_score:
+            best_score, best_id = score, int(r["id"])
+    return best_id
+
+
+@router.post("/api/conclusions")
+async def api_conclusion_save(request: Request):
+    """Create or update an analytical conclusion for a given intercept.
+
+    Body: { message_id:int, conclusion_text:str, mgrs:[str], intercept_text?:str }
+
+    The conclusion is bound to the intercept's message; network_id and created_at
+    are derived server-side from that message (not trusted from the client).
+    Because analytical_conclusions.message_id is UNIQUE, this upserts: if a
+    conclusion already exists for the message it is overwritten. The conclusion
+    is auto-classified by keyword, exactly like the ingest path, so a manually
+    saved conclusion behaves like any other "Аналітика 63" conclusion.
+    """
+    payload: Dict[str, Any] = await request.json()
+
+    try:
+        message_id = int(payload.get("message_id"))
+    except (TypeError, ValueError):
+        return JSONResponse({"ok": False, "error": "message_id обовʼязковий"}, status_code=400)
+
+    conclusion_text = (payload.get("conclusion_text") or "").strip()
+    mgrs_list = [str(m).strip() for m in (payload.get("mgrs") or []) if str(m).strip()]
+
+    missing = []
+    if not conclusion_text:
+        missing.append("Висновок")
+    if not mgrs_list:
+        missing.append("Координати")
+    if missing:
+        return JSONResponse(
+            {"ok": False, "error": "Не заповнено: " + ", ".join(missing), "missing": missing},
+            status_code=400,
+        )
+
+    mgrs_json = json.dumps(mgrs_list, ensure_ascii=False)
+
+    with get_conn() as conn:
+        msg = conn.execute(
+            "SELECT id, network_id, created_at FROM messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not msg:
+            return JSONResponse({"ok": False, "error": "Перехоплення не знайдено"}, status_code=404)
+
+        network_id = int(msg["network_id"])
+        created_at = msg["created_at"]
+        type_id = _classify_conclusion(conn, conclusion_text)
+
+        existing = conn.execute(
+            "SELECT id FROM analytical_conclusions WHERE message_id = ?", (message_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE analytical_conclusions "
+                "SET conclusion_text = ?, mgrs_json = ?, type_id = ?, "
+                "    network_id = ?, created_at = ? "
+                "WHERE message_id = ?",
+                (conclusion_text, mgrs_json, type_id, network_id, created_at, message_id),
+            )
+            ac_id = int(existing["id"])
+            created = False
+        else:
+            cur = conn.execute(
+                "INSERT INTO analytical_conclusions "
+                "(message_id, network_id, created_at, conclusion_text, mgrs_json, type_id) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (message_id, network_id, created_at, conclusion_text, mgrs_json, type_id),
+            )
+            ac_id = int(cur.lastrowid)
+            created = True
+        conn.commit()
+
+        t = conn.execute(
+            "SELECT type, color FROM conclusion_types WHERE id = ?", (type_id,)
+        ).fetchone()
+
+    return {
+        "ok": True,
+        "id": ac_id,
+        "created": created,
+        "type_id": type_id,
+        "type_label": (t["type"] if t else "невідомо"),
+        "type_color": (t["color"] if t else "#6b7280"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Conclusion types CRUD
 # ---------------------------------------------------------------------------
 

@@ -196,6 +196,8 @@
   let _conclMarkerPicked = false;  // interactive marker state
   let _conclCoordFmt     = "MGRS"; // "MGRS" | "УСК"
   let _conclFixedMarkers = [];     // [{marker, lat, lon, chipEl}] — фіксовані точки
+  let _conclSaved = false;         // чи збережено поточний висновок у БД
+  let _conclSaveWired = false;     // одноразова прив'язка save-кнопки/слухачів
   let _conclDrawn        = [];     // [{type, layers:[...]}] — стрілки/зони/орієнтири
   let _conclBelowRenderer = null;  // canvas-рендерер нижче квадратів/точок (Зона, Орієнтир)
   let _conclAboveRenderer = null;  // canvas-рендерер вище всього (Стрілка)
@@ -352,6 +354,7 @@
       return `${i + 1}. ${mgrs}`;
     });
     ta.value = lines.join("\n");
+    _conclSaved = false;   // координати змінились → висновок не збережено
   }
 
   /* Chip для квадрата (показує "28 17") */
@@ -738,6 +741,88 @@
   }
 
   /* ═════════════════════════════════════════
+     Збереження висновку в БД (POST /api/conclusions)
+  ═════════════════════════════════════════ */
+
+  /* MGRS-координати висновку з поля "Координати" (рядки виду "1. 37UDQ...") */
+  function _collectConclMgrs() {
+    const raw = document.getElementById("conclCoords")?.value || "";
+    const out = [];
+    raw.split("\n").forEach(line => {
+      const m = line.replace(/^\s*\d+\.\s*/, "").trim();
+      if (m) out.push(m);
+    });
+    return out;
+  }
+
+  /* Перелік незаповнених обов'язкових полів лівої колонки */
+  function _conclMissingFields() {
+    const miss = [];
+    if (!(document.getElementById("conclText")?.value || "").trim())        miss.push("Висновок");
+    if (!_collectConclMgrs().length)                                        miss.push("Координати");
+    if (!(document.getElementById("conclInterceptTa")?.value || "").trim()) miss.push("Перехоплення");
+    return miss;
+  }
+
+  function _conclComplete() { return _conclMissingFields().length === 0; }
+
+  /* Зберегти/оновити висновок. Повертає Promise<bool> (успіх). */
+  function _saveConclusion() {
+    if (!_currentItem || !_currentItem.id) {
+      if (window.appToast) window.appToast("Спершу оберіть перехоплення у «Моніторингу»", "warn", 2800);
+      return Promise.resolve(false);
+    }
+    const miss = _conclMissingFields();
+    if (miss.length) {
+      if (window.appToast) window.appToast("Заповніть поля для збереження: " + miss.join(", "), "warn", 3400);
+      return Promise.resolve(false);
+    }
+    const body = {
+      message_id:      _currentItem.id,
+      conclusion_text: (document.getElementById("conclText").value || "").trim(),
+      mgrs:            _collectConclMgrs(),
+      intercept_text:  (document.getElementById("conclInterceptTa")?.value || "").trim(),
+    };
+    return fetch("/api/conclusions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d || !d.ok) {
+          if (window.appToast) window.appToast(d && d.error ? d.error : "Помилка збереження", "error", 3400);
+          return false;
+        }
+        _conclSaved = true;
+        if (window.appToast) window.appToast(d.created ? "Висновок збережено" : "Висновок оновлено", "success", 1800);
+        return true;
+      })
+      .catch(() => {
+        if (window.appToast) window.appToast("Помилка з'єднання при збереженні", "error", 2800);
+        return false;
+      });
+  }
+
+  /* Запит на збереження при закритті модалки, якщо все заповнено й не збережено.
+     Capture-фаза — спрацьовує до основного обробника закриття. */
+  function _initConclCloseGuard() {
+    const modal = document.getElementById("itModalConclusion");
+    if (!modal) return;
+    function maybeOffer() {
+      if (_conclSaved || !_conclComplete()) return;
+      if (window.confirm("Висновок заповнено, але не збережено. Зберегти?")) _saveConclusion();
+      else _conclSaved = true;   // користувач відмовився — не питати повторно при цьому закритті
+    }
+    modal.querySelectorAll("[data-it-modal-close]").forEach(el => {
+      el.addEventListener("click", maybeOffer, true);
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !modal.classList.contains("hidden")) maybeOffer();
+    }, true);
+  }
+
+  /* ═════════════════════════════════════════
      Map drawing tools: Стрілка / Зона / Орієнтир
   ═════════════════════════════════════════ */
 
@@ -997,6 +1082,16 @@
     // Conclusion controls
     document.getElementById("conclTemplatesBtn")?.addEventListener("click", _openTemplatesModal);
 
+    // Збереження висновку: кнопка 💾, відстеження змін, запит при закритті (одноразово)
+    if (!_conclSaveWired) {
+      _conclSaveWired = true;
+      document.getElementById("conclSaveBtn")?.addEventListener("click", _saveConclusion);
+      ["conclText", "conclInterceptTa", "conclCoords"].forEach(id => {
+        document.getElementById(id)?.addEventListener("input", () => { _conclSaved = false; });
+      });
+      _initConclCloseGuard();
+    }
+
     // Copy button: висновок + координати + роздільник + перехоплення (через порожній рядок)
     document.getElementById("conclCopyBtn")?.addEventListener("click", () => {
       const text = _buildConclFullText();
@@ -1186,6 +1281,7 @@
     const ta = document.getElementById("conclInterceptTa");
     if (!ta) return;
     ta.value = item ? _buildPasteText(item) : "";
+    _conclSaved = false;   // нове перехоплення → новий незбережений висновок
   }
 
   /**
