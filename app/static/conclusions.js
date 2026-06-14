@@ -435,6 +435,25 @@
     } finally { if (btn) btn.disabled = false; }
   }
 
+  /* ── Видалення висновку ── */
+  async function deleteConclusion(acId, tr) {
+    if (!window.confirm("Видалити цей аналітичний висновок?")) return;
+    try {
+      const res  = await fetch(`/api/conclusions/${acId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { toast(data.error || "Помилка видалення", "error"); return; }
+      const idx = state.view.rows.findIndex((r) => r.id === acId);
+      if (idx !== -1) state.view.rows.splice(idx, 1);
+      tr?.remove();
+      const cnt = $("cnCountVal"); if (cnt) cnt.textContent = String(state.view.rows.length);
+      if (!state.view.rows.length) {
+        const t = $("cnTable"); if (t) t.style.display = "none";
+        const em = $("cnEmptyMsg"); if (em) em.style.display = "";
+      }
+      toast("Висновок видалено", "success", 2000);
+    } catch (e) { toast("Помилка з'єднання", "error"); }
+  }
+
   function updateBadge(tr, typeId, typeLabel, typeColor) {
     const badge = tr?.querySelector(".cn-type-badge--pick");
     if (!badge) return;
@@ -722,6 +741,7 @@
             <button class="cn-edit-btn" title="Редагувати висновок">✏</button>
             <button class="cn-reclassify-btn" title="Повторно проаналізувати тип">♻</button>
             <button class="cn-delta-btn ${deltaBtnClass}" title="${deltaBtnTitle}">⊡</button>
+            <button class="cn-del-btn" title="Видалити висновок">🗑</button>
           </td>
         </tr>`;
       }).join("");
@@ -736,6 +756,13 @@
           const acId = tr ? parseInt(tr.dataset.acId, 10) : null;
           const row = acId ? state.view.rows.find((r) => r.id === acId) : null;
           if (row) openEditModal(row);
+          return;
+        }
+        const delBtn = e.target.closest(".cn-del-btn");
+        if (delBtn) {
+          const tr = delBtn.closest("tr");
+          const acId = tr ? parseInt(tr.dataset.acId, 10) : null;
+          if (acId) deleteConclusion(acId, tr);
           return;
         }
         const reBtn = e.target.closest(".cn-reclassify-btn");

@@ -597,6 +597,21 @@ async def api_conclusion_edit(ac_id: int, request: Request):
     }
 
 
+@router.delete("/api/conclusions/{ac_id}")
+def api_conclusion_delete(ac_id: int):
+    """Delete an analytical conclusion. The linked intercept (message) is kept —
+    only the analytical conclusion row is removed."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM analytical_conclusions WHERE id = ?", (ac_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Висновок не знайдено"}, status_code=404)
+        conn.execute("DELETE FROM analytical_conclusions WHERE id = ?", (ac_id,))
+        conn.commit()
+    return {"ok": True, "id": ac_id}
+
+
 # ---------------------------------------------------------------------------
 # Conclusion types CRUD
 # ---------------------------------------------------------------------------
