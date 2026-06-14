@@ -5533,6 +5533,13 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .concl-pal-list .cpl-cnt{ min-width:20px; text-align:center; padding:0 6px; border-radius:9px; font-weight:700; background:rgba(255,255,255,.12); }
 .concl-pal-list .cpl-cnt--hot{ background:#16a34a; color:#fff; }
 .concl-pal-list .cpl-empty{ opacity:.55; padding:4px 2px; }
+/* Попап висновків по точці зони */
+.concl-zone-pop{ max-height:240px; overflow-y:auto; font-size:.82rem; min-width:200px; }
+.concl-zone-pop .czp-head{ font-weight:700; opacity:.65; margin-bottom:6px; font-size:.74rem; text-transform:uppercase; }
+.concl-zone-pop .czp-item{ padding:5px 0; border-top:1px solid var(--border,#d0d5dd); }
+.concl-zone-pop .czp-item:first-of-type{ border-top:none; }
+.concl-zone-pop .czp-meta{ font-size:.74rem; opacity:.6; margin-bottom:2px; }
+.concl-zone-pop .czp-text{ white-space:pre-wrap; }
 .pal-panel{
   position:absolute; top:0; right:0; bottom:0; width:320px; max-width:80%;
   background:var(--card,#fff); border-left:1px solid var(--border,#d0d5dd);

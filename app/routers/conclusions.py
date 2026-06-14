@@ -377,6 +377,71 @@ def api_conclusion_zone_points(
     return {"ok": True, "points": points, "count": len(points)}
 
 
+@router.get("/api/conclusions/by-point")
+def api_conclusions_by_point(
+    mgrs: str = "",
+    network_id: int = 0,
+    unit: str = "",
+    days: int = 0,
+    limit: int = 50,
+):
+    """Conclusions whose MGRS set contains a given point, for a frequency/unit.
+
+    Used when the user clicks a zone point on the map: shows the analytical
+    conclusion(s) that placed that exact point. Scope matches the zone overlay —
+    network_id (frequency) or unit (all its networks). Newest first.
+    """
+    mgrs = (mgrs or "").strip()
+    unit = (unit or "").strip()
+    if not mgrs:
+        return {"ok": False, "error": "mgrs обовʼязковий"}
+
+    wheres = ["ac.mgrs_json LIKE ?"]
+    params: List[Any] = ['%"' + mgrs + '"%']
+    if network_id:
+        wheres.append("ac.network_id = ?")
+        params.append(int(network_id))
+    elif unit:
+        wheres.append("ac.network_id IN (SELECT id FROM networks WHERE unit = ?)")
+        params.append(unit)
+    else:
+        return {"ok": False, "error": "network_id або unit обовʼязковий"}
+    if days and days > 0:
+        wheres.append("REPLACE(ac.created_at,'T',' ') >= ?")
+        params.append((datetime.now() - timedelta(days=int(days))).strftime("%Y-%m-%d %H:%M:%S"))
+
+    where_sql = " AND ".join(wheres)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT ac.created_at, ac.conclusion_text, ac.network_id,
+                   ct.type AS type_label, ct.color AS type_color, n.frequency
+            FROM analytical_conclusions ac
+            LEFT JOIN conclusion_types ct ON ct.id = ac.type_id
+            LEFT JOIN networks n          ON n.id  = ac.network_id
+            WHERE {where_sql}
+            ORDER BY ac.created_at DESC
+            LIMIT ?
+            """,
+            [*params, int(limit)],
+        ).fetchall()
+
+    return {
+        "ok": True,
+        "rows": [
+            {
+                "created_at":      r["created_at"] or "",
+                "conclusion_text": r["conclusion_text"] or "",
+                "frequency":       r["frequency"] or "",
+                "type_label":      r["type_label"] or "",
+                "type_color":      r["type_color"] or "",
+            }
+            for r in rows
+        ],
+        "total": len(rows),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Manual conclusion save (from the Висновок editor modal)
 # ---------------------------------------------------------------------------

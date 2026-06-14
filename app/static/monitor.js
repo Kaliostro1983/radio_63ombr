@@ -875,10 +875,12 @@
       const btn = document.getElementById(id);
       if (btn) btn.classList.toggle("hidden", !show);
     });
-    if (!show) { _setEyeActive("freq", false); _setEyeActive("unit", false); }
+    // Зони скидаються при зміні перехоплення → кнопки завжди неактивні на старті.
+    _setEyeActive("freq", false);
+    _setEyeActive("unit", false);
   }
 
-  function _drawZone(kind, codes, color) {
+  function _drawZone(kind, codes, color, qctx) {
     _clearZone(kind);
     if (!_conclMap) return;
     const latlngs = [];
@@ -887,9 +889,12 @@
       const ll = _mgrsToLatLon(c);
       if (!ll) return;
       latlngs.push(ll);
-      layers.push(L.circleMarker([ll.lat, ll.lon], {
+      const cm = L.circleMarker([ll.lat, ll.lon], {
         radius: 4, color: color, weight: 1, fillColor: color, fillOpacity: 0.9,
-      }));
+        bubblingMouseEvents: false,   // клік по точці не створює новий маркер на карті
+      });
+      cm.on("click", () => _showPointConclusions(cm, c, qctx));
+      layers.push(cm);
     });
     if (!latlngs.length) return;
     if (latlngs.length >= 3) {
@@ -928,10 +933,42 @@
           if (window.appToast) window.appToast("Немає точок у висновках", "warn", 2200);
           return;
         }
-        _drawZone(kind, d.points, color);
+        const qctx = kind === "freq"
+          ? { kind: "freq", network_id: _currentItem.network_id }
+          : { kind: "unit", unit: (_currentItem.network && _currentItem.network.unit || "").trim() };
+        _drawZone(kind, d.points, color, qctx);
         _setEyeActive(kind, true);
       })
       .catch(() => { if (window.appToast) window.appToast("Помилка завантаження зони", "error", 2800); });
+  }
+
+  /* Клік по точці зони → попап зі списком висновків, що поставили цю точку */
+  function _showPointConclusions(marker, mgrs, qctx) {
+    const params = new URLSearchParams();
+    params.set("mgrs", mgrs);
+    if (qctx && qctx.kind === "freq") params.set("network_id", qctx.network_id || 0);
+    else if (qctx) params.set("unit", qctx.unit || "");
+    marker.bindPopup('<div class="concl-zone-pop">Завантаження…</div>',
+      { maxWidth: 360, className: "concl-zone-popup", autoPan: true }).openPopup();
+    fetch("/api/conclusions/by-point?" + params.toString())
+      .then(r => r.json())
+      .then(d => {
+        if (!d || !d.ok) { marker.setPopupContent('<div class="concl-zone-pop">Помилка</div>'); return; }
+        if (!d.rows || !d.rows.length) {
+          marker.setPopupContent('<div class="concl-zone-pop">Немає висновків для цієї точки</div>');
+          return;
+        }
+        const head = `<div class="czp-head">Висновків: ${d.total}</div>`;
+        const items = d.rows.map(c => {
+          const meta = _esc(c.created_at) +
+            (c.frequency ? " · " + _esc(c.frequency) : "") +
+            (c.type_label ? " · " + _esc(c.type_label) : "");
+          return `<div class="czp-item"><div class="czp-meta">${meta}</div>` +
+                 `<div class="czp-text">${_esc(c.conclusion_text)}</div></div>`;
+        }).join("");
+        marker.setPopupContent(`<div class="concl-zone-pop">${head}${items}</div>`);
+      })
+      .catch(() => marker.setPopupContent('<div class="concl-zone-pop">Помилка завантаження</div>'));
   }
 
   /* ═════════════════════════════════════════
