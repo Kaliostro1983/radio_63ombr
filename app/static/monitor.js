@@ -858,64 +858,6 @@
     return lower.concat(upper);
   }
 
-  /* Обгортаючий контур (concave hull / alpha-shape, edge-digging):
-     стартуємо з опуклої оболонки й «вгризаємось» у найдовші ребра до найближчих
-     внутрішніх точок, доки ребро довше за `concavity`× відстані до точки.
-     Тісно повторює форму розташування й не роздувається через викиди.
-     pts: [{lat,lon}] → впорядковане кільце [{lat,lon}]. */
-  function _concaveHull(points, concavity) {
-    concavity = concavity || 2;
-    const seen = new Set(), pts = [];
-    points.forEach(p => { const k = p.lat + "," + p.lon; if (!seen.has(k)) { seen.add(k); pts.push(p); } });
-    if (pts.length < 4) return pts.slice();
-    const hull = _convexHull(pts);
-    if (hull.length < 3) return hull;
-    const hs = new Set(hull.map(p => p.lat + "," + p.lon));
-    let interior = pts.filter(p => !hs.has(p.lat + "," + p.lon));
-    let edges = [];
-    for (let i = 0; i < hull.length; i++) edges.push([hull[i], hull[(i + 1) % hull.length]]);
-
-    const sq = (a, b) => { const dx = a.lon - b.lon, dy = a.lat - b.lat; return dx * dx + dy * dy; };
-    function segD2(p, a, b) {
-      const x = p.lon, y = p.lat, x1 = a.lon, y1 = a.lat, x2 = b.lon, y2 = b.lat;
-      const A = x - x1, B = y - y1, C = x2 - x1, D = y2 - y1, len = C * C + D * D;
-      let t = len ? (A * C + B * D) / len : -1; t = Math.max(0, Math.min(1, t));
-      const px = x1 + t * C, py = y1 + t * D, dx = x - px, dy = y - py;
-      return dx * dx + dy * dy;
-    }
-    const same = (a, b) => a.lat === b.lat && a.lon === b.lon;
-    const ccw = (a, b, c) => (b.lon - a.lon) * (c.lat - a.lat) - (b.lat - a.lat) * (c.lon - a.lon);
-    function segInt(p1, p2, p3, p4) {
-      if (same(p1, p3) || same(p1, p4) || same(p2, p3) || same(p2, p4)) return false;
-      const d1 = ccw(p3, p4, p1), d2 = ccw(p3, p4, p2), d3 = ccw(p1, p2, p3), d4 = ccw(p1, p2, p4);
-      return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
-    }
-    function hits(a, p, ex) {
-      for (let i = 0; i < edges.length; i++) { if (i === ex) continue; if (segInt(a, p, edges[i][0], edges[i][1])) return true; }
-      return false;
-    }
-    let guard = pts.length * 4;
-    while (interior.length && guard-- > 0) {
-      let bE = -1, bI = -1, bDec = concavity, bP = null;
-      for (let ei = 0; ei < edges.length; ei++) {
-        const a = edges[ei][0], b = edges[ei][1], el = Math.sqrt(sq(a, b));
-        let nd = Infinity, ni = -1;
-        for (let k = 0; k < interior.length; k++) { const d = segD2(interior[k], a, b); if (d < nd) { nd = d; ni = k; } }
-        if (ni < 0) continue;
-        const dec = el / Math.sqrt(nd || 1e-12);
-        if (dec > bDec) {
-          const p = interior[ni];
-          if (!hits(a, p, ei) && !hits(p, b, ei)) { bDec = dec; bE = ei; bI = ni; bP = p; }
-        }
-      }
-      if (bE < 0) break;
-      const a = edges[bE][0], b = edges[bE][1];
-      edges.splice(bE, 1, [a, bP], [bP, b]);
-      interior.splice(bI, 1);
-    }
-    return edges.map(e => e[0]);
-  }
-
   function _clearZone(kind) {
     if (_zoneLayers[kind]) {
       try { _conclMap && _conclMap.removeLayer(_zoneLayers[kind]); } catch (_) {}
@@ -956,7 +898,7 @@
     });
     if (!latlngs.length) return;
     if (latlngs.length >= 3) {
-      const hull = _concaveHull(latlngs, 2).map(p => [p.lat, p.lon]);
+      const hull = _convexHull(latlngs).map(p => [p.lat, p.lon]);
       layers.unshift(L.polygon(hull, {
         color: color, weight: 2, fillColor: color, fillOpacity: 0.12,
         pane: "conclBelow", renderer: _conclBelowRenderer,
@@ -1021,8 +963,11 @@
           const meta = _esc(c.created_at) +
             (c.frequency ? " · " + _esc(c.frequency) : "") +
             (c.type_label ? " · " + _esc(c.type_label) : "");
+          const intercept = c.intercept_text
+            ? `<div class="czp-intercept"><div class="czp-ilabel">Перехоплення</div>${_esc(c.intercept_text)}</div>`
+            : "";
           return `<div class="czp-item"><div class="czp-meta">${meta}</div>` +
-                 `<div class="czp-text">${_esc(c.conclusion_text)}</div></div>`;
+                 `<div class="czp-text">${_esc(c.conclusion_text)}</div>${intercept}</div>`;
         }).join("");
         marker.setPopupContent(`<div class="concl-zone-pop">${head}${items}</div>`);
       })

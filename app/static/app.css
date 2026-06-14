@@ -5540,6 +5540,8 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .concl-zone-pop .czp-item:first-of-type{ border-top:none; }
 .concl-zone-pop .czp-meta{ font-size:.74rem; opacity:.6; margin-bottom:2px; }
 .concl-zone-pop .czp-text{ white-space:pre-wrap; }
+.concl-zone-pop .czp-intercept{ margin-top:4px; padding:4px 6px; border-left:2px solid var(--border,#475569); background:rgba(255,255,255,.05); white-space:pre-wrap; font-size:.78rem; opacity:.85; }
+.concl-zone-pop .czp-ilabel{ font-size:.68rem; text-transform:uppercase; opacity:.55; margin-bottom:2px; }
 .pal-panel{
   position:absolute; top:0; right:0; bottom:0; width:320px; max-width:80%;
   background:var(--card,#fff); border-left:1px solid var(--border,#d0d5dd);

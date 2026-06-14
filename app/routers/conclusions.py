@@ -415,10 +415,12 @@ def api_conclusions_by_point(
         rows = conn.execute(
             f"""
             SELECT ac.created_at, ac.conclusion_text, ac.network_id,
-                   ct.type AS type_label, ct.color AS type_color, n.frequency
+                   ct.type AS type_label, ct.color AS type_color, n.frequency,
+                   msg.body_text, msg.net_description
             FROM analytical_conclusions ac
             LEFT JOIN conclusion_types ct ON ct.id = ac.type_id
             LEFT JOIN networks n          ON n.id  = ac.network_id
+            LEFT JOIN messages msg        ON msg.id = ac.message_id
             WHERE {where_sql}
             ORDER BY ac.created_at DESC
             LIMIT ?
@@ -426,20 +428,18 @@ def api_conclusions_by_point(
             [*params, int(limit)],
         ).fetchall()
 
-    return {
-        "ok": True,
-        "rows": [
-            {
-                "created_at":      r["created_at"] or "",
-                "conclusion_text": r["conclusion_text"] or "",
-                "frequency":       r["frequency"] or "",
-                "type_label":      r["type_label"] or "",
-                "type_color":      r["type_color"] or "",
-            }
-            for r in rows
-        ],
-        "total": len(rows),
-    }
+    out = []
+    for r in rows:
+        parts = [p for p in (r["net_description"], r["body_text"]) if p]
+        out.append({
+            "created_at":      r["created_at"] or "",
+            "conclusion_text": r["conclusion_text"] or "",
+            "intercept_text":  "\n".join(parts),
+            "frequency":       r["frequency"] or "",
+            "type_label":      r["type_label"] or "",
+            "type_color":      r["type_color"] or "",
+        })
+    return {"ok": True, "rows": out, "total": len(rows)}
 
 
 # ---------------------------------------------------------------------------
