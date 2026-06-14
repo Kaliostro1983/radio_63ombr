@@ -577,12 +577,41 @@
     </div>
   </div>
 </div>
+
+<!-- Edit conclusion modal -->
+<div id="cnEditModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" id="cnEditBackdrop"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:560px">
+    <div class="modal-head">
+      <div>
+        <div class="small" style="opacity:.75">Редагування</div>
+        <div style="font-weight:700">Аналітичний висновок</div>
+      </div>
+      <button class="secondary" type="button" id="cnEditCloseBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:12px">
+        <label for="cnEditText">Висновок</label>
+        <textarea id="cnEditText" rows="4" style="width:100%" placeholder="Текст аналітичного висновку…"></textarea>
+      </div>
+      <div class="field">
+        <label for="cnEditCoords">Координати (MGRS, по одній на рядок)</label>
+        <textarea id="cnEditCoords" rows="4" style="width:100%" placeholder="37UDQ12345 67890"></textarea>
+      </div>
+      <div id="cnEditErr" class="small" style="color:var(--danger);display:none;margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="cnEditSaveBtn" type="button">Зберегти</button>
+      <button class="secondary" type="button" id="cnEditCancelBtn">Скасувати</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <!-- Military symbol library (APP-6 / MIL-STD-2525) -->
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/conclusions.js?v=23" defer></script>
+<script src="/static/conclusions.js?v=24" defer></script>
 <script src="/static/quick_conclusions.js?v=16" defer></script>
 <script src="/static/conclusions_compare.js?v=1" defer></script>
 {% endblock %}

@@ -551,6 +551,53 @@ async def api_conclusion_save(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Edit an existing conclusion (fix a wrong analyst conclusion)
+# ---------------------------------------------------------------------------
+
+@router.put("/api/conclusions/{ac_id}")
+async def api_conclusion_edit(ac_id: int, request: Request):
+    """Edit an existing analytical conclusion's text and coordinates.
+
+    Body: { conclusion_text:str, mgrs?:[str] }
+    Updates conclusion_text (required, non-empty). If `mgrs` is present, replaces
+    the coordinate list. The conclusion type is left unchanged (use the type
+    badge or ♻ re-classify to change it).
+    """
+    payload: Dict[str, Any] = await request.json()
+    conclusion_text = (payload.get("conclusion_text") or "").strip()
+    if not conclusion_text:
+        return JSONResponse({"ok": False, "error": "Висновок не може бути порожнім"}, status_code=400)
+
+    has_mgrs = "mgrs" in payload
+    mgrs_list = [str(m).strip() for m in (payload.get("mgrs") or []) if str(m).strip()]
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM analytical_conclusions WHERE id = ?", (ac_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Висновок не знайдено"}, status_code=404)
+        if has_mgrs:
+            conn.execute(
+                "UPDATE analytical_conclusions SET conclusion_text = ?, mgrs_json = ? WHERE id = ?",
+                (conclusion_text, json.dumps(mgrs_list, ensure_ascii=False), ac_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE analytical_conclusions SET conclusion_text = ? WHERE id = ?",
+                (conclusion_text, ac_id),
+            )
+        conn.commit()
+
+    return {
+        "ok": True,
+        "id": ac_id,
+        "conclusion_text": conclusion_text,
+        "mgrs": mgrs_list if has_mgrs else None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Conclusion types CRUD
 # ---------------------------------------------------------------------------
 

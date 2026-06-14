@@ -378,6 +378,63 @@
     finally { btn.textContent = "♻"; btn.disabled = false; }
   }
 
+  /* ── Редагування висновку (текст + координати) ── */
+  let _editAcId = null, _editWired = false;
+  function _wireEditModal() {
+    if (_editWired) return;
+    _editWired = true;
+    $("cnEditCloseBtn")?.addEventListener("click", closeEditModal);
+    $("cnEditCancelBtn")?.addEventListener("click", closeEditModal);
+    $("cnEditBackdrop")?.addEventListener("click", closeEditModal);
+    $("cnEditSaveBtn")?.addEventListener("click", saveEdit);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !$("cnEditModal")?.classList.contains("hidden")) closeEditModal();
+    });
+  }
+  function openEditModal(row) {
+    _wireEditModal();
+    _editAcId = row.id;
+    $("cnEditText").value   = row.conclusion_text || "";
+    $("cnEditCoords").value = (row.mgrs || []).join("\n");
+    const err = $("cnEditErr"); if (err) err.style.display = "none";
+    $("cnEditModal").classList.remove("hidden");
+    setTimeout(() => $("cnEditText")?.focus(), 0);
+  }
+  function closeEditModal() {
+    $("cnEditModal")?.classList.add("hidden");
+    _editAcId = null;
+  }
+  async function saveEdit() {
+    if (!_editAcId) return;
+    const text   = ($("cnEditText").value || "").trim();
+    const coords = ($("cnEditCoords").value || "").split("\n").map((s) => s.trim()).filter(Boolean);
+    const err = $("cnEditErr");
+    if (!text) { if (err) { err.textContent = "Висновок не може бути порожнім"; err.style.display = ""; } return; }
+    const btn = $("cnEditSaveBtn"); if (btn) btn.disabled = true;
+    try {
+      const res  = await fetch(`/api/conclusions/${_editAcId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conclusion_text: text, mgrs: coords }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { if (err) { err.textContent = data.error || "Помилка"; err.style.display = ""; } return; }
+      const row = state.view.rows.find((r) => r.id === _editAcId);
+      if (row) { row.conclusion_text = text; row.mgrs = coords; }
+      const tr = cnTableBody.querySelector(`tr[data-ac-id="${_editAcId}"]`);
+      if (tr && tr.children.length >= 5) {
+        tr.children[2].innerHTML = escapeHtml(formatConclusion(text));
+        tr.children[4].innerHTML = coords.length
+          ? coords.map((m) => `<code class="cn-mgrs-code">${escapeHtml(m)}</code>`).join(" ")
+          : "<span style='opacity:.4'>—</span>";
+      }
+      toast("Висновок оновлено", "success", 2000);
+      closeEditModal();
+    } catch (e) {
+      if (err) { err.textContent = "Помилка з'єднання"; err.style.display = ""; }
+    } finally { if (btn) btn.disabled = false; }
+  }
+
   function updateBadge(tr, typeId, typeLabel, typeColor) {
     const badge = tr?.querySelector(".cn-type-badge--pick");
     if (!badge) return;
@@ -662,6 +719,7 @@
           <td>${interceptHtml}</td>
           <td style="text-align:center">${mgrs || "<span style='opacity:.4'>—</span>"}</td>
           <td style="text-align:center;white-space:nowrap">
+            <button class="cn-edit-btn" title="Редагувати висновок">✏</button>
             <button class="cn-reclassify-btn" title="Повторно проаналізувати тип">♻</button>
             <button class="cn-delta-btn ${deltaBtnClass}" title="${deltaBtnTitle}">⊡</button>
           </td>
@@ -672,6 +730,14 @@
       cnTableBody.onclick = (e) => {
         const badge = e.target.closest(".cn-type-badge--pick");
         if (badge) { openTypePicker(badge); return; }
+        const editBtn = e.target.closest(".cn-edit-btn");
+        if (editBtn) {
+          const tr = editBtn.closest("tr");
+          const acId = tr ? parseInt(tr.dataset.acId, 10) : null;
+          const row = acId ? state.view.rows.find((r) => r.id === acId) : null;
+          if (row) openEditModal(row);
+          return;
+        }
         const reBtn = e.target.closest(".cn-reclassify-btn");
         if (reBtn) { reclassifyConclusion(reBtn); return; }
         const deltaBtn = e.target.closest(".cn-delta-btn");
