@@ -383,6 +383,11 @@
   }
   function toFront(el) {
     if (!el || el.classList.contains("hidden")) return;
+    // Портал у <body>: гарантує кореневий контекст стекування, тож модалка не
+    // лишається в пастці контексту якогось предка (напр. .tab-panel-wrap).
+    // Переносимо лише раз (потім el уже прямий нащадок body) — щоб не
+    // перевантажувати можливі iframe всередині.
+    if (el.parentNode !== document.body) document.body.appendChild(el);
     var maxOther = 0;
     document.querySelectorAll(".modal").forEach(function (m) {
       if (m === el || m.classList.contains("hidden")) return;
