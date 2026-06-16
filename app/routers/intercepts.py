@@ -40,6 +40,9 @@ def get_conn():
     # Allow waiting for short-lived writer locks (background ingest/matchers).
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    # Cyrillic-aware lowercase for case-insensitive text search (SQLite LIKE
+    # only case-folds ASCII): pylower(col) LIKE pylower(term).
+    conn.create_function("pylower", 1, lambda s: s.lower() if isinstance(s, str) else s)
     try:
         conn.execute("PRAGMA busy_timeout = 30000;")
     except Exception:
