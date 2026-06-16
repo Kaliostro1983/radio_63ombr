@@ -781,7 +781,8 @@ button.secondary{
 
 .tab-panel-wrap{
   position:relative;
-  z-index:1;
+  /* без z-index: інакше створюється контекст стекування, у який провалюються
+     fixed-модалки (.it-modal) і не можуть піднятись над модалкою позивного */
   background:var(--card);
   border:1px solid var(--border);
   border-radius:18px;
