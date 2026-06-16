@@ -296,8 +296,8 @@ def intercepts_search(
             words = [w for w in words if len(w) >= 2]
 
             for word in words:
-                where.append("m.body_text LIKE ?")
-                params.append(f"%{word}%")
+                where.append("pylower(m.body_text) LIKE ?")
+                params.append(f"%{word.lower()}%")
 
         exact_freq, freq_mask = normalize_freq_or_mask(frequency_raw)
 

@@ -36,6 +36,14 @@ def _register_sql_functions(conn: sqlite3.Connection) -> None:
 
     conn.create_function("norm_alias", 1, _norm_alias_sql)
 
+    # Cyrillic-aware lowercase: SQLite's built-in LOWER()/LIKE only case-fold
+    # ASCII, so a lowercase search term never matches a capitalised Cyrillic
+    # word. Use pylower(col) LIKE pylower(?) for case-insensitive text search.
+    def _pylower_sql(val: object) -> object:
+        return val.lower() if isinstance(val, str) else val
+
+    conn.create_function("pylower", 1, _pylower_sql)
+
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
 
