@@ -3838,7 +3838,10 @@
       const willOpen = panel.classList.contains("hidden");
       panel.classList.toggle("hidden");
       panel.setAttribute("aria-hidden", willOpen ? "false" : "true");
-      if (willOpen) { _palLoadUnits(); _palLoadList(); }
+      if (willOpen) {
+        _palScope.clear(); _palSaveScope();   // при відкритті — жодна палітра не виділена (пошук по всіх)
+        _palLoadUnits(); _palLoadList();
+      }
     });
     document.getElementById("palPanelClose")?.addEventListener("click", () => {
       panel.classList.add("hidden");
@@ -4322,7 +4325,7 @@
     pts = pts.filter(p => p.lat != null && p.lon != null);
 
     if (!pts.length) {
-      if (window.appToast) window.appToast(`Не знайдено: ${code}`, "info", 1600);
+      if (window.appToast) window.appToast(`«${code}»: не знайдено жодної точки`, "info", 1900);
       return;
     }
 
@@ -4340,6 +4343,8 @@
       if (pts.length === 1) _conclMap.setView([pts[0].lat, pts[0].lon], Math.max(_conclMap.getZoom(), 14));
       else _conclMap.fitBounds(grp.getBounds(), { maxZoom: 15, padding: [40, 40] });
     } catch (_) {}
+
+    if (window.appToast) window.appToast(`«${code}»: знайдено точок — ${pts.length}`, "success", 1800);
 
     // Очищуємо інпут — пошук тепер "зафіксовано" чіпом.
     const ci = document.getElementById("conclCoordInput");
