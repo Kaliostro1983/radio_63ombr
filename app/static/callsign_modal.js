@@ -368,6 +368,10 @@
     if (!modal) return;
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
+    // Картка позивного — одна спільна модалка. Якщо її викликають, коли вона
+    // вже відкрита позаду (напр. з модалки перехоплень) — підняти на передній
+    // план (дані вже оновлено через fillEditModal).
+    if (window.__modalToFront) window.__modalToFront(modal);
   }
 
   function closeModal() {
