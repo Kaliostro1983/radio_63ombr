@@ -1653,7 +1653,7 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         stage="create_table:palette_units",
     )
     for _pu_order, _pu_name in enumerate(
-        ["37 мсп", "31 мсп", "36 мсп", "164 омсбр", "19 тп", "67 мсд"], start=1
+        ["37 мсп", "31 мсп", "36 мсп", "164 омсбр", "19 тп", "67 мсд", "189 орб"], start=1
     ):
         safe_execute(
             conn,
