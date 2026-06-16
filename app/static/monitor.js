@@ -3961,12 +3961,19 @@
   /* ---- Редагування кольорів палітри ---- */
   let _palEditState = null;  // { paletteId, original: Map<rid,color>, current: Map<rid,color> }
 
+  /* Список усіх підрозділів-тегів з фільтра панелі (id + назва) */
+  function _palUnitOptions() {
+    const sel = document.getElementById("palUnitFilter");
+    if (!sel) return [];
+    return [...sel.options].filter(o => o.value).map(o => ({ id: o.value, name: o.textContent }));
+  }
+
   async function _palOpenEditDialog(p) {
     const dlg  = document.getElementById("palEditDialog");
     const body = document.getElementById("palEditBody");
     const title = document.getElementById("palEditTitle");
     if (!dlg || !body) return;
-    title.textContent = `Редагувати кольори: ${p.name}`;
+    title.textContent = `Редагувати: ${p.name}`;
     body.innerHTML = '<div class="pal-empty">Завантаження…</div>';
     dlg.classList.remove("hidden");
 
@@ -3975,27 +3982,43 @@
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.detail || "Помилка");
       const regions = j.regions || [];
-      if (!regions.length) {
-        body.innerHTML = '<div class="pal-empty">У палітрі немає регіонів.</div>';
-        return;
-      }
       const orig = new Map();
       const cur  = new Map();
       regions.forEach(r => { orig.set(r.id, r.color || "#000000"); cur.set(r.id, r.color || "#000000"); });
-      _palEditState = { paletteId: p.id, original: orig, current: cur };
+      const curUnitIds = new Set((p.units || []).map(u => Number(u.id)));
+      _palEditState = {
+        paletteId: p.id, original: orig, current: cur,
+        origUnits: new Set(curUnitIds), curUnits: new Set(curUnitIds),
+      };
 
-      body.innerHTML = `<div class="pal-edit-list">${
-        regions.map(r => `
-          <div class="pal-edit-row" data-rid="${r.id}">
-            <input type="color" class="pal-edit-color" value="${_esc(r.color || "#000000")}" title="Обрати колір">
-            <div class="pal-edit-label">
-              <div class="pal-edit-label-main">${_esc(r.label || "—")}</div>
-              <div class="pal-edit-label-meta">${r.point_count} тчк</div>
-            </div>
-          </div>
-        `).join("")
-      }</div>`;
+      const unitChips = _palUnitOptions().map(o =>
+        `<label class="pal-unit-chip" style="cursor:pointer"><input type="checkbox" value="${o.id}" ${curUnitIds.has(Number(o.id)) ? "checked" : ""} style="margin-right:4px">${_esc(o.name)}</label>`
+      ).join("") || '<span class="pal-empty">—</span>';
 
+      const colorList = regions.length
+        ? `<div style="font-size:12px;color:#667085;margin:4px 0 4px">Кольори областей</div><div class="pal-edit-list">${
+            regions.map(r => `
+              <div class="pal-edit-row" data-rid="${r.id}">
+                <input type="color" class="pal-edit-color" value="${_esc(r.color || "#000000")}" title="Обрати колір">
+                <div class="pal-edit-label">
+                  <div class="pal-edit-label-main">${_esc(r.label || "—")}</div>
+                  <div class="pal-edit-label-meta">${r.point_count} тчк</div>
+                </div>
+              </div>`).join("")
+          }</div>`
+        : '<div class="pal-empty" style="margin-top:6px">У палітрі немає регіонів.</div>';
+
+      body.innerHTML =
+        `<label style="display:block;font-size:12px;color:#667085;margin-bottom:3px">Підрозділи (теги)</label>` +
+        `<div id="palEditUnits" class="pal-item-units" style="margin-bottom:8px">${unitChips}</div>` +
+        colorList;
+
+      body.querySelectorAll("#palEditUnits input[type=checkbox]").forEach(cb => {
+        cb.addEventListener("change", () => {
+          const id = Number(cb.value);
+          if (cb.checked) _palEditState.curUnits.add(id); else _palEditState.curUnits.delete(id);
+        });
+      });
       body.querySelectorAll(".pal-edit-color").forEach(inp => {
         inp.addEventListener("input", (e) => {
           const row = e.target.closest(".pal-edit-row");
@@ -4015,29 +4038,42 @@
 
   async function _palSaveEdit() {
     if (!_palEditState) return _palCloseEditDialog();
-    const { paletteId, original, current } = _palEditState;
+    const { paletteId, original, current, origUnits, curUnits } = _palEditState;
+
     const changes = [];
     current.forEach((color, rid) => {
       if ((original.get(rid) || "").toLowerCase() !== (color || "").toLowerCase()) {
         changes.push({ region_id: rid, color });
       }
     });
-    if (!changes.length) { _palCloseEditDialog(); return; }
+    const unitsChanged = !origUnits || origUnits.size !== curUnits.size ||
+      [...curUnits].some(id => !origUnits.has(id));
+
+    if (!changes.length && !unitsChanged) { _palCloseEditDialog(); return; }
 
     try {
-      const r = await fetch(`/api/palettes/${paletteId}/colors`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ colors: changes }),
-      });
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.detail || "Помилка");
-      if (window.appToast) window.appToast(`Оновлено регіонів: ${j.updated}`, "success", 1600);
+      if (changes.length) {
+        const r = await fetch(`/api/palettes/${paletteId}/colors`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ colors: changes }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.detail || "Помилка кольорів");
+      }
+      if (unitsChanged) {
+        const r = await fetch(`/api/palettes/${paletteId}/units`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ unit_ids: [...curUnits] }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.detail || "Помилка тегів");
+      }
+      if (window.appToast) window.appToast("Палітру оновлено", "success", 1600);
       _palCloseEditDialog();
-      _palClearRegions(paletteId);  // прибираємо старі полігони з карти
+      if (changes.length) _palClearRegions(paletteId);
       _palLoadList();
     } catch (e) {
-      if (window.appToast) window.appToast("Помилка збереження: " + (e.message || e), "error", 2200);
+      if (window.appToast) window.appToast("Помилка збереження: " + (e.message || e), "error", 2400);
     }
   }
 

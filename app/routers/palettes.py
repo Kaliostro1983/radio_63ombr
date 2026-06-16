@@ -560,3 +560,43 @@ async def api_palette_set_colors(palette_id: int, payload: dict = Body(...)):
         conn.commit()
 
     return {"ok": True, "updated": len(updates)}
+
+
+@router.post("/api/palettes/{palette_id}/units")
+async def api_palette_set_units(palette_id: int, payload: dict = Body(...)):
+    """Replace the unit tags (підрозділи) linked to a palette.
+
+    Body: {"unit_ids": [int, ...]}. Existing links are replaced wholesale.
+    Invalid / unknown unit ids are ignored. An empty list clears all tags.
+    """
+    raw = (payload or {}).get("unit_ids") or []
+    unit_ids: list[int] = []
+    for x in raw:
+        try:
+            unit_ids.append(int(x))
+        except (TypeError, ValueError):
+            continue
+
+    with get_conn() as conn:
+        if not conn.execute("SELECT id FROM palettes WHERE id = ?", (palette_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Палітру не знайдено")
+
+        if unit_ids:
+            ph = ",".join("?" * len(unit_ids))
+            valid = {
+                int(r[0]) for r in conn.execute(
+                    f"SELECT id FROM palette_units WHERE id IN ({ph})", unit_ids
+                ).fetchall()
+            }
+            # preserve order, drop unknowns
+            unit_ids = [u for u in dict.fromkeys(unit_ids) if u in valid]
+
+        conn.execute("DELETE FROM palette_unit_links WHERE palette_id = ?", (palette_id,))
+        for uid in unit_ids:
+            conn.execute(
+                "INSERT OR IGNORE INTO palette_unit_links (palette_id, unit_id) VALUES (?, ?)",
+                (palette_id, uid),
+            )
+        conn.commit()
+
+    return {"ok": True, "unit_ids": unit_ids}
