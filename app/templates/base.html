@@ -377,8 +377,9 @@
    (для випадку, коли модалку «викликають» повторно, а вона вже відкрита позаду). */
 (function () {
   function zOf(m) {
-    var z = parseInt(m.style.zIndex, 10);
-    if (!isFinite(z)) z = parseInt(getComputedStyle(m).zIndex, 10);
+    /* Фактичний застосований z-index (computed), бо inline може бути
+       перебитий CSS-правилом з !important. */
+    var z = parseInt(getComputedStyle(m).zIndex, 10);
     return isFinite(z) ? z : 0;
   }
   function toFront(el) {
@@ -394,7 +395,9 @@
       if (getComputedStyle(m).display === "none") return;
       maxOther = Math.max(maxOther, zOf(m));
     });
-    el.style.zIndex = String(Math.max(maxOther + 1, zOf(el)));
+    /* setProperty з пріоритетом important — бо .it-modal/.cn-modal мають
+       z-index: 9999 !important у CSS, що інакше перебиває inline-стиль. */
+    el.style.setProperty("z-index", String(Math.max(maxOther + 1, zOf(el))), "important");
   }
   window.__modalToFront = toFront;
 
