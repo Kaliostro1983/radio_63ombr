@@ -371,5 +371,55 @@
 <script src="https://unpkg.com/proj4@2.11.0/dist/proj4.js" defer></script>
 <script src="/static/callsign_modal.js?v=13" defer></script>
 {% block scripts %}{% endblock %}
+<script>
+/* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається
+   над усіма іншими видимими. window.__modalToFront(el) — підняти примусово
+   (для випадку, коли модалку «викликають» повторно, а вона вже відкрита позаду). */
+(function () {
+  function zOf(m) {
+    var z = parseInt(m.style.zIndex, 10);
+    if (!isFinite(z)) z = parseInt(getComputedStyle(m).zIndex, 10);
+    return isFinite(z) ? z : 0;
+  }
+  function toFront(el) {
+    if (!el || el.classList.contains("hidden")) return;
+    var maxOther = 0;
+    document.querySelectorAll(".modal").forEach(function (m) {
+      if (m === el || m.classList.contains("hidden")) return;
+      if (getComputedStyle(m).display === "none") return;
+      maxOther = Math.max(maxOther, zOf(m));
+    });
+    el.style.zIndex = String(Math.max(maxOther + 1, zOf(el)));
+  }
+  window.__modalToFront = toFront;
+
+  var mo = new MutationObserver(function (muts) {
+    muts.forEach(function (m) {
+      if (m.attributeName !== "class") return;
+      var el = m.target;
+      if (!el.classList || !el.classList.contains("modal")) return;
+      var wasHidden = (" " + (m.oldValue || "") + " ").indexOf(" hidden ") !== -1;
+      if (wasHidden && !el.classList.contains("hidden")) toFront(el);
+    });
+  });
+  function observe(el) {
+    if (el.__zObs) return;
+    el.__zObs = 1;
+    mo.observe(el, { attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+  }
+  function scan() { document.querySelectorAll(".modal").forEach(observe); }
+  var queued = false;
+  function queueScan() {
+    if (queued) return; queued = true;
+    requestAnimationFrame(function () { queued = false; scan(); });
+  }
+  function init() {
+    scan();
+    new MutationObserver(queueScan).observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>
 </body>
 </html>

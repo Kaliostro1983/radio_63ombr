@@ -782,6 +782,7 @@
       if (!m) return;
       m.classList.remove("hidden");
       m.removeAttribute("aria-hidden");
+      if (window.__modalToFront) window.__modalToFront(m);   // завжди поверх інших відкритих модалок
       if (window.pauseMonitor) window.pauseMonitor();
       if (which === "conclusion") {
         if (!_conclusionInited) { _conclusionInited = true; if (window.initConclusionPanel) window.initConclusionPanel(); }
