@@ -1585,11 +1585,14 @@
       () => _captureConclMapBase64() // зображення карти
     );
 
-    // Map
-    requestAnimationFrame(() => {
-      if (typeof L === "undefined") return;
+    // Map. Leaflet вантажиться як defer-скрипт із CDN, тож на момент першого
+    // кадру глобальний L може бути ще не визначений. Раніше одноразовий RAF у
+    // такому разі мовчки виходив — і карта не створювалась ЗОВСІМ до наступного
+    // перезавантаження (чорна карта + не працював пошук, бо обробник Enter
+    // перевіряє _conclMap). Тепер чекаємо появи L і лише тоді будуємо карту.
+    function _buildConclMap() {
       const el = document.getElementById("conclMap");
-      if (!el || _conclMap) return;
+      if (!el || _conclMap || typeof L === "undefined") return;
       // preferCanvas — щоб квадрати (полігони) рендерилися на <canvas>
       // і потрапляли у скріншот html2canvas (SVG він не захоплює)
       _conclMap = L.map(el, { center: [48.5, 37.5], zoom: 10, preferCanvas: true });
@@ -1612,7 +1615,13 @@
       _conclMap.on("click", e => {
         _placeConclClickMarker(_conclMap, e.latlng.lat, e.latlng.lng);
       });
-    });
+      setTimeout(() => { try { _conclMap.invalidateSize(); } catch (_) {} }, 60);
+    }
+    (function _waitLeaflet(n) {
+      if (_conclMap) return;
+      if (typeof L !== "undefined") { requestAnimationFrame(_buildConclMap); return; }
+      if (n > 0) setTimeout(() => _waitLeaflet(n - 1), 100);   // ~12с очікування Leaflet
+    })(120);
   };
 
   function _fillConclIntercept(item) {
