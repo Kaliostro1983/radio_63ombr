@@ -2,7 +2,7 @@
 {% set is_embed = request.query_params.get("embed") == "1" %}
 {% block content %}
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css" />
 
 {% if is_embed %}
 <style>
@@ -992,8 +992,8 @@
 </script>
 <script src="/static/networks_autocomplete.js?v=4" defer></script>
 <script src="/static/networks_graph.js?v=5" defer></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
-<script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.min.js" defer></script>
+<script src="/static/vendor/leaflet/leaflet.js" defer></script>
+<script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/networks_peleng.js?v=2" defer></script>
 <script src="/static/networks_aliases.js?v=1" defer></script>
 <script src="/static/networks_intercepts.js?v=1" defer></script>
