@@ -116,7 +116,7 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
     if clauses:
         base_sql += " WHERE " + " AND ".join(clauses)
 
-    base_sql += " ORDER BY n.frequency ASC"
+    base_sql += " ORDER BY intercepts_7d DESC, n.frequency ASC"
     rows = conn.execute(base_sql, params).fetchall()
 
     # Прикріпити теги (як у таблиці на головній): network_id -> [tag_id, ...]
