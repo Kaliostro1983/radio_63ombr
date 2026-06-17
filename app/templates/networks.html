@@ -429,8 +429,9 @@
           <tbody>
             {% for r in all_rows %}
               <tr
+                class="net-row-link"
+                data-net-open="{{ r['id'] }}"
                 style="cursor:pointer;{% if r['bg_color'] %}background: {{ r['bg_color'] }}; border-left: 4px solid {{ r['border_color'] }};{% endif %}"
-                onclick="window.location.href='/networks?pick={{ r['id'] }}'"
               >
                 <td>{{ loop.index }}</td>
                 <td>{{ r['frequency'] }}</td>
@@ -562,6 +563,23 @@
       </div>
     </div>
     </div><!-- /netModalOcheret -->
+
+    <!-- ── Modal: Картка р/м (iframe — клік по рядку списку «Усі р/м») ──
+         Відкривається ПОВЕРХ сторінки без перезавантаження, тож фільтри
+         списку зберігаються. Контент — /networks?pick=ID&embed=1. -->
+    <div id="netModalCardFrame" class="modal hidden net-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-net-cardframe-close></div>
+      <div class="modal-card net-modal-card" role="dialog" aria-modal="true" aria-labelledby="netModalCardFrameTitle">
+        <div class="modal-head">
+          <div id="netModalCardFrameTitle" class="modal-title">Картка р/м</div>
+          <button type="button" class="secondary" data-net-cardframe-close style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body net-modal-body" style="padding:0">
+          <iframe id="netCardFrame" src="about:blank" title="Картка р/м"
+                  style="width:100%; height:82vh; border:0; display:block; background:var(--bg)"></iframe>
+        </div>
+      </div>
+    </div><!-- /netModalCardFrame -->
 
   </div><!-- /tab-panel-wrap -->
 </section>
@@ -804,9 +822,35 @@
     // Esc — close топ-most відкриту модалку
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
+      // Спочатку — iframe-картка (відкрита кліком по рядку списку).
+      if (cardFrameModal && !cardFrameModal.classList.contains("hidden")) { closeCardFrame(); return; }
       for (const k of ["card","etalons","akademik","ocheret"]) {
         if (modals[k] && !modals[k].classList.contains("hidden")) { closeModal(k); break; }
       }
+    });
+
+    // ── Картка р/м у iframe-модалці: клік по рядку списку «Усі р/м» відкриває
+    // картку ПОВЕРХ сторінки, без перезавантаження → фільтри списку зберігаються.
+    const cardFrameModal = document.getElementById("netModalCardFrame");
+    const cardFrame      = document.getElementById("netCardFrame");
+    function openCardFrame(netId) {
+      if (!cardFrameModal || !cardFrame || !netId) return;
+      cardFrame.src = "/networks?pick=" + encodeURIComponent(netId) + "&embed=1";
+      cardFrameModal.classList.remove("hidden");
+      cardFrameModal.removeAttribute("aria-hidden");
+      if (window.__modalToFront) window.__modalToFront(cardFrameModal);
+    }
+    function closeCardFrame() {
+      if (!cardFrameModal) return;
+      cardFrameModal.classList.add("hidden");
+      cardFrameModal.setAttribute("aria-hidden", "true");
+      if (cardFrame) cardFrame.src = "about:blank";
+    }
+    cardFrameModal?.querySelectorAll("[data-net-cardframe-close]").forEach((el) => {
+      el.addEventListener("click", (e) => { e.stopPropagation(); closeCardFrame(); });
+    });
+    document.querySelectorAll("tr[data-net-open]").forEach((tr) => {
+      tr.addEventListener("click", () => openCardFrame(tr.getAttribute("data-net-open")));
     });
 
     // Initial state: ?pick=ID → відкриваємо картку (це класична семантика
