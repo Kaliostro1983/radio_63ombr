@@ -855,10 +855,19 @@
 
     // Initial state: ?pick=ID → відкриваємо картку (це класична семантика
     // «відкрити цю р/м»). ?tab=X — відкриваємо відповідну модалку.
+    // АЛЕ не при перезавантаженні сторінки (Ctrl+F5): тоді ?pick/?tab могли
+    // лишитись в адресі від попередньої навігації, і користувач не очікує
+    // повторного відкриття модалки. Авто-відкриваємо лише при явному переході
+    // (клік «Відкрити», пошук, зовнішній deep-link).
+    const navEntry = performance.getEntriesByType("navigation")[0];
+    const isReload = navEntry ? navEntry.type === "reload" : false;
     const qs = new URLSearchParams(location.search);
     const initialTab = (qs.get("tab") || "").toLowerCase();
     const pick = qs.get("pick");
-    if (initialTab && initialTab in modals) {
+    if (isReload) {
+      // Прибрати ?pick/?tab з адреси, щоб стан був чистим після перезавантаження.
+      if (pick || initialTab) history.replaceState(null, "", location.pathname);
+    } else if (initialTab && initialTab in modals) {
       openModal(initialTab);
     } else if (pick) {
       openModal("card");
