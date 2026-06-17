@@ -200,6 +200,7 @@
   let _conclSaveWired = false;     // одноразова прив'язка save-кнопки/слухачів
   let _zoneLayers = { freq: null, unit: null };  // шари зон-«очей» (по частоті / підрозділу)
   let _unitPalLayers = {};                       // палітра_id -> шар регіонів (перелік палітр підрозділу)
+  let _lastPalCtxKey = null;                     // ключ останнього контексту палітр (unit|network) для скидання scope
   let _conclDrawn        = [];     // [{type, layers:[...]}] — стрілки/зони/орієнтири
   let _conclBelowRenderer = null;  // canvas-рендерер нижче квадратів/точок (Зона, Орієнтир)
   let _conclAboveRenderer = null;  // canvas-рендерер вище всього (Стрілка)
@@ -1113,7 +1114,17 @@
       unit = (_currentItem.network && _currentItem.network.unit || "").trim();
       nid  = _currentItem.network_id || 0;
     }
-    if (!unit) return;
+    if (!unit) { _lastPalCtxKey = null; return; }
+
+    // Нове перехоплення (інша частота/підрозділ) → скидаємо область пошуку
+    // (_palScope): чекбокси стартують порожніми, тож «жодна не виділена = пошук
+    // по всіх палітрах». Це також прибирає застарілий scope зі сховища (від
+    // попередніх перехоплень/сеансів), який інакше непомітно фільтрував пошук.
+    const ctxKey = unit + "|" + nid;
+    if (ctxKey !== _lastPalCtxKey) {
+      _palScope.clear(); _palSaveScope();
+      _lastPalCtxKey = ctxKey;
+    }
 
     fetch(`/api/palettes/for-unit?unit=${encodeURIComponent(unit)}&network_id=${nid}&days=60`)
       .then(r => r.json())
