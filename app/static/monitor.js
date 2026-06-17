@@ -1093,6 +1093,7 @@
         const pid = parseInt(cb.getAttribute("data-pid"), 10);
         if (cb.checked) _palScope.add(pid); else _palScope.delete(pid);
         _palSaveScope();
+        _palRefreshSearchChips();   // перепошук по кодах із чіпів під новий scope
       });
     });
   }
@@ -3942,6 +3943,7 @@
   // конт-інпуті "Координати" і утримує всі рендернуті варіанти на карті:
   //   { code, markers: [L.marker], chipEl, mapRef }
   let _palSearchChips = [];
+  let _palRefreshToken = 0;                       // захист від гонки при перепошуку чіпів
 
   function _palLoadScope() {
     try { return new Set(JSON.parse(localStorage.getItem(PAL_SCOPE_KEY) || "[]")); }
@@ -4057,6 +4059,7 @@
       item.querySelector(".pal-item-check").addEventListener("change", (e) => {
         if (e.target.checked) _palScope.add(p.id); else _palScope.delete(p.id);
         _palSaveScope();
+        _palRefreshSearchChips();   // перепошук по кодах із чіпів під новий scope
       });
       item.querySelector(".pal-show").addEventListener("click", () => _palToggleRegions(p.id));
       item.querySelector(".pal-arch")?.addEventListener("click", () => _palAction(p.id, "archive"));
@@ -4447,6 +4450,42 @@
     if (chipEntry) chipEntry.markers.push(m);
     else           _palMatchMarkers.push(m);   // legacy fallback
     return m;
+  }
+
+  /* Повторно знайти точки для всіх кодів, що вже стоять чіпами, під поточну
+   * область пошуку (_palScope). Викликається при перемиканні галочок палітр.
+   * Самі чіпи лишаються (навіть якщо під новим scope точок нема) — щоб зворотне
+   * перемикання галочки знову показало маркери. */
+  async function _palRefreshSearchChips() {
+    if (!_conclMap || !_palSearchChips.length) return;
+    const myToken = ++_palRefreshToken;
+    const inclArch = document.getElementById("palIncludeArchived")?.checked ? 1 : 0;
+    const unitId   = document.getElementById("palUnitFilter")?.value || "";
+    const allMarkers = [];
+    for (const entry of _palSearchChips) {
+      // прибрати старі маркери цього чіпа (сам чіп лишаємо)
+      entry.markers.forEach(m => { try { m.remove(); } catch (_) {} });
+      entry.markers = [];
+      const qs = new URLSearchParams({ q: entry.code, include_archived: String(inclArch) });
+      if (unitId) qs.set("unit_id", unitId);
+      let results = [];
+      try {
+        const r = await fetch("/api/palettes/search?" + qs.toString());
+        const j = await r.json();
+        results = j.results || [];
+      } catch (_) { continue; }
+      if (myToken !== _palRefreshToken) return;   // запустили новіший перепошук
+      const pts = [];
+      results.forEach(g => {
+        if (_palScope.size && !_palScope.has(g.palette_id)) return;
+        g.points.forEach(pt => { if (pt.lat != null && pt.lon != null) pts.push({ ...pt, palette_name: g.palette_name }); });
+      });
+      pts.forEach(p => { const m = _palPlaceVariant(_conclMap, p, entry); if (m) allMarkers.push(m); });
+    }
+    if (myToken !== _palRefreshToken) return;
+    if (allMarkers.length) {
+      try { _conclMap.fitBounds(L.featureGroup(allMarkers).getBounds(), { maxZoom: 15, padding: [40, 40] }); } catch (_) {}
+    }
   }
 
   async function _paletteLookupAndPlace(query) {
