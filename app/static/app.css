@@ -5519,20 +5519,23 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .concl-map-tool-btn--eye2{ top:144px; }
 .concl-map-tool-btn--eye1.is-active{ background:#2563eb; border-color:#2563eb; color:#fff; }
 .concl-map-tool-btn--eye2.is-active{ background:#d97706; border-color:#d97706; color:#fff; }
-/* Перелік палітр підрозділу — лівий нижній кут карти */
+/* Перелік палітр для частоти — правий нижній кут карти */
 .concl-pal-list{
-  position:absolute; left:10px; bottom:10px; z-index:500;
-  max-width:300px; max-height:42%; overflow-y:auto;
+  position:absolute; right:10px; bottom:10px; z-index:500;
+  max-width:320px; max-height:52%; overflow-y:auto;
   background:rgba(20,24,30,.92); color:#e8eaed;
   border:1px solid rgba(255,255,255,.18); border-radius:8px;
   padding:6px 8px; font-size:.82rem; box-shadow:0 4px 14px rgba(0,0,0,.35);
 }
 .concl-pal-list .cpl-title{ font-weight:700; opacity:.7; margin:2px 2px 6px; font-size:.74rem; text-transform:uppercase; }
+.concl-pal-list .cpl-sec{ font-weight:700; opacity:.5; margin:8px 2px 3px; font-size:.66rem; text-transform:uppercase; letter-spacing:.02em; }
+.concl-pal-list .cpl-sec:first-of-type{ margin-top:2px; }
 .concl-pal-list .cpl-row{ display:flex; align-items:center; gap:7px; padding:3px 2px; cursor:pointer; }
 .concl-pal-list .cpl-row:hover{ background:rgba(255,255,255,.06); border-radius:5px; }
 .concl-pal-list .cpl-name{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .concl-pal-list .cpl-cnt{ min-width:20px; text-align:center; padding:0 6px; border-radius:9px; font-weight:700; background:rgba(255,255,255,.12); }
 .concl-pal-list .cpl-cnt--hot{ background:#16a34a; color:#fff; }
+.concl-pal-list .cpl-cnt--other{ min-width:18px; background:rgba(255,255,255,.07); color:#cbd5e1; font-weight:600; }
 .concl-pal-list .cpl-empty{ opacity:.55; padding:4px 2px; }
 /* Попап висновків по точці зони */
 .concl-zone-pop{ max-height:240px; overflow-y:auto; font-size:.82rem; min-width:200px; }

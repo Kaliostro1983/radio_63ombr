@@ -1036,20 +1036,53 @@
     }
   }
 
-  function _renderConclPalettes(palettes, groups) {
+  function _renderConclPalettes(palettes, freqGroups, otherGroups) {
     const host = document.getElementById("conclPalList");
     if (!host) return;
     if (!palettes || !palettes.length) { host.classList.add("hidden"); host.innerHTML = ""; return; }
-    const rows = palettes.map(p => {
-      const cnt = _palConclCount(p.regions, groups);
-      const hot = cnt > 0 ? " cpl-cnt--hot" : "";
-      return `<label class="cpl-row" title="${_esc(p.unit || "")}">` +
-        `<input type="checkbox" data-pid="${p.id}">` +
-        `<span class="cpl-name">${_esc(p.name || "")}</span>` +
-        `<span class="cpl-cnt${hot}">${cnt}</span>` +
+
+    // Для кожної палітри рахуємо висновки по ЦІЙ частоті та по ІНШИХ частотах
+    // і визначаємо «ярус» (tier):
+    //   1 — є висновки саме по цій частоті;
+    //   2 — висновків по цій частоті нема, але є по інших;
+    //   3 — висновків нема взагалі (просто палітра підрозділу).
+    const enriched = palettes.map(p => {
+      const cntFreq  = _palConclCount(p.regions, freqGroups);
+      const cntOther = _palConclCount(p.regions, otherGroups);
+      const tier = cntFreq > 0 ? 1 : (cntOther > 0 ? 2 : 3);
+      return { p, cntFreq, cntOther, tier };
+    });
+    // Стабільне сортування лише за tier: у межах ярусу зберігається порядок
+    // зі сервера (найдетальніший підрозділ → масштабніший).
+    enriched.sort((a, b) => a.tier - b.tier);
+
+    const SEC = {
+      1: "Висновки по цій частоті",
+      2: "Висновки по інших частотах",
+      3: "Палітри підрозділу",
+    };
+    let html = "";
+    let lastTier = 0;
+    enriched.forEach(e => {
+      if (e.tier !== lastTier) {
+        html += `<div class="cpl-sec">${SEC[e.tier]}</div>`;
+        lastTier = e.tier;
+      }
+      const hot = e.cntFreq > 0 ? " cpl-cnt--hot" : "";
+      // У 2-му ярусі показуємо приглушений лічильник «інших» висновків —
+      // щоб було видно, чому палітра стоїть вище за «просто палітри підрозділу».
+      const other = (e.tier === 2)
+        ? `<span class="cpl-cnt cpl-cnt--other" title="Висновки по інших частотах">${e.cntOther}</span>`
+        : "";
+      html += `<label class="cpl-row" title="${_esc(e.p.unit || "")}">` +
+        `<input type="checkbox" data-pid="${e.p.id}">` +
+        `<span class="cpl-name">${_esc(e.p.name || "")}</span>` +
+        other +
+        `<span class="cpl-cnt${hot}">${e.cntFreq}</span>` +
         `</label>`;
-    }).join("");
-    host.innerHTML = `<div class="cpl-title">Палітри підрозділу</div>${rows}`;
+    });
+
+    host.innerHTML = `<div class="cpl-title">Палітри для частоти</div>${html}`;
     host.classList.remove("hidden");
     host.querySelectorAll('input[type="checkbox"][data-pid]').forEach(cb => {
       cb.addEventListener("change", () => {
@@ -1060,19 +1093,64 @@
     });
   }
 
-  function _loadConclPalettes() {
+  /* Завантажити перелік палітр для частоти/підрозділу.
+   * ctx (необов'язково): { unit, network_id } — для перехоплення, вставленого
+   * у поле «Перехоплення». Без ctx — беремо активне перехоплення _currentItem. */
+  function _loadConclPalettes(ctx) {
     const host = document.getElementById("conclPalList");
     if (host) { host.classList.add("hidden"); host.innerHTML = ""; }
     Object.keys(_unitPalLayers).forEach(pid => _togglePaletteRegions(pid, [], false));
     _unitPalLayers = {};
-    if (!_currentItem) return;
-    const unit = (_currentItem.network && _currentItem.network.unit || "").trim();
-    const nid = _currentItem.network_id || 0;
+
+    let unit = "", nid = 0;
+    if (ctx) {
+      unit = (ctx.unit || "").trim();
+      nid  = ctx.network_id || 0;
+    } else if (_currentItem) {
+      unit = (_currentItem.network && _currentItem.network.unit || "").trim();
+      nid  = _currentItem.network_id || 0;
+    }
     if (!unit) return;
-    fetch(`/api/palettes/for-unit?unit=${encodeURIComponent(unit)}&network_id=${nid}&days=10`)
+
+    fetch(`/api/palettes/for-unit?unit=${encodeURIComponent(unit)}&network_id=${nid}&days=60`)
       .then(r => r.json())
-      .then(d => { if (d && d.ok) _renderConclPalettes(d.palettes || [], d.conclusion_groups || []); })
+      .then(d => {
+        if (d && d.ok) _renderConclPalettes(d.palettes || [], d.conclusion_groups || [], d.other_groups || []);
+      })
       .catch(() => {});
+  }
+
+  /* Витягти частоту із шапки перехоплення (число виду 146.6350 / 30.150). */
+  function _extractFreqFromText(text) {
+    const head = String(text || "").split(/\r?\n\s*\r?\n/)[0] || "";
+    const lines = head.split(/\r?\n/).slice(0, 5);
+    for (const ln of lines) {
+      const m = ln.match(/\b\d{2,3}[.,]\d{2,4}\b/);
+      if (m) return m[0].replace(",", ".");
+    }
+    return "";
+  }
+
+  /* Підібрати контекст { unit, network_id } для палітр із довільного тексту
+   * перехоплення: unit — із шапки; network_id — через пошук мережі за частотою
+   * (пріоритет рядку з тим самим підрозділом, що в шапці). */
+  async function _palCtxFromText(text) {
+    const unit = (_buildPseudoItem(text).network.unit || "").trim();
+    const freq = _extractFreqFromText(text);
+    let networkId = 0, canonUnit = unit;
+    if (freq) {
+      try {
+        const r = await fetch(`/api/networks/lookup?q=${encodeURIComponent(freq)}`);
+        const d = await r.json();
+        const rows = (d && d.ok && Array.isArray(d.rows)) ? d.rows : [];
+        const exact = rows.filter(x => String(x.frequency || "").trim() === freq);
+        const pool = exact.length ? exact : rows;
+        const byUnit = unit ? pool.find(x => (x.unit || "").trim() === unit) : null;
+        const pick = byUnit || pool[0] || null;
+        if (pick) { networkId = pick.id || 0; if (pick.unit) canonUnit = String(pick.unit).trim(); }
+      } catch (_) {}
+    }
+    return { unit: canonUnit || unit, network_id: networkId };
   }
 
   /* ═════════════════════════════════════════
@@ -3781,7 +3859,28 @@
           window.appToast(msg, "success", 1800);
         }
       }
+      // Палітри для частоти: підвантажити перелік для вставленого перехоплення
+      // (немає активного _currentItem — резолвимо контекст із тексту).
+      if (!_currentItem) {
+        _palCtxFromText(pasted).then(ctx => _loadConclPalettes(ctx)).catch(() => {});
+      }
     });
+
+    // Ручна вставка/набір у поле «Перехоплення» (без активного перехоплення) —
+    // також оновлюємо перелік палітр (з невеликою затримкою).
+    if (ta) {
+      let _palTextTimer = null;
+      ta.addEventListener("input", () => {
+        if (_currentItem) return;   // активне перехоплення керує палітрами саме
+        clearTimeout(_palTextTimer);
+        const val = ta.value;
+        _palTextTimer = setTimeout(() => {
+          const t = (val || "").trim();
+          if (!t) { _loadConclPalettes({ unit: "", network_id: 0 }); return; }
+          _palCtxFromText(t).then(ctx => _loadConclPalettes(ctx)).catch(() => {});
+        }, 650);
+      });
+    }
 
     document.getElementById("conclFindSquareBtn")?.addEventListener("click", () => {
       const squares = _extractSquares(_bodyOnly(ta ? ta.value : ""));

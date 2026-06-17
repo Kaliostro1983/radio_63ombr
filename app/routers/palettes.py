@@ -63,6 +63,19 @@ def api_palette_units():
     return {"ok": True, "units": [{"id": int(r["id"]), "name": str(r["name"])} for r in rows]}
 
 
+def _rows_to_mgrs_groups(rows) -> list:
+    """[{mgrs_json}] → [[mgrs, ...], ...] — one list per conclusion (drops empties)."""
+    out = []
+    for r in rows:
+        try:
+            pts = [str(m).strip() for m in json.loads(r["mgrs_json"] or "[]") if str(m).strip()]
+        except Exception:
+            pts = []
+        if pts:
+            out.append(pts)
+    return out
+
+
 def _network_conclusion_groups(conn, network_id: int, days: int) -> list:
     """Per-conclusion MGRS point groups for a network over the last `days` days.
 
@@ -78,15 +91,32 @@ def _network_conclusion_groups(conn, network_id: int, days: int) -> list:
         "WHERE network_id = ? AND REPLACE(created_at,'T',' ') >= ?",
         (int(network_id), start),
     ).fetchall()
-    out = []
-    for r in rows:
-        try:
-            pts = [str(m).strip() for m in json.loads(r["mgrs_json"] or "[]") if str(m).strip()]
-        except Exception:
-            pts = []
-        if pts:
-            out.append(pts)
-    return out
+    return _rows_to_mgrs_groups(rows)
+
+
+def _other_conclusion_groups(conn, network_id: int, days: int) -> list:
+    """MGRS point groups for conclusions on OTHER networks (last `days` days).
+
+    Used by the client to flag palettes that already hold conclusions on a
+    different frequency/unit (tier 2) versus palettes with no conclusions at
+    all (tier 3). When `network_id` is 0 we have no "current" frequency, so we
+    return every conclusion's group (the client then has only this one bucket).
+    """
+    start = (datetime.now() - timedelta(days=int(days or 10))).strftime("%Y-%m-%d %H:%M:%S")
+    if network_id:
+        rows = conn.execute(
+            "SELECT mgrs_json FROM analytical_conclusions "
+            "WHERE network_id IS NOT NULL AND network_id <> ? "
+            "AND REPLACE(created_at,'T',' ') >= ?",
+            (int(network_id), start),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT mgrs_json FROM analytical_conclusions "
+            "WHERE network_id IS NOT NULL AND REPLACE(created_at,'T',' ') >= ?",
+            (start,),
+        ).fetchall()
+    return _rows_to_mgrs_groups(rows)
 
 
 @router.get("/api/palettes/for-unit")
@@ -104,8 +134,10 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
     unit = (unit or "").strip()
     with get_conn() as conn:
         groups = _network_conclusion_groups(conn, network_id, days)
+        other_groups = _other_conclusion_groups(conn, network_id, days)
         if not unit:
-            return {"ok": True, "palettes": [], "conclusion_groups": groups}
+            return {"ok": True, "palettes": [],
+                    "conclusion_groups": groups, "other_groups": other_groups}
 
         spec = {}  # unit_id -> (name, specificity_len)
         for u in conn.execute("SELECT id, name FROM palette_units").fetchall():
@@ -113,7 +145,8 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
             if nm and (unit == nm or unit.endswith(" " + nm)):
                 spec[int(u["id"])] = (nm, len(nm))
         if not spec:
-            return {"ok": True, "palettes": [], "conclusion_groups": groups}
+            return {"ok": True, "palettes": [],
+                    "conclusion_groups": groups, "other_groups": other_groups}
 
         unit_ids = list(spec.keys())
         ph = ",".join("?" * len(unit_ids))
@@ -141,7 +174,8 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
             palettes.append(info)
         palettes.sort(key=lambda x: (-x["spec"], x["name"]))
 
-    return {"ok": True, "palettes": palettes, "conclusion_groups": groups}
+    return {"ok": True, "palettes": palettes,
+            "conclusion_groups": groups, "other_groups": other_groups}
 
 
 # --------------------------------------------------------------------------- #
