@@ -137,6 +137,24 @@
       if (window.homeOpenInterceptsUrl(embedUrl)) return;
     }
 
+    // Якщо картка позивного відкрита всередині iframe (напр. модалка
+    // «Картка р/м» на /home → /networks?embed=1, де pathname === "/networks"),
+    // делегуємо відкриття батьківському вікну /home — без нової вкладки браузера.
+    try {
+      if (
+        window.parent &&
+        window.parent !== window &&
+        typeof window.parent.homeOpenInterceptsUrl === "function"
+      ) {
+        const embedParams = new URLSearchParams(params.toString());
+        embedParams.set("embed", "1");
+        const embedUrl = `/intercepts-explorer?${embedParams.toString()}`;
+        if (window.parent.homeOpenInterceptsUrl(embedUrl)) return;
+      }
+    } catch (e) {
+      /* cross-origin або помічник відсутній — йдемо у fallback нижче */
+    }
+
     const w = window.open(url, "_blank", "noopener");
     if (!w) {
       showError("Браузер заблокував відкриття вкладки. Дозволь popups для цього сайту.");
