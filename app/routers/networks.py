@@ -117,7 +117,16 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
         base_sql += " WHERE " + " AND ".join(clauses)
 
     base_sql += " ORDER BY n.frequency ASC"
-    return conn.execute(base_sql, params).fetchall()
+    rows = conn.execute(base_sql, params).fetchall()
+
+    # Прикріпити теги (як у таблиці на головній): network_id -> [tag_id, ...]
+    tag_map = _get_tag_ids_for_networks(conn, [int(r["id"]) for r in rows])
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["tag_ids"] = tag_map.get(int(r["id"]), [])
+        out.append(d)
+    return out
 
 
 def _default_all_status_ids(conn) -> list[int]:

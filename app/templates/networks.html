@@ -420,6 +420,7 @@
               <th style="width:120px">Частота</th>
               <th style="width:140px">Маска</th>
               <th>Назва р/м</th>
+              <th style="min-width:120px">Теги</th>
               <th style="width:80px" title="Перехоплень за останні 7 днів">7 днів</th>
               <th style="width:220px">Чат</th>
               <th style="width:110px">Еталонка</th>
@@ -435,6 +436,21 @@
                 <td>{{ r['frequency'] }}</td>
                 <td>{{ r['mask'] }}</td>
                 <td>УКХ р/м {{ r['unit'] }}, н.п. {{ r['zone'] }}</td>
+                <td class="net-tags-cell">
+                  {% set tids = r['tag_ids'] %}
+                  {% if tids %}
+                    {% for tid in tids %}
+                      <img
+                        class="net-tag-icon"
+                        src="/static/icons/network_tags/{{ tid }}.svg"
+                        alt="Тег {{ tid }}"
+                        onerror="this.onerror=null; this.src='/static/icons/network_tags/_default.svg';"
+                      />
+                    {% endfor %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
                 <td style="text-align:center; font-weight:600">{{ r['intercepts_7d'] }}</td>
                 <td>{{ r['chat_name'] }}</td>
                 <td class="small" style="white-space:nowrap; color:#fff">
