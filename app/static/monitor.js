@@ -1074,8 +1074,11 @@
       const other = (e.tier === 2)
         ? `<span class="cpl-cnt cpl-cnt--other" title="Висновки по інших частотах">${e.cntOther}</span>`
         : "";
+      // Чекбокс керує областю пошуку (_palScope), як і в панелі «Палітри» —
+      // позначені палітри обмежують пошук точок. Регіони на карті НЕ малюємо.
+      const checked = _palScope.has(e.p.id) ? " checked" : "";
       html += `<label class="cpl-row" title="${_esc(e.p.unit || "")}">` +
-        `<input type="checkbox" data-pid="${e.p.id}">` +
+        `<input type="checkbox" data-pid="${e.p.id}"${checked}>` +
         `<span class="cpl-name">${_esc(e.p.name || "")}</span>` +
         other +
         `<span class="cpl-cnt${hot}">${e.cntFreq}</span>` +
@@ -1087,8 +1090,8 @@
     host.querySelectorAll('input[type="checkbox"][data-pid]').forEach(cb => {
       cb.addEventListener("change", () => {
         const pid = parseInt(cb.getAttribute("data-pid"), 10);
-        const p = palettes.find(x => x.id === pid);
-        _togglePaletteRegions(pid, p ? p.regions : [], cb.checked);
+        if (cb.checked) _palScope.add(pid); else _palScope.delete(pid);
+        _palSaveScope();
       });
     });
   }
