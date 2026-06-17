@@ -430,7 +430,7 @@
             {% for r in all_rows %}
               <tr
                 style="cursor:pointer;{% if r['bg_color'] %}background: {{ r['bg_color'] }}; border-left: 4px solid {{ r['border_color'] }};{% endif %}"
-                onclick="window.open('/networks?pick={{ r['id'] }}', '_blank')"
+                onclick="window.location.href='/networks?pick={{ r['id'] }}'"
               >
                 <td>{{ loop.index }}</td>
                 <td>{{ r['frequency'] }}</td>
