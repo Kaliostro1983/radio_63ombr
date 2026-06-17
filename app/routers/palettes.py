@@ -119,14 +119,33 @@ def _other_conclusion_groups(conn, network_id: int, days: int) -> list:
     return _rows_to_mgrs_groups(rows)
 
 
+def _unit_tokens(s: str) -> list:
+    """Lowercased whitespace-split tokens of a unit string (Cyrillic-safe)."""
+    return [t for t in re.split(r"\s+", (s or "").strip().lower()) if t]
+
+
+def _is_contiguous_subseq(haystack: list, needle: list) -> bool:
+    """True if `needle` tokens appear as a contiguous run inside `haystack`."""
+    n, m = len(haystack), len(needle)
+    if not m or m > n:
+        return False
+    for i in range(n - m + 1):
+        if haystack[i:i + m] == needle:
+            return True
+    return False
+
+
 @router.get("/api/palettes/for-unit")
 def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
     """Palettes relevant to a unit, ordered narrowest → broadest, with region
     hulls inline, plus the current network's conclusion point-groups.
 
-    A palette is relevant when its unit name is a token-boundary SUFFIX of the
-    intercept's unit (e.g. unit "1 мсб 36 мсп 67 мсд 25 ЗА" matches palettes of
-    "1 мсб 36 мсп 67 мсд 25 ЗА", then "36 мсп 67 мсд 25 ЗА", then "67 мсд 25 ЗА").
+    A palette unit-tag is relevant when its tokens appear as a contiguous run
+    ANYWHERE inside the intercept's unit (token-boundary containment, not just a
+    suffix). E.g. unit "1 мсб 164 омсбр 25 ЗА" matches a palette tagged
+    "164 омсбр" even though "25 ЗА" follows it; "1 мсб 36 мсп 67 мсд 25 ЗА"
+    matches "36 мсп 67 мсд 25 ЗА", then "67 мсд 25 ЗА". Longer tags are treated
+    as narrower (more specific) and ranked first within a tier.
     The client uses `regions` (WKT polygons) + `conclusion_groups` to compute,
     per palette, how many conclusions on this frequency (last `days` days) fall
     inside the palette, and to draw the regions when its checkbox is ticked.
@@ -139,10 +158,11 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
             return {"ok": True, "palettes": [],
                     "conclusion_groups": groups, "other_groups": other_groups}
 
+        unit_tokens = _unit_tokens(unit)
         spec = {}  # unit_id -> (name, specificity_len)
         for u in conn.execute("SELECT id, name FROM palette_units").fetchall():
             nm = (u["name"] or "").strip()
-            if nm and (unit == nm or unit.endswith(" " + nm)):
+            if nm and _is_contiguous_subseq(unit_tokens, _unit_tokens(nm)):
                 spec[int(u["id"])] = (nm, len(nm))
         if not spec:
             return {"ok": True, "palettes": [],
