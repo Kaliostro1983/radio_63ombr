@@ -112,6 +112,17 @@
     m.modal.removeAttribute("aria-hidden");
   }
 
+  // Відкрити модалку перехоплень із готовим embed-URL (виклик із картки позивного).
+  window.homeOpenInterceptsUrl = function (embedUrl) {
+    const m = modalMap.intercepts;
+    if (!m || !m.modal) return false;
+    const ifr = document.getElementById(m.iframeId);
+    if (ifr) ifr.src = embedUrl;
+    m.modal.classList.remove("hidden");
+    m.modal.removeAttribute("aria-hidden");
+    return true;
+  };
+
   function closeAllHomeModals() {
     Object.keys(modalMap).forEach((k) => closeHomeModal(k, { skipHistory: true }));
   }

@@ -81,7 +81,12 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
         g.name AS group_name,
         s.name AS status_name,
         {select_colors},
-        e.updated_at AS etalon_updated_at
+        e.updated_at AS etalon_updated_at,
+        (SELECT COUNT(*) FROM messages m
+           WHERE m.network_id = n.id
+             AND m.is_valid = 1
+             AND coalesce(m.content_type, 'intercept') = 'intercept'
+             AND REPLACE(m.created_at, 'T', ' ') >= ?) AS intercepts_7d
     FROM networks n
     JOIN chats c    ON c.id = n.chat_id
     JOIN groups g   ON g.id = n.group_id
@@ -90,7 +95,9 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
     """
 
     clauses = []
-    params = []
+    # First bind param feeds the intercepts_7d subquery in the SELECT above.
+    since_7d = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+    params = [since_7d]
 
     def add_in(field, values):
         if not values:

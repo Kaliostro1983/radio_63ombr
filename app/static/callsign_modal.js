@@ -129,6 +129,14 @@
       if (window.csOpenInterceptsModal(embedUrl)) return;
     }
 
+    // На /home — відкриваємо iframe-модалку Перехоплень прямо на сторінці.
+    if (window.location.pathname === "/home" && typeof window.homeOpenInterceptsUrl === "function") {
+      const embedParams = new URLSearchParams(params.toString());
+      embedParams.set("embed", "1");
+      const embedUrl = `/intercepts-explorer?${embedParams.toString()}`;
+      if (window.homeOpenInterceptsUrl(embedUrl)) return;
+    }
+
     const w = window.open(url, "_blank", "noopener");
     if (!w) {
       showError("Браузер заблокував відкриття вкладки. Дозволь popups для цього сайту.");

@@ -343,6 +343,11 @@
   display: flex;
   flex-direction: column;
 }
+/* «Огляд» — вужча картка на 25% (1180→885, 95vw→71.25vw) */
+#homeModalOverview .home-modal-card {
+  width: 71.25vw;
+  max-width: 885px;
+}
 .home-modal-body {
   padding: 16px 20px 24px;
   overflow: auto;
@@ -499,7 +504,7 @@ thead .cas-col-total { text-align: center; }
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/home.js?v=24" defer></script>
+<script src="/static/home.js?v=25" defer></script>
 <script src="/static/casualties.js?v=14" defer></script>
 <script src="/static/overview.js?v=1" defer></script>
 {% endblock %}
