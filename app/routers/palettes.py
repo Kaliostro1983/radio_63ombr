@@ -198,6 +198,49 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
             "conclusion_groups": groups, "other_groups": other_groups}
 
 
+@router.get("/api/palettes/efficiency")
+def api_palettes_efficiency(days: int = 90):
+    """Palette efficiency: every non-archived palette with its region hulls,
+    plus ALL analytical conclusions' MGRS point-groups over the last `days`.
+
+    The client converts conclusion points to lat/lon and counts, per palette,
+    how many conclusions fall inside its region hulls (server has no MGRS
+    converter, so the geometry is done client-side — consistent with the
+    conclusion-editor palette panel).
+    """
+    try:
+        days = max(1, min(int(days or 90), 3650))
+    except (TypeError, ValueError):
+        days = 90
+    with get_conn() as conn:
+        # network_id=0 → all conclusions over the window (one group per conclusion).
+        groups = _other_conclusion_groups(conn, 0, days)
+        prows = conn.execute(
+            "SELECT id, name FROM palettes WHERE is_archived = 0 ORDER BY name"
+        ).fetchall()
+        palettes = []
+        for p in prows:
+            pid = int(p["id"])
+            regs = conn.execute(
+                "SELECT hull_wkt FROM palette_regions "
+                "WHERE palette_id = ? AND hull_wkt IS NOT NULL AND hull_wkt <> ''",
+                (pid,),
+            ).fetchall()
+            units = conn.execute(
+                "SELECT u.name FROM palette_unit_links l "
+                "JOIN palette_units u ON u.id = l.unit_id "
+                "WHERE l.palette_id = ? ORDER BY u.name",
+                (pid,),
+            ).fetchall()
+            palettes.append({
+                "id": pid,
+                "name": p["name"] or "",
+                "units": [str(u["name"]) for u in units],
+                "regions": [str(r["hull_wkt"]) for r in regs],
+            })
+    return {"ok": True, "days": days, "palettes": palettes, "conclusion_groups": groups}
+
+
 # --------------------------------------------------------------------------- #
 #  Listing
 # --------------------------------------------------------------------------- #

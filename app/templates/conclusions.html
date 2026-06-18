@@ -53,6 +53,20 @@
   .cn-cmp-marker { font-size:.72em; opacity:.6; text-transform:uppercase; }
   .cn-cmp-mgrs { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.82em; opacity:.85; margin-top:3px; }
   .cn-cmp-empty-cell { opacity:.35; }
+  /* Ефективність палітр */
+  .pe-sub { opacity:.7; margin-bottom:10px; }
+  .pe-table { width:100%; border-collapse:collapse; }
+  .pe-table th { text-align:left; padding:6px 10px; border-bottom:1px solid var(--border); font-size:.82em; opacity:.7; }
+  .pe-table td { padding:7px 10px; border-top:1px solid var(--border); }
+  .pe-idx { opacity:.5; }
+  .pe-name { font-weight:600; }
+  .pe-units { opacity:.7; font-size:.88em; }
+  .pe-cnt-cell { text-align:center; }
+  .pe-cnt { display:inline-block; min-width:34px; text-align:center; padding:2px 8px; border-radius:9px; font-weight:700; }
+  .pe-cnt--zero { background: color-mix(in srgb,#dc2626 25%, transparent); }
+  .pe-cnt--low  { background: color-mix(in srgb,#f59e0b 30%, transparent); }
+  .pe-cnt--high { background: color-mix(in srgb,#16a34a 35%, transparent); }
+  .pe-empty { opacity:.55; padding:14px 4px; }
 </style>
 <div class="page">
   {% if not is_embed %}
@@ -61,6 +75,7 @@
       <h1>Висновки</h1>
     </div>
     <div class="cn-page-actions">
+      <button id="cnOpenPaletteEff" type="button" class="secondary">Ефективність палітр</button>
       <button id="cnOpenCompare" type="button" class="secondary">Порівняння</button>
       <button id="cnOpenSettings" type="button" class="secondary">Налаштування</button>
     </div>
@@ -606,12 +621,26 @@
     </div>
   </div>
 </div>
+
+<!-- ── Modal: Ефективність палітр (висновки за 90 днів по кожній палітрі) ── -->
+<div id="cnPaletteEffModal" class="modal hidden cn-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-cn-pe-close></div>
+  <div class="modal-card cn-modal-card" role="dialog" aria-modal="true" aria-labelledby="cnPaletteEffTitle">
+    <div class="modal-head">
+      <div id="cnPaletteEffTitle" class="modal-title">Ефективність палітр · висновки за 90 днів</div>
+      <button type="button" class="secondary" data-cn-pe-close style="padding:4px 10px">✕</button>
+    </div>
+    <div id="cnPaletteEffBody" class="modal-body cn-modal-body"></div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <!-- Military symbol library (APP-6 / MIL-STD-2525) -->
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
+<script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/conclusions.js?v=25" defer></script>
 <script src="/static/quick_conclusions.js?v=16" defer></script>
 <script src="/static/conclusions_compare.js?v=1" defer></script>
+<script src="/static/palette_efficiency.js?v=1" defer></script>
 {% endblock %}
