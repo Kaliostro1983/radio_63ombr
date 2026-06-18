@@ -542,6 +542,11 @@
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || "by-id failed");
       if (!data.row) return;
+      // НВ — це позначка «позивний не визначений», а не позивний: без картки.
+      if (String(data.row.name || "").trim().toUpperCase() === "НВ") {
+        if (window.appToast) window.appToast("«НВ» — невизначений позивний, картки немає", "info", 2200);
+        return;
+      }
       fillEditModal(data.row, context);
     } catch (e) {
       console.error(e);
@@ -918,10 +923,9 @@
     }
 
     modal.addEventListener("click", function (e) {
-      const t = e.target;
-      if (t && t.getAttribute && t.getAttribute("data-close") === "1") {
-        closeModal();
-      }
+      // closest — бо клік може потрапити на <svg>/<path> усередині кнопки-іконки.
+      const t = e.target && e.target.closest ? e.target.closest('[data-close="1"]') : null;
+      if (t) closeModal();
     });
 
     if (statusModal) {

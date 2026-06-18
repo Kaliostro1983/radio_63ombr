@@ -557,9 +557,12 @@ async def api_conclusion_save(request: Request):
         # with analytical conclusions can be marked/filtered later. Rebuild from
         # the message's current callsigns (snapshot at save time).
         conn.execute("DELETE FROM callsign_conclusions WHERE conclusion_id = ?", (ac_id,))
+        # НВ — це позначка «позивний не визначений», а не позивний: не лінкуємо.
         conn.execute(
             "INSERT OR IGNORE INTO callsign_conclusions (conclusion_id, callsign_id) "
-            "SELECT ?, callsign_id FROM message_callsigns WHERE message_id = ?",
+            "SELECT ?, mc.callsign_id FROM message_callsigns mc "
+            "JOIN callsigns c ON c.id = mc.callsign_id "
+            "WHERE mc.message_id = ? AND c.name <> 'НВ'",
             (ac_id, message_id),
         )
 

@@ -893,16 +893,29 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         if _table_exists(conn, "callsign_conclusions"):
             n = conn.execute("SELECT COUNT(*) FROM callsign_conclusions").fetchone()[0]
             if not n:
+                # НВ — позначка «не визначено», не позивний → не лінкуємо.
                 safe_execute(
                     conn,
                     "INSERT OR IGNORE INTO callsign_conclusions (conclusion_id, callsign_id) "
                     "SELECT ac.id, mc.callsign_id "
                     "FROM analytical_conclusions ac "
-                    "JOIN message_callsigns mc ON mc.message_id = ac.message_id",
+                    "JOIN message_callsigns mc ON mc.message_id = ac.message_id "
+                    "JOIN callsigns c ON c.id = mc.callsign_id "
+                    "WHERE c.name <> 'НВ'",
                     module="app.core.db",
                     function="_run_lightweight_migrations",
                     stage="backfill:callsign_conclusions",
                 )
+            # Idempotent cleanup: НВ links must never exist (self-healing if any
+            # slipped in before this rule, or from a pre-cleanup backfill).
+            safe_execute(
+                conn,
+                "DELETE FROM callsign_conclusions WHERE callsign_id IN "
+                "(SELECT id FROM callsigns WHERE name = 'НВ')",
+                module="app.core.db",
+                function="_run_lightweight_migrations",
+                stage="cleanup:callsign_conclusions:НВ",
+            )
     except sqlite3.DatabaseError:
         pass
     # User-configurable "Тип" options for Delta reports (shared across all conclusion types)
