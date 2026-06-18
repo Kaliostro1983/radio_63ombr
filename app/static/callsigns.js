@@ -426,11 +426,11 @@
   function renderCallsignNameCell(row) {
     return `
       <div class="callsign-name" style="font-weight:700">
-        <img
+        <span class="cs-ico-wrap" data-concl-cs-id="${row.callsign_id || ""}"><img
           class="callsign-ico"
           src="/static/icons/callsign_statuses/${row.status_id || "_default"}.svg"
           alt=""
-        >
+        ></span>
         <span>${escapeHtml(row.name || "")}</span>
       </div>
     `;
@@ -516,6 +516,7 @@
       });
       elTbody.appendChild(tr);
     });
+    if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(elTbody);
   }
 
   function renderSearchTable(rows) {
@@ -546,6 +547,7 @@
       });
       elSearchTbody.appendChild(tr);
     });
+    if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(elSearchTbody);
   }
 
   async function runQuery() {
@@ -670,6 +672,7 @@
       });
       elWantedTbody.appendChild(tr);
     });
+    if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(elWantedTbody);
   }
 
   async function runWanted() {

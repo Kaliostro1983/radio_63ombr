@@ -31,6 +31,7 @@
   const mergeConfirm = $("csMergeConfirm");
   const mergeCancel = $("csMergeCancel");
   const btnOpenIntercepts = $("csOpenIntercepts");
+  const btnOpenConclusions = $("csOpenConclusions");
   const btnOpenLinks = $("csOpenLinks");
   const quickWrap = $("csQuickId");
 
@@ -488,6 +489,11 @@
     renderQuickIdButtons();
     if (btnDelete) btnDelete.style.display = "inline-block";
 
+    // Кнопка «Висновки» — лише якщо по позивному є аналітичні висновки.
+    if (btnOpenConclusions) {
+      btnOpenConclusions.classList.toggle("hidden", !row.has_conclusions);
+    }
+
     openModal();
     setTimeout(function () {
       if (modalName) modalName.focus();
@@ -525,6 +531,7 @@
     renderSourceSelect(CURRENT_SOURCE_ID);
     setPhotoForStatus(CURRENT_STATUS_ID);
     if (btnDelete) btnDelete.style.display = "none";
+    if (btnOpenConclusions) btnOpenConclusions.classList.add("hidden");
 
     if (modalNetworkQuery) modalNetworkQuery.value = "";
     renderNetworkSelect([], CURRENT_NETWORK_ID);
@@ -769,6 +776,16 @@
     }
     if (btnOpenIntercepts) {
       btnOpenIntercepts.addEventListener("click", openInterceptsForCurrent);
+    }
+    if (btnOpenConclusions) {
+      btnOpenConclusions.addEventListener("click", function () {
+        const cid = modalId && modalId.value ? parseInt(modalId.value, 10) : 0;
+        const cname = (modalName && modalName.value ? String(modalName.value) : "").trim();
+        if (!cid) return;
+        if (window.openConclusionsView) {
+          window.openConclusionsView({ callsign_id: cid, callsign: cname });
+        }
+      });
     }
     if (btnOpenLinks) {
       btnOpenLinks.addEventListener("click", openLinksForCurrent);

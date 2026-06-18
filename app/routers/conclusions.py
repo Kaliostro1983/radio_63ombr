@@ -109,11 +109,15 @@ def api_conclusions_list(
     date_to: str = "",
     network_id: int = 0,
     type_id: int = -1,
+    callsign_id: int = 0,
+    callsign: str = "",
 ):
     """Return analytical conclusions with optional filters.
 
     date_from / date_to accept either 'YYYY-MM-DD' (plain date) or
     'YYYY-MM-DDTHH:MM' / 'YYYY-MM-DDTHH:MM:SS' (datetime-local from browser).
+    callsign_id filters to conclusions tied to that callsign (exact, via the
+    callsign_conclusions link table); callsign filters by callsign name (LIKE).
     """
     start = _parse_filter_dt(date_from, "00:00:00")
     end   = _parse_filter_dt(date_to,   "23:59:59")
@@ -127,6 +131,16 @@ def api_conclusions_list(
     if type_id >= 0:
         wheres.append("ac.type_id = ?")
         params.append(type_id)
+    if callsign_id:
+        wheres.append("ac.id IN (SELECT conclusion_id FROM callsign_conclusions WHERE callsign_id = ?)")
+        params.append(int(callsign_id))
+    cs_name = (callsign or "").strip()
+    if cs_name:
+        wheres.append(
+            "ac.id IN (SELECT cc.conclusion_id FROM callsign_conclusions cc "
+            "JOIN callsigns c ON c.id = cc.callsign_id WHERE c.name LIKE ?)"
+        )
+        params.append(f"%{cs_name}%")
 
     where_sql = " AND ".join(wheres)
 

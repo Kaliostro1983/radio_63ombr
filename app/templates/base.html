@@ -132,6 +132,7 @@
         <div id="csModalTitle" style="font-weight:700">—</div>
       </div>
       <div style="display:flex; gap:10px; align-items:center">
+        <button id="csOpenConclusions" class="secondary hidden" type="button">Висновки</button>
         <button id="csOpenIntercepts" class="secondary" type="button">Перехоплення</button>
         <button id="csOpenLinks" class="secondary" type="button">Зв'язки</button>
         <button class="secondary" type="button" data-close="1">Закрити</button>
@@ -241,6 +242,61 @@
     </div>
   </div>
 </div>
+
+<!-- Shared conclusions view modal (iframe → /conclusions?embed=1&pane=view&…).
+     Opened from the callsign modal "Висновки" button and the Висновки "Пошук". -->
+<div id="globalConclModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-global-concl-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="globalConclTitle"
+       style="max-width:1280px; width:96vw">
+    <div class="modal-head">
+      <div id="globalConclTitle" class="modal-title">Висновки</div>
+      <button type="button" class="secondary" data-global-concl-close style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <iframe id="globalConclFrame" src="about:blank" title="Висновки"
+              style="width:100%; height:82vh; border:0; display:block; background:var(--bg)"></iframe>
+    </div>
+  </div>
+</div>
+<script>
+  // Глобальна модалка перегляду висновків. params: { callsign_id, callsign,
+  // network_id, date_from, date_to, type_id } — усі необов'язкові.
+  window.openConclusionsView = function (params) {
+    var modal = document.getElementById("globalConclModal");
+    var frame = document.getElementById("globalConclFrame");
+    if (!modal || !frame) return false;
+    var qs = new URLSearchParams({ embed: "1", pane: "view" });
+    params = params || {};
+    Object.keys(params).forEach(function (k) {
+      var v = params[k];
+      if (v !== undefined && v !== null && String(v) !== "") qs.set(k, String(v));
+    });
+    var title = document.getElementById("globalConclTitle");
+    if (title) title.textContent = params.callsign ? ("Висновки · " + params.callsign) : "Висновки";
+    frame.src = "/conclusions?" + qs.toString();
+    modal.classList.remove("hidden");
+    modal.removeAttribute("aria-hidden");
+    if (window.__modalToFront) window.__modalToFront(modal);
+    return true;
+  };
+  (function () {
+    var modal = document.getElementById("globalConclModal");
+    if (!modal) return;
+    function close() {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+      var frame = document.getElementById("globalConclFrame");
+      if (frame) frame.src = "about:blank";
+    }
+    modal.querySelectorAll("[data-global-concl-close]").forEach(function (el) {
+      el.addEventListener("click", function (e) { e.stopPropagation(); close(); });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.classList.contains("hidden")) close();
+    });
+  })();
+</script>
 
 <!-- Shared landmark edit modal (/landmarks, /intercepts-explorer) -->
 <div id="lmModal" class="modal hidden" aria-hidden="true">
@@ -369,7 +425,7 @@
 <script src="/static/vendor/leaflet/leaflet.js" defer></script>
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/vendor/proj4.js" defer></script>
-<script src="/static/callsign_modal.js?v=17" defer></script>
+<script src="/static/callsign_modal.js?v=18" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 /* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається

@@ -163,6 +163,8 @@
   const networkInput   = $("cnNetworkInput");
   const networkDrop    = $("cnNetworkDrop");
   const networkId      = $("cnNetworkId");
+  const callsignInput  = $("cnCallsign");
+  const callsignId     = $("cnCallsignId");
   const typeSel        = $("cnTypeSel");
   const cnShowBtn      = $("cnShowBtn");
   const cnCountVal     = $("cnCountVal");
@@ -688,6 +690,9 @@
     if (dateTo.value)   params.set("date_to",   dateTo.value);
     if (networkId.value) params.set("network_id", networkId.value);
     if (typeSel.value !== "-1") params.set("type_id", typeSel.value);
+    // Позивний: точний id (із префільтра) має пріоритет над введеним ім'ям.
+    if (callsignId && callsignId.value) params.set("callsign_id", callsignId.value);
+    else if (callsignInput && callsignInput.value.trim()) params.set("callsign", callsignInput.value.trim());
 
     try {
       const res  = await fetch("/api/conclusions?" + params);
@@ -1911,11 +1916,44 @@
    *  ?tab=settings у URL — відкриваємо модалку одразу при заході.
    *  embed-режим (cnPaneQuick присутній) — нічого не авто-завантажуємо.
    * ────────────────────────────────────────────── */
+  const usp = new URLSearchParams(location.search);
+  const urlTab = usp.get("tab");
+  const wantView = usp.get("pane") === "view";   // embed-перегляд висновків (модалка)
   const isEmbedMode = !!$("cnPaneQuick");
-  const urlTab = new URLSearchParams(location.search).get("tab");
 
-  if (isEmbedMode) {
-    // У embed (iframe /conclusions?tab=quick&embed=1) — quick_conclusions.js
+  // Ручне редагування поля «Позивний» скидає точний id (фільтр за ім'ям).
+  if (callsignInput) {
+    callsignInput.addEventListener("input", () => { if (callsignId) callsignId.value = ""; });
+  }
+  // Кнопка «Пошук» у шапці — відкрити модалку перегляду висновків.
+  const cnOpenSearchBtn = $("cnOpenSearch");
+  if (cnOpenSearchBtn) {
+    cnOpenSearchBtn.addEventListener("click", () => {
+      if (window.openConclusionsView) window.openConclusionsView({});
+    });
+  }
+
+  function applyUrlFiltersAndLoad() {
+    const dfrom = usp.get("date_from");
+    const dto   = usp.get("date_to");
+    // Без явних дат у модалці — широке вікно (рік), щоб показати всі висновки.
+    if (dfrom) { dateFrom.value = dfrom; }
+    else { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setHours(0, 0, 0, 0); dateFrom.value = localDatetimeString(d); }
+    if (dto) { dateTo.value = dto; }
+    else { const d = new Date(); d.setHours(23, 59, 0, 0); dateTo.value = localDatetimeString(d); }
+    if (usp.get("network_id") && networkId) networkId.value = usp.get("network_id");
+    if (usp.get("type_id") && typeSel) typeSel.value = usp.get("type_id");
+    if (usp.get("callsign_id") && callsignId) callsignId.value = usp.get("callsign_id");
+    if (usp.get("callsign") && callsignInput) callsignInput.value = usp.get("callsign");
+    loadConclusions();
+  }
+
+  if (wantView) {
+    // Embed-режим перегляду висновків: префіл фільтрів з URL + завантаження.
+    loadNetworksForFilter();
+    loadTypesForFilter().then(applyUrlFiltersAndLoad).catch(applyUrlFiltersAndLoad);
+  } else if (isEmbedMode) {
+    // quick-embed (iframe /conclusions?embed=1&tab=quick) — quick_conclusions.js
     // самостійно піклується про свою ініціалізацію.
   } else {
     loadNetworksForFilter();

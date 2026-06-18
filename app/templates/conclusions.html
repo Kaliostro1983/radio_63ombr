@@ -75,6 +75,7 @@
       <h1>Висновки</h1>
     </div>
     <div class="cn-page-actions">
+      <button id="cnOpenSearch" type="button" class="secondary">Пошук</button>
       <button id="cnOpenPaletteEff" type="button" class="secondary">Ефективність палітр</button>
       <button id="cnOpenCompare" type="button" class="secondary">Порівняння</button>
       <button id="cnOpenSettings" type="button" class="secondary">Налаштування</button>
@@ -96,7 +97,7 @@
       <!-- ===== ПЕРЕГЛЯД (основний контент) ===== -->
       <section
         id="cnPaneView"
-        class="{% if is_embed %}hidden{% endif %}"
+        class="{% if is_embed and request.query_params.get('pane') != 'view' %}hidden{% endif %}"
         role="region"
         aria-label="Перегляд"
       >
@@ -130,6 +131,13 @@
                 <div id="cnNetworkDrop" class="cn-ac-drop hidden"></div>
                 <input type="hidden" id="cnNetworkId" value="" />
               </div>
+            </div>
+
+            <!-- Позивний -->
+            <div class="field cn-filter-field--net">
+              <label for="cnCallsign">Позивний</label>
+              <input id="cnCallsign" type="text" placeholder="— всі —" autocomplete="off" />
+              <input type="hidden" id="cnCallsignId" value="" />
             </div>
 
             <!-- Тип -->
@@ -639,7 +647,7 @@
 <!-- Military symbol library (APP-6 / MIL-STD-2525) -->
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
 <script src="/static/vendor/mgrs.min.js" defer></script>
-<script src="/static/conclusions.js?v=25" defer></script>
+<script src="/static/conclusions.js?v=26" defer></script>
 <script src="/static/quick_conclusions.js?v=16" defer></script>
 <script src="/static/conclusions_compare.js?v=1" defer></script>
 <script src="/static/palette_efficiency.js?v=2" defer></script>
