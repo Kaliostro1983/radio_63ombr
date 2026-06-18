@@ -465,8 +465,15 @@ def api_callsign_by_id(id: int):
             (cid,),
         ).fetchone()
 
-    if not row:
-        return JSONResponse({"ok": True, "row": None})
+        if not row:
+            return JSONResponse({"ok": True, "row": None})
+
+        has_conclusions = bool(
+            conn.execute(
+                "SELECT 1 FROM callsign_conclusions WHERE callsign_id = ? LIMIT 1",
+                (cid,),
+            ).fetchone()
+        )
 
     return {
         "ok": True,
@@ -481,8 +488,35 @@ def api_callsign_by_id(id: int):
             "source_label": row["source_label"] or "",
             "frequency": row["frequency"] or "Невідомо",
             "unit": row["unit"] or "Невідомо",
+            "has_conclusions": has_conclusions,
         },
     }
+
+
+@router.get("/api/callsigns/conclusion-flags")
+def api_callsign_conclusion_flags(ids: str = ""):
+    """Return which of the given callsign ids have analytical conclusions.
+
+    Query: ids=1,2,3  →  {"ok": True, "with_conclusions": [1, 3]}
+    Used to overlay a badge on callsign status icons in lists.
+    """
+    id_list = []
+    for part in (ids or "").split(","):
+        part = part.strip()
+        if part.isdigit():
+            id_list.append(int(part))
+    if not id_list:
+        return {"ok": True, "with_conclusions": []}
+
+    id_list = list(dict.fromkeys(id_list))  # de-dup, keep order
+    placeholders = ",".join("?" * len(id_list))
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT DISTINCT callsign_id FROM callsign_conclusions "
+            f"WHERE callsign_id IN ({placeholders})",
+            tuple(id_list),
+        ).fetchall()
+    return {"ok": True, "with_conclusions": [int(r["callsign_id"]) for r in rows]}
 
 
 @router.get("/api/callsigns/{callsign_id}/graph")

@@ -389,6 +389,21 @@ CREATE TABLE IF NOT EXISTS analytical_conclusions (
 CREATE INDEX IF NOT EXISTS idx_analytical_conclusions_network_dt
     ON analytical_conclusions(network_id, created_at DESC);
 
+-- Link table: which callsigns are tied to each analytical conclusion.
+-- A conclusion is linked to every callsign that appears on its intercept
+-- (message), captured at save time. Used to mark callsigns that already have
+-- analytical conclusions (icon overlay, "Висновки" button, filtering).
+CREATE TABLE IF NOT EXISTS callsign_conclusions (
+    conclusion_id INTEGER NOT NULL,
+    callsign_id   INTEGER NOT NULL,
+    PRIMARY KEY(conclusion_id, callsign_id),
+    FOREIGN KEY(conclusion_id) REFERENCES analytical_conclusions(id) ON DELETE CASCADE,
+    FOREIGN KEY(callsign_id)   REFERENCES callsigns(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_callsign_conclusions_callsign
+    ON callsign_conclusions(callsign_id);
+
 -- Isolated store for "Батальйони 63" conclusions (separators ОБТВР / 60 ОМБр).
 -- Used ONLY for the cross-group comparison report; kept out of the operational
 -- pipeline (no messages link, no callsign graph, no classification, no map, no
@@ -852,6 +867,26 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
             function="_run_lightweight_migrations",
             stage=f"seed_color:conclusion_types:{_ct_name}",
         )
+    # One-time backfill of callsign_conclusions for conclusions that existed
+    # before the link table was introduced. Guarded by emptiness so it runs once
+    # and never re-adds links that were later removed (links are maintained on
+    # conclusion save/delete going forward).
+    try:
+        if _table_exists(conn, "callsign_conclusions"):
+            n = conn.execute("SELECT COUNT(*) FROM callsign_conclusions").fetchone()[0]
+            if not n:
+                safe_execute(
+                    conn,
+                    "INSERT OR IGNORE INTO callsign_conclusions (conclusion_id, callsign_id) "
+                    "SELECT ac.id, mc.callsign_id "
+                    "FROM analytical_conclusions ac "
+                    "JOIN message_callsigns mc ON mc.message_id = ac.message_id",
+                    module="app.core.db",
+                    function="_run_lightweight_migrations",
+                    stage="backfill:callsign_conclusions",
+                )
+    except sqlite3.DatabaseError:
+        pass
     # User-configurable "Тип" options for Delta reports (shared across all conclusion types)
     safe_execute(
         conn,

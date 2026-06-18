@@ -534,6 +534,16 @@ async def api_conclusion_save(request: Request):
             )
             ac_id = int(cur.lastrowid)
             created = True
+
+        # Link this conclusion to every callsign on its intercept, so callsigns
+        # with analytical conclusions can be marked/filtered later. Rebuild from
+        # the message's current callsigns (snapshot at save time).
+        conn.execute("DELETE FROM callsign_conclusions WHERE conclusion_id = ?", (ac_id,))
+        conn.execute(
+            "INSERT OR IGNORE INTO callsign_conclusions (conclusion_id, callsign_id) "
+            "SELECT ?, callsign_id FROM message_callsigns WHERE message_id = ?",
+            (ac_id, message_id),
+        )
         conn.commit()
 
         t = conn.execute(
@@ -607,6 +617,7 @@ def api_conclusion_delete(ac_id: int):
         ).fetchone()
         if not row:
             return JSONResponse({"ok": False, "error": "Висновок не знайдено"}, status_code=404)
+        conn.execute("DELETE FROM callsign_conclusions WHERE conclusion_id = ?", (ac_id,))
         conn.execute("DELETE FROM analytical_conclusions WHERE id = ?", (ac_id,))
         conn.commit()
     return {"ok": True, "id": ac_id}
