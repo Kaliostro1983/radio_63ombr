@@ -200,32 +200,33 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
 
 @router.get("/api/palettes/efficiency")
 def api_palettes_efficiency(days: int = 90):
-    """Palette efficiency: every non-archived palette with its region hulls,
-    plus ALL analytical conclusions' MGRS point-groups over the last `days`.
+    """Palette efficiency: for each non-archived palette, how many conclusions
+    over the last `days` were made USING that palette — i.e. the operator
+    searched a code, picked one of the palette's points, and saved the
+    conclusion. Counted from conclusion_palette_points (recorded at save time).
 
-    The client converts conclusion points to lat/lon and counts, per palette,
-    how many conclusions fall inside its region hulls (server has no MGRS
-    converter, so the geometry is done client-side — consistent with the
-    conclusion-editor palette panel).
+    Returns per palette: `conclusions` (distinct conclusions that used a point
+    of this palette) and `points` (total effective point selections).
     """
     try:
         days = max(1, min(int(days or 90), 3650))
     except (TypeError, ValueError):
         days = 90
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
-        # network_id=0 → all conclusions over the window (one group per conclusion).
-        groups = _other_conclusion_groups(conn, 0, days)
         prows = conn.execute(
             "SELECT id, name FROM palettes WHERE is_archived = 0 ORDER BY name"
         ).fetchall()
         palettes = []
         for p in prows:
             pid = int(p["id"])
-            regs = conn.execute(
-                "SELECT hull_wkt FROM palette_regions "
-                "WHERE palette_id = ? AND hull_wkt IS NOT NULL AND hull_wkt <> ''",
-                (pid,),
-            ).fetchall()
+            cnt = conn.execute(
+                "SELECT COUNT(DISTINCT cpp.conclusion_id) AS c, COUNT(*) AS pts "
+                "FROM conclusion_palette_points cpp "
+                "JOIN analytical_conclusions ac ON ac.id = cpp.conclusion_id "
+                "WHERE cpp.palette_id = ? AND REPLACE(ac.created_at,'T',' ') >= ?",
+                (pid, start),
+            ).fetchone()
             units = conn.execute(
                 "SELECT u.name FROM palette_unit_links l "
                 "JOIN palette_units u ON u.id = l.unit_id "
@@ -236,9 +237,10 @@ def api_palettes_efficiency(days: int = 90):
                 "id": pid,
                 "name": p["name"] or "",
                 "units": [str(u["name"]) for u in units],
-                "regions": [str(r["hull_wkt"]) for r in regs],
+                "conclusions": int(cnt["c"]) if cnt and cnt["c"] is not None else 0,
+                "points": int(cnt["pts"]) if cnt and cnt["pts"] is not None else 0,
             })
-    return {"ok": True, "days": days, "palettes": palettes, "conclusion_groups": groups}
+    return {"ok": True, "days": days, "palettes": palettes}
 
 
 # --------------------------------------------------------------------------- #

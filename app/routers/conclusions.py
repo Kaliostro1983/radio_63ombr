@@ -558,6 +558,22 @@ async def api_conclusion_save(request: Request):
             "SELECT ?, callsign_id FROM message_callsigns WHERE message_id = ?",
             (ac_id, message_id),
         )
+
+        # Palette points the operator selected for this conclusion (palette
+        # efficiency). Rebuild from the request (snapshot at save time).
+        conn.execute("DELETE FROM conclusion_palette_points WHERE conclusion_id = ?", (ac_id,))
+        for pp in (payload.get("palette_points") or []):
+            try:
+                pid = int(pp.get("palette_id"))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if not pid:
+                continue
+            conn.execute(
+                "INSERT OR IGNORE INTO conclusion_palette_points "
+                "(conclusion_id, palette_id, point_code, mgrs) VALUES (?, ?, ?, ?)",
+                (ac_id, pid, str(pp.get("code") or ""), str(pp.get("mgrs") or "")),
+            )
         conn.commit()
 
         t = conn.execute(

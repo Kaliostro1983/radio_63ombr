@@ -467,13 +467,15 @@
 
   /* Додати фіксовану точку (з Enter або з "Вибрати точку").
      label — назва точки палітри (показується в чипі замість координати). */
-  function _addFixedMarker(map, lat, lon, label) {
+  function _addFixedMarker(map, lat, lon, label, palette) {
     const marker = L.marker([lat, lon], {
       icon: _iconPicked(),
       bubblingMouseEvents: false,
     }).addTo(map);
 
-    const entry = { marker, lat, lon, chipEl: null, label: label || null };
+    // palette (необов'язково) — { id, code }: точка взята з палітри й буде
+    // зарахована цій палітрі як ефективна при збереженні висновку.
+    const entry = { marker, lat, lon, chipEl: null, label: label || null, palette: palette || null };
 
     const chipEl = _createCoordChip(lat, lon, () => {
       entry.marker.remove();
@@ -780,11 +782,21 @@
       if (window.appToast) window.appToast("Заповніть поля для збереження: " + miss.join(", "), "warn", 3400);
       return Promise.resolve(false);
     }
+    // Точки палітр, обрані оператором у цьому висновку (для обліку ефективності
+    // палітр). Беремо лише фіксовані маркери, позначені палітрою.
+    const palettePoints = _conclFixedMarkers
+      .filter(e => e && e.palette && e.palette.id)
+      .map(e => ({
+        palette_id: e.palette.id,
+        code:       e.palette.code || "",
+        mgrs:       _latLonToMgrs(e.lat, e.lon),
+      }));
     const body = {
       message_id:      _currentItem.id,
       conclusion_text: (document.getElementById("conclText").value || "").trim(),
       mgrs:            _collectConclMgrs(),
       intercept_text:  (document.getElementById("conclInterceptTa")?.value || "").trim(),
+      palette_points:  palettePoints,
     };
     return fetch("/api/conclusions", {
       method: "POST",
@@ -4428,7 +4440,8 @@
           // ("18", "Т-3") в чіпі більше не несе нової інформації.
           // Інші варіанти ТОГО Ж пошуку прибираються разом із своїм
           // search-чіпом; інші пошуки (інші коди) лишаються на карті.
-          _addFixedMarker(map, p.lat, p.lon);
+          _addFixedMarker(map, p.lat, p.lon, null,
+            p.palette_id ? { id: p.palette_id, code: p.code || "" } : null);
           if (chipEntry) _palRemoveSearchChip(chipEntry);
           else _palClearMatchMarkers();  // legacy fallback
           const ci = document.getElementById("conclCoordInput");
@@ -4483,7 +4496,7 @@
       const pts = [];
       results.forEach(g => {
         if (_palScope.size && !_palScope.has(g.palette_id)) return;
-        g.points.forEach(pt => { if (pt.lat != null && pt.lon != null) pts.push({ ...pt, palette_name: g.palette_name }); });
+        g.points.forEach(pt => { if (pt.lat != null && pt.lon != null) pts.push({ ...pt, palette_name: g.palette_name, palette_id: g.palette_id }); });
       });
       pts.forEach(p => { const m = _palPlaceVariant(_conclMap, p, entry); if (m) allMarkers.push(m); });
     }
@@ -4522,7 +4535,7 @@
     let pts = [];
     results.forEach(g => {
       if (_palScope.size && !_palScope.has(g.palette_id)) return;
-      g.points.forEach(pt => pts.push({ ...pt, palette_name: g.palette_name }));
+      g.points.forEach(pt => pts.push({ ...pt, palette_name: g.palette_name, palette_id: g.palette_id }));
     });
     pts = pts.filter(p => p.lat != null && p.lon != null);
 

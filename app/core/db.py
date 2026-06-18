@@ -404,6 +404,24 @@ CREATE TABLE IF NOT EXISTS callsign_conclusions (
 CREATE INDEX IF NOT EXISTS idx_callsign_conclusions_callsign
     ON callsign_conclusions(callsign_id);
 
+-- Palette efficiency: each palette point an operator SELECTED while building a
+-- conclusion (searched a code → picked a point → saved). One row per selected
+-- point. "Скільки висновків зроблено по палітрі" = COUNT(DISTINCT conclusion_id)
+-- per palette_id. Populated on conclusion save; no historical backfill (the
+-- selection action wasn't recorded before).
+CREATE TABLE IF NOT EXISTS conclusion_palette_points (
+    conclusion_id INTEGER NOT NULL,
+    palette_id    INTEGER NOT NULL,
+    point_code    TEXT NOT NULL DEFAULT '',
+    mgrs          TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY(conclusion_id, palette_id, mgrs),
+    FOREIGN KEY(conclusion_id) REFERENCES analytical_conclusions(id) ON DELETE CASCADE,
+    FOREIGN KEY(palette_id)    REFERENCES palettes(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_conclusion_palette_points_palette
+    ON conclusion_palette_points(palette_id);
+
 -- Isolated store for "Батальйони 63" conclusions (separators ОБТВР / 60 ОМБр).
 -- Used ONLY for the cross-group comparison report; kept out of the operational
 -- pipeline (no messages link, no callsign graph, no classification, no map, no
