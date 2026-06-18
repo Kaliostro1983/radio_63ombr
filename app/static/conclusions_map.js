@@ -5,9 +5,11 @@
 
 // ── URL params ────────────────────────────────────────────────
 const _params    = new URLSearchParams(location.search);
-const _dateFrom  = _params.get("date_from") || "";
-const _dateTo    = _params.get("date_to")   || "";
-const _networkId = parseInt(_params.get("network_id") || "0", 10);
+const _dateFrom   = _params.get("date_from") || "";
+const _dateTo     = _params.get("date_to")   || "";
+const _networkId  = parseInt(_params.get("network_id") || "0", 10);
+const _callsignId = parseInt(_params.get("callsign_id") || "0", 10);
+const _callsign   = _params.get("callsign") || "";
 
 // ── State ─────────────────────────────────────────────────────
 let _map = null;
@@ -315,9 +317,11 @@ function applyTypeFilter() {
 // ── Load conclusions ──────────────────────────────────────────
 async function loadConclusions() {
   const qs = new URLSearchParams();
-  if (_dateFrom)  qs.set("date_from",  _dateFrom);
-  if (_dateTo)    qs.set("date_to",    _dateTo);
-  if (_networkId) qs.set("network_id", _networkId);
+  if (_dateFrom)   qs.set("date_from",  _dateFrom);
+  if (_dateTo)     qs.set("date_to",    _dateTo);
+  if (_networkId)  qs.set("network_id", _networkId);
+  if (_callsignId) qs.set("callsign_id", _callsignId);
+  else if (_callsign) qs.set("callsign", _callsign);
 
   const resp = await fetch(`/api/conclusions?${qs}`);
   const data = await resp.json();

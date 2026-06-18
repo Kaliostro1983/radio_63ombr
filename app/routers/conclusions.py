@@ -162,7 +162,10 @@ def api_conclusions_list(
                 n.mask,
                 n.unit,
                 msg.body_text,
-                msg.net_description
+                msg.net_description,
+                (SELECT GROUP_CONCAT(c.name, ', ')
+                   FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id
+                  WHERE mc.message_id = ac.message_id) AS callsigns
             FROM analytical_conclusions ac
             LEFT JOIN conclusion_types ct  ON ct.id  = ac.type_id
             LEFT JOIN networks n           ON n.id   = ac.network_id
@@ -187,6 +190,7 @@ def api_conclusions_list(
             "created_at":      r["created_at"] or "",
             "conclusion_text": r["conclusion_text"] or "",
             "body_text":       r["body_text"] or "",
+            "callsigns":       r["callsigns"] or "",
             "net_description": r["net_description"] or "",
             "mgrs":            mgrs,
             "type_id":         int(r["type_id"]) if r["type_id"] is not None else 0,

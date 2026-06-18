@@ -720,8 +720,11 @@
           .map((m) => `<code class="cn-mgrs-code">${escapeHtml(m)}</code>`)
           .join(" ");
         const conclusionFmt = escapeHtml(formatConclusion(r.conclusion_text || ""));
-        const interceptHtml = r.body_text
-          ? `<div class="cn-intercept-cell">${escapeHtml(r.body_text)}</div>`
+        const csLine = r.callsigns
+          ? `<div class="cn-cs-line" title="Позивні перехоплення">${escapeHtml(r.callsigns)}</div>`
+          : "";
+        const interceptHtml = (r.body_text || r.callsigns)
+          ? `<div class="cn-intercept-cell">${csLine}${escapeHtml(r.body_text || "")}</div>`
           : `<span style="opacity:.4">—</span>`;
 
         // Delta button: gray = already sent, red = not yet sent
@@ -812,6 +815,8 @@
       if (dateFrom.value)   qs.set("date_from",  dateFrom.value);
       if (dateTo.value)     qs.set("date_to",    dateTo.value);
       if (networkId.value)  qs.set("network_id", networkId.value);
+      if (callsignId && callsignId.value) qs.set("callsign_id", callsignId.value);
+      else if (callsignInput && callsignInput.value.trim()) qs.set("callsign", callsignInput.value.trim());
       window.open("/conclusions/map?" + qs.toString(), "_blank");
     });
   }

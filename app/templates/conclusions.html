@@ -68,6 +68,8 @@
   .pe-cnt--high { background: color-mix(in srgb,#16a34a 35%, transparent); }
   .pe-pts { display:inline-block; min-width:26px; text-align:center; opacity:.7; font-weight:600; }
   .pe-empty { opacity:.55; padding:14px 4px; }
+  /* Позивні перехоплення у списку висновків */
+  .cn-cs-line { font-weight:700; margin-bottom:4px; color:#cbd5e1; }
 </style>
 <div class="page">
   {% if not is_embed %}
@@ -318,8 +320,8 @@
       </div><!-- /cn-modal-card -->
       </div><!-- /cnCompareModal -->
 
-      {% if is_embed %}
-      <!-- ===== ШВИДКО (рендеримо лише в embed-режимі — використовується як iframe з /monitor) ===== -->
+      {% if is_embed and request.query_params.get('pane') != 'view' %}
+      <!-- ===== ШВИДКО (лише в embed-режимі «швидко», НЕ в pane=view) ===== -->
       <section
         id="cnPaneQuick"
         role="region"
@@ -648,7 +650,7 @@
 <!-- Military symbol library (APP-6 / MIL-STD-2525) -->
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
 <script src="/static/vendor/mgrs.min.js" defer></script>
-<script src="/static/conclusions.js?v=26" defer></script>
+<script src="/static/conclusions.js?v=27" defer></script>
 <script src="/static/quick_conclusions.js?v=16" defer></script>
 <script src="/static/conclusions_compare.js?v=1" defer></script>
 <script src="/static/palette_efficiency.js?v=3" defer></script>
