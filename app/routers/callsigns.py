@@ -1110,6 +1110,17 @@ async def api_callsign_merge(request: Request):
                 (target_id, source_id),
             )
 
+            # Move analytical-conclusion links from source to target, so the
+            # correct callsign inherits the wrong one's conclusions (otherwise
+            # deleting source would drop them via ON DELETE CASCADE). OR IGNORE
+            # dedups where target already links the same conclusion; then drop
+            # any leftover source rows.
+            conn.execute(
+                "UPDATE OR IGNORE callsign_conclusions SET callsign_id = ? WHERE callsign_id = ?",
+                (target_id, source_id),
+            )
+            conn.execute("DELETE FROM callsign_conclusions WHERE callsign_id = ?", (source_id,))
+
             # Remove source from other tables.
             conn.execute("DELETE FROM callsign_status_map WHERE callsign_id = ?", (source_id,))
             conn.execute("DELETE FROM callsigns WHERE id = ?", (source_id,))
