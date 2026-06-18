@@ -1029,6 +1029,16 @@ async def api_callsign_delete(request: Request):
                     received_at=received_at,
                 )
 
+            # The edge rebuild above re-links callsigns by NORMALIZED name via
+            # upsert_callsign. If another message_callsign on the same message has
+            # a near-duplicate name that normalizes to this callsign (e.g.
+            # "— Беркут на приеме" → "- БЕРКУТ НА ПРИЕМЕ"), the rebuild re-creates
+            # a message_callsigns row pointing here AFTER the reassignment to НВ,
+            # which would block the FK delete. Drop any such residual references
+            # (НВ is already linked from the reassignment, so messages keep a
+            # callsign).
+            conn.execute("DELETE FROM message_callsigns WHERE callsign_id = ?", (callsign_id,))
+
             # Finally remove old callsign row (no longer referenced by message_callsigns).
             conn.execute("DELETE FROM callsign_status_map WHERE callsign_id = ?", (callsign_id,))
             conn.execute("DELETE FROM callsigns WHERE id = ?", (callsign_id,))
