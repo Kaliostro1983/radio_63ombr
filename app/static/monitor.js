@@ -1049,19 +1049,19 @@
     }
   }
 
-  function _renderConclPalettes(palettes, freqGroups, otherGroups) {
+  function _renderConclPalettes(palettes) {
     const host = document.getElementById("conclPalList");
     if (!host) return;
     if (!palettes || !palettes.length) { host.classList.add("hidden"); host.innerHTML = ""; return; }
 
-    // Для кожної палітри рахуємо висновки по ЦІЙ частоті та по ІНШИХ частотах
-    // і визначаємо «ярус» (tier):
-    //   1 — є висновки саме по цій частоті;
-    //   2 — висновків по цій частоті нема, але є по інших;
-    //   3 — висновків нема взагалі (просто палітра підрозділу).
+    // Лічильники приходять із сервера (conclusion_palette_points): скільки
+    // висновків зроблено САМЕ ПО ЦІЙ ПАЛІТРІ (обрано її точку), а не геометрично.
+    //   1 — є висновки по цій частоті;
+    //   2 — по цій частоті нема, але є по інших;
+    //   3 — висновків нема (просто палітра підрозділу).
     const enriched = palettes.map(p => {
-      const cntFreq  = _palConclCount(p.regions, freqGroups);
-      const cntOther = _palConclCount(p.regions, otherGroups);
+      const cntFreq  = Number(p.cnt_freq || 0);
+      const cntOther = Number(p.cnt_other || 0);
       const tier = cntFreq > 0 ? 1 : (cntOther > 0 ? 2 : 3);
       return { p, cntFreq, cntOther, tier };
     });
@@ -1139,10 +1139,10 @@
       _lastPalCtxKey = ctxKey;
     }
 
-    fetch(`/api/palettes/for-unit?unit=${encodeURIComponent(unit)}&network_id=${nid}&days=60`)
+    fetch(`/api/palettes/for-unit?unit=${encodeURIComponent(unit)}&network_id=${nid}&days=90`)
       .then(r => r.json())
       .then(d => {
-        if (d && d.ok) _renderConclPalettes(d.palettes || [], d.conclusion_groups || [], d.other_groups || []);
+        if (d && d.ok) _renderConclPalettes(d.palettes || []);
       })
       .catch(() => {});
   }

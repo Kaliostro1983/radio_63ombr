@@ -136,27 +136,29 @@ def _is_contiguous_subseq(haystack: list, needle: list) -> bool:
 
 
 @router.get("/api/palettes/for-unit")
-def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
-    """Palettes relevant to a unit, ordered narrowest → broadest, with region
-    hulls inline, plus the current network's conclusion point-groups.
+def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 90):
+    """Palettes relevant to a unit, ordered narrowest → broadest, each with the
+    number of conclusions made USING it (explicit point selection, recorded in
+    conclusion_palette_points) over the last `days` days — split into:
+      `cnt_freq`  — conclusions on THIS network (frequency);
+      `cnt_other` — conclusions on OTHER networks.
+    These drive the 3 tiers in the editor panel (this freq / other freq / none).
 
     A palette unit-tag is relevant when its tokens appear as a contiguous run
     ANYWHERE inside the intercept's unit (token-boundary containment, not just a
     suffix). E.g. unit "1 мсб 164 омсбр 25 ЗА" matches a palette tagged
-    "164 омсбр" even though "25 ЗА" follows it; "1 мсб 36 мсп 67 мсд 25 ЗА"
-    matches "36 мсп 67 мсд 25 ЗА", then "67 мсд 25 ЗА". Longer tags are treated
-    as narrower (more specific) and ranked first within a tier.
-    The client uses `regions` (WKT polygons) + `conclusion_groups` to compute,
-    per palette, how many conclusions on this frequency (last `days` days) fall
-    inside the palette, and to draw the regions when its checkbox is ticked.
+    "164 омсбр"; longer tags are narrower and ranked first within a tier.
     """
     unit = (unit or "").strip()
+    try:
+        days = max(1, min(int(days or 90), 3650))
+    except (TypeError, ValueError):
+        days = 90
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    nid = int(network_id or 0)
     with get_conn() as conn:
-        groups = _network_conclusion_groups(conn, network_id, days)
-        other_groups = _other_conclusion_groups(conn, network_id, days)
         if not unit:
-            return {"ok": True, "palettes": [],
-                    "conclusion_groups": groups, "other_groups": other_groups}
+            return {"ok": True, "palettes": []}
 
         unit_tokens = _unit_tokens(unit)
         spec = {}  # unit_id -> (name, specificity_len)
@@ -165,8 +167,7 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
             if nm and _is_contiguous_subseq(unit_tokens, _unit_tokens(nm)):
                 spec[int(u["id"])] = (nm, len(nm))
         if not spec:
-            return {"ok": True, "palettes": [],
-                    "conclusion_groups": groups, "other_groups": other_groups}
+            return {"ok": True, "palettes": []}
 
         unit_ids = list(spec.keys())
         ph = ",".join("?" * len(unit_ids))
@@ -185,17 +186,21 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 10):
 
         palettes = []
         for pid, info in best.items():
-            regs = conn.execute(
-                "SELECT hull_wkt FROM palette_regions "
-                "WHERE palette_id = ? AND hull_wkt IS NOT NULL AND hull_wkt <> ''",
-                (pid,),
-            ).fetchall()
-            info["regions"] = [str(r["hull_wkt"]) for r in regs]
+            cnt = conn.execute(
+                "SELECT "
+                "  COUNT(DISTINCT CASE WHEN ac.network_id = ?  THEN cpp.conclusion_id END) AS cnt_freq, "
+                "  COUNT(DISTINCT CASE WHEN ac.network_id <> ? THEN cpp.conclusion_id END) AS cnt_other "
+                "FROM conclusion_palette_points cpp "
+                "JOIN analytical_conclusions ac ON ac.id = cpp.conclusion_id "
+                "WHERE cpp.palette_id = ? AND REPLACE(ac.created_at,'T',' ') >= ?",
+                (nid, nid, pid, start),
+            ).fetchone()
+            info["cnt_freq"]  = int(cnt["cnt_freq"]) if cnt and cnt["cnt_freq"] is not None else 0
+            info["cnt_other"] = int(cnt["cnt_other"]) if cnt and cnt["cnt_other"] is not None else 0
             palettes.append(info)
         palettes.sort(key=lambda x: (-x["spec"], x["name"]))
 
-    return {"ok": True, "palettes": palettes,
-            "conclusion_groups": groups, "other_groups": other_groups}
+    return {"ok": True, "palettes": palettes}
 
 
 @router.get("/api/palettes/efficiency")
