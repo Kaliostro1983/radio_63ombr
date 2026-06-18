@@ -287,7 +287,7 @@
           const statusId = (item.status_id != null && item.status_id !== "") ? item.status_id : "_default";
           return `
           <div class="callsign-chip callsign-chip--clickable" data-id="${item.id}" data-role="${role}" title="Редагувати позивний">
-            <img class="callsign-chip__icon" src="/static/icons/callsign_statuses/${statusId}.svg" alt="">
+            <span class="cs-ico-wrap" data-concl-cs-id="${item.id}"><img class="callsign-chip__icon" src="/static/icons/callsign_statuses/${statusId}.svg" alt=""></span>
             <span class="callsign-chip__name">${escapeHtml(item.name)}</span>
             <button
               type="button"
@@ -1804,6 +1804,9 @@
 
       /* Wire up all events */
       _attachCardEvents(container);
+
+      /* Оверлей-крапка на іконках позивних, по яких є аналітичні висновки. */
+      if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(container);
 
     } catch (e) {
       container.innerHTML = `<div class="intercepts-main-card__empty">Помилка: ${escapeHtml(String(e.message || e))}</div>`;

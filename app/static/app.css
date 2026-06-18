@@ -5519,6 +5519,16 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .concl-map-tool-btn--eye2{ top:144px; }
 .concl-map-tool-btn--eye1.is-active{ background:#2563eb; border-color:#2563eb; color:#fff; }
 .concl-map-tool-btn--eye2.is-active{ background:#d97706; border-color:#d97706; color:#fff; }
+/* Оверлей на іконці позивного: маленька кутова крапка, якщо по позивному
+   є аналітичні висновки. Обгортка .cs-ico-wrap робить img позиціонованим. */
+.cs-ico-wrap{ position:relative; display:inline-flex; align-items:center; }
+.cs-ico-wrap.cs-has-concl::after{
+  content:""; position:absolute; top:-2px; right:-3px;
+  width:7px; height:7px; border-radius:50%;
+  background:#16a34a; border:1.5px solid #11151a;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35); pointer-events:none;
+}
+
 /* Перелік палітр для частоти — правий нижній кут карти */
 .concl-pal-list{
   position:absolute; right:10px; bottom:10px; z-index:500;

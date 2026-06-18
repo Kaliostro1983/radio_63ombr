@@ -47,18 +47,16 @@
     return inside;
   }
 
-  /* Скільки висновкових груп мають ≥1 точку всередині регіонів палітри */
-  function palConclCount(regionWkts, groups) {
+  /* Скільки висновкових груп (уже у вигляді [{lat,lon}]) мають ≥1 точку
+   * всередині регіонів палітри. Координати конвертуються з MGRS один раз
+   * заздалегідь (groupPts), тож тут лише дешевий point-in-ring. */
+  function palConclCount(regionWkts, groupPts) {
     const rings = (regionWkts || []).map(parseWktPolygon).filter(Boolean);
-    if (!rings.length || !groups || !groups.length) return 0;
+    if (!rings.length || !groupPts || !groupPts.length) return 0;
     let n = 0;
-    groups.forEach((codes) => {
-      const hit = (codes || []).some((code) => {
-        const ll = mgrsToLatLon(code);
-        return ll && rings.some((r) => pointInRing(ll.lat, ll.lon, r));
-      });
-      if (hit) n++;
-    });
+    for (const pts of groupPts) {
+      if (pts.some((ll) => rings.some((r) => pointInRing(ll.lat, ll.lon, r)))) n++;
+    }
     return n;
   }
 
@@ -102,10 +100,12 @@
       return;
     }
     const groups = data.conclusion_groups || [];
+    // Конвертуємо MGRS кожного висновку в lat/lon ОДИН раз (а не на кожну палітру).
+    const groupPts = groups.map((codes) => (codes || []).map(mgrsToLatLon).filter(Boolean));
     const rows = (data.palettes || []).map((p) => ({
       name: p.name || "",
       units: (p.units || []).join(", "),
-      count: palConclCount(p.regions, groups),
+      count: palConclCount(p.regions, groupPts),
     }));
     rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 

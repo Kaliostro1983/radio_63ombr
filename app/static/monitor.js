@@ -1906,8 +1906,10 @@
         ? `/static/icons/callsign_statuses/${c.status_id}.svg`
         : `/static/icons/callsign_statuses/_default.svg`;
       return `<span class="mon-cs-tag" data-cs-id="${c.id}" data-msg-id="${item.id}">` +
-               `<img class="mon-cs-status-icon" src="${iconSrc}" alt=""` +
-               ` onerror="this.onerror=null;this.src='/static/icons/callsign_statuses/_default.svg'">` +
+               `<span class="cs-ico-wrap" data-concl-cs-id="${c.id}">` +
+                 `<img class="mon-cs-status-icon" src="${iconSrc}" alt=""` +
+                 ` onerror="this.onerror=null;this.src='/static/icons/callsign_statuses/_default.svg'">` +
+               `</span>` +
                _esc(c.name) +
              `</span>`;
     }).join("");
@@ -1933,6 +1935,9 @@
         `<div class="mon-detail-divider"></div>` +
         `<div class="mon-detail-body">${_formatBody(text)}</div>` +
       `</div>`;
+
+    // Оверлей-крапка на іконках позивних, по яких є аналітичні висновки.
+    if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(_detail);
 
     /* ── bind events ── */
 

@@ -889,6 +889,28 @@
   window.setCallsignModalOnSave = setCallsignModalOnSave;
   window.fillCallsignEditModal = fillEditModal;
 
+  // Позначити іконки позивних, по яких є аналітичні висновки. Шукає елементи
+  // з data-concl-cs-id у `root` (за замовч. document), пакетно питає сервер і
+  // додає клас .cs-has-concl (CSS малює маленьку кутову крапку-оверлей).
+  window.decorateCallsignConclusions = async function (root) {
+    try {
+      root = root || document;
+      const nodes = Array.prototype.slice.call(root.querySelectorAll("[data-concl-cs-id]"));
+      if (!nodes.length) return;
+      const ids = Array.from(new Set(
+        nodes.map((n) => parseInt(n.getAttribute("data-concl-cs-id"), 10)).filter(Boolean)
+      ));
+      if (!ids.length) return;
+      const r = await fetch("/api/callsigns/conclusion-flags?ids=" + ids.join(","));
+      const d = await r.json();
+      const set = new Set((d && d.ok && d.with_conclusions) ? d.with_conclusions : []);
+      nodes.forEach((n) => {
+        const id = parseInt(n.getAttribute("data-concl-cs-id"), 10);
+        n.classList.toggle("cs-has-concl", set.has(id));
+      });
+    } catch (_) { /* мовчки — оверлей не критичний */ }
+  };
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
