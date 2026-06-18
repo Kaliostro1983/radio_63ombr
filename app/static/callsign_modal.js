@@ -39,6 +39,9 @@
   const newStatusName = $("csNewStatusName");
   const newStatusErr = $("csNewStatusErr");
   const btnCreateStatus = $("csCreateStatus");
+  const statusEditId = $("csStatusEditId");
+  const statusModalTitle = $("csStatusModalTitle");
+  const statusModalSub = $("csStatusModalSub");
 
   let STATUS_LIST = [];
   let SOURCE_LIST = [];
@@ -375,7 +378,13 @@
       };
 
       btn.appendChild(img);
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", function (e) {
+        // Ctrl+клік — редагувати назву статусу (а не обирати його).
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          openStatusEditModal(sid, s.name || "");
+          return;
+        }
         CURRENT_STATUS_ID = sid;
         if (modalStatus) modalStatus.value = String(sid);
         setPhotoForStatus(CURRENT_STATUS_ID);
@@ -427,11 +436,33 @@
       newStatusErr.style.display = "none";
       newStatusErr.textContent = "";
     }
+    if (statusEditId) statusEditId.value = "";   // режим створення
+    if (statusModalSub) statusModalSub.textContent = "Новий статус";
+    if (statusModalTitle) statusModalTitle.textContent = "Додати статус";
+    if (btnCreateStatus) btnCreateStatus.textContent = "Створити";
     if (newStatusName) newStatusName.value = "";
     statusModal.classList.remove("hidden");
     statusModal.setAttribute("aria-hidden", "false");
+    if (window.__modalToFront) window.__modalToFront(statusModal);
     setTimeout(function () {
-      if (newStatusName) newStatusName.focus();
+      if (newStatusName) { newStatusName.focus(); newStatusName.select(); }
+    }, 0);
+  }
+
+  // Режим редагування назви існуючого статусу (Ctrl+клік по статусу).
+  function openStatusEditModal(id, name) {
+    if (!statusModal || !id) return;
+    if (newStatusErr) { newStatusErr.style.display = "none"; newStatusErr.textContent = ""; }
+    if (statusEditId) statusEditId.value = String(id);
+    if (statusModalSub) statusModalSub.textContent = "Редагування статусу";
+    if (statusModalTitle) statusModalTitle.textContent = "Перейменувати статус";
+    if (btnCreateStatus) btnCreateStatus.textContent = "Зберегти";
+    if (newStatusName) newStatusName.value = String(name || "");
+    statusModal.classList.remove("hidden");
+    statusModal.setAttribute("aria-hidden", "false");
+    if (window.__modalToFront) window.__modalToFront(statusModal);
+    setTimeout(function () {
+      if (newStatusName) { newStatusName.focus(); newStatusName.select(); }
     }, 0);
   }
 
@@ -819,6 +850,16 @@
           setPhotoForStatus(CURRENT_STATUS_ID);
         }
       });
+      // Ctrl+клік по полю статусу — редагувати назву обраного статусу.
+      modalStatus.addEventListener("mousedown", function (e) {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        const v = parseInt(modalStatus.value, 10);
+        if (!Number.isFinite(v) || v <= 0) return;
+        e.preventDefault();   // не відкривати випадаючий список
+        const st = STATUS_LIST.find(function (s) { return Number(s.id) === v; });
+        openStatusEditModal(v, st ? st.name : "");
+        try { modalStatus.blur(); } catch (_) {}
+      });
     }
 
     if (modalSource) {
@@ -837,25 +878,34 @@
           return;
         }
 
+        const editId = statusEditId && statusEditId.value ? parseInt(statusEditId.value, 10) : 0;
         btnCreateStatus.disabled = true;
 
         try {
-          const r = await fetch("/api/callsigns/statuses", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name }),
-          });
+          const r = editId
+            ? await fetch("/api/callsigns/statuses/" + editId, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+              })
+            : await fetch("/api/callsigns/statuses", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+              });
 
           const data = await r.json();
 
           if (!data.ok) {
-            showStatusError(data.error || "Не вдалося створити статус");
+            showStatusError(data.error || (editId ? "Не вдалося перейменувати статус" : "Не вдалося створити статус"));
             return;
           }
 
           await loadStatuses();
-          CURRENT_STATUS_ID = data.id;
+          // Перейменування — лишаємо поточний обраний статус; створення — обираємо новий.
+          if (!editId) CURRENT_STATUS_ID = data.id;
           renderStatusSelect(CURRENT_STATUS_ID);
+          renderQuickIdButtons();
           setPhotoForStatus(CURRENT_STATUS_ID);
           closeStatusModal();
         } catch (e) {

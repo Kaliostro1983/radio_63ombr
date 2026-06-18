@@ -5519,6 +5519,10 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .concl-map-tool-btn--eye2{ top:144px; }
 .concl-map-tool-btn--eye1.is-active{ background:#2563eb; border-color:#2563eb; color:#fff; }
 .concl-map-tool-btn--eye2.is-active{ background:#d97706; border-color:#d97706; color:#fff; }
+/* Кнопки-іконки в модалці позивного (замість текстових написів). */
+.cs-icon-btn{ display:inline-flex; align-items:center; justify-content:center; width:38px; height:34px; padding:0; }
+.cs-icon-btn svg{ display:block; }
+
 /* Оверлей на іконці позивного: маленька кутова крапка, якщо по позивному
    є аналітичні висновки. Обгортка .cs-ico-wrap робить img позиціонованим. */
 .cs-ico-wrap{ position:relative; display:inline-flex; align-items:center; }

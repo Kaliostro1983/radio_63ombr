@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=107"/>
+  <link rel="stylesheet" href="/static/app.css?v=108"/>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
   <script src="/static/app.js?v=2" defer></script>
   {% block extra_head %}{% endblock %}
@@ -131,11 +131,19 @@
         <div class="small" style="opacity:.75">Особова справа</div>
         <div id="csModalTitle" style="font-weight:700">—</div>
       </div>
-      <div style="display:flex; gap:10px; align-items:center">
-        <button id="csOpenConclusions" class="secondary hidden" type="button">Висновки</button>
-        <button id="csOpenIntercepts" class="secondary" type="button">Перехоплення</button>
-        <button id="csOpenLinks" class="secondary" type="button">Зв'язки</button>
-        <button class="secondary" type="button" data-close="1">Закрити</button>
+      <div style="display:flex; gap:8px; align-items:center">
+        <button id="csOpenConclusions" class="secondary cs-icon-btn hidden" type="button" title="Висновки" aria-label="Висновки">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2.5h7l3 3V17a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 5 17V2.5z"/><path d="M11.5 2.5V6h3.5"/><path d="M7.5 10h5M7.5 13h5"/></svg>
+        </button>
+        <button id="csOpenIntercepts" class="secondary cs-icon-btn" type="button" title="Перехоплення" aria-label="Перехоплення">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/><path d="M5.8 5.3a6 6 0 0 0 0 8.4M14.2 5.3a6 6 0 0 1 0 8.4M10 9.5v7"/></svg>
+        </button>
+        <button id="csOpenLinks" class="secondary cs-icon-btn" type="button" title="Зв'язки" aria-label="Зв'язки">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="14" cy="14" r="2.2"/><circle cx="14" cy="6" r="2.2"/><path d="M7.7 7.5 12.3 12.5M8.2 6h3.6"/></svg>
+        </button>
+        <button class="secondary cs-icon-btn" type="button" data-close="1" title="Закрити" aria-label="Закрити">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+        </button>
       </div>
     </div>
 
@@ -164,7 +172,7 @@
           </div>
 
           <div style="margin-top:10px">
-            <label class="small">Статус</label>
+            <label class="small" title="Ctrl+клік — перейменувати обраний статус">Статус <span style="opacity:.5">(Ctrl+клік — перейменувати)</span></label>
             <select id="csModalStatus" style="width:100%"></select>
           </div>
 
@@ -212,10 +220,15 @@
     </div>
 
     <div class="modal-foot">
-      <button id="csDelete" type="button" class="secondary" style="border-color:#7f1d1d;color:#fecaca">Видалити</button>
-      <button id="csMerge" type="button" class="secondary" style="border-color:#854d0e;color:#fde68a" title="Злити цей (помилковий) позивний в інший, зберігши всі зв'язки">Злити з…</button>
-      <button id="csSave" type="button">Зберегти</button>
-      <button class="secondary" type="button" data-close="1">Скасувати</button>
+      <button id="csDelete" type="button" class="secondary cs-icon-btn" style="border-color:#7f1d1d;color:#fecaca" title="Видалити позивний" aria-label="Видалити позивний">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6h11M8 6V4.5h4V6M6 6l.7 9.5a.6.6 0 0 0 .6.5h5.4a.6.6 0 0 0 .6-.5L14 6M8.5 9v4.5M11.5 9v4.5"/></svg>
+      </button>
+      <button id="csMerge" type="button" class="secondary cs-icon-btn" style="border-color:#854d0e;color:#fde68a" title="Злити цей (помилковий) позивний в інший, зберігши всі зв'язки" aria-label="Злити з…">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="15" r="2"/><circle cx="14" cy="10" r="2"/><path d="M6 7v6M8 5.6c3 .4 4 1.8 4.2 3.8M8 14.4c3-.4 4-1.8 4.2-3.8"/></svg>
+      </button>
+      <button id="csSave" type="button" class="cs-icon-btn" title="Зберегти" aria-label="Зберегти">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 4.5h8.5L15.5 7v8.5a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5v-11z"/><path d="M7 4.5V8h5V4.5M7 16v-3.5h6V16"/></svg>
+      </button>
     </div>
   </div>
 </div>
@@ -226,12 +239,13 @@
   <div class="modal-card cs-status-modal-card" role="dialog" aria-modal="true">
     <div class="modal-head">
       <div>
-        <div class="small" style="opacity:.75">Новий статус</div>
-        <div style="font-weight:700">Додати статус</div>
+        <div id="csStatusModalSub" class="small" style="opacity:.75">Новий статус</div>
+        <div id="csStatusModalTitle" style="font-weight:700">Додати статус</div>
       </div>
       <button class="secondary" type="button" data-close-status="1">Закрити</button>
     </div>
     <div class="modal-body">
+      <input id="csStatusEditId" type="hidden" value="" />
       <label class="small">Назва</label>
       <input id="csNewStatusName" type="text" />
       <div id="csNewStatusErr" class="small" style="color: var(--danger); margin-top:10px; display:none"></div>
@@ -425,7 +439,7 @@
 <script src="/static/vendor/leaflet/leaflet.js" defer></script>
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/vendor/proj4.js" defer></script>
-<script src="/static/callsign_modal.js?v=18" defer></script>
+<script src="/static/callsign_modal.js?v=19" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 /* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається

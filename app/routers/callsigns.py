@@ -96,6 +96,35 @@ async def api_status_create(request: Request):
     return {"ok": True, "id": new_id, "name": name}
 
 
+@router.put("/api/callsigns/statuses/{status_id}")
+async def api_status_rename(status_id: int, request: Request):
+    """Rename an existing callsign status. Expects JSON: `{ "name": "..." }`."""
+    payload: Dict[str, Any] = await request.json()
+    name = (payload.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM callsign_statuses WHERE id = ?", (status_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Статус не знайдено"}, status_code=404)
+        dup = conn.execute(
+            "SELECT 1 FROM callsign_statuses WHERE lower(name)=lower(?) AND id<>? LIMIT 1",
+            (name, status_id),
+        ).fetchone()
+        if dup:
+            return JSONResponse({"ok": False, "error": "Статус з такою назвою вже існує"}, status_code=400)
+        try:
+            conn.execute("UPDATE callsign_statuses SET name = ? WHERE id = ?", (name, status_id))
+            conn.commit()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    return {"ok": True, "id": status_id, "name": name}
+
+
 @router.get("/api/callsigns/sources")
 def api_sources():
     """Return list of callsign sources for UI dropdowns."""
