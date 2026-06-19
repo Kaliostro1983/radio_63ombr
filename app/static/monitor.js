@@ -4091,6 +4091,7 @@
     m.innerHTML =
       `<div class="pal-ctx-info"></div>` +
       `<button type="button" class="pal-ctx-item" data-act="show">🗺 Показати на карті</button>` +
+      `<button type="button" class="pal-ctx-item" data-act="export">📦 Експорт (kmz)</button>` +
       `<button type="button" class="pal-ctx-item" data-act="edit">✏️ Редагувати</button>` +
       `<button type="button" class="pal-ctx-item" data-act="arch"></button>` +
       `<button type="button" class="pal-ctx-item pal-ctx-item--danger" data-act="del">🗑 Видалити</button>`;
@@ -4103,6 +4104,11 @@
       _palCloseCtxMenu();
       if (!p) return;
       if (act === "show") _palToggleRegions(p.id);
+      else if (act === "export") {
+        const a = document.createElement("a");
+        a.href = `/api/palettes/${p.id}/export`;
+        document.body.appendChild(a); a.click(); a.remove();
+      }
       else if (act === "edit") _palOpenEditDialog(p);
       else if (act === "arch") _palAction(p.id, p.is_archived ? "unarchive" : "archive");
       else if (act === "del") { if (confirm(`Видалити палітру «${p.name}» назавжди?`)) _palAction(p.id, "delete"); }

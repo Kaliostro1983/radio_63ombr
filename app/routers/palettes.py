@@ -14,13 +14,17 @@ Endpoints (Phase 1):
 
 from __future__ import annotations
 
+import html
+import io
 import json
 import re
+import zipfile
 from datetime import datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, HTTPException, Query, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.core.db import get_conn
 from app.core.palette_fold import fold_code, mask_to_glob, is_mask
@@ -201,6 +205,80 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 90):
         palettes.sort(key=lambda x: (-x["spec"], x["name"]))
 
     return {"ok": True, "palettes": palettes}
+
+
+def _hex_to_kml_color(hexc: str) -> str:
+    """#rrggbb → KML aabbggrr (opaque). Inverse of import's _kml_color_to_hex."""
+    h = (hexc or "").strip().lstrip("#").lower()
+    if len(h) != 6 or any(ch not in "0123456789abcdef" for ch in h):
+        return "ffffffff"
+    rr, gg, bb = h[0:2], h[2:4], h[4:6]
+    return "ff" + bb + gg + rr
+
+
+def _build_palette_kml(name: str, points) -> str:
+    """KML matching the import format: one Placemark per point with the code as
+    <name>, the stored colour as inline IconStyle, and lon,lat coordinates."""
+    esc = html.escape
+    out = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<kml xmlns="http://www.opengis.net/kml/2.2">',
+        '    <Document>',
+        f'        <name>{esc(str(name or ""))}</name>',
+        '        <visibility>1</visibility>',
+    ]
+    for p in points:
+        code = esc(str(p["code"] or ""))
+        kcol = _hex_to_kml_color(p["color"])
+        lat = p["lat"]; lon = p["lon"]
+        out.append('        <Placemark>')
+        out.append(f'            <name>{code}</name>')
+        out.append('            <description>Точка</description>')
+        out.append('            <Style><IconStyle>'
+                   f'<color>{kcol}</color><scale>1.0</scale></IconStyle></Style>')
+        out.append(f'            <Point><coordinates>{lon},{lat}</coordinates></Point>')
+        out.append('        </Placemark>')
+    out.append('    </Document>')
+    out.append('</kml>')
+    return "\n".join(out)
+
+
+@router.get("/api/palettes/{palette_id}/export")
+def api_palette_export(palette_id: int):
+    """Export a palette as a .kmz (zip with doc.kml) — re-importable here and
+    viewable in Google Earth. Colours/codes/coordinates round-trip via import."""
+    with get_conn() as conn:
+        prow = conn.execute(
+            "SELECT id, name FROM palettes WHERE id = ?", (palette_id,)
+        ).fetchone()
+        if not prow:
+            raise HTTPException(status_code=404, detail="palette not found")
+        name = (prow["name"] or f"palette_{palette_id}").strip()
+        pts = conn.execute(
+            "SELECT code, color, lat, lon FROM palette_points "
+            "WHERE palette_id = ? AND lat IS NOT NULL AND lon IS NOT NULL "
+            "ORDER BY id",
+            (palette_id,),
+        ).fetchall()
+
+    kml = _build_palette_kml(name, pts)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("doc.kml", kml.encode("utf-8"))
+    data = buf.getvalue()
+
+    # ASCII-safe fallback filename + RFC 5987 UTF-8 name for Cyrillic.
+    ascii_name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or f"palette_{palette_id}"
+    fname = name + ".kmz"
+    disposition = (
+        f'attachment; filename="{ascii_name}.kmz"; '
+        f"filename*=UTF-8''{quote(fname)}"
+    )
+    return Response(
+        content=data,
+        media_type="application/vnd.google-earth.kmz",
+        headers={"Content-Disposition": disposition},
+    )
 
 
 @router.get("/api/palettes/efficiency")
