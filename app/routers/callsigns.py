@@ -480,6 +480,8 @@ def api_callsign_by_id(id: int):
                 c.network_id AS network_id,
                 c.callsign_status_id AS status_id,
                 c.source_id AS source_id,
+                c.is_position AS is_position,
+                c.has_air_defense AS has_air_defense,
                 s.name AS status_label,
                 src.name AS source_label,
                 n.frequency AS frequency,
@@ -518,16 +520,19 @@ def api_callsign_by_id(id: int):
             "frequency": row["frequency"] or "Невідомо",
             "unit": row["unit"] or "Невідомо",
             "has_conclusions": has_conclusions,
+            "is_position": bool(row["is_position"]),
+            "has_air_defense": bool(row["has_air_defense"]),
         },
     }
 
 
 @router.get("/api/callsigns/conclusion-flags")
 def api_callsign_conclusion_flags(ids: str = ""):
-    """Return which of the given callsign ids have analytical conclusions.
+    """Return marker flags for the given callsign ids: which have analytical
+    conclusions (green dot) and which have air defense (red dot).
 
-    Query: ids=1,2,3  →  {"ok": True, "with_conclusions": [1, 3]}
-    Used to overlay a badge on callsign status icons in lists.
+    Query: ids=1,2,3  →  {"ok": True, "with_conclusions": [1,3], "with_aa": [2]}
+    Used to overlay badges on callsign status icons in lists.
     """
     id_list = []
     for part in (ids or "").split(","):
@@ -535,17 +540,26 @@ def api_callsign_conclusion_flags(ids: str = ""):
         if part.isdigit():
             id_list.append(int(part))
     if not id_list:
-        return {"ok": True, "with_conclusions": []}
+        return {"ok": True, "with_conclusions": [], "with_aa": []}
 
     id_list = list(dict.fromkeys(id_list))  # de-dup, keep order
     placeholders = ",".join("?" * len(id_list))
     with get_conn() as conn:
-        rows = conn.execute(
+        concl = conn.execute(
             f"SELECT DISTINCT callsign_id FROM callsign_conclusions "
             f"WHERE callsign_id IN ({placeholders})",
             tuple(id_list),
         ).fetchall()
-    return {"ok": True, "with_conclusions": [int(r["callsign_id"]) for r in rows]}
+        aa = conn.execute(
+            f"SELECT id FROM callsigns "
+            f"WHERE has_air_defense = 1 AND id IN ({placeholders})",
+            tuple(id_list),
+        ).fetchall()
+    return {
+        "ok": True,
+        "with_conclusions": [int(r["callsign_id"]) for r in concl],
+        "with_aa": [int(r["id"]) for r in aa],
+    }
 
 
 @router.get("/api/callsigns/{callsign_id}/graph")
@@ -727,6 +741,9 @@ async def api_callsign_save(request: Request):
     source_id = payload.get("source_id")
     source_id = _as_int(source_id, 0) if source_id is not None else 0
 
+    is_position = 1 if payload.get("is_position") else 0
+    has_air_defense = 1 if payload.get("has_air_defense") else 0
+
     if not name:
         return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
 
@@ -766,9 +783,11 @@ async def api_callsign_save(request: Request):
                         comment,
                         callsign_status_id,
                         source_id,
+                        is_position,
+                        has_air_defense,
                         updated_at,
                         last_seen_dt
-                    ) VALUES (?,?,?,?,?,?,?)
+                    ) VALUES (?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         network_id or None,
@@ -776,6 +795,8 @@ async def api_callsign_save(request: Request):
                         comment,
                         status_id or None,
                         source_id or None,
+                        is_position,
+                        has_air_defense,
                         now_dt,
                         None,
                     ),
@@ -804,6 +825,8 @@ async def api_callsign_save(request: Request):
                         comment=?,
                         callsign_status_id=?,
                         source_id=?,
+                        is_position=?,
+                        has_air_defense=?,
                         updated_at=?
                     WHERE id=?
                     """,
@@ -813,6 +836,8 @@ async def api_callsign_save(request: Request):
                         comment,
                         status_id or None,
                         source_id or None,
+                        is_position,
+                        has_air_defense,
                         now_dt,
                         callsign_id,
                     ),

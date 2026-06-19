@@ -5533,6 +5533,13 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
   background:#16a34a; border:1.5px solid #11151a;
   box-shadow:0 0 0 1px rgba(0,0,0,.35); pointer-events:none;
 }
+/* Червона крапка (лівий верхній кут) — позивний має наявне ППО. */
+.cs-ico-wrap.cs-has-aa::before{
+  content:""; position:absolute; top:-2px; left:-3px;
+  width:7px; height:7px; border-radius:50%;
+  background:#dc2626; border:1.5px solid #11151a;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35); pointer-events:none; z-index:1;
+}
 
 /* Перелік палітр для частоти — правий нижній кут карти */
 .concl-pal-list{

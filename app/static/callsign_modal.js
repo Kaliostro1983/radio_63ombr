@@ -15,6 +15,8 @@
   const modalStatus = $("csModalStatus");
   const modalSource = $("csModalSource");
   const modalComment = $("csModalComment");
+  const modalIsPosition = $("csModalIsPosition");
+  const modalHasAA = $("csModalHasAA");
   const modalNetworkQuery = $("csModalNetworkQuery");
   const modalNetwork = $("csModalNetwork");
   const modalPhoto = $("csModalPhoto");
@@ -506,6 +508,8 @@
     if (modalTitle) modalTitle.textContent = row.name || "—";
     if (modalName) modalName.value = row.name || "";
     if (modalComment) modalComment.value = row.comment || "";
+    if (modalIsPosition) modalIsPosition.checked = !!row.is_position;
+    if (modalHasAA) modalHasAA.checked = !!row.has_air_defense;
     CURRENT_STATUS_ID = row.status_id || null;
     CURRENT_SOURCE_ID = row.source_id || null;
     CURRENT_NETWORK_ID = row.network_id || null;
@@ -559,6 +563,8 @@
     if (modalTitle) modalTitle.textContent = "Новий позивний";
     if (modalName) modalName.value = "";
     if (modalComment) modalComment.value = "";
+    if (modalIsPosition) modalIsPosition.checked = false;
+    if (modalHasAA) modalHasAA.checked = false;
     CURRENT_STATUS_ID = null;
     CURRENT_SOURCE_ID = null;
     CURRENT_NETWORK_ID = null;
@@ -615,6 +621,8 @@
           comment,
           status_id,
           source_id,
+          is_position: !!(modalIsPosition && modalIsPosition.checked),
+          has_air_defense: !!(modalHasAA && modalHasAA.checked),
           network_id:
             modalNetwork && modalNetwork.value
               ? parseInt(modalNetwork.value, 10)
@@ -638,6 +646,8 @@
       try {
         window.dispatchEvent(new CustomEvent("callsignModalSaved", { detail: { data: data, context: context || {} } }));
       } catch (e) {}
+      // Оновити оверлеї-точки (зелена — висновки, червона — ППО) на видимих іконках.
+      if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(document);
     } finally {
       if (btnSave) btnSave.disabled = false;
     }
@@ -960,9 +970,9 @@
   window.setCallsignModalOnSave = setCallsignModalOnSave;
   window.fillCallsignEditModal = fillEditModal;
 
-  // Позначити іконки позивних, по яких є аналітичні висновки. Шукає елементи
-  // з data-concl-cs-id у `root` (за замовч. document), пакетно питає сервер і
-  // додає клас .cs-has-concl (CSS малює маленьку кутову крапку-оверлей).
+  // Позначити іконки позивних оверлей-точками: зелена (.cs-has-concl) — є
+  // аналітичні висновки; червона (.cs-has-aa) — наявне ППО. Шукає елементи з
+  // data-concl-cs-id у `root` (за замовч. document) і пакетно питає сервер.
   window.decorateCallsignConclusions = async function (root) {
     try {
       root = root || document;
@@ -974,10 +984,12 @@
       if (!ids.length) return;
       const r = await fetch("/api/callsigns/conclusion-flags?ids=" + ids.join(","));
       const d = await r.json();
-      const set = new Set((d && d.ok && d.with_conclusions) ? d.with_conclusions : []);
+      const concl = new Set((d && d.ok && d.with_conclusions) ? d.with_conclusions : []);
+      const aa = new Set((d && d.ok && d.with_aa) ? d.with_aa : []);
       nodes.forEach((n) => {
         const id = parseInt(n.getAttribute("data-concl-cs-id"), 10);
-        n.classList.toggle("cs-has-concl", set.has(id));
+        n.classList.toggle("cs-has-concl", concl.has(id));
+        n.classList.toggle("cs-has-aa", aa.has(id));
       });
     } catch (_) { /* мовчки — оверлей не критичний */ }
   };

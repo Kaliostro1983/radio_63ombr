@@ -786,6 +786,8 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "callsigns", "last_seen_dt", "last_seen_dt TEXT")
     _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
+    _ensure_column(conn, "callsigns", "is_position", "is_position INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "callsigns", "has_air_defense", "has_air_defense INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
     _ensure_column(conn, "network_tags", "conclusions", "conclusions TEXT")
 
