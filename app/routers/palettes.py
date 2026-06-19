@@ -261,23 +261,39 @@ def api_palette_export(palette_id: int):
             (palette_id,),
         ).fetchall()
 
-    kml = _build_palette_kml(name, pts)
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("doc.kml", kml.encode("utf-8"))
-    data = buf.getvalue()
-
-    # ASCII-safe fallback filename + RFC 5987 UTF-8 name for Cyrillic.
+    # Target program accepts up to MAX_OBJECTS objects per file → split a larger
+    # palette into several .kmz parts, delivered together in one .zip.
+    MAX_OBJECTS = 6500
     ascii_name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or f"palette_{palette_id}"
-    fname = name + ".kmz"
-    disposition = (
-        f'attachment; filename="{ascii_name}.kmz"; '
-        f"filename*=UTF-8''{quote(fname)}"
-    )
+    part_name = re.sub(r'[\\/:*?"<>|]+', "_", name).strip() or f"palette_{palette_id}"
+
+    def _kmz_bytes(points) -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("doc.kml", _build_palette_kml(name, points).encode("utf-8"))
+        return buf.getvalue()
+
+    def _disposition(ascii_fn: str, utf8_fn: str) -> str:
+        return (f'attachment; filename="{ascii_fn}"; '
+                f"filename*=UTF-8''{quote(utf8_fn)}")
+
+    if len(pts) <= MAX_OBJECTS:
+        return Response(
+            content=_kmz_bytes(pts),
+            media_type="application/vnd.google-earth.kmz",
+            headers={"Content-Disposition": _disposition(ascii_name + ".kmz", name + ".kmz")},
+        )
+
+    chunks = [pts[i:i + MAX_OBJECTS] for i in range(0, len(pts), MAX_OBJECTS)]
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as z:
+        for idx, ch in enumerate(chunks, 1):
+            z.writestr(f"{part_name} ({idx}).kmz", _kmz_bytes(ch))
+    zip_utf8 = f"{name} ({len(chunks)} частин).zip"
     return Response(
-        content=data,
-        media_type="application/vnd.google-earth.kmz",
-        headers={"Content-Disposition": disposition},
+        content=zbuf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": _disposition(ascii_name + ".zip", zip_utf8)},
     )
 
 
