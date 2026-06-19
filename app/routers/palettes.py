@@ -17,6 +17,7 @@ from __future__ import annotations
 import html
 import io
 import json
+import os
 import re
 import zipfile
 from datetime import datetime, timedelta
@@ -216,9 +217,26 @@ def _hex_to_kml_color(hexc: str) -> str:
     return "ff" + bb + gg + rr
 
 
+_EXPORT_ICON_PATH = os.path.join(os.path.dirname(__file__), "..", "static", "palette_export_icon.png")
+_EXPORT_ICON_HREF = "files/marker.png"
+_EXPORT_STYLE_ID = "ptstyle"
+
+
+def _export_icon_bytes() -> bytes:
+    """Marker icon bundled into every exported KMZ (same one used by the source
+    palettes). Without an icon the target program shows a '?' placeholder."""
+    try:
+        with open(_EXPORT_ICON_PATH, "rb") as f:
+            return f.read()
+    except OSError:
+        return b""
+
+
 def _build_palette_kml(name: str, points) -> str:
-    """KML matching the import format: one Placemark per point with the code as
-    <name>, the stored colour as inline IconStyle, and lon,lat coordinates."""
+    """KML in the source palette format: a shared icon Style + one Placemark per
+    point (code as <name>, stored colour as inline IconStyle that tints the
+    icon, lon,lat coordinates). Re-importable here and shows the marker icon in
+    the target program."""
     esc = html.escape
     out = [
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -226,6 +244,12 @@ def _build_palette_kml(name: str, points) -> str:
         '    <Document>',
         f'        <name>{esc(str(name or ""))}</name>',
         '        <visibility>1</visibility>',
+        f'        <Style id="{_EXPORT_STYLE_ID}">',
+        '            <IconStyle>',
+        '                <scale>1.3</scale>',
+        f'                <Icon><href>{_EXPORT_ICON_HREF}</href></Icon>',
+        '            </IconStyle>',
+        '        </Style>',
     ]
     for p in points:
         code = esc(str(p["code"] or ""))
@@ -233,9 +257,11 @@ def _build_palette_kml(name: str, points) -> str:
         lat = p["lat"]; lon = p["lon"]
         out.append('        <Placemark>')
         out.append(f'            <name>{code}</name>')
+        out.append('            <visibility>1</visibility>')
         out.append('            <description>Точка</description>')
+        out.append(f'            <styleUrl>#{_EXPORT_STYLE_ID}</styleUrl>')
         out.append('            <Style><IconStyle>'
-                   f'<color>{kcol}</color><scale>1.0</scale></IconStyle></Style>')
+                   f'<color>{kcol}</color><scale>1.3</scale></IconStyle></Style>')
         out.append(f'            <Point><coordinates>{lon},{lat}</coordinates></Point>')
         out.append('        </Placemark>')
     out.append('    </Document>')
@@ -267,10 +293,14 @@ def api_palette_export(palette_id: int):
     ascii_name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or f"palette_{palette_id}"
     part_name = re.sub(r'[\\/:*?"<>|]+', "_", name).strip() or f"palette_{palette_id}"
 
+    icon_bytes = _export_icon_bytes()
+
     def _kmz_bytes(points) -> bytes:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
             z.writestr("doc.kml", _build_palette_kml(name, points).encode("utf-8"))
+            if icon_bytes:
+                z.writestr(_EXPORT_ICON_HREF, icon_bytes)
         return buf.getvalue()
 
     def _disposition(ascii_fn: str, utf8_fn: str) -> str:
