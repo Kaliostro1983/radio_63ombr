@@ -4052,41 +4052,95 @@
     host.innerHTML = "";
     _palList.forEach(p => {
       const item = document.createElement("div");
-      item.className = "pal-item" + (p.is_archived ? " is-archived" : "");
+      item.className = "pal-item pal-item--compact" + (p.is_archived ? " is-archived" : "");
       const inScope = _palScope.has(p.id);
-      const units = (p.units || []).map(u => `<span class="pal-unit-chip">${_esc(u.name)}</span>`).join("");
-      item.innerHTML = `
-        <div class="pal-item-top">
-          <input type="checkbox" class="pal-item-check" ${inScope ? "checked" : ""} title="Шукати в цій палітрі">
-          <span class="pal-item-name" title="${_esc(p.name)}">${_esc(p.name)}</span>
-          <button class="pal-btn pal-show" title="Показати області на карті">🗺</button>
-        </div>
-        <div class="pal-item-meta">
-          <span>${p.point_count} тчк · ${p.region_count} обл.</span>
-          <span>викор.: ${p.use_count}${_palStaleBadge(p)}</span>
-        </div>
-        <div class="pal-item-units">${units}</div>
-        <div class="pal-item-actions">
-          ${p.is_archived
-            ? `<button class="pal-btn pal-unarch">Розархівувати</button>`
-            : `<button class="pal-btn pal-arch">Архівувати</button>`}
-          <button class="pal-btn pal-btn--danger pal-del">Видалити</button>
-          <button class="pal-btn pal-edit">Редагувати</button>
-        </div>`;
+      // Компактний рядок: чекбокс (область пошуку) + назва + кружечок «⋯».
+      // Усі дії з палітрою — у контекстному меню за кліком на кружечок.
+      item.innerHTML =
+        `<input type="checkbox" class="pal-item-check" ${inScope ? "checked" : ""} title="Шукати в цій палітрі">` +
+        `<span class="pal-item-name" title="${_esc(p.name)}">${_esc(p.name)}</span>` +
+        `<button class="pal-menu-btn" type="button" title="Дії з палітрою" aria-label="Дії з палітрою">` +
+          `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4">` +
+            `<circle cx="10" cy="10" r="8"/>` +
+            `<circle cx="6.2" cy="10" r="1.1" fill="currentColor" stroke="none"/>` +
+            `<circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/>` +
+            `<circle cx="13.8" cy="10" r="1.1" fill="currentColor" stroke="none"/>` +
+          `</svg>` +
+        `</button>`;
       item.querySelector(".pal-item-check").addEventListener("change", (e) => {
         if (e.target.checked) _palScope.add(p.id); else _palScope.delete(p.id);
         _palSaveScope();
         _palRefreshSearchChips();   // перепошук по кодах із чіпів під новий scope
       });
-      item.querySelector(".pal-show").addEventListener("click", () => _palToggleRegions(p.id));
-      item.querySelector(".pal-arch")?.addEventListener("click", () => _palAction(p.id, "archive"));
-      item.querySelector(".pal-unarch")?.addEventListener("click", () => _palAction(p.id, "unarchive"));
-      item.querySelector(".pal-del")?.addEventListener("click", () => {
-        if (confirm(`Видалити палітру «${p.name}» назавжди?`)) _palAction(p.id, "delete");
+      item.querySelector(".pal-menu-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        _palOpenCtxMenu(p, e.currentTarget);
       });
-      item.querySelector(".pal-edit")?.addEventListener("click", () => _palOpenEditDialog(p));
       host.appendChild(item);
     });
+  }
+
+  /* ── Контекстне меню палітри (одне на всі рядки) ── */
+  let _palCtxMenuEl = null;
+  let _palCtxPid = null;
+
+  function _palCtxMenu() {
+    if (_palCtxMenuEl) return _palCtxMenuEl;
+    const m = document.createElement("div");
+    m.className = "pal-ctx-menu hidden";
+    m.innerHTML =
+      `<div class="pal-ctx-info"></div>` +
+      `<button type="button" class="pal-ctx-item" data-act="show">🗺 Показати на карті</button>` +
+      `<button type="button" class="pal-ctx-item" data-act="edit">✏️ Редагувати</button>` +
+      `<button type="button" class="pal-ctx-item" data-act="arch"></button>` +
+      `<button type="button" class="pal-ctx-item pal-ctx-item--danger" data-act="del">🗑 Видалити</button>`;
+    document.body.appendChild(m);
+    m.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn) return;
+      const act = btn.getAttribute("data-act");
+      const p = _palList.find(x => x.id === _palCtxPid);
+      _palCloseCtxMenu();
+      if (!p) return;
+      if (act === "show") _palToggleRegions(p.id);
+      else if (act === "edit") _palOpenEditDialog(p);
+      else if (act === "arch") _palAction(p.id, p.is_archived ? "unarchive" : "archive");
+      else if (act === "del") { if (confirm(`Видалити палітру «${p.name}» назавжди?`)) _palAction(p.id, "delete"); }
+    });
+    _palCtxMenuEl = m;
+    return m;
+  }
+
+  function _palCtxOutside(e) {
+    if (_palCtxMenuEl && !_palCtxMenuEl.contains(e.target) && !(e.target.closest && e.target.closest(".pal-menu-btn"))) {
+      _palCloseCtxMenu();
+    }
+  }
+  function _palCloseCtxMenu() {
+    if (_palCtxMenuEl) _palCtxMenuEl.classList.add("hidden");
+    _palCtxPid = null;
+    document.removeEventListener("click", _palCtxOutside, true);
+  }
+
+  function _palOpenCtxMenu(p, btn) {
+    const m = _palCtxMenu();
+    _palCtxPid = p.id;
+    const units = (p.units || []).map(u => `<span class="pal-unit-chip">${_esc(u.name)}</span>`).join("");
+    m.querySelector(".pal-ctx-info").innerHTML =
+      `<div class="pal-ctx-meta">${p.point_count} тчк · ${p.region_count} обл. · викор.: ${p.use_count}${_palStaleBadge(p)}</div>` +
+      (units ? `<div class="pal-ctx-units">${units}</div>` : "");
+    m.querySelector('[data-act="arch"]').textContent = p.is_archived ? "🗄 Розархівувати" : "🗄 Архівувати";
+    m.classList.remove("hidden");
+    // Позиціонуємо біля кнопки (panel — праворуч, тож вирівнюємо правий край).
+    const r = btn.getBoundingClientRect();
+    const mw = m.offsetWidth || 210, mh = m.offsetHeight || 180;
+    let left = r.right - mw;
+    let top  = r.bottom + 4;
+    if (left < 6) left = 6;
+    if (top + mh > window.innerHeight - 6) top = Math.max(6, r.top - mh - 4);
+    m.style.left = left + "px";
+    m.style.top  = top + "px";
+    setTimeout(() => document.addEventListener("click", _palCtxOutside, true), 0);
   }
 
   async function _palAction(id, action) {
