@@ -161,6 +161,19 @@
             </div>
           </div>
 
+          <div class="field">
+            <label for="callsign2Query" title="Заповніть обидва позивні — знайде перехоплення, де один із них викликає іншого (caller↔callee)">Співрозмовник</label>
+            <div class="cs-filter-ac-wrap" style="position:relative">
+              <input
+                id="callsign2Query"
+                name="callsign2"
+                type="text"
+                placeholder="Другий позивний"
+                autocomplete="off"
+              >
+            </div>
+          </div>
+
           <div class="field field-btn">
             <label>&nbsp;</label>
             <div class="action-buttons">
@@ -977,7 +990,7 @@
  * — у флоу "Висновок → Додати → Орієнтир" має бути ПОВЕРХ .it-modal. */
 #conclLmPicker { z-index: 10500 !important; }
 </style>
-<script src="/static/intercepts_explorer.js?v=28"></script>
+<script src="/static/intercepts_explorer.js?v=29"></script>
 <script src="/static/monitor.js?v=116"></script>
 <script src="/static/landmarks.js?v=13" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>

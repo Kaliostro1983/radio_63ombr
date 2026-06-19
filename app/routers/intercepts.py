@@ -400,6 +400,7 @@ def intercepts_explorer_list(
     end_dt: str | None = Query(None),
     network: str | None = Query(None),
     callsign: str | None = Query(None),
+    callsign2: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     debug: int = Query(0),
@@ -411,6 +412,7 @@ def intercepts_explorer_list(
     """
     network_raw = (network or "").strip()
     callsign_raw = (callsign or "").strip()
+    callsign2_raw = (callsign2 or "").strip()
 
     def parse_browser_dt(value: str | None) -> str | None:
         """Parse browser-provided ISO datetime into DB comparison format."""
@@ -494,21 +496,29 @@ def intercepts_explorer_list(
                 )
                 params.extend([like_value, like_value, like_value, like_value, like_value])
 
-        if callsign_raw:
-            # Позивні зберігаються у верхньому регістрі; SQLite lower()/upper()
-            # не обробляють кирилицю, тому нормалізуємо запит через Python str.upper().
-            where.append(
-                """
-                EXISTS (
-                    SELECT 1
-                    FROM message_callsigns mc
-                    JOIN callsigns c ON c.id = mc.callsign_id
-                    WHERE mc.message_id = m.id
-                      AND c.name = ?
-                )
-                """
+        # Позивні зберігаються у верхньому регістрі; SQLite lower()/upper() не
+        # обробляють кирилицю, тому нормалізуємо запит через Python str.upper().
+        def _cs_exists(role: str | None) -> str:
+            role_clause = f"AND mc.role = '{role}'" if role else ""
+            return (
+                "EXISTS (SELECT 1 FROM message_callsigns mc "
+                "JOIN callsigns c ON c.id = mc.callsign_id "
+                f"WHERE mc.message_id = m.id AND c.name = ? {role_clause})"
             )
-            params.append(callsign_raw.upper())
+
+        if callsign_raw and callsign2_raw:
+            # Обидва позивні задані → перехоплення, де один із них «Хто викликає»
+            # (caller), а інший «Кого викликають» (callee) — у будь-якому напрямку.
+            a = callsign_raw.upper()
+            b = callsign2_raw.upper()
+            caller = _cs_exists("caller")
+            callee = _cs_exists("callee")
+            where.append(f"(({caller} AND {callee}) OR ({caller} AND {callee}))")
+            params.extend([a, b, b, a])
+        elif callsign_raw or callsign2_raw:
+            # Один позивний → збіг за будь-якою роллю (як раніше).
+            where.append(_cs_exists(None))
+            params.append((callsign_raw or callsign2_raw).upper())
 
         where_sql = " AND ".join(where)
 
