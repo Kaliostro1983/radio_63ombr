@@ -3242,6 +3242,18 @@
     _renderShareRows(panel);
     panel.classList.remove("hidden");
 
+    // Підняти панель над усіма видимими модалками. Інакше, коли її викликають
+    // із модалки «Висновок» (.it-modal, z-index 9999), панель відкривається
+    // ПОЗАДУ неї і нею неможливо скористатися.
+    let maxZ = 300;
+    document.querySelectorAll(".modal, .it-modal").forEach(m => {
+      if (m === panel || m.classList.contains("hidden")) return;
+      if (getComputedStyle(m).display === "none") return;
+      const z = parseInt(getComputedStyle(m).zIndex, 10);
+      if (isFinite(z)) maxZ = Math.max(maxZ, z);
+    });
+    panel.style.setProperty("z-index", String(maxZ + 10), "important");
+
     // Position below the originating button, aligned to its right edge
     const btn = document.getElementById(btnId);
     if (btn) {
