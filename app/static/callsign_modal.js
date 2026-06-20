@@ -41,6 +41,7 @@
   const newStatusName = $("csNewStatusName");
   const newStatusErr = $("csNewStatusErr");
   const btnCreateStatus = $("csCreateStatus");
+  const btnDeleteStatus = $("csDeleteStatus");
   const statusEditId = $("csStatusEditId");
   const statusModalTitle = $("csStatusModalTitle");
   const statusModalSub = $("csStatusModalSub");
@@ -453,6 +454,7 @@
     if (statusModalSub) statusModalSub.textContent = "Новий статус";
     if (statusModalTitle) statusModalTitle.textContent = "Додати статус";
     if (btnCreateStatus) btnCreateStatus.textContent = "Створити";
+    if (btnDeleteStatus) btnDeleteStatus.style.display = "none";
     if (newStatusName) newStatusName.value = "";
     statusModal.classList.remove("hidden");
     statusModal.setAttribute("aria-hidden", "false");
@@ -470,6 +472,7 @@
     if (statusModalSub) statusModalSub.textContent = "Редагування статусу";
     if (statusModalTitle) statusModalTitle.textContent = "Перейменувати статус";
     if (btnCreateStatus) btnCreateStatus.textContent = "Зберегти";
+    if (btnDeleteStatus) btnDeleteStatus.style.display = "inline-block";
     if (newStatusName) newStatusName.value = String(name || "");
     statusModal.classList.remove("hidden");
     statusModal.setAttribute("aria-hidden", "false");
@@ -939,6 +942,47 @@
           showStatusError("Помилка запиту");
         } finally {
           btnCreateStatus.disabled = false;
+        }
+      });
+    }
+
+    if (btnDeleteStatus) {
+      btnDeleteStatus.addEventListener("click", async function () {
+        const id = statusEditId && statusEditId.value ? parseInt(statusEditId.value, 10) : 0;
+        if (!id) return;
+        const st = STATUS_LIST.find(function (s) { return Number(s.id) === id; });
+        const nm = st ? st.name : "";
+        if (!window.confirm(
+              "Видалити статус «" + nm + "»?\n" +
+              "Усім позивним із цим статусом буде присвоєно «Не вказано».")) {
+          return;
+        }
+        btnDeleteStatus.disabled = true;
+        try {
+          const r = await fetch("/api/callsigns/statuses/" + id, { method: "DELETE" });
+          const data = await r.json();
+          if (!data.ok) {
+            showStatusError(data.error || "Не вдалося видалити статус");
+            return;
+          }
+          // Якщо видалили поточно обраний статус — скидаємо на «Не вказано».
+          if (Number(CURRENT_STATUS_ID) === id) CURRENT_STATUS_ID = null;
+          await loadStatuses();
+          renderStatusSelect(CURRENT_STATUS_ID);
+          renderQuickIdButtons();
+          setPhotoForStatus(CURRENT_STATUS_ID);
+          closeStatusModal();
+          if (window.appToast) {
+            window.appToast(
+              "Статус видалено" +
+                (data.reassigned ? " · перепризначено: " + data.reassigned : ""),
+              "success", 2200);
+          }
+        } catch (e) {
+          console.error(e);
+          showStatusError("Помилка запиту");
+        } finally {
+          btnDeleteStatus.disabled = false;
         }
       });
     }

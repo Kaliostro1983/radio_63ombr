@@ -125,6 +125,43 @@ async def api_status_rename(status_id: int, request: Request):
     return {"ok": True, "id": status_id, "name": name}
 
 
+@router.delete("/api/callsigns/statuses/{status_id}")
+def api_status_delete(status_id: int):
+    """Delete a callsign status.
+
+    Усім позивним із цим статусом присвоюється «Не вказано» (NULL у
+    `callsign_status_id`/`status_id`). FK на `callsigns` не має каскаду, тож
+    перед видаленням статусу обнуляємо посилання. `callsign_status_map`
+    очищаємо явно (на випадок, якщо PRAGMA foreign_keys вимкнено).
+    Повертає кількість перепризначених позивних.
+    """
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM callsign_statuses WHERE id = ?", (status_id,)
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Статус не знайдено"}, status_code=404)
+        try:
+            cur1 = conn.execute(
+                "UPDATE callsigns SET callsign_status_id = NULL WHERE callsign_status_id = ?",
+                (status_id,),
+            )
+            cur2 = conn.execute(
+                "UPDATE callsigns SET status_id = NULL WHERE status_id = ?",
+                (status_id,),
+            )
+            conn.execute(
+                "DELETE FROM callsign_status_map WHERE status_id = ?", (status_id,)
+            )
+            conn.execute("DELETE FROM callsign_statuses WHERE id = ?", (status_id,))
+            conn.commit()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    reassigned = (cur1.rowcount or 0) + (cur2.rowcount or 0)
+    return {"ok": True, "id": status_id, "reassigned": reassigned}
+
+
 @router.get("/api/callsigns/sources")
 def api_sources():
     """Return list of callsign sources for UI dropdowns."""
