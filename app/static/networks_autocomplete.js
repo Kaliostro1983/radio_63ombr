@@ -135,21 +135,10 @@
   );
   setupNetworkFreqLookup(document.getElementById("etalonsFreqQuery"));
 
-  // Intercepts explorer — «Частоти» з чіпами: обраний пункт додаємо чіпом
-  // (а не сабмітимо форму), щоб можна було набрати кілька частот.
-  setupNetworkFreqLookup(
-    document.getElementById("networkQuery"),
-    function (it, value) {
-      const inp = document.getElementById("networkQuery");
-      if (window.itAddFreqChip) {
-        window.itAddFreqChip(value);
-        if (inp) { inp.value = ""; inp.focus(); }
-      } else {
-        var f = document.getElementById("interceptsFilterForm");
-        if (f) f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      }
-    }
-  );
+  // Intercepts explorer — поле «Частоти» має ВЛАСНИЙ автокомпліт+чіпи
+  // (intercepts_freq_chips.js). Тут навмисно НЕ чіпляємо спільний lookup до
+  // #networkQuery, щоб не було конфлікту обробників (подвійний дропдаун /
+  // фіксація набраного тексту замість обраної частоти).
 
   // Callsigns "by frequency" tab — trigger the Показати button
   setupNetworkFreqLookup(

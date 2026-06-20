@@ -1,7 +1,8 @@
-/* Поле «Частоти» у фільтрі «Перегляд» — кілька частот як чіпи (автокомпліт
- * лишається на networks_autocomplete.js). Видимий інпут #networkQuery керує
- * введенням; список частот тримаємо в масиві й синхронізуємо у прихований
- * #networkHidden (name="network", через кому) — звідти його читає buildQuery.
+/* Поле «Частоти» у фільтрі «Перегляд» — кілька частот як чіпи + власний
+ * автокомпліт (через /api/networks/lookup). Вибраний пункт додається чіпом із
+ * ПРАВИЛЬНОЮ частотою (а не з того, що набрано). Видимий список частот тримаємо
+ * в масиві й синхронізуємо у прихований #networkHidden (name="network", через
+ * кому) — звідти його читає buildQuery.
  *
  * Публічне API (window.itFreqChips): set(list) / add(val) / clear() / getValues().
  */
@@ -16,6 +17,12 @@
 
   let freqs = [];
 
+  // Автокомпліт
+  let acBox = null;
+  let acItems = [];
+  let acIndex = -1;
+  let acTimer = null;
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -26,7 +33,6 @@
   }
 
   function render() {
-    // Прибрати наявні чіпи (інпут лишаємо на місці — він останній елемент).
     container.querySelectorAll(".freq-chip").forEach((el) => el.remove());
     freqs.forEach((f) => {
       const chip = document.createElement("span");
@@ -56,11 +62,6 @@
     render();
   }
 
-  function commitPending() {
-    const t = input.value.trim();
-    if (t) { addFreq(t); input.value = ""; }
-  }
-
   function set(list) {
     freqs = [];
     (Array.isArray(list) ? list : [list]).forEach((v) => {
@@ -72,36 +73,114 @@
     render();
   }
 
-  // ── Ввід: Enter/кома → чіп; Enter на порожньому інпуті → сабміт форми. ──
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "," ) { e.preventDefault(); commitPending(); return; }
-    if (e.key === "Enter") {
-      if (input.value.trim()) { e.preventDefault(); commitPending(); }
-      // порожній інпут — не блокуємо: спрацює submit (Показати)
-    }
-    if (e.key === "Backspace" && !input.value && freqs.length) {
-      freqs.pop(); render();
-    }
-  });
-  // Втрата фокусу — зафіксувати недодану частоту як чіп.
-  input.addEventListener("blur", () => { setTimeout(commitPending, 120); });
+  function commitPending() {
+    const t = input.value.trim();
+    if (t) { addFreq(t); input.value = ""; }
+  }
 
-  // Видалення чіпа.
+  // ── Автокомпліт ──────────────────────────────────────────────
+  function closeAc() {
+    if (acBox) acBox.remove();
+    acBox = null;
+    acItems = [];
+    acIndex = -1;
+  }
+
+  function highlight() {
+    if (!acBox) return;
+    acBox.querySelectorAll(".callsign-autocomplete__item").forEach((el, i) => {
+      el.classList.toggle("is-selected", i === acIndex);
+    });
+  }
+
+  // Частота для чіпа: беремо саме частоту (а не маску), як її обрав користувач.
+  function freqOf(it) {
+    return String((it && (it.frequency || it.mask)) || "").trim();
+  }
+
+  function pickItem(it) {
+    const f = freqOf(it);
+    if (f) addFreq(f);
+    input.value = "";
+    closeAc();
+    input.focus();
+  }
+
+  async function lookup(q) {
+    const qs = String(q || "").trim();
+    closeAc();
+    if (qs.length < 2) return;
+    let rows = [];
+    try {
+      const r = await fetch("/api/networks/lookup?q=" + encodeURIComponent(qs),
+                            { headers: { Accept: "application/json" } });
+      const d = await r.json();
+      rows = (d && d.ok && Array.isArray(d.rows)) ? d.rows : [];
+    } catch (_) { return; }
+    if (!rows.length) return;
+
+    acItems = rows;
+    acIndex = -1;
+    acBox = document.createElement("div");
+    acBox.className = "callsign-autocomplete";
+    acBox.innerHTML = rows.map((row, i) => {
+      const label = `${row.frequency || ""}${row.mask ? " / " + row.mask : ""} — ${row.unit || ""}`.trim();
+      return `<button type="button" class="callsign-autocomplete__item" data-idx="${i}">${esc(label)}</button>`;
+    }).join("");
+    container.appendChild(acBox);
+  }
+
+  // Клік по пункту автокомпліту (делегуємо на контейнер) + видалення чіпа.
   container.addEventListener("click", (e) => {
-    const btn = e.target.closest(".freq-chip__remove");
-    if (btn) { removeFreq(btn.dataset.freq || ""); input.focus(); }
-    else if (e.target === container) input.focus();
+    const acItem = e.target.closest(".callsign-autocomplete__item");
+    if (acItem) {
+      const i = Number(acItem.dataset.idx);
+      if (Number.isFinite(i) && acItems[i]) pickItem(acItems[i]);
+      return;
+    }
+    const rm = e.target.closest(".freq-chip__remove");
+    if (rm) { removeFreq(rm.dataset.freq || ""); input.focus(); return; }
+    if (e.target === container) input.focus();
+  });
+
+  // Запобігаємо втраті фокуса/блюру до того, як обробимо клік по пункту.
+  container.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".callsign-autocomplete__item")) { e.preventDefault(); return; }
+    if (e.target === container) { e.preventDefault(); input.focus(); }
+  });
+
+  // ── Ввід ─────────────────────────────────────────────────────
+  input.addEventListener("input", () => {
+    clearTimeout(acTimer);
+    acTimer = setTimeout(() => lookup(input.value), 180);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" && acItems.length) {
+      e.preventDefault(); acIndex = (acIndex + 1) % acItems.length; highlight(); return;
+    }
+    if (e.key === "ArrowUp" && acItems.length) {
+      e.preventDefault(); acIndex = (acIndex - 1 + acItems.length) % acItems.length; highlight(); return;
+    }
+    if (e.key === "Escape") { closeAc(); return; }
+    if (e.key === ",") { e.preventDefault(); commitPending(); closeAc(); return; }
+    if (e.key === "Enter") {
+      if (acIndex >= 0 && acItems[acIndex]) { e.preventDefault(); pickItem(acItems[acIndex]); return; }
+      if (input.value.trim()) { e.preventDefault(); commitPending(); closeAc(); return; }
+      // порожній інпут без вибору — не блокуємо: спрацює submit (Показати)
+    }
+    if (e.key === "Backspace" && !input.value && freqs.length) { freqs.pop(); render(); }
+  });
+
+  // Закрити автокомпліт при кліку поза контейнером.
+  document.addEventListener("click", (e) => {
+    if (!container.contains(e.target)) closeAc();
   });
 
   // Перед сабмітом — зафіксувати поточний текст інпута (capture, до buildQuery).
   if (form) {
-    form.addEventListener("submit", () => { commitPending(); }, true);
+    form.addEventListener("submit", () => { commitPending(); closeAc(); }, true);
   }
-
-  // Клік по контейнеру фокусує інпут.
-  container.addEventListener("mousedown", (e) => {
-    if (e.target === container) { e.preventDefault(); input.focus(); }
-  });
 
   // Ініціалізація: перетворити початкове значення hidden (з URL) на чіпи.
   if (hidden.value && hidden.value.trim()) addFreq(hidden.value);
