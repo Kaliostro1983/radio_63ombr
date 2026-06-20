@@ -439,6 +439,172 @@ def api_network_by_id(id: int):
         }
 
 
+@router.get("/api/networks/{network_id}/cross-analysis")
+def api_network_cross_analysis(
+    network_id: int,
+    active_only: int = 1,
+    min_matches: int = 5,
+):
+    """Крос-аналіз спільних позивних у межах бригадно-полкової групи.
+
+    Порівнюємо цільову р/м з усіма р/м тієї самої групи ("Хто (група)",
+    networks.group_id). Якщо active_only=1 — лише з тими, що мають статус
+    мережі «Спостерігається». Позивні зіставляються за нормалізованою назвою
+    (callsigns.name; «НВ» виключаємо). До таблиці потрапляють лише ті р/м, що
+    мають >= min_matches спільних позивних із цільовою.
+
+    Відповідь:
+        target  — {id, frequency, unit, group_name, status}
+        peers   — усі р/м групи зі спільним лічильником (для контейнера-зведення)
+        columns — peers, що пройшли min_matches (стовпці таблиці)
+        rows    — позивні цільової р/м, наявні хоча б в одному column-peer:
+                  {name, target:{...}, cells:{<net_id>:{callsign_id,status_id,status_label}}}
+    """
+    min_matches = max(1, int(min_matches or 1))
+    with get_conn() as conn:
+        tgt = conn.execute(
+            "SELECT id, frequency, unit, group_id, status_id FROM networks WHERE id=?",
+            (network_id,),
+        ).fetchone()
+        if not tgt:
+            return JSONResponse({"ok": False, "error": "Радіомережу не знайдено"}, status_code=404)
+
+        group_name = ""
+        if tgt["group_id"]:
+            g = conn.execute("SELECT name FROM groups WHERE id=?", (tgt["group_id"],)).fetchone()
+            group_name = (g["name"] if g else "") or ""
+
+        st = conn.execute("SELECT name FROM statuses WHERE id=?", (tgt["status_id"],)).fetchone()
+        target_status = (st["name"] if st else "") or ""
+
+        # Статус мережі «Спостерігається» (для фільтра «Активні р/м»).
+        obs = conn.execute(
+            "SELECT id FROM statuses WHERE name='Спостерігається' LIMIT 1"
+        ).fetchone()
+        obs_id = obs["id"] if obs else None
+
+        # Назви статусів позивних (callsign_statuses) для підказок.
+        cs_status_label = {
+            int(r["id"]): (r["name"] or "")
+            for r in conn.execute("SELECT id, name FROM callsign_statuses").fetchall()
+        }
+
+        # Позивні цільової р/м (без «НВ»).
+        tgt_rows = conn.execute(
+            "SELECT id, name, COALESCE(callsign_status_id, status_id) AS sid "
+            "FROM callsigns WHERE network_id=? AND name <> 'НВ'",
+            (network_id,),
+        ).fetchall()
+        target_cs = {
+            r["name"]: {
+                "callsign_id": int(r["id"]),
+                "status_id": int(r["sid"]) if r["sid"] is not None else None,
+            }
+            for r in tgt_rows
+        }
+        target_names = list(target_cs.keys())
+
+        # Р/м тієї самої групи (окрім цільової), опційно лише «Спостерігається».
+        peer_wheres = ["group_id = ?", "id <> ?"]
+        peer_params: list = [tgt["group_id"] or 0, network_id]
+        if active_only and obs_id is not None:
+            peer_wheres.append("status_id = ?")
+            peer_params.append(obs_id)
+        peer_rows = conn.execute(
+            "SELECT id, frequency, unit, status_id FROM networks WHERE "
+            + " AND ".join(peer_wheres),
+            peer_params,
+        ).fetchall()
+        peers_meta = {
+            int(r["id"]): {
+                "network_id": int(r["id"]),
+                "frequency": r["frequency"] or "",
+                "unit": r["unit"] or "",
+            }
+            for r in peer_rows
+        }
+
+        # Спільні позивні по всіх peer-мережах одним запитом.
+        # cells[name][net_id] = {callsign_id, status_id, status_label}
+        cells: dict = {}
+        common_by_net: dict = {pid: 0 for pid in peers_meta}
+        if target_names and peers_meta:
+            ph_nets = ",".join("?" * len(peers_meta))
+            ph_names = ",".join("?" * len(target_names))
+            rows = conn.execute(
+                f"SELECT network_id, name, id, "
+                f"       COALESCE(callsign_status_id, status_id) AS sid "
+                f"FROM callsigns "
+                f"WHERE network_id IN ({ph_nets}) AND name <> 'НВ' "
+                f"  AND name IN ({ph_names})",
+                [*peers_meta.keys(), *target_names],
+            ).fetchall()
+            for r in rows:
+                nid = int(r["network_id"])
+                nm = r["name"]
+                sid = int(r["sid"]) if r["sid"] is not None else None
+                cells.setdefault(nm, {})[nid] = {
+                    "callsign_id": int(r["id"]),
+                    "status_id": sid,
+                    "status_label": cs_status_label.get(sid, "") if sid else "",
+                }
+                common_by_net[nid] = common_by_net.get(nid, 0) + 1
+
+        # Зведення по всіх peer (для контейнера), відсортоване за спільними desc.
+        peers_summary = sorted(
+            (
+                {**peers_meta[pid], "common": common_by_net.get(pid, 0)}
+                for pid in peers_meta
+            ),
+            key=lambda p: (-p["common"], p["frequency"]),
+        )
+        # Стовпці таблиці — ті, що пройшли поріг.
+        columns = [p for p in peers_summary if p["common"] >= min_matches]
+        col_ids = [c["network_id"] for c in columns]
+
+        # Рядки — позивні цільової, наявні хоча б в одному column-peer.
+        out_rows = []
+        for nm in target_names:
+            row_cells = {
+                nid: cells[nm][nid]
+                for nid in col_ids
+                if nm in cells and nid in cells[nm]
+            }
+            if not row_cells:
+                continue
+            tinfo = target_cs[nm]
+            out_rows.append({
+                "name": nm,
+                "target": {
+                    "callsign_id": tinfo["callsign_id"],
+                    "status_id": tinfo["status_id"],
+                    "status_label": cs_status_label.get(tinfo["status_id"], "") if tinfo["status_id"] else "",
+                },
+                "cells": row_cells,
+                "_n": len(row_cells),
+            })
+        out_rows.sort(key=lambda r: (-r["_n"], r["name"]))
+        for r in out_rows:
+            r.pop("_n", None)
+
+    return {
+        "ok": True,
+        "target": {
+            "id": int(tgt["id"]),
+            "frequency": tgt["frequency"] or "",
+            "unit": tgt["unit"] or "",
+            "group_name": group_name,
+            "status": target_status,
+            "total_callsigns": len(target_names),
+        },
+        "peers": peers_summary,
+        "columns": columns,
+        "rows": out_rows,
+        "min_matches": min_matches,
+        "active_only": bool(active_only),
+    }
+
+
 @router.get("/api/network-aliases")
 def api_network_aliases_list(actor=Depends(get_actor)):
     """List active (non-archived) network aliases with linked network frequency."""

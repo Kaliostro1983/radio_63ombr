@@ -161,6 +161,13 @@
         {% else %}
           <button type="button" class="secondary" style="width:220px" onclick="window.open('/networks?tab=etalons&pick={{ current.id }}','_blank')">Додати еталонку</button>
         {% endif %}
+        <button id="netCrossBtn" type="button" class="secondary cs-icon-btn"
+                title="Крос-аналіз: спільні позивні з р/м цієї ж бригадно-полкової групи"
+                aria-label="Крос-аналіз"
+                data-net-id="{{ current.id }}"
+                data-net-freq="{{ current.frequency }}">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="14" cy="14" r="3"/><path d="M8.1 8.1l3.8 3.8M13 7l0 0M7 13l0 0"/><path d="M11.5 6h2.5v2.5"/><path d="M8.5 14H6v-2.5"/></svg>
+        </button>
       {% else %}
         <button type="button" class="secondary" style="width:220px" disabled>Додати еталонку</button>
       {% endif %}
@@ -685,6 +692,43 @@
   </div>
 </div>
 
+<!-- ── Modal: Крос-аналіз спільних позивних ─────────────────────── -->
+<div id="netCrossModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-cross-close="1"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:1180px; width:96vw">
+    <div class="modal-head">
+      <div class="modal-title">Крос-аналіз спільних позивних</div>
+      <button type="button" class="secondary cs-icon-btn" data-cross-close="1" title="Закрити" aria-label="Закрити">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="xa-controls">
+        <div class="xa-field">
+          <label class="small">Радіомережа (частота)</label>
+          <div class="xa-ac-wrap">
+            <input id="xaFreq" type="text" autocomplete="off" placeholder="напр. 144.8250" />
+            <input id="xaNetId" type="hidden" value="" />
+            <div id="xaAcList" class="xa-ac-list hidden"></div>
+          </div>
+        </div>
+        <label class="xa-check small" title="Порівнювати лише з р/м у статусі «Спостерігається»">
+          <input id="xaActiveOnly" type="checkbox" checked /> Активні р/м
+        </label>
+        <div class="xa-field xa-field--min">
+          <label class="small">Не менше співпадінь</label>
+          <input id="xaMinMatches" type="number" min="1" value="5" />
+        </div>
+        <button id="xaShowBtn" type="button">Показати</button>
+      </div>
+
+      <div id="xaSummary" class="xa-summary hidden"></div>
+      <div id="xaMsg" class="small" style="opacity:.6; margin-top:10px"></div>
+      <div id="xaTableWrap" class="xa-table-wrap"></div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -1066,4 +1110,5 @@
 <script src="/static/networks_peleng.js?v=2" defer></script>
 <script src="/static/networks_aliases.js?v=1" defer></script>
 <script src="/static/networks_intercepts.js?v=1" defer></script>
+<script src="/static/networks_cross.js?v=1" defer></script>
 {% endblock %}
