@@ -1840,7 +1840,9 @@
 
     if (startInput) startInput.value = fmt(start);
     if (endInput)   endInput.value   = fmt(end);
-    if (netInput)   netInput.value   = String(freq || "").trim();
+    // «Частоти» — чіпи: через API контролера (очищає попередні).
+    if (window.itFreqChips) window.itFreqChips.set(String(freq || "").trim() ? [String(freq).trim()] : []);
+    else if (netInput) netInput.value = String(freq || "").trim();
 
     if (window.itSetTab) window.itSetTab("view");
 

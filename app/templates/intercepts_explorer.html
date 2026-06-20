@@ -123,62 +123,66 @@
         role="region"
         aria-label="Перегляд"
       >
-        <form id="interceptsFilterForm" class="intercepts-filter-form" autocomplete="off">
-          <div class="field">
-            <label for="periodStart">Початок періоду</label>
-            <input id="periodStart" name="period_start" type="datetime-local">
-          </div>
+        <form id="interceptsFilterForm" class="intercepts-filter-form intercepts-filter-form--rows" autocomplete="off">
+          <div class="if-row">
+            <div class="field">
+              <label for="periodStart">Початок періоду</label>
+              <input id="periodStart" name="period_start" type="datetime-local">
+            </div>
 
-          <div class="field">
-            <label for="periodEnd">Завершення періоду</label>
-            <input id="periodEnd" name="period_end" type="datetime-local">
-          </div>
+            <div class="field">
+              <label for="periodEnd">Завершення періоду</label>
+              <input id="periodEnd" name="period_end" type="datetime-local">
+            </div>
 
-          <div class="field">
-            <label for="networkQuery">Частота</label>
-            <div class="home-freq-input-wrap">
-              <input
-                id="networkQuery"
-                name="network"
-                type="text"
-                placeholder="Усі р/м"
-                autocomplete="off"
-              >
+            <div class="field field--freqs">
+              <label for="networkQuery">Частоти</label>
+              <div id="freqChips" class="freq-chips home-freq-input-wrap">
+                <input
+                  id="networkQuery"
+                  type="text"
+                  placeholder="Додати частоту…"
+                  autocomplete="off"
+                >
+              </div>
+              <input type="hidden" id="networkHidden" name="network" value="">
             </div>
           </div>
 
-          <div class="field">
-            <label for="callsignQuery">Позивний</label>
-            <div class="cs-filter-ac-wrap" style="position:relative">
-              <input
-                id="callsignQuery"
-                name="callsign"
-                type="text"
-                placeholder="Усі позивні"
-                autocomplete="off"
-              >
-              <div id="callsignAcDrop" class="cs-filter-ac-drop hidden"></div>
+          <div class="if-row">
+            <div class="field">
+              <label for="callsignQuery">Позивний</label>
+              <div class="cs-filter-ac-wrap" style="position:relative">
+                <input
+                  id="callsignQuery"
+                  name="callsign"
+                  type="text"
+                  placeholder="Усі позивні"
+                  autocomplete="off"
+                >
+                <div id="callsignAcDrop" class="cs-filter-ac-drop hidden"></div>
+              </div>
             </div>
-          </div>
 
-          <div class="field">
-            <label for="callsign2Query" title="Заповніть обидва позивні — знайде перехоплення, де один із них викликає іншого (caller↔callee)">Співрозмовник</label>
-            <div class="cs-filter-ac-wrap" style="position:relative">
-              <input
-                id="callsign2Query"
-                name="callsign2"
-                type="text"
-                placeholder="Другий позивний"
-                autocomplete="off"
-              >
+            <div class="field">
+              <label for="callsign2Query" title="Заповніть обидва позивні — знайде перехоплення, де один із них викликає іншого (caller↔callee)">Співрозмовник</label>
+              <div class="cs-filter-ac-wrap" style="position:relative">
+                <input
+                  id="callsign2Query"
+                  name="callsign2"
+                  type="text"
+                  placeholder="Другий позивний"
+                  autocomplete="off"
+                >
+              </div>
             </div>
-          </div>
 
-          <div class="field field-btn">
-            <label>&nbsp;</label>
-            <div class="action-buttons">
-              <button type="submit">Показати</button>
-              <div id="interceptsFoundCount" class="intercepts-found-pill" title="Кількість знайдених перехоплень">—</div>
+            <div class="field field-btn">
+              <label>&nbsp;</label>
+              <div class="action-buttons">
+                <button type="submit">Показати</button>
+                <div id="interceptsFoundCount" class="intercepts-found-pill" title="Кількість знайдених перехоплень">—</div>
+              </div>
             </div>
           </div>
         </form>
@@ -679,7 +683,12 @@
 
     startInput.value = qsStart || toDatetimeLocalValue(start);
     endInput.value = qsEnd || toDatetimeLocalValue(end);
-    if (networkInput && qsNet) networkInput.value = qsNet;
+    // «Частоти» — чіпи: початкове значення з URL кладемо в hidden #networkHidden
+    // (name="network"); контролер intercepts_freq_chips.js перетворить на чіпи.
+    if (qsNet) {
+      const nh = document.getElementById("networkHidden");
+      if (nh) nh.value = qsNet;
+    }
     if (callsignInput && qsCs) callsignInput.value = qsCs;
   })();
 </script>
@@ -990,11 +999,12 @@
  * — у флоу "Висновок → Додати → Орієнтир" має бути ПОВЕРХ .it-modal. */
 #conclLmPicker { z-index: 10500 !important; }
 </style>
+<script src="/static/intercepts_freq_chips.js?v=1"></script>
 <script src="/static/intercepts_explorer.js?v=29"></script>
-<script src="/static/monitor.js?v=117"></script>
+<script src="/static/monitor.js?v=118"></script>
 <script src="/static/landmarks.js?v=13" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>
-<script src="/static/networks_autocomplete.js?v=4" defer></script>
+<script src="/static/networks_autocomplete.js?v=5" defer></script>
 <script src="/static/dictionary.js?v=1" defer></script>
 {% endblock %}
 

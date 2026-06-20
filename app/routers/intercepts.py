@@ -472,9 +472,28 @@ def intercepts_explorer_list(
             where.append(f"({message_dt_sql}) <= ?")
             params.append(end_dt_norm)
 
-        exact_freq, freq_mask = normalize_freq_or_mask(network_raw)
+        # Поле «Частоти» підтримує кілька частот (чіпи), розділених комою.
+        # Кілька токенів → OR по точному збігу частоти/маски кожного.
+        network_tokens = [t.strip() for t in network_raw.split(",") if t.strip()]
 
-        if network_raw:
+        if len(network_tokens) > 1:
+            ors: list[str] = []
+            for tok in network_tokens:
+                ef, fm = normalize_freq_or_mask(tok)
+                if ef:
+                    ors.append("(COALESCE(n.frequency, '') = ? OR COALESCE(n.mask, '') = ?)")
+                    params.extend([ef, ef])
+                elif fm:
+                    ors.append("(COALESCE(n.frequency, '') LIKE ? OR COALESCE(n.mask, '') LIKE ?)")
+                    params.extend([fm, fm])
+                else:
+                    lv = f"%{tok}%"
+                    ors.append("(COALESCE(n.frequency, '') LIKE ? OR COALESCE(n.mask, '') LIKE ?)")
+                    params.extend([lv, lv])
+            if ors:
+                where.append("(" + " OR ".join(ors) + ")")
+        elif network_raw:
+            exact_freq, freq_mask = normalize_freq_or_mask(network_raw)
             if exact_freq:
                 where.append("(COALESCE(n.frequency, '') = ? OR COALESCE(n.mask, '') = ?)")
                 params.extend([exact_freq, exact_freq])

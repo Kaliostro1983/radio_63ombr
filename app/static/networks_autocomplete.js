@@ -135,12 +135,19 @@
   );
   setupNetworkFreqLookup(document.getElementById("etalonsFreqQuery"));
 
-  // Intercepts explorer — dispatch JS submit event (not form.submit which bypasses listeners)
+  // Intercepts explorer — «Частоти» з чіпами: обраний пункт додаємо чіпом
+  // (а не сабмітимо форму), щоб можна було набрати кілька частот.
   setupNetworkFreqLookup(
     document.getElementById("networkQuery"),
-    function () {
-      var f = document.getElementById("interceptsFilterForm");
-      if (f) f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    function (it, value) {
+      const inp = document.getElementById("networkQuery");
+      if (window.itAddFreqChip) {
+        window.itAddFreqChip(value);
+        if (inp) { inp.value = ""; inp.focus(); }
+      } else {
+        var f = document.getElementById("interceptsFilterForm");
+        if (f) f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      }
     }
   );
 

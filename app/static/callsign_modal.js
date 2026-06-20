@@ -120,7 +120,9 @@
       const csEl    = document.getElementById("callsignQuery");
       if (startEl) startEl.value = start;
       if (endEl)   endEl.value   = end;
-      if (netEl)   netEl.value   = networkToken;
+      // «Частоти» — чіпи: заповнюємо через API контролера (очищає попередні).
+      if (window.itFreqChips) window.itFreqChips.set(networkToken ? [networkToken] : []);
+      else if (netEl) netEl.value = networkToken;
       if (csEl)    csEl.value    = callsignName;
       window.itSetTab("view");
       const form = document.getElementById("interceptsFilterForm");

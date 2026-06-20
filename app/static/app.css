@@ -1490,6 +1490,69 @@ button.secondary{
   align-items:end;
 }
 
+/* Дворядний варіант фільтра «Перегляд»: ряд 1 — дати + «Частоти» (широке),
+   ряд 2 — решта (Позивний, Співрозмовник, Показати). */
+.intercepts-filter-form--rows{
+  display:flex !important;
+  flex-direction:column;
+  gap:12px;
+}
+.intercepts-filter-form--rows .if-row{
+  display:flex;
+  gap:12px;
+  align-items:flex-end;
+  flex-wrap:wrap;
+}
+.intercepts-filter-form--rows .field--freqs{
+  flex:1 1 420px;
+  min-width:280px;
+}
+/* Контейнер чіпів частот (також .home-freq-input-wrap для автокомпліту) */
+.freq-chips{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+  min-height:42px;
+  padding:5px 8px;
+  position:relative;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--input-bg, #11151a);
+}
+.freq-chips #networkQuery{
+  flex:1 1 90px;
+  min-width:90px;
+  max-width:none !important;
+  border:0 !important;
+  background:transparent !important;
+  padding:4px 2px;
+  outline:none;
+  box-shadow:none !important;
+}
+.freq-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 4px 2px 10px;
+  background:rgba(255,255,255,.08);
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:13px;
+  white-space:nowrap;
+}
+.freq-chip__remove{
+  cursor:pointer;
+  border:0;
+  background:transparent;
+  color:var(--fg);
+  opacity:.6;
+  font-size:16px;
+  line-height:1;
+  padding:0 3px;
+}
+.freq-chip__remove:hover{ opacity:1; }
+
 /* Автокомпліт поля "Позивний" */
 .cs-filter-ac-drop{
   position:absolute;
