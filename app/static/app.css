@@ -1261,8 +1261,8 @@ button.secondary{
   background:transparent; border:1px solid var(--border); color:var(--fg); cursor:pointer;
 }
 .cs-stmgr-btn:hover{ background:rgba(255,255,255,.08); }
-.cs-stmgr-btn--save{ color:var(--accent,#7cc4ff);
-  border-color:color-mix(in srgb, var(--accent,#7cc4ff) 45%, var(--border)); }
+.cs-stmgr-btn--save{ color:#22c55e;
+  border-color:color-mix(in srgb, #22c55e 50%, var(--border)); }
 .cs-stmgr-btn--del{ color:var(--danger);
   border-color:color-mix(in srgb, var(--danger) 50%, var(--border)); }
 

@@ -323,11 +323,6 @@
       modalStatus.appendChild(opt);
     });
 
-    const optAdd = document.createElement("option");
-    optAdd.value = "__add__";
-    optAdd.textContent = "— Додати статус —";
-    modalStatus.appendChild(optAdd);
-
     if (selectedId) {
       modalStatus.value = String(selectedId);
     } else {
