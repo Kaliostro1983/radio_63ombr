@@ -690,6 +690,16 @@
       return;
     }
 
+    // Дубль: подію вже надіслано іншим висновком — підтверджуємо, щоб не
+    // продублювати звіт у технічному чаті випадково.
+    if (_deltaModalRow.twin_sended && !_deltaModalRow.sended) {
+      if (!window.confirm(
+            "Цю подію вже надіслано іншим висновком (дубль).\n" +
+            "Надіслати Дельта-звіт усе одно?")) {
+        return;
+      }
+    }
+
     const sendBtn = $("cnDeltaSendBtn");
     if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "…"; }
 
@@ -736,10 +746,13 @@
     }
 
     const btn = $("cnSendAllUnsent");
-    if (btn) { btn.disabled = true; btn.dataset._t = btn.textContent; btn.textContent = "Надсилання…"; }
+    const total = candidates.length;
+    if (btn) { btn.disabled = true; btn.dataset._t = btn.textContent; }
 
-    let sent = 0, skipped = 0, failed = 0;
+    let sent = 0, skipped = 0, failed = 0, done = 0;
     for (const row of candidates) {
+      done++;
+      if (btn) btn.textContent = `Надсилання… ${done}/${total}`;
       const fields = deltaFieldsFromRow(row, typeById(row.type_id));
       if (!fields) { skipped++; continue; }   // немає іконки
       const res = await pushDeltaText(buildDeltaText(fields, row));
