@@ -5930,7 +5930,18 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .xa-peer b{ margin-left:3px; }
 .xa-peer--pass{ opacity:1; color:#22c55e; border-color:color-mix(in srgb,#22c55e 50%,var(--border)); }
 
-.xa-table-wrap{ overflow:auto; max-height:60vh; }
+/* Модалка крос-аналізу: фікс-висота + внутрішній скрол таблиці, щоб контент
+   не виходив за нижню межу вікна. */
+#netCrossModal .modal-card{
+  display:flex; flex-direction:column;
+  max-height:calc(100vh - 80px);
+  margin:40px auto;
+}
+#netCrossModal .modal-body{
+  display:flex; flex-direction:column; min-height:0; flex:1 1 auto;
+  overflow:hidden;
+}
+.xa-table-wrap{ flex:1 1 auto; min-height:0; overflow:auto; }
 .xa-table{ border-collapse:separate; border-spacing:0; }
 .xa-table th, .xa-table td{ border-bottom:1px solid var(--border,#2b3340); padding:4px 8px; text-align:center; }
 .xa-th-name{ position:sticky; left:0; z-index:3; background:var(--card,#1b1f24); text-align:left; }
