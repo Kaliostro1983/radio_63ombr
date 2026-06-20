@@ -1503,16 +1503,21 @@ button.secondary{
   align-items:flex-end;
   flex-wrap:wrap;
 }
-/* Поля фіксованої ширини не стискаються; «Частоти» — гнучке й займає решту. */
-.intercepts-filter-form--rows .if-row > .field{ flex:0 0 auto; }
+/* Поля з визначеною шириною (flex-basis) — інпути всередині заповнюють їх на
+   100%, тож datetime-local не схлопується. «Частоти» — гнучке, займає решту. */
+.intercepts-filter-form--rows .if-row > .field{ flex:0 0 auto; min-width:0; }
+.intercepts-filter-form--rows .field--dt{ flex:0 0 190px; width:190px; }
+.intercepts-filter-form--rows .field--cs{ flex:0 0 220px; width:220px; }
 .intercepts-filter-form--rows .field--freqs{
-  flex:1 1 360px;
+  flex:1 1 340px;
   min-width:280px;
 }
-.intercepts-filter-form--rows #periodStart,
-.intercepts-filter-form--rows #periodEnd{ width:200px; max-width:200px; }
-.intercepts-filter-form--rows #callsignQuery,
-.intercepts-filter-form--rows #callsign2Query{ width:220px; max-width:220px; }
+.intercepts-filter-form--rows .field--dt input,
+.intercepts-filter-form--rows .field--cs input{
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+}
 /* Контейнер чіпів частот (також .home-freq-input-wrap для автокомпліту) */
 .freq-chips{
   display:flex;
