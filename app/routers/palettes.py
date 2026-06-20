@@ -178,7 +178,7 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 90):
         unit_ids = list(spec.keys())
         ph = ",".join("?" * len(unit_ids))
         prows = conn.execute(
-            f"""SELECT p.id, p.name, l.unit_id
+            f"""SELECT p.id, p.seq_no, p.name, l.unit_id
                 FROM palettes p JOIN palette_unit_links l ON l.palette_id = p.id
                 WHERE p.is_archived = 0 AND l.unit_id IN ({ph})""",
             unit_ids,
@@ -188,7 +188,11 @@ def api_palettes_for_unit(unit: str = "", network_id: int = 0, days: int = 90):
         for r in prows:
             pid = int(r["id"]); uid = int(r["unit_id"]); s = spec[uid][1]
             if pid not in best or s > best[pid]["spec"]:
-                best[pid] = {"id": pid, "name": r["name"] or "", "unit": spec[uid][0], "spec": s}
+                best[pid] = {
+                    "id": pid,
+                    "seq_no": int(r["seq_no"]) if r["seq_no"] is not None else None,
+                    "name": r["name"] or "", "unit": spec[uid][0], "spec": s,
+                }
 
         palettes = []
         for pid, info in best.items():
@@ -386,7 +390,7 @@ def api_palettes_efficiency(days: int = 90):
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         prows = conn.execute(
-            "SELECT id, name FROM palettes WHERE is_archived = 0 ORDER BY name"
+            "SELECT id, seq_no, name FROM palettes WHERE is_archived = 0 ORDER BY seq_no"
         ).fetchall()
         palettes = []
         for p in prows:
@@ -406,6 +410,7 @@ def api_palettes_efficiency(days: int = 90):
             ).fetchall()
             palettes.append({
                 "id": pid,
+                "seq_no": int(p["seq_no"]) if p["seq_no"] is not None else None,
                 "name": p["name"] or "",
                 "units": [str(u["name"]) for u in units],
                 "conclusions": int(cnt["c"]) if cnt and cnt["c"] is not None else 0,
@@ -436,12 +441,12 @@ def api_palettes_list(
     with get_conn() as conn:
         rows = conn.execute(
             f"""
-            SELECT p.id, p.name, p.source_format, p.source_filename, p.comment,
+            SELECT p.id, p.seq_no, p.name, p.source_format, p.source_filename, p.comment,
                    p.is_archived, p.imported_at, p.last_used_at, p.use_count,
                    p.point_count
             FROM palettes p
             {where_sql}
-            ORDER BY p.is_archived, p.name
+            ORDER BY p.is_archived, p.seq_no
             """,
             params,
         ).fetchall()
@@ -460,6 +465,7 @@ def api_palettes_list(
             ).fetchone()[0]
             items.append({
                 "id": int(r["id"]),
+                "seq_no": int(r["seq_no"]) if r["seq_no"] is not None else None,
                 "name": str(r["name"]),
                 "source_format": str(r["source_format"] or ""),
                 "comment": str(r["comment"] or ""),
@@ -677,13 +683,13 @@ def api_palette_search(
         rows = conn.execute(
             f"""
             SELECT pp.id, pp.code, pp.code_fold, pp.color, pp.lat, pp.lon,
-                   pp.palette_id, pal.name AS palette_name,
+                   pp.palette_id, pal.name AS palette_name, pal.seq_no AS palette_seq_no,
                    reg.label AS region_label
             FROM palette_points pp
             JOIN palettes pal ON pal.id = pp.palette_id
             LEFT JOIN palette_regions reg ON reg.id = pp.region_id
             WHERE {where_sql}
-            ORDER BY pal.name, pp.code_fold
+            ORDER BY pal.seq_no, pp.code_fold
             LIMIT ?
             """,
             [*params, int(limit)],
@@ -707,6 +713,7 @@ def api_palette_search(
         g = grouped.setdefault(pid, {
             "palette_id": pid,
             "palette_name": str(r["palette_name"]),
+            "palette_seq_no": int(r["palette_seq_no"]) if r["palette_seq_no"] is not None else None,
             "points": [],
         })
         g["points"].append({

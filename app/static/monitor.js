@@ -742,7 +742,25 @@
     if (coords)     parts.push(coords);
     if (separator)  parts.push(separator);
     if (intercept)  parts.push(intercept);
+    // Якщо висновок зроблено завдяки палітрі (обрано її точку) — після
+    // перехоплення додаємо «[Палітра: N]» (N — порядковий id, як «#N»). Кілька
+    // різних палітр → перелік через кому. Цей параметр відділяється від тіла
+    // перехоплення при парсингу (_bodyOnly / analytical_intercept_parser).
+    const palTag = _conclPaletteTag();
+    if (palTag) parts.push(palTag);
     return parts.join("\n\n");
+  }
+
+  /* «[Палітра: N]» з обраних точок палітри (порядкові id, distinct, за зрост.). */
+  function _conclPaletteTag() {
+    const seqs = [];
+    _conclFixedMarkers.forEach(e => {
+      const s = e && e.palette ? Number(e.palette.seq_no) : NaN;
+      if (Number.isFinite(s) && s > 0 && !seqs.includes(s)) seqs.push(s);
+    });
+    if (!seqs.length) return "";
+    seqs.sort((a, b) => a - b);
+    return `[Палітра: ${seqs.join(", ")}]`;
   }
 
   /* ═════════════════════════════════════════
@@ -1092,7 +1110,7 @@
       const checked = _palScope.has(e.p.id) ? " checked" : "";
       html += `<label class="cpl-row" title="${_esc(e.p.unit || "")}">` +
         `<input type="checkbox" data-pid="${e.p.id}"${checked}>` +
-        `<span class="cpl-name">${_esc(e.p.name || "")}</span>` +
+        `<span class="cpl-name">${_palSeqPrefix(e.p.seq_no)}${_esc(e.p.name || "")}</span>` +
         other +
         `<span class="cpl-cnt${hot}">${e.cntFreq}</span>` +
         `</label>`;
@@ -3523,9 +3541,19 @@
      порожнього рядка. Без цього reassembler склеює цифри часу й частоти
      (напр. "19" з 18:38:19 + "156" з 156.4750 → 19156) і зміщує пари. */
   function _bodyOnly(text) {
-    const s = String(text || "");
+    const s = _stripPaletteTag(String(text || ""));
     const m = s.match(/\n\s*\n([\s\S]*)$/);
     return m ? m[1] : s;
+  }
+
+  /* Прибирає службовий маркер «[Палітра: N]» (та порожні рядки навколо нього)
+     з тексту — щоб він не потрапляв у тіло перехоплення при парсингу квадратів
+     і п'ятизначних. Тег додається у _buildConclFullText після перехоплення. */
+  function _stripPaletteTag(text) {
+    return String(text || "")
+      .replace(/\n\s*\n\s*\[Палітра:[^\]]*\]\s*$/u, "")
+      .replace(/\s*\[Палітра:[^\]]*\]\s*$/u, "")
+      .trimEnd();
   }
 
   /* Квадрати: усі унікальні пари двозначних чисел.
@@ -4057,6 +4085,12 @@
     return "";
   }
 
+  /* Префікс «#N» (порядковий id палітри) перед назвою. Порожньо, якщо seq_no нема. */
+  function _palSeqPrefix(seq) {
+    const n = Number(seq);
+    return (Number.isFinite(n) && n > 0) ? `<span class="pal-seq">#${n}</span> ` : "";
+  }
+
   function _palRenderList() {
     const host = document.getElementById("palList");
     if (!host) return;
@@ -4070,7 +4104,7 @@
       // Усі дії з палітрою — у контекстному меню за кліком на кружечок.
       item.innerHTML =
         `<input type="checkbox" class="pal-item-check" ${inScope ? "checked" : ""} title="Шукати в цій палітрі">` +
-        `<span class="pal-item-name" title="${_esc(p.name)}">${_esc(p.name)}</span>` +
+        `<span class="pal-item-name" title="${_esc(p.name)}">${_palSeqPrefix(p.seq_no)}${_esc(p.name)}</span>` +
         `<button class="pal-menu-btn" type="button" title="Дії з палітрою" aria-label="Дії з палітрою">` +
           `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4">` +
             `<circle cx="10" cy="10" r="8"/>` +
@@ -4145,6 +4179,7 @@
     _palCtxPid = p.id;
     const units = (p.units || []).map(u => `<span class="pal-unit-chip">${_esc(u.name)}</span>`).join("");
     m.querySelector(".pal-ctx-info").innerHTML =
+      `<div class="pal-ctx-name">${_palSeqPrefix(p.seq_no)}${_esc(p.name || "")}</div>` +
       `<div class="pal-ctx-meta">${p.point_count} тчк · ${p.region_count} обл. · викор.: ${p.use_count}${_palStaleBadge(p)}</div>` +
       (units ? `<div class="pal-ctx-units">${units}</div>` : "");
     m.querySelector('[data-act="arch"]').textContent = p.is_archived ? "🗄 Розархівувати" : "🗄 Архівувати";
@@ -4513,7 +4548,7 @@
           // Інші варіанти ТОГО Ж пошуку прибираються разом із своїм
           // search-чіпом; інші пошуки (інші коди) лишаються на карті.
           _addFixedMarker(map, p.lat, p.lon, null,
-            p.palette_id ? { id: p.palette_id, code: p.code || "" } : null);
+            p.palette_id ? { id: p.palette_id, seq_no: p.palette_seq_no, code: p.code || "" } : null);
           if (chipEntry) _palRemoveSearchChip(chipEntry);
           else _palClearMatchMarkers();  // legacy fallback
           const ci = document.getElementById("conclCoordInput");
@@ -4568,7 +4603,7 @@
       const pts = [];
       results.forEach(g => {
         if (_palScope.size && !_palScope.has(g.palette_id)) return;
-        g.points.forEach(pt => { if (pt.lat != null && pt.lon != null) pts.push({ ...pt, palette_name: g.palette_name, palette_id: g.palette_id }); });
+        g.points.forEach(pt => { if (pt.lat != null && pt.lon != null) pts.push({ ...pt, palette_name: g.palette_name, palette_id: g.palette_id, palette_seq_no: g.palette_seq_no }); });
       });
       pts.forEach(p => { const m = _palPlaceVariant(_conclMap, p, entry); if (m) allMarkers.push(m); });
     }
@@ -4607,7 +4642,7 @@
     let pts = [];
     results.forEach(g => {
       if (_palScope.size && !_palScope.has(g.palette_id)) return;
-      g.points.forEach(pt => pts.push({ ...pt, palette_name: g.palette_name, palette_id: g.palette_id }));
+      g.points.forEach(pt => pts.push({ ...pt, palette_name: g.palette_name, palette_id: g.palette_id, palette_seq_no: g.palette_seq_no }));
     });
     pts = pts.filter(p => p.lat != null && p.lon != null);
 

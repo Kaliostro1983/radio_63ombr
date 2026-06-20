@@ -1759,6 +1759,21 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         """,
         stage="create_table:palettes",
     )
+    # Порядковий id палітри (відображається як "#N"). Backfill за порядком id;
+    # нові палітри отримують seq_no при імпорті (persist_palette).
+    _ensure_column(conn, "palettes", "seq_no", "seq_no INTEGER")
+    _try_ddl(
+        conn,
+        "UPDATE palettes SET seq_no = ("
+        "  SELECT COUNT(*) FROM palettes p2 WHERE p2.id <= palettes.id"
+        ") WHERE seq_no IS NULL",
+        stage="backfill:palettes.seq_no",
+    )
+    _try_ddl(
+        conn,
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_palettes_seq_no ON palettes(seq_no)",
+        stage="index:palettes.seq_no",
+    )
     _try_ddl(
         conn,
         """

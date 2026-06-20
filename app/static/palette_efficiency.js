@@ -15,6 +15,11 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  function seqPrefix(seq) {
+    const n = Number(seq);
+    return (Number.isFinite(n) && n > 0) ? `<span class="pe-seq">#${n}</span> ` : "";
+  }
+
   function heatClass(n) {
     if (n <= 0) return "pe-cnt--zero";
     if (n <= 10) return "pe-cnt--low";
@@ -49,6 +54,7 @@
     }
 
     const rows = (data.palettes || []).map((p) => ({
+      seq_no: p.seq_no,
       name: p.name || "",
       units: (p.units || []).join(", "),
       conclusions: Number(p.conclusions || 0),
@@ -63,7 +69,7 @@
     const trs = rows.map((r, i) => `
       <tr>
         <td class="pe-idx">${i + 1}</td>
-        <td class="pe-name">${esc(r.name)}</td>
+        <td class="pe-name">${seqPrefix(r.seq_no)}${esc(r.name)}</td>
         <td class="pe-units">${esc(r.units) || "—"}</td>
         <td class="pe-cnt-cell"><span class="pe-cnt ${heatClass(r.conclusions)}">${r.conclusions}</span></td>
         <td class="pe-cnt-cell"><span class="pe-pts">${r.points}</span></td>

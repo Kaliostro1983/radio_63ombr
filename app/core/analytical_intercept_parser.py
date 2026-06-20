@@ -35,6 +35,30 @@ RE_MGRS_ANY = re.compile(
     flags=re.IGNORECASE,
 )
 
+# Службовий маркер «[Палітра: N]» (порядковий id палітри, з якої взято точку).
+# Додається у редакторі висновку після перехоплення; на парсингу його треба
+# відділити від тіла перехоплення, щоб він не псував шаблонний парсер.
+RE_PALETTE_TAG = re.compile(r"\[\s*Палітра\s*:\s*([^\]]*)\]", flags=re.IGNORECASE)
+
+
+def _extract_palette_tag(text: str) -> tuple[str, list[int]]:
+    """Витягти «[Палітра: N, …]» з тексту.
+
+    Повертає (текст_без_тегу, [порядкові_id]). Тег видаляється разом із
+    порожніми рядками навколо нього.
+    """
+    seqs: list[int] = []
+    for m in RE_PALETTE_TAG.finditer(text or ""):
+        for tok in re.split(r"[,\s]+", (m.group(1) or "").strip()):
+            if tok.isdigit():
+                n = int(tok)
+                if n not in seqs:
+                    seqs.append(n)
+    cleaned = RE_PALETTE_TAG.sub("", text or "")
+    # Прибрати осиротілі порожні рядки/пробіли, що лишилися від тегу.
+    cleaned = re.sub(r"\n\s*\n\s*$", "", cleaned).rstrip()
+    return cleaned, seqs
+
 
 def _detect_source(line: str) -> tuple[str, str]:
     """Map a separator line to (source_side, source_marker).
@@ -126,6 +150,7 @@ def is_analytical_intercept(text: str) -> bool:
     if not conclusion:
         return False
 
+    tail, _seqs = _extract_palette_tag(tail)
     parsed = parse_template_intercept(tail)
     return bool(parsed.get("ok", False))
 
@@ -151,6 +176,9 @@ def parse_analytical_intercept(text: str) -> Dict[str, Any]:
     if not conclusion:
         return {"ok": False, "error": "analytical_conclusion_not_found"}
 
+    # Відокремити службовий маркер «[Палітра: N]» від тіла перехоплення.
+    tail, palette_seqs = _extract_palette_tag(tail)
+
     parsed = parse_template_intercept(tail)
     if not parsed.get("ok", False):
         return parsed
@@ -161,5 +189,6 @@ def parse_analytical_intercept(text: str) -> Dict[str, Any]:
     out["analytical_source_side"] = source_side or "analytics63"
     out["analytical_source_marker"] = source_marker or "63ombr"
     out["analytical_tail_text"] = tail
+    out["analytical_palette_seqs"] = palette_seqs
     out["source_message_format"] = "analytical_type"
     return out

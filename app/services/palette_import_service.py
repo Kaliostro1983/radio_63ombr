@@ -572,14 +572,21 @@ def persist_palette(
     else:
         mn_lat = mn_lon = mx_lat = mx_lon = None
 
+    # Наступний порядковий id (#N) — max(seq_no)+1.
+    try:
+        row = conn.execute("SELECT COALESCE(MAX(seq_no), 0) + 1 AS n FROM palettes").fetchone()
+        next_seq = int(row["n"] if not isinstance(row, tuple) else row[0])
+    except Exception:
+        next_seq = None
+
     cur = conn.execute(
         """
         INSERT INTO palettes (name, source_format, source_filename, comment,
-            is_archived, imported_at, point_count, min_lat, min_lon, max_lat, max_lon)
-        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+            is_archived, imported_at, point_count, min_lat, min_lon, max_lat, max_lon, seq_no)
+        VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
         """,
         (parsed.name, parsed.source_format, parsed.source_filename, comment,
-         now, len(pts), mn_lat, mn_lon, mx_lat, mx_lon),
+         now, len(pts), mn_lat, mn_lon, mx_lat, mx_lon, next_seq),
     )
     palette_id = int(cur.lastrowid)
 
