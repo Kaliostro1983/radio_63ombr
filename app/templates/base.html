@@ -321,6 +321,58 @@
   })();
 </script>
 
+<!-- Shared callsign links-graph modal (iframe → /callsigns?tab=links&...&embed=1).
+     Opened from the callsign modal "Зв'язки" button (current tab, not a new tab). -->
+<div id="globalLinksModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-global-links-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="globalLinksTitle"
+       style="max-width:1280px; width:96vw">
+    <div class="modal-head">
+      <div id="globalLinksTitle" class="modal-title">Зв'язки</div>
+      <button type="button" class="secondary" data-global-links-close style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <iframe id="globalLinksFrame" src="about:blank" title="Зв'язки"
+              style="width:100%; height:82vh; border:0; display:block; background:var(--bg)"></iframe>
+    </div>
+  </div>
+</div>
+<script>
+  // Глобальна модалка графа зв'язків позивного. Відкривається з модалки
+  // позивного («Зв'язки») на поточній вкладці, а не в новій.
+  window.openLinksView = function (callsignId, name) {
+    var modal = document.getElementById("globalLinksModal");
+    var frame = document.getElementById("globalLinksFrame");
+    if (!modal || !frame || !callsignId) return false;
+    var qs = new URLSearchParams({
+      tab: "links", callsign_id: String(callsignId), days: "14", advanced: "0", embed: "1",
+    });
+    var title = document.getElementById("globalLinksTitle");
+    if (title) title.textContent = name ? ("Зв'язки · " + name) : "Зв'язки";
+    frame.src = "/callsigns?" + qs.toString();
+    modal.classList.remove("hidden");
+    modal.removeAttribute("aria-hidden");
+    if (window.__modalToFront) window.__modalToFront(modal);
+    return true;
+  };
+  (function () {
+    var modal = document.getElementById("globalLinksModal");
+    if (!modal) return;
+    function close() {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+      var frame = document.getElementById("globalLinksFrame");
+      if (frame) frame.src = "about:blank";
+    }
+    modal.querySelectorAll("[data-global-links-close]").forEach(function (el) {
+      el.addEventListener("click", function (e) { e.stopPropagation(); close(); });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !modal.classList.contains("hidden")) close();
+    });
+  })();
+</script>
+
 <!-- Shared landmark edit modal (/landmarks, /intercepts-explorer) -->
 <div id="lmModal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" data-close="1"></div>
@@ -448,7 +500,7 @@
 <script src="/static/vendor/leaflet/leaflet.js" defer></script>
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/vendor/proj4.js" defer></script>
-<script src="/static/callsign_modal.js?v=21" defer></script>
+<script src="/static/callsign_modal.js?v=22" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 /* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається

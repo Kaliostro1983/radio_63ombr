@@ -183,6 +183,17 @@
       } catch (_) { /* fall through to new-tab fallback */ }
     }
 
+    // Поза /callsigns — відкриваємо граф у модалці на поточній вкладці (iframe),
+    // а не в новій вкладці браузера.
+    if (window.openLinksView && window.openLinksView(callsignId, callsignName)) return;
+
+    // Якщо модалку викликано всередині iframe — делегуємо батьківському вікну.
+    try {
+      if (window.parent && window.parent !== window &&
+          typeof window.parent.openLinksView === "function" &&
+          window.parent.openLinksView(callsignId, callsignName)) return;
+    } catch (e) { /* cross-origin — у fallback */ }
+
     const days = 14;
     const adv = 0;
     const url = `/callsigns?tab=links&callsign_id=${encodeURIComponent(callsignId)}&days=${encodeURIComponent(days)}&advanced=${encodeURIComponent(adv)}`;

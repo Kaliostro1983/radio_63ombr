@@ -1,7 +1,19 @@
 {% extends "base.html" %}
+{% set is_embed = request.query_params.get("embed") == "1" %}
 
 {% block content %}
+{% if is_embed %}
+<style>
+  /* embed=1 — сторінка вбудована як iframe (модалка «Зв'язки» з картки позивного):
+     прибираємо шапку/навігацію, лишаємо лише граф зв'язків (#csPaneLinks). */
+  html, body { background: var(--bg); margin:0; height:100%; overflow:hidden; }
+  .site-header, .site-footer, .top-nav, .nav-bar, .global-nav, .app-sidebar, .sidebar { display:none !important; }
+  .callsigns-page-header { display:none !important; }
+  .page { padding:0 !important; }
+</style>
+{% endif %}
 <div class="page">
+  {% if not is_embed %}
   <div class="page-header callsigns-page-header">
     <div class="callsigns-page-header__title">
       <h1>Позивні</h1>
@@ -13,6 +25,7 @@
       <button id="csOpenWanted" type="button" class="secondary">Розшук</button>
     </div>
   </div>
+  {% endif %}
 
   <!-- Legacy tab buttons (приховані) — лишаємо для зворотньої сумісності
        з existing setTab-логікою та для URL ?tab=X. -->
