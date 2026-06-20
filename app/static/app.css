@@ -1503,10 +1503,16 @@ button.secondary{
   align-items:flex-end;
   flex-wrap:wrap;
 }
+/* Поля фіксованої ширини не стискаються; «Частоти» — гнучке й займає решту. */
+.intercepts-filter-form--rows .if-row > .field{ flex:0 0 auto; }
 .intercepts-filter-form--rows .field--freqs{
-  flex:1 1 420px;
+  flex:1 1 360px;
   min-width:280px;
 }
+.intercepts-filter-form--rows #periodStart,
+.intercepts-filter-form--rows #periodEnd{ width:200px; max-width:200px; }
+.intercepts-filter-form--rows #callsignQuery,
+.intercepts-filter-form--rows #callsign2Query{ width:220px; max-width:220px; }
 /* Контейнер чіпів частот (також .home-freq-input-wrap для автокомпліту) */
 .freq-chips{
   display:flex;
