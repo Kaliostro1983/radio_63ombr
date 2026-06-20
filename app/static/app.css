@@ -1495,6 +1495,8 @@ button.secondary{
 .intercepts-filter-form--rows{
   display:flex !important;
   flex-direction:column;
+  align-items:stretch;   /* перебиваємо базовий align-items:end (через нього
+                            рядки тулились праворуч і лишали пусто зліва) */
   gap:12px;
 }
 .intercepts-filter-form--rows .if-row{
@@ -1511,6 +1513,7 @@ button.secondary{
 .intercepts-filter-form--rows .field--freqs{
   flex:1 1 340px;
   min-width:280px;
+  max-width:560px;   /* не розтягуємо на всю ширину — рівняємось до 2-го ряду */
 }
 .intercepts-filter-form--rows .field--dt input,
 .intercepts-filter-form--rows .field--cs input{
