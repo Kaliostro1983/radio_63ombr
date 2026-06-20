@@ -37,6 +37,13 @@
   const btnOpenLinks = $("csOpenLinks");
   const quickWrap = $("csQuickId");
 
+  const statusManageBtn = $("csModalStatusManage");
+  const stMgrModal = $("csStatusManagerModal");
+  const stMgrNewName = $("csStMgrNewName");
+  const stMgrAddBtn = $("csStMgrAdd");
+  const stMgrErr = $("csStMgrErr");
+  const stMgrList = $("csStMgrList");
+
   const statusModal = $("csStatusModal");
   const newStatusName = $("csNewStatusName");
   const newStatusErr = $("csNewStatusErr");
@@ -492,6 +499,162 @@
     if (!newStatusErr) return;
     newStatusErr.textContent = msg;
     newStatusErr.style.display = "block";
+  }
+
+  /* ── Керування статусами (додати / редагувати / видалити) ── */
+
+  function showStMgrError(msg) {
+    if (!stMgrErr) return;
+    stMgrErr.textContent = msg || "";
+    stMgrErr.style.display = msg ? "block" : "none";
+  }
+
+  function renderStatusManager() {
+    if (!stMgrList) return;
+    stMgrList.innerHTML = "";
+    if (!Array.isArray(STATUS_LIST) || !STATUS_LIST.length) {
+      const empty = document.createElement("div");
+      empty.className = "small";
+      empty.style.opacity = ".6";
+      empty.textContent = "Статусів ще немає.";
+      stMgrList.appendChild(empty);
+      return;
+    }
+    STATUS_LIST.forEach(function (s) {
+      const sid = Number(s.id);
+      const row = document.createElement("div");
+      row.className = "cs-stmgr-row";
+      row.dataset.id = String(sid);
+
+      const img = document.createElement("img");
+      img.src = "/static/icons/callsign_statuses/" + sid + ".svg";
+      img.alt = "";
+      img.onerror = function () {
+        this.onerror = null;
+        this.src = "/static/icons/callsign_statuses/_default.svg";
+      };
+
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.className = "cs-stmgr-name";
+      inp.value = String(s.name || "");
+
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "cs-stmgr-btn cs-stmgr-btn--save";
+      saveBtn.title = "Зберегти назву";
+      saveBtn.setAttribute("data-act", "save");
+      saveBtn.innerHTML =
+        '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg>';
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "cs-stmgr-btn cs-stmgr-btn--del";
+      delBtn.title = "Видалити статус";
+      delBtn.setAttribute("data-act", "del");
+      delBtn.innerHTML =
+        '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4.5h4V6M6 6l.7 9.5a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L15 6"/></svg>';
+
+      row.appendChild(img);
+      row.appendChild(inp);
+      row.appendChild(saveBtn);
+      row.appendChild(delBtn);
+      stMgrList.appendChild(row);
+    });
+  }
+
+  function openStatusManager() {
+    if (!stMgrModal) return;
+    showStMgrError("");
+    if (stMgrNewName) stMgrNewName.value = "";
+    renderStatusManager();
+    stMgrModal.classList.remove("hidden");
+    stMgrModal.setAttribute("aria-hidden", "false");
+    if (window.__modalToFront) window.__modalToFront(stMgrModal);
+  }
+
+  function closeStatusManager() {
+    if (!stMgrModal) return;
+    stMgrModal.classList.add("hidden");
+    stMgrModal.setAttribute("aria-hidden", "true");
+  }
+
+  // Після будь-якої зміни статусів — перечитати список і оновити всі вью.
+  async function refreshAfterStatusChange() {
+    await loadStatuses();
+    renderStatusSelect(CURRENT_STATUS_ID);
+    renderQuickIdButtons();
+    setPhotoForStatus(CURRENT_STATUS_ID);
+    renderStatusManager();
+  }
+
+  async function stMgrCreate() {
+    const name = (stMgrNewName && stMgrNewName.value ? stMgrNewName.value : "").trim();
+    if (!name) { showStMgrError("Вкажіть назву статусу"); return; }
+    showStMgrError("");
+    if (stMgrAddBtn) stMgrAddBtn.disabled = true;
+    try {
+      const r = await fetch("/api/callsigns/statuses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await r.json();
+      if (!data.ok) { showStMgrError(data.error || "Не вдалося створити статус"); return; }
+      if (stMgrNewName) stMgrNewName.value = "";
+      await refreshAfterStatusChange();
+    } catch (e) {
+      console.error(e);
+      showStMgrError("Помилка запиту");
+    } finally {
+      if (stMgrAddBtn) stMgrAddBtn.disabled = false;
+    }
+  }
+
+  async function stMgrRename(id, name) {
+    const nm = (name || "").trim();
+    if (!nm) { showStMgrError("Назва не може бути порожньою"); return; }
+    showStMgrError("");
+    try {
+      const r = await fetch("/api/callsigns/statuses/" + id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nm }),
+      });
+      const data = await r.json();
+      if (!data.ok) { showStMgrError(data.error || "Не вдалося перейменувати статус"); return; }
+      await refreshAfterStatusChange();
+    } catch (e) {
+      console.error(e);
+      showStMgrError("Помилка запиту");
+    }
+  }
+
+  async function stMgrDelete(id) {
+    const st = STATUS_LIST.find(function (s) { return Number(s.id) === Number(id); });
+    const nm = st ? st.name : "";
+    if (!window.confirm(
+          "Видалити статус «" + nm + "»?\n" +
+          "Усім позивним із цим статусом буде присвоєно «Не вказано».")) {
+      return;
+    }
+    showStMgrError("");
+    try {
+      const r = await fetch("/api/callsigns/statuses/" + id, { method: "DELETE" });
+      const data = await r.json();
+      if (!data.ok) { showStMgrError(data.error || "Не вдалося видалити статус"); return; }
+      if (Number(CURRENT_STATUS_ID) === Number(id)) CURRENT_STATUS_ID = null;
+      await refreshAfterStatusChange();
+      if (window.appToast) {
+        window.appToast(
+          "Статус видалено" +
+            (data.reassigned ? " · перепризначено: " + data.reassigned : ""),
+          "success", 2200);
+      }
+    } catch (e) {
+      console.error(e);
+      showStMgrError("Помилка запиту");
+    }
   }
 
   async function loadStatuses() {
@@ -987,6 +1150,59 @@
       });
     }
 
+    // Кнопка-іконка «Керування статусами» поряд із полем «Статус».
+    if (statusManageBtn) {
+      statusManageBtn.addEventListener("click", function () {
+        openStatusManager();
+      });
+    }
+
+    if (stMgrAddBtn) {
+      stMgrAddBtn.addEventListener("click", function () { stMgrCreate(); });
+    }
+    if (stMgrNewName) {
+      stMgrNewName.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); stMgrCreate(); }
+      });
+    }
+    if (stMgrList) {
+      // Делегування: «save» (перейменувати) та «del» (видалити) по рядках.
+      stMgrList.addEventListener("click", function (e) {
+        const btn = e.target && e.target.closest ? e.target.closest("[data-act]") : null;
+        if (!btn) return;
+        const row = btn.closest(".cs-stmgr-row");
+        if (!row) return;
+        const id = parseInt(row.dataset.id, 10);
+        if (!Number.isFinite(id)) return;
+        const act = btn.getAttribute("data-act");
+        if (act === "save") {
+          const inp = row.querySelector(".cs-stmgr-name");
+          stMgrRename(id, inp ? inp.value : "");
+        } else if (act === "del") {
+          stMgrDelete(id);
+        }
+      });
+      // Enter у полі назви — зберегти перейменування цього рядка.
+      stMgrList.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter") return;
+        const inp = e.target && e.target.classList && e.target.classList.contains("cs-stmgr-name")
+          ? e.target : null;
+        if (!inp) return;
+        e.preventDefault();
+        const row = inp.closest(".cs-stmgr-row");
+        if (!row) return;
+        const id = parseInt(row.dataset.id, 10);
+        if (Number.isFinite(id)) stMgrRename(id, inp.value);
+      });
+    }
+    if (stMgrModal) {
+      stMgrModal.addEventListener("click", function (e) {
+        const t = e.target && e.target.closest
+          ? e.target.closest('[data-close-stmgr="1"]') : null;
+        if (t) closeStatusManager();
+      });
+    }
+
     modal.addEventListener("click", function (e) {
       // closest — бо клік може потрапити на <svg>/<path> усередині кнопки-іконки.
       const t = e.target && e.target.closest ? e.target.closest('[data-close="1"]') : null;
@@ -1007,15 +1223,18 @@
     }
 
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) {
-        closeModal();
+      if (e.key !== "Escape") return;
+      // Закриваємо лише верхню модалку (менеджер → форма статусу → картка).
+      if (stMgrModal && !stMgrModal.classList.contains("hidden")) {
+        closeStatusManager();
+        return;
       }
-      if (
-        e.key === "Escape" &&
-        statusModal &&
-        !statusModal.classList.contains("hidden")
-      ) {
+      if (statusModal && !statusModal.classList.contains("hidden")) {
         closeStatusModal();
+        return;
+      }
+      if (modal && !modal.classList.contains("hidden")) {
+        closeModal();
       }
     });
   }

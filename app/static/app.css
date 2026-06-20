@@ -1248,6 +1248,24 @@ button.secondary{
   max-width:420px;
 }
 
+/* Status manager: add row + per-status edit/delete list */
+.cs-stmgr-add{ display:flex; gap:6px; align-items:center; }
+.cs-stmgr-add input{ flex:1 1 auto; min-width:0; }
+.cs-stmgr-list{ display:flex; flex-direction:column; gap:6px; max-height:48vh; overflow:auto; }
+.cs-stmgr-row{ display:flex; gap:6px; align-items:center; }
+.cs-stmgr-row img{ width:20px; height:20px; flex:0 0 auto; object-fit:contain; }
+.cs-stmgr-name{ flex:1 1 auto; min-width:0; }
+.cs-stmgr-btn{
+  flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center;
+  width:32px; height:32px; padding:0; border-radius:8px;
+  background:transparent; border:1px solid var(--border); color:var(--fg); cursor:pointer;
+}
+.cs-stmgr-btn:hover{ background:rgba(255,255,255,.08); }
+.cs-stmgr-btn--save{ color:var(--accent,#7cc4ff);
+  border-color:color-mix(in srgb, var(--accent,#7cc4ff) 45%, var(--border)); }
+.cs-stmgr-btn--del{ color:var(--danger);
+  border-color:color-mix(in srgb, var(--danger) 50%, var(--border)); }
+
 /* =========================
    11. CHIPS
 ========================= */

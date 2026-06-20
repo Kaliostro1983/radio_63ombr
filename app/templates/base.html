@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=113"/>
+  <link rel="stylesheet" href="/static/app.css?v=114"/>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
   <script src="/static/app.js?v=2" defer></script>
   {% block extra_head %}{% endblock %}
@@ -172,8 +172,15 @@
           </div>
 
           <div style="margin-top:10px">
-            <label class="small" title="Ctrl+клік — правка / видалення обраного статусу">Статус <span style="opacity:.5">(Ctrl+клік — правка/видалення)</span></label>
-            <select id="csModalStatus" style="width:100%"></select>
+            <label class="small">Статус</label>
+            <div style="display:flex; gap:6px; align-items:center">
+              <select id="csModalStatus" style="flex:1 1 auto; min-width:0; max-width:240px"></select>
+              <button id="csModalStatusManage" class="secondary cs-icon-btn" type="button"
+                      title="Керування статусами (додати / редагувати / видалити)"
+                      aria-label="Керування статусами">
+                <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 3.5l4 4L8 16l-4 1 1-4 7.5-7.5z"/><path d="M11 5l4 4"/></svg>
+              </button>
+            </div>
           </div>
 
           <div style="margin-top:10px">
@@ -264,6 +271,27 @@
       <button id="csDeleteStatus" class="secondary" type="button"
               style="display:none; color:var(--danger); border-color:color-mix(in srgb, var(--danger) 50%, var(--border))">Видалити</button>
       <button class="secondary" type="button" data-close-status="1">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Status manager modal: add / edit / delete callsign statuses -->
+<div id="csStatusManagerModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-close-stmgr="1"></div>
+  <div class="modal-card cs-status-modal-card" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div style="font-weight:700">Керування статусами</div>
+      <button class="secondary cs-icon-btn" type="button" data-close-stmgr="1" title="Закрити" aria-label="Закрити">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="cs-stmgr-add">
+        <input id="csStMgrNewName" type="text" placeholder="Нова назва статусу" />
+        <button id="csStMgrAdd" type="button">Додати</button>
+      </div>
+      <div id="csStMgrErr" class="small" style="color: var(--danger); margin-top:8px; display:none"></div>
+      <div id="csStMgrList" class="cs-stmgr-list" style="margin-top:10px"></div>
     </div>
   </div>
 </div>
@@ -502,7 +530,7 @@
 <script src="/static/vendor/leaflet/leaflet.js" defer></script>
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/vendor/proj4.js" defer></script>
-<script src="/static/callsign_modal.js?v=23" defer></script>
+<script src="/static/callsign_modal.js?v=24" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 /* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається
