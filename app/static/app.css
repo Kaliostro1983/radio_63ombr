@@ -2857,10 +2857,15 @@ button.secondary{
   margin-bottom: 16px;
 }
 
-/* datetime-local fields */
+/* datetime-local fields (width reduced ~25%: 170 → 128px) */
 .cn-filter-field--dt {
-  flex: 1;
-  min-width: 170px;
+  flex: 0 0 auto;
+  width: 128px;
+  min-width: 128px;
+}
+.cn-filter-field--dt input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* R/M network autocomplete — 4× smaller */
@@ -3062,9 +3067,9 @@ button.secondary{
   text-align: left;
 }
 
-/* Intercept text cell */
+/* Intercept text cell (height +50%: 76 → 114px) */
 .cn-intercept-cell {
-  max-height: 76px;
+  max-height: 114px;
   overflow-y: auto;
   font-size: 12px;
   line-height: 1.5;
