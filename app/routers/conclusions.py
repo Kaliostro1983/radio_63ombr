@@ -36,6 +36,29 @@ def _now_sql() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+# MGRS, наданий вручну в редакторі, приходить у «людському» вигляді з пробілами
+# ("37U DQ 17419 25227"). Інжест-конвеєр зберігає його компактно
+# ("37UDQ1741925227"). Щоб формат був єдиний усюди, нормалізуємо і ручні
+# координати до компактного вигляду тим самим парсером, що й аналітичний інжест.
+from app.core.analytical_intercept_parser import (  # noqa: E402
+    RE_MGRS_ANY as _RE_MGRS_ANY,
+    _normalize_mgrs as _norm_mgrs_parts,
+)
+
+
+def _normalize_mgrs_str(s: str) -> str:
+    """Звести один MGRS-рядок до компактного канонічного вигляду.
+
+    Якщо рядок не схожий на MGRS — повертаємо як є (лише обрізаємо пробіли по
+    краях), щоб не зіпсувати нестандартні координати.
+    """
+    raw = str(s or "").strip()
+    m = _RE_MGRS_ANY.search(raw)
+    if m:
+        return _norm_mgrs_parts(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5))
+    return raw
+
+
 def _parse_filter_dt(value: str, default_time: str) -> str:
     """Accept either a plain date ('YYYY-MM-DD') or a datetime-local
     ('YYYY-MM-DDTHH:MM' / 'YYYY-MM-DDTHH:MM:SS') and normalise to
@@ -158,11 +181,23 @@ def api_conclusions_list(
                 ac.sended,
                 ct.type   AS type_label,
                 ct.color  AS type_color,
+                ct.delta_auto_send AS delta_auto_send,
                 n.frequency,
                 n.mask,
                 n.unit,
                 msg.body_text,
                 msg.net_description,
+                -- Дублі тієї самої події: інші висновки з тим самим
+                -- (network_id, created_at) — ключ, який використовує і /compare.
+                (SELECT COUNT(*) FROM analytical_conclusions ad
+                   WHERE ad.network_id = ac.network_id
+                     AND ad.created_at = ac.created_at
+                     AND ad.id <> ac.id) AS dup_count,
+                (SELECT COUNT(*) FROM analytical_conclusions ad
+                   WHERE ad.network_id = ac.network_id
+                     AND ad.created_at = ac.created_at
+                     AND ad.id <> ac.id
+                     AND ad.sended = 1) AS twin_sended,
                 (SELECT GROUP_CONCAT(c.name, ', ')
                    FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id
                   WHERE mc.message_id = ac.message_id) AS callsigns
@@ -200,6 +235,9 @@ def api_conclusions_list(
             "mask":            r["mask"] or "",
             "unit":            r["unit"] or "",
             "sended":          int(r["sended"]) if r["sended"] is not None else 0,
+            "dup_count":       int(r["dup_count"] or 0),
+            "twin_sended":     bool(r["twin_sended"]),
+            "delta_auto_send": bool(r["delta_auto_send"]) if r["delta_auto_send"] is not None else True,
         })
 
     return {"ok": True, "rows": out, "total": len(out)}
@@ -504,7 +542,7 @@ async def api_conclusion_save(request: Request):
         return JSONResponse({"ok": False, "error": "message_id обовʼязковий"}, status_code=400)
 
     conclusion_text = (payload.get("conclusion_text") or "").strip()
-    mgrs_list = [str(m).strip() for m in (payload.get("mgrs") or []) if str(m).strip()]
+    mgrs_list = [_normalize_mgrs_str(m) for m in (payload.get("mgrs") or []) if str(m).strip()]
 
     missing = []
     if not conclusion_text:
@@ -616,7 +654,7 @@ async def api_conclusion_edit(ac_id: int, request: Request):
         return JSONResponse({"ok": False, "error": "Висновок не може бути порожнім"}, status_code=400)
 
     has_mgrs = "mgrs" in payload
-    mgrs_list = [str(m).strip() for m in (payload.get("mgrs") or []) if str(m).strip()]
+    mgrs_list = [_normalize_mgrs_str(m) for m in (payload.get("mgrs") or []) if str(m).strip()]
 
     with get_conn() as conn:
         row = conn.execute(

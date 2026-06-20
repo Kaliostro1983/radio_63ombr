@@ -3132,9 +3132,25 @@ button.secondary{
 }
 .cn-delta-btn--on  { color: #6b7280; }
 .cn-delta-btn--off { color: #dc2626; opacity: .75; }
+.cn-delta-btn--dup { color: #d97706; opacity: .8; }   /* бурштин: дубль вже надісланої події */
 .cn-delta-btn:hover {
   opacity: 1;
   border-color: var(--border);
+}
+
+/* «дубль» — мітка, що подія має ще один висновок */
+.cn-dup-tag {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: #d97706;
+  border: 1px solid color-mix(in srgb, #d97706 50%, var(--border));
+  border-radius: 6px;
 }
 
 /* Delta report modal grid */

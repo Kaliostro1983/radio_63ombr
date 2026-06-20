@@ -562,78 +562,73 @@
     modal.setAttribute("aria-hidden", "true");
   }
 
-  async function sendDeltaReport() {
-    if (!_deltaModalRow) return;
+  /* SIDC-іконка → людська назва типу для рядка «Тип:» у Дельта-звіті. */
+  function sidcLabelForType(typeObj) {
+    const iconSidc = (typeObj && typeObj.icon_sidc) || "";
+    const normSidc = iconSidc.length >= 4
+      ? iconSidc.slice(0, 3) + "6" + iconSidc.slice(4)
+      : iconSidc;
+    const sidcEntry = normSidc ? _SIDC_ICONS.find((e) => e.s === normSidc) : null;
+    return sidcEntry ? sidcEntry.l : "";
+  }
 
-    const type      = $("cdmType")?.value?.trim()     || "";
-    const name      = $("cdmName")?.value?.trim()     || "";
-    const ident     = $("cdmIdent")?.value            || "";
-    const unit      = $("cdmUnit")?.value?.trim()     || "";
-    const source    = $("cdmSource")?.value           || "";
-    const presence  = $("cdmPresence")?.value         || "";
-    const dtRaw     = $("cdmDatetime")?.value         || "";
-    const radius    = $("cdmRadius")?.value?.trim()   || "";
-    const mgrs      = $("cdmMgrs")?.value?.trim()     || "";
-
-    // Format datetime-local "2026-05-25T09:58" → "25.05.2026 09:58:00"
-    let dtFmt = "";
-    if (dtRaw) {
-      const [datePart, timePart] = dtRaw.split("T");
-      if (datePart && timePart) {
-        const [y, mo, d] = datePart.split("-");
-        dtFmt = `${d}.${mo}.${y} ${timePart}:00`;
-      }
-    }
-
+  /* Зібрати текст Дельта-звіту з полів + рядка висновку. fields:
+     {type,name,ident,unit,source,presence,dtFmt,radius,mgrs}. */
+  function buildDeltaText(fields, row) {
     const lines = [];
-    if (type)    lines.push(`Тип: ${type}`);
-    if (name)    lines.push(`Назва: ${name}`);
-    if (ident)   lines.push(`Ідентифікація: ${ident}`);
-    if (unit)    lines.push(`Підрозділ: ${unit}`);
-    if (presence) lines.push(`Присутність: ${presence}`);
-    if (source)  lines.push(`Джерело: ${source}`);
-    if (dtFmt)   lines.push(`Час виявлення: ${dtFmt}`);
-    if (radius)  lines.push(`Радіус дії: ${radius}`);
-    if (mgrs)    lines.push(`MGRS: ${mgrs}`);
+    if (fields.type)     lines.push(`Тип: ${fields.type}`);
+    if (fields.name)     lines.push(`Назва: ${fields.name}`);
+    if (fields.ident)    lines.push(`Ідентифікація: ${fields.ident}`);
+    if (fields.unit)     lines.push(`Підрозділ: ${fields.unit}`);
+    if (fields.presence) lines.push(`Присутність: ${fields.presence}`);
+    if (fields.source)   lines.push(`Джерело: ${fields.source}`);
+    if (fields.dtFmt)    lines.push(`Час виявлення: ${fields.dtFmt}`);
+    if (fields.radius)   lines.push(`Радіус дії: ${fields.radius}`);
+    if (fields.mgrs)     lines.push(`MGRS: ${fields.mgrs}`);
 
     const conclusion = _fillRoutePoints(
-      (_deltaModalRow.conclusion_text || "").trim(),
-      _deltaModalRow.mgrs || [],
+      (row.conclusion_text || "").trim(),
+      row.mgrs || [],
     );
-    const body       = (_deltaModalRow.body_text       || "").trim();
+    const body = (row.body_text || "").trim();
 
-    // ── Intercept header (шапка перехоплення) ──────────────────────────────
-    // Line 1: formatted created_at  "2026-05-26 06:32:49" → "26.05.2026, 06:32:49"
+    // ── Шапка перехоплення ──
     let createdAtFmt = "";
-    const _dtm = (_deltaModalRow.created_at || "").match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2}:\d{2})/);
+    const _dtm = (row.created_at || "").match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2}:\d{2})/);
     if (_dtm) createdAtFmt = `${_dtm[3]}.${_dtm[2]}.${_dtm[1]}, ${_dtm[4]}`;
-
-    // Line 2: frequency
-    const _freq = (_deltaModalRow.frequency || "").trim();
-
-    // Line 3: net_description (stored with emoji, e.g. "🪵 БПЛА | укх р/м …")
-    const _netDesc = (_deltaModalRow.net_description || "").trim();
-
-    // Line 4: mask (may be empty)
-    const _mask = (_deltaModalRow.mask || "").trim();
-
-    // Line 5: first callsign from body_text — first token after "— "
+    const _freq = (row.frequency || "").trim();
+    const _netDesc = (row.net_description || "").trim();
+    const _mask = (row.mask || "").trim();
     const _csMatch = body.match(/—\s*(\S+)/);
     const _firstCS = _csMatch ? _csMatch[1].replace(/,$/, "").toUpperCase() : "";
-
     const header = [createdAtFmt, _freq, _netDesc, _mask, _firstCS].filter(Boolean).join("\n");
-    // ─────────────────────────────────────────────────────────────────────────
 
-    const text = [lines.join("\n"), conclusion, header, body].filter(Boolean).join("\n\n");
+    return [lines.join("\n"), conclusion, header, body].filter(Boolean).join("\n\n");
+  }
 
-    if (!cnSettingsChatId) {
-      toast("Оберіть цільовий чат у вкладці «Налаштування»", "warn");
-      return;
-    }
+  /* Дефолтні поля Дельти з рядка + типу (як їх заповнює openDeltaModal).
+     Повертає null, якщо у типу немає налаштованої іконки (надсилати не можна). */
+  function deltaFieldsFromRow(row, typeObj) {
+    const typeLabel = sidcLabelForType(typeObj || {});
+    if (!typeLabel) return null;   // без іконки звіт не формуємо
+    let dtFmt = "";
+    const _dtm = (row.created_at || "").match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2})/);
+    if (_dtm) dtFmt = `${_dtm[3]}.${_dtm[2]}.${_dtm[1]} ${_dtm[4]}:00`;
+    return {
+      type:     typeLabel,
+      name:     row.frequency || "",
+      ident:    (typeObj && typeObj.delta_identification === "Ворожий") ? "Ворожий" : "Дружній",
+      unit:     row.unit || "",
+      source:   (typeObj && typeObj.delta_source)   || "Радіорозвідка (РР)",
+      presence: (typeObj && typeObj.delta_presence) || "присутній",
+      dtFmt,
+      radius:   "",
+      mgrs:     (row.mgrs || []).map((m) => m.replace(/\s+/g, "")).join(", "),
+    };
+  }
 
-    const sendBtn = $("cnDeltaSendBtn");
-    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "…"; }
-
+  /* Надіслати текст у цільовий чат. Повертає {ok, error}. */
+  async function pushDeltaText(text) {
     try {
       const res = await fetch("/api/push/send", {
         method:  "POST",
@@ -645,34 +640,120 @@
         }),
       });
       const d = await res.json().catch(() => ({}));
-      if (res.ok && d.ok) {
-        toast("Дельта-звіт надіслано", "success");
-        // Persist chat to server so auto-send can use it
-        saveAppSettings({
-          delta_chat_id:   cnSettingsChatId,
-          delta_chat_name: cnSettingsChatName,
-          delta_platform:  cnSettingsPlatform,
-        });
-        // Mark sended in DB + update button in table
-        const rowId = _deltaModalRow.id;
-        fetch(`/api/conclusions/${rowId}/mark-sended`, { method: "POST" }).catch(() => {});
-        const rowObj = state.view.rows.find((r) => r.id === rowId);
-        if (rowObj) rowObj.sended = 1;
-        const tr = cnTableBody.querySelector(`tr[data-ac-id="${rowId}"]`);
-        const dBtn = tr?.querySelector(".cn-delta-btn");
-        if (dBtn) {
-          dBtn.className = "cn-delta-btn cn-delta-btn--on";
-          dBtn.title = "Дельта-звіт надіслано";
-        }
-        closeDeltaModal();
-      } else {
-        toast(d.error || "Помилка надсилання", "error");
-      }
+      if (res.ok && d.ok) return { ok: true };
+      return { ok: false, error: d.error || "Помилка надсилання" };
     } catch (err) {
-      toast("Помилка: " + err.message, "error");
-    } finally {
-      if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = "&#10148; Надіслати"; }
+      return { ok: false, error: err.message };
     }
+  }
+
+  /* Позначити висновок як надісланий: БД + стан + кнопка в таблиці. */
+  function markRowSended(rowId) {
+    fetch(`/api/conclusions/${rowId}/mark-sended`, { method: "POST" }).catch(() => {});
+    const rowObj = state.view.rows.find((r) => r.id === rowId);
+    if (rowObj) rowObj.sended = 1;
+    const tr = cnTableBody.querySelector(`tr[data-ac-id="${rowId}"]`);
+    const dBtn = tr?.querySelector(".cn-delta-btn");
+    if (dBtn) {
+      dBtn.className = "cn-delta-btn cn-delta-btn--on";
+      dBtn.title = "Дельта-звіт надіслано";
+    }
+  }
+
+  async function sendDeltaReport() {
+    if (!_deltaModalRow) return;
+
+    const dtRaw = $("cdmDatetime")?.value || "";
+    let dtFmt = "";
+    if (dtRaw) {
+      const [datePart, timePart] = dtRaw.split("T");
+      if (datePart && timePart) {
+        const [y, mo, d] = datePart.split("-");
+        dtFmt = `${d}.${mo}.${y} ${timePart}:00`;
+      }
+    }
+    const fields = {
+      type:     $("cdmType")?.value?.trim()     || "",
+      name:     $("cdmName")?.value?.trim()     || "",
+      ident:    $("cdmIdent")?.value            || "",
+      unit:     $("cdmUnit")?.value?.trim()     || "",
+      source:   $("cdmSource")?.value           || "",
+      presence: $("cdmPresence")?.value         || "",
+      dtFmt,
+      radius:   $("cdmRadius")?.value?.trim()   || "",
+      mgrs:     $("cdmMgrs")?.value?.trim()     || "",
+    };
+    const text = buildDeltaText(fields, _deltaModalRow);
+
+    if (!cnSettingsChatId) {
+      toast("Оберіть цільовий чат у вкладці «Налаштування»", "warn");
+      return;
+    }
+
+    const sendBtn = $("cnDeltaSendBtn");
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "…"; }
+
+    const res = await pushDeltaText(text);
+    if (res.ok) {
+      toast("Дельта-звіт надіслано", "success");
+      saveAppSettings({
+        delta_chat_id:   cnSettingsChatId,
+        delta_chat_name: cnSettingsChatName,
+        delta_platform:  cnSettingsPlatform,
+      });
+      markRowSended(_deltaModalRow.id);
+      closeDeltaModal();
+    } else {
+      toast(res.error || "Помилка надсилання", "error");
+    }
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = "&#10148; Надіслати"; }
+  }
+
+  /* Гуртове надсилання всіх невідісланих висновків поточної вибірки.
+     Пропускаємо: вже надіслані; дублі, чия подія вже надіслана іншим
+     висновком (twin_sended); типи без іконки (звіт сформувати не можна). */
+  async function sendAllUnsent() {
+    if (!cnSettingsChatId) {
+      toast("Оберіть цільовий чат у вкладці «Налаштування»", "warn");
+      return;
+    }
+    await refreshTypesCache();
+    const typeById = (id) =>
+      state.view.types.find((t) => t.id === id) ||
+      state.settings.types.find((t) => t.id === id) || {};
+
+    const candidates = (state.view.rows || []).filter(
+      (r) => !r.sended && !r.twin_sended,
+    );
+    if (!candidates.length) {
+      toast("Невідісланих висновків немає", "info");
+      return;
+    }
+    if (!window.confirm(
+          `Надіслати Дельта-звіти для ${candidates.length} висновк(ів)?\n` +
+          `Дублі вже надісланих подій і типи без іконки буде пропущено.`)) {
+      return;
+    }
+
+    const btn = $("cnSendAllUnsent");
+    if (btn) { btn.disabled = true; btn.dataset._t = btn.textContent; btn.textContent = "Надсилання…"; }
+
+    let sent = 0, skipped = 0, failed = 0;
+    for (const row of candidates) {
+      const fields = deltaFieldsFromRow(row, typeById(row.type_id));
+      if (!fields) { skipped++; continue; }   // немає іконки
+      const res = await pushDeltaText(buildDeltaText(fields, row));
+      if (res.ok) { markRowSended(row.id); sent++; }
+      else { failed++; }
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset._t || "Надіслати всі невідіслані"; }
+    toast(
+      `Надіслано: ${sent}` +
+        (skipped ? ` · пропущено (без іконки): ${skipped}` : "") +
+        (failed ? ` · помилок: ${failed}` : ""),
+      failed ? "warn" : "success",
+    );
   }
 
   /* ──────────────────────────────────────────────
@@ -727,9 +808,25 @@
           ? `<div class="cn-intercept-cell">${csLine}${escapeHtml(r.body_text || "")}</div>`
           : `<span style="opacity:.4">—</span>`;
 
-        // Delta button: gray = already sent, red = not yet sent
-        const deltaBtnClass = r.sended ? "cn-delta-btn--on" : "cn-delta-btn--off";
-        const deltaBtnTitle = r.sended ? "Дельта-звіт надіслано" : "Надіслати Дельта-звіт";
+        // Delta button: сірий = надіслано; бурштин = дубль (подію вже надіслано
+        // іншим висновком); червоний = не надіслано. Підказка пояснює причину.
+        let deltaBtnClass, deltaBtnTitle;
+        if (r.sended) {
+          deltaBtnClass = "cn-delta-btn--on";
+          deltaBtnTitle = "Дельта-звіт надіслано";
+        } else if (r.twin_sended) {
+          deltaBtnClass = "cn-delta-btn--dup";
+          deltaBtnTitle = "Дубль: цю подію вже надіслано іншим висновком. Натисніть, щоб надіслати все одно";
+        } else if (r.delta_auto_send === false) {
+          deltaBtnClass = "cn-delta-btn--off";
+          deltaBtnTitle = "Не надіслано (авто-надсилання вимкнено для цього типу). Натисніть, щоб надіслати";
+        } else {
+          deltaBtnClass = "cn-delta-btn--off";
+          deltaBtnTitle = "Надіслати Дельта-звіт";
+        }
+        const dupTag = (r.dup_count > 0)
+          ? `<span class="cn-dup-tag" title="Висновків на цю подію: ${r.dup_count + 1}">дубль</span>`
+          : "";
 
         return `<tr data-ac-id="${r.id}">
           <td style="text-align:center">
@@ -746,6 +843,7 @@
           <td>${interceptHtml}</td>
           <td style="text-align:center">${mgrs || "<span style='opacity:.4'>—</span>"}</td>
           <td style="text-align:center;white-space:nowrap">
+            ${dupTag}
             <button class="cn-edit-btn" title="Редагувати висновок">✏</button>
             <button class="cn-reclassify-btn" title="Повторно проаналізувати тип">♻</button>
             <button class="cn-delta-btn ${deltaBtnClass}" title="${deltaBtnTitle}">⊡</button>
@@ -820,6 +918,9 @@
       window.open("/conclusions/map?" + qs.toString(), "_blank");
     });
   }
+
+  const cnSendAllUnsentBtn = $("cnSendAllUnsent");
+  if (cnSendAllUnsentBtn) cnSendAllUnsentBtn.addEventListener("click", sendAllUnsent);
 
   function toggleGeoPanel() {
     geoState.visible = !geoState.visible;
