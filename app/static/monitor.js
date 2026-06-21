@@ -1220,6 +1220,15 @@
     (entry.mMarkers || []).forEach(l => l.remove && l.remove());
     const i = _conclDrawn.indexOf(entry);
     if (i !== -1) _conclDrawn.splice(i, 1);
+    // Орієнтир: прибрати прив'язану координату (чіп + рядок у «Координати»).
+    if (entry.coordEntry){
+      const ce = entry.coordEntry;
+      if (ce.chipEl) ce.chipEl.remove();
+      const j = _conclFixedMarkers.indexOf(ce);
+      if (j !== -1) _conclFixedMarkers.splice(j, 1);
+      entry.coordEntry = null;
+      _refreshConclCoords();
+    }
   }
   function _midLatLng(a, b){ return L.latLng((a.lat+b.lat)/2, (a.lng+b.lng)/2); }
   /* Трикутник вістря (3 latlng) для лінії A→B, вершина точно в B */
@@ -1389,6 +1398,18 @@
     const entry = { type:"landmark", layers:[layer, del] };
     del.on("click", (e) => { if (e.originalEvent) L.DomEvent.stop(e.originalEvent); _removeDrawn(entry); });
     _conclDrawn.push(entry);
+
+    // Координата орієнтира (за хрестиком) йде в поле «Координати» — як окрема
+    // точка-чіп. Видаляється разом з орієнтиром (через _removeDrawn).
+    const coordEntry = { isLandmark:true, lat: at.lat, lon: at.lng, chipEl:null, drawnEntry: entry };
+    entry.coordEntry = coordEntry;
+    const lmChip = _createCoordChip(at.lat, at.lng, () => _removeDrawn(entry), lm.name || null);
+    coordEntry.chipEl = lmChip;
+    _conclFixedMarkers.push(coordEntry);
+    const lmChips = document.getElementById("conclCoordChips");
+    if (lmChips) lmChips.appendChild(lmChip);
+    _refreshConclCoords();
+
     try { map.fitBounds(layer.getBounds ? layer.getBounds() : L.latLngBounds([layer.getLatLng(), layer.getLatLng()]), { maxZoom:14, padding:[40,40] }); } catch(_){}
   }
 
