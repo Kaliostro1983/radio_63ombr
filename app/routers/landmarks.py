@@ -20,6 +20,31 @@ def _normalize_keyword(value: str) -> str:
     return " ".join(parts).lower()
 
 
+# Суфікс «(р-н)» для зон (полігонів) додаємо ЛИШЕ при генеруванні назви для
+# інтерфейсу — у БД (name / key_word) він не зберігається, щоб key_word лишався
+# придатним для матчингу перехоплень (оператор каже «мітяйка», не «мітяйка (р-н)»).
+_DISTRICT_SUFFIX = " (р-н)"
+
+
+def _strip_district(name: str) -> str:
+    s = (name or "").rstrip()
+    if s.endswith(_DISTRICT_SUFFIX):
+        return s[: -len(_DISTRICT_SUFFIX)].rstrip()
+    return s
+
+
+def _display_name(name: object, id_geom: object) -> str:
+    """Назва для UI: зонам (id_geom=2) додаємо «(р-н)»; решті — як є."""
+    s = str(name or "")
+    try:
+        g = int(id_geom)
+    except (TypeError, ValueError):
+        g = None
+    if g == 2 and not s.rstrip().endswith(_DISTRICT_SUFFIX):
+        return s.rstrip() + _DISTRICT_SUFFIX
+    return s
+
+
 def _parse_int_opt(v: Any) -> int | None:
     if v is None:
         return None
@@ -239,7 +264,7 @@ def api_landmarks_search(
             {
                 "id": int(r["id"]),
                 "type_name": type_name,
-                "name": str(r["name"] or ""),
+                "name": _display_name(r["name"], r["id_geom"]),
                 "group_name": str(r["group_name"] or "") if r["id_group"] is not None else None,
                 "group_id": int(r["id_group"]) if r["id_group"] is not None else None,
                 "type_id": int(r["id_type"]),
@@ -307,7 +332,7 @@ def api_landmark_get(landmark_id: int):
         "ok": True,
         "landmark": {
             "id": int(row["id"]),
-            "name": str(row["name"] or ""),
+            "name": _display_name(row["name"], id_geom),
             "id_group": int(row["id_group"]) if row["id_group"] is not None else None,
             "group_name": str(row["group_name"]) if row["group_name"] is not None else None,
             "id_type": int(row["id_type"]),
@@ -351,6 +376,11 @@ async def api_landmark_update(request: Request, landmark_id: int):
     if id_geom is None:
         id_geom = 1
     comment = str(payload.get("comment") or "").strip()
+
+    # Зонам суфікс «(р-н)» додається лише на показ — у БД не зберігаємо
+    # (інакше він потрапив би в key_word і зламав матчинг).
+    if id_geom == 2:
+        name = _strip_district(name)
 
     key_word = _normalize_keyword(name)
     if not key_word:
@@ -481,6 +511,11 @@ async def api_landmark_create(request: Request):
     if id_geom is None:
         id_geom = 1
     comment = str(payload.get("comment") or "").strip()
+
+    # Зонам суфікс «(р-н)» додається лише на показ — у БД не зберігаємо
+    # (інакше він потрапив би в key_word і зламав матчинг).
+    if id_geom == 2:
+        name = _strip_district(name)
 
     key_word = _normalize_keyword(name)
     if not key_word:

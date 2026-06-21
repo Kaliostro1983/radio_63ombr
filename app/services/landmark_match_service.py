@@ -40,6 +40,18 @@ def _keyword_pattern(keyword: str) -> re.Pattern[str]:
     return re.compile(rf"(?<!\w){re.escape(keyword)}(?!\w)", flags=re.IGNORECASE)
 
 
+_DISTRICT_SUFFIX = " (р-н)"
+
+
+def _display_name(name: object, id_geom: object) -> str:
+    """Назва для UI: зонам (id_geom=2) додаємо «(р-н)». У БД суфікс не зберігаємо."""
+    s = str(name or "")
+    g = int(id_geom) if isinstance(id_geom, int) or (isinstance(id_geom, str) and id_geom.isdigit()) else None
+    if g == 2 and not s.rstrip().endswith(_DISTRICT_SUFFIX):
+        return s.rstrip() + _DISTRICT_SUFFIX
+    return s
+
+
 def _load_active_landmarks(conn) -> list[dict[str, Any]]:
     """Load active landmarks used by matcher."""
     rows = conn.execute(
@@ -272,7 +284,7 @@ def get_message_landmark_matches(message_id: int) -> list[dict[str, Any]]:
                 "matcher_version": row["matcher_version"] or "",
                 "landmark": {
                     "id": int(row["id_landmark"]),
-                    "name": row["landmark_name"] or "",
+                    "name": _display_name(row["landmark_name"], row["id_geom"]),
                     "key_word": row["key_word"] or "",
                     "location_wkt": row["location_wkt"] or "",
                     "location_kind": row["location_kind"] or "",
