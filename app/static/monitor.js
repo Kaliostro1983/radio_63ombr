@@ -1528,6 +1528,14 @@
       function _processCoordToken(val) {
         if (!_conclMap || !val) return false;
 
+        // «$<код>» — кодований квадрат із палітри «квадрати»: малюємо квадрат
+        // 200×200 м і додаємо координату його центру.
+        if (val.startsWith("$")) {
+          const code = val.slice(1).trim();
+          if (code) _codedSquareLookupAndPlace(code);
+          return true;
+        }
+
         // Квадрат із равликом: "25 17 4"
         const sqSnail = val.match(/^(\d{2})\s+(\d{2})\s+([1-9])$/);
         if (sqSnail) {
@@ -4694,6 +4702,86 @@
     // Очищуємо інпут — пошук тепер "зафіксовано" чіпом.
     const ci = document.getElementById("conclCoordInput");
     if (ci) ci.value = "";
+  }
+
+  /* Кодований квадрат: малюємо квадрат 200×200 м (вирівняний по сітці УСК-2000)
+     навколо точки-центру й додаємо координату центру в поле «Координати».
+     Поводиться як «квадрат» (isSquare) — у textarea йде координата центру. */
+  function _addCodedSquare(map, lat, lon, code) {
+    if (!map || !isFinite(lat) || !isFinite(lon)) return;
+    // Центр у прямокутних УСК-2000 (X northing, Y easting), кути ±100 м.
+    const uskStr = _latLonToUsk(lat, lon);
+    const m = String(uskStr).match(/^(\d+)\s+(\d+)$/);
+    let latlngs = null;
+    if (m) {
+      const X = parseInt(m[1], 10), Y = parseInt(m[2], 10), H = 100;
+      const corners = [
+        _usk2000ToLatLon(X - H, Y - H),
+        _usk2000ToLatLon(X - H, Y + H),
+        _usk2000ToLatLon(X + H, Y + H),
+        _usk2000ToLatLon(X + H, Y - H),
+      ];
+      if (!corners.some(c => !c)) latlngs = corners.map(c => [c.lat, c.lon]);
+    }
+    const center = { lat, lon };
+    let layer;
+    if (latlngs) {
+      layer = L.polygon(latlngs, { color:"#ef4444", weight:2, fillColor:"#ef4444", fillOpacity:0.35 }).addTo(map);
+    } else {
+      // Резерв (нема proj4): маркер у центрі.
+      layer = L.marker([lat, lon], { icon: _iconPicked() }).addTo(map);
+    }
+
+    const centerDot = L.marker([lat, lon], {
+      icon: L.divIcon({ className:"", iconSize:[12,12], iconAnchor:[6,6], html:`<div class="concl-square-dot"></div>` }),
+      interactive: false,
+    }).addTo(map);
+
+    const entry = { layer, centerDot, chipEl: null, isSquare: true, centerLatLon: center };
+    const chipEl = _createSquareChip(`$${code}`, () => {
+      entry.layer.remove();
+      if (entry.centerDot) entry.centerDot.remove();
+      const idx = _conclFixedMarkers.indexOf(entry);
+      if (idx !== -1) _conclFixedMarkers.splice(idx, 1);
+      entry.chipEl.remove();
+      _refreshConclCoords();
+    });
+    entry.chipEl = chipEl;
+    _conclFixedMarkers.push(entry);
+
+    const chipsContainer = document.getElementById("conclCoordChips");
+    if (chipsContainer) chipsContainer.appendChild(chipEl);
+
+    try { map.fitBounds(layer.getBounds ? layer.getBounds() : L.latLngBounds([[lat,lon],[lat,lon]]), { maxZoom:16, padding:[40,40] }); } catch(_){}
+    _refreshConclCoords();
+  }
+
+  /* Пошук кодованого квадрата за «$<код>» серед палітр «квадрати». */
+  async function _codedSquareLookupAndPlace(code) {
+    if (!_conclMap || !code) return;
+    const inclArch = document.getElementById("palIncludeArchived")?.checked ? 1 : 0;
+    const qs = new URLSearchParams({ q: code, include_archived: String(inclArch), squares: "1" });
+    let results;
+    try {
+      const r = await fetch("/api/palettes/search?" + qs.toString());
+      const j = await r.json();
+      results = j.results || [];
+    } catch (_) {
+      if (window.appToast) window.appToast("Помилка пошуку квадрата", "error", 1800);
+      return;
+    }
+    // Беремо першу точку з точним кодом (квадрати мають унікальні коди).
+    let pt = null;
+    for (const g of results) {
+      const hit = (g.points || []).find(p => p.lat != null && p.lon != null);
+      if (hit) { pt = hit; break; }
+    }
+    if (!pt) {
+      if (window.appToast) window.appToast(`Квадрат «${code}» не знайдено`, "info", 1900);
+      return;
+    }
+    _addCodedSquare(_conclMap, pt.lat, pt.lon, code);
+    if (window.appToast) window.appToast(`Квадрат «${code}» додано`, "success", 1500);
   }
 
 })();

@@ -644,6 +644,7 @@ def api_palette_search(
     case_sensitive: int = Query(default=0),
     include_archived: int = Query(default=0),
     unit_id: int | None = Query(default=None),
+    squares: int = Query(default=0),
     limit: int = Query(default=300, ge=1, le=2000),
 ):
     """Search palette points by code (fold + masks).
@@ -664,6 +665,10 @@ def api_palette_search(
     if unit_id:
         where.append("EXISTS (SELECT 1 FROM palette_unit_links l WHERE l.palette_id = pal.id AND l.unit_id = ?)")
         params.append(int(unit_id))
+    # «Кодовані квадрати» — палітри, у назві яких є слово «квадрати»
+    # (синтаксис «$<код>» у вікні висновку шукає саме серед них).
+    if squares:
+        where.append("pal.name LIKE '%квадрати%'")
 
     if is_mask(query):
         glob = mask_to_glob(query)
