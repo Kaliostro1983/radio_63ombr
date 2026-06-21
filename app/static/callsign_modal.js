@@ -182,19 +182,9 @@
     if (!callsignId) return;
     const callsignName = (modalName && modalName.value ? String(modalName.value) : "").trim();
 
-    // На /callsigns — закриваємо відкриті модалки (csModal + csModalSearch),
-    // проставляємо фільтр у головну Зв'язки-секцію і одразу запускаємо runLinks.
-    if (window.location.pathname === "/callsigns" && typeof window.csOpenLinksForCallsign === "function") {
-      // Спочатку закриваємо саму модалку позивного — щоб користувач побачив зв'язки.
-      try { closeModal(); } catch (_) {}
-      try {
-        const ok = await window.csOpenLinksForCallsign(callsignId, callsignName);
-        if (ok) return;
-      } catch (_) { /* fall through to new-tab fallback */ }
-    }
-
-    // Поза /callsigns — відкриваємо граф у модалці на поточній вкладці (iframe),
-    // а не в новій вкладці браузера.
+    // Граф зв'язків відкриваємо в модальному вікні на поточній вкладці (iframe)
+    // — однаково на всіх сторінках, зокрема й на /callsigns (раніше там граф
+    // перемальовував усю сторінку в головну Зв'язки-секцію).
     if (window.openLinksView && window.openLinksView(callsignId, callsignName)) return;
 
     // Якщо модалку викликано всередині iframe — делегуємо батьківському вікну.
