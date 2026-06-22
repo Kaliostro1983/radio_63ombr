@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Query
@@ -13,6 +13,37 @@ router = APIRouter()
 
 def _now_iso() -> str:
     return datetime.utcnow().isoformat()
+
+
+def _compute_valid_until(payload: dict, is_permanent: int) -> str | None:
+    """Абсолютний термін придатності з тривалості (днів). Постійний → NULL."""
+    if is_permanent:
+        return None
+    raw = payload.get("valid_days")
+    try:
+        days = int(float(str(raw).strip()))
+    except (TypeError, ValueError):
+        return None
+    if days <= 0:
+        return None
+    return (datetime.utcnow() + timedelta(days=days)).isoformat()
+
+
+def _valid_days_remaining(valid_until: object) -> int | None:
+    """К-сть діб, що лишилась до valid_until (округлення вгору). NULL → None."""
+    s = str(valid_until or "").strip()
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", ""))
+    except ValueError:
+        return None
+    delta = dt - datetime.utcnow()
+    secs = delta.total_seconds()
+    if secs <= 0:
+        return 0
+    import math
+    return int(math.ceil(secs / 86400.0))
 
 
 def _normalize_keyword(value: str) -> str:
@@ -304,6 +335,7 @@ def api_landmark_get(landmark_id: int):
                 l.comment,
                 l.is_active,
                 COALESCE(l.is_permanent, 1) AS is_permanent,
+                l.valid_until,
                 lt.name AS type_name,
                 g.name AS group_name,
                 lg.name AS geom_type_name
@@ -345,6 +377,8 @@ def api_landmark_get(landmark_id: int):
             "comment": str(row["comment"] or ""),
             "is_active": int(row["is_active"]) if row["is_active"] is not None else 1,
             "is_permanent": int(row["is_permanent"]) if row["is_permanent"] is not None else 1,
+            "valid_until": str(row["valid_until"]) if row["valid_until"] else None,
+            "valid_days": _valid_days_remaining(row["valid_until"]),
         },
     }
 
@@ -443,6 +477,7 @@ async def api_landmark_update(request: Request, landmark_id: int):
                 comment = ?,
                 is_active = ?,
                 is_permanent = ?,
+                valid_until = ?,
                 updated_at = ?
             WHERE id = ? AND is_active = 1
             """,
@@ -458,6 +493,7 @@ async def api_landmark_update(request: Request, landmark_id: int):
                 comment,
                 is_active,
                 is_permanent,
+                _compute_valid_until(payload, is_permanent),
                 now_iso,
                 landmark_id,
             ),
@@ -559,9 +595,9 @@ async def api_landmark_create(request: Request):
             """
             INSERT INTO landmarks (
                 name, key_word, location_wkt, location_kind, location_mgrs, id_geom, comment,
-                date_creation, updated_at, id_group, id_type, is_active, is_permanent
+                date_creation, updated_at, id_group, id_type, is_active, is_permanent, valid_until
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -577,6 +613,7 @@ async def api_landmark_create(request: Request):
                 id_type,
                 is_active,
                 is_permanent,
+                _compute_valid_until(payload, is_permanent),
             ),
         )
 

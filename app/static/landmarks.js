@@ -28,6 +28,8 @@
   const editNameInput = $("lmEditName");
   const editIsActiveInput = $("lmEditIsActive");
   const editIsPermanentInput = $("lmEditIsPermanent");
+  const editValidRow = $("lmEditValidRow");
+  const editValidDaysInput = $("lmEditValidDays");
   const editLocationMgrsInput = $("lmEditLocationMgrs");
   const editLocationWktInput = $("lmEditLocationWkt");
   const editCommentInput = $("lmEditComment");
@@ -98,10 +100,18 @@
     editErr.textContent = "";
   }
 
+  // Показуємо інпут «Термін придатності» лише для тимчасових (не постійних).
+  function syncValidRow() {
+    const permanent = editIsPermanentInput ? editIsPermanentInput.checked : true;
+    if (editValidRow) editValidRow.classList.toggle("hidden", permanent);
+  }
+
   function clearEditInputs() {
     if (editNameInput) editNameInput.value = "";
     if (editIsActiveInput) editIsActiveInput.checked = true;
     if (editIsPermanentInput) editIsPermanentInput.checked = true;
+    if (editValidDaysInput) editValidDaysInput.value = "";
+    syncValidRow();
     if (editLocationMgrsInput) editLocationMgrsInput.value = "";
     if (editLocationWktInput) editLocationWktInput.value = "";
     if (editCommentInput) editCommentInput.value = "";
@@ -803,6 +813,11 @@
     if (editCommentInput) editCommentInput.value = landmark.comment || "";
     if (editIsActiveInput) editIsActiveInput.checked = landmark.is_active !== 0;
     if (editIsPermanentInput) editIsPermanentInput.checked = landmark.is_permanent !== 0;
+    if (editValidDaysInput) {
+      const vd = landmark.valid_days;
+      editValidDaysInput.value = (vd != null && vd > 0) ? String(vd) : "";
+    }
+    syncValidRow();
 
     // Завантажити збережений WKT у редактор (для Зона/Крива/Точка без MGRS)
     if (ig === 2 || ig === 3) {
@@ -879,6 +894,15 @@
 
       if (!name) throw new Error("Назва не може бути порожньою");
 
+      // Тимчасовий орієнтир → обов'язково додатний термін придатності (діб).
+      let valid_days = null;
+      if (!is_permanent) {
+        valid_days = parseInt(editValidDaysInput?.value, 10);
+        if (!Number.isFinite(valid_days) || valid_days <= 0) {
+          throw new Error("Вкажіть термін придатності (діб) для тимчасового орієнтира");
+        }
+      }
+
       if (id_geom === 1) {
         if (location_mgrs) {
           const ll = mgrsToLatLonBrowser(location_mgrs);
@@ -903,6 +927,7 @@
         comment: comment || "",
         is_active: is_active,
         is_permanent: is_permanent,
+        valid_days: valid_days,
       };
 
       if (id) {
@@ -958,14 +983,17 @@
       });
     }
 
-    // Modal close handlers.
+    // Modal close handlers. closest() — бо клік може потрапити на <svg>/<path>
+    // усередині кнопки-іконки «Закрити».
     modal.addEventListener("click", (ev) => {
       const t = ev.target;
       if (!t) return;
-      const close = t.getAttribute && t.getAttribute("data-close") === "1";
-      if (close) closeModal();
+      if (t.closest && t.closest('[data-close="1"]')) { closeModal(); return; }
       if (t === modal) closeModal();
     });
+
+    // Перемикання «Постійний» показує/ховає інпут терміну придатності.
+    if (editIsPermanentInput) editIsPermanentInput.addEventListener("change", syncValidRow);
 
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape" && modal && !modal.classList.contains("hidden")) closeModal();

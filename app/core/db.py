@@ -1149,6 +1149,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     # Постійний орієнтир (на відміну від тимчасового). Усі наявні рядки →
     # is_permanent=1, бо до введення прапора всі вважалися постійними.
     _ensure_column(conn, "landmarks", "is_permanent", "is_permanent INTEGER NOT NULL DEFAULT 1")
+    # Тимчасовий орієнтир: абсолютний термін придатності (ISO). NULL = безстроковий
+    # (для постійних). Обчислюється з тривалості (днів), яку вводить оператор.
+    _ensure_column(conn, "landmarks", "valid_until", "valid_until TEXT")
     safe_execute(
         conn,
         """
