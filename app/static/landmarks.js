@@ -147,6 +147,28 @@
     }
   }
 
+  /* Копіювання з індикацією: кнопка на ~1.2с показує «Скопійовано ✓» + toast.
+     Порожнє значення — нічого не копіюємо. */
+  async function copyWithFeedback(btn, value) {
+    const text = String(value ?? "").trim();
+    if (!text) {
+      if (window.appToast) window.appToast("Немає координат для копіювання", "warn", 1500);
+      return;
+    }
+    await copyTextToClipboard(text);
+    if (window.appToast) window.appToast("Скопійовано", "success", 1300);
+    if (btn) {
+      if (!btn.dataset._orig) btn.dataset._orig = btn.textContent;
+      btn.textContent = "Скопійовано ✓";
+      btn.classList.add("lm-coord-copied");
+      clearTimeout(btn._copyT);
+      btn._copyT = setTimeout(() => {
+        btn.textContent = btn.dataset._orig || "Копіювати";
+        btn.classList.remove("lm-coord-copied");
+      }, 1200);
+    }
+  }
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -1003,12 +1025,12 @@
 
     if (copyMgrsBtn && editLocationMgrsInput) {
       copyMgrsBtn.addEventListener("click", () => {
-        copyTextToClipboard(editLocationMgrsInput.value);
+        copyWithFeedback(copyMgrsBtn, editLocationMgrsInput.value);
       });
     }
     if (copyWktBtn && editLocationWktInput) {
       copyWktBtn.addEventListener("click", () => {
-        copyTextToClipboard(editLocationWktInput.value);
+        copyWithFeedback(copyWktBtn, editLocationWktInput.value);
       });
     }
 

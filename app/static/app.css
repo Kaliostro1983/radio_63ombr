@@ -2009,6 +2009,11 @@ button.secondary{
   align-self: flex-start;
   margin-top: 2px;
 }
+/* Індикація успішного копіювання координати */
+.lm-coord-copy-btn.lm-coord-copied {
+  color: #22c55e;
+  border-color: color-mix(in srgb, #22c55e 55%, var(--border));
+}
 
 .lm-modal-textarea {
   width: 100%;

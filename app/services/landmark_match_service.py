@@ -54,6 +54,8 @@ def _display_name(name: object, id_geom: object) -> str:
 
 def _load_active_landmarks(conn) -> list[dict[str, Any]]:
     """Load active landmarks used by matcher."""
+    # Прострочені (valid_until у минулому) не матчимо — навіть якщо прапор
+    # is_active ще не перемкнули на 0 (лінива деактивація у списку орієнтирів).
     rows = conn.execute(
         """
         SELECT id, key_word
@@ -61,7 +63,9 @@ def _load_active_landmarks(conn) -> list[dict[str, Any]]:
         WHERE is_active = 1
           AND key_word IS NOT NULL
           AND trim(key_word) <> ''
-        """
+          AND (valid_until IS NULL OR valid_until > ?)
+        """,
+        (_now_iso(),),
     ).fetchall()
     out: list[dict[str, Any]] = []
     for row in rows:

@@ -29,6 +29,16 @@ def _compute_valid_until(payload: dict, is_permanent: int) -> str | None:
     return (datetime.utcnow() + timedelta(days=days)).isoformat()
 
 
+def _expire_stale_landmarks(conn) -> None:
+    """Деактивувати орієнтири, термін придатності яких сплив (Активний → false)."""
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        "UPDATE landmarks SET is_active = 0, updated_at = ? "
+        "WHERE is_active = 1 AND valid_until IS NOT NULL AND valid_until <= ?",
+        (now, now),
+    )
+
+
 def _valid_days_remaining(valid_until: object) -> int | None:
     """К-сть діб, що лишилась до valid_until (округлення вгору). NULL → None."""
     s = str(valid_until or "").strip()
@@ -252,6 +262,7 @@ def api_landmarks_search(
     where_sql = " AND ".join(where) if where else "1=1"
 
     with get_conn() as conn:
+        _expire_stale_landmarks(conn)   # прострочені → Активний=false (зникають зі списку)
         unknown_type_id = _unknown_landmark_type_id(conn)
 
         total = conn.execute(
@@ -343,7 +354,7 @@ def api_landmark_get(landmark_id: int):
             JOIN landmark_types lt ON lt.id = l.id_type
             LEFT JOIN groups g ON g.id = l.id_group
             LEFT JOIN landmark_geoms lg ON lg.id = l.id_geom
-            WHERE l.id = ? AND l.is_active = 1
+            WHERE l.id = ?
             LIMIT 1
             """,
             (landmark_id,),
@@ -479,7 +490,7 @@ async def api_landmark_update(request: Request, landmark_id: int):
                 is_permanent = ?,
                 valid_until = ?,
                 updated_at = ?
-            WHERE id = ? AND is_active = 1
+            WHERE id = ?
             """,
             (
                 name,
@@ -500,7 +511,7 @@ async def api_landmark_update(request: Request, landmark_id: int):
         )
 
         if getattr(cur, "rowcount", 0) == 0:
-            raise HTTPException(status_code=404, detail="Орієнтир не знайдено або деактивований")
+            raise HTTPException(status_code=404, detail="Орієнтир не знайдено")
 
         if is_active == 0:
             # Remove stale matches so deactivated landmarks disappear in the
