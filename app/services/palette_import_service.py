@@ -12,6 +12,7 @@ The parser is dependency-free (xml.etree + zipfile + json).
 
 from __future__ import annotations
 
+import csv
 import io
 import json
 import re
@@ -221,6 +222,16 @@ def _normalize_color(value) -> str:
             except ValueError:
                 return ""
         return ""
+    # Голий «r,g,b» / «r,g,b,a» (CSV-експорт GOI: напр. "0,0,255,1.00").
+    if "," in s:
+        nums = re.findall(r"\d+", s)
+        if len(nums) >= 3:
+            try:
+                r, g, b = (max(0, min(255, int(c))) for c in nums[:3])
+                return f"#{r:02x}{g:02x}{b:02x}"
+            except ValueError:
+                return ""
+        return ""
     if s.startswith("#"):
         s = s[1:]
     if len(s) == 3 and all(c in "0123456789abcdef" for c in s):
@@ -304,6 +315,41 @@ def parse_geojson_bytes(data: bytes, *, source_filename: str) -> ParsedPalette:
     return ParsedPalette(
         name=pal_name,
         source_format="geojson",
+        source_filename=source_filename,
+        points=points,
+    )
+
+
+def parse_csv_bytes(data: bytes, *, source_filename: str) -> ParsedPalette:
+    """Parse a CSV export (GOI/Kropyva) into a ParsedPalette.
+
+    Очікувані колонки: ``name`` (код точки), ``coordinates`` (WKT
+    ``POINT (lon lat)``), ``color`` (напр. "0,0,255,1.00" — r,g,b,a, або будь-який
+    формат, який розуміє ``_normalize_color``). Рядки без коректного POINT
+    пропускаються (палітра = точки).
+    """
+    text = data.decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(text))
+    pt_re = re.compile(r"POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)", re.IGNORECASE)
+
+    points: list[ParsedPoint] = []
+    for row in reader:
+        code = str(row.get("name") or "").strip()
+        m = pt_re.search(str(row.get("coordinates") or ""))
+        if not m:
+            continue
+        try:
+            lon = float(m.group(1)); lat = float(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        color = _normalize_color(row.get("color"))
+        points.append(ParsedPoint(code=code, color=color, lat=lat, lon=lon))
+
+    file_stem = re.sub(r"\.[A-Za-z0-9]+$", "", (source_filename or "").strip())
+    pal_name = file_stem or "Палітра"
+    return ParsedPalette(
+        name=pal_name,
+        source_format="csv",
         source_filename=source_filename,
         points=points,
     )

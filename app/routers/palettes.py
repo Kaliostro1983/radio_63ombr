@@ -31,7 +31,7 @@ from fastapi.responses import JSONResponse, Response
 from app.core.db import get_conn
 from app.core.palette_fold import fold_code, mask_to_glob, is_mask
 from app.services.palette_import_service import (
-    parse_kml_bytes, parse_geojson_bytes, parse_ldk_bytes,
+    parse_kml_bytes, parse_geojson_bytes, parse_ldk_bytes, parse_csv_bytes,
     build_regions, analyze_duplicates, persist_palette,
 )
 
@@ -52,6 +52,8 @@ def _detect_format(filename: str) -> str:
         return "geojson"
     if fn.endswith(".ldk"):
         return "ldk"
+    if fn.endswith(".csv"):
+        return "csv"
     return ""
 
 
@@ -494,6 +496,8 @@ def _parse_upload(data: bytes, filename: str):
         return parse_kml_bytes(data, source_format="kml", source_filename=filename)
     if fmt == "geojson":
         return parse_geojson_bytes(data, source_filename=filename)
+    if fmt == "csv":
+        return parse_csv_bytes(data, source_filename=filename)
     # LDK (AlpineQuest) — бінарний формат, magic "LDK:" (4C 44 4B 3A)
     if fmt == "ldk" or data[:4] == b"LDK:":
         return parse_ldk_bytes(data, source_filename=filename)
@@ -503,7 +507,7 @@ def _parse_upload(data: bytes, filename: str):
         return parse_kml_bytes(data, source_format="kml", source_filename=filename)
     if head in (b"{", b"["):
         return parse_geojson_bytes(data, source_filename=filename)
-    raise HTTPException(status_code=400, detail="Підтримуються .kml / .kmz / .geojson / .ldk файли")
+    raise HTTPException(status_code=400, detail="Підтримуються .kml / .kmz / .geojson / .ldk / .csv файли")
 
 
 @router.post("/api/palettes/import/analyze")
