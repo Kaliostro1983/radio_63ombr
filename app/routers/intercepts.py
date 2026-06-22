@@ -1406,45 +1406,41 @@ def monitor_playlist(
             f"SELECT COUNT(*) FROM messages m WHERE {where_sql}", params
         ).fetchone()[0]
 
+        # Спершу беремо лише id потрібної сторінки (дешево — без важких виразів
+        # над повним текстом для УСІХ рядків), потім читаємо тіло тільки для них.
         rows = conn.execute(
             f"""
             SELECT m.id, m.created_at, COALESCE(m.is_read, 0) AS is_read,
                    n.frequency, n.mask, n.unit,
-                   substr(m.body_text, 1, 120) AS body_preview,
-                   (
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '0', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '1', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '2', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '3', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '4', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '5', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '6', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '7', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '8', ''))) +
-                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '9', '')))
-                   ) AS digit_count
-            FROM messages m
+                   m.body_text AS body_full
+            FROM (
+                SELECT id FROM messages m
+                WHERE {where_sql}
+                ORDER BY {order_by}
+                LIMIT ? OFFSET ?
+            ) sel
+            JOIN messages m ON m.id = sel.id
             LEFT JOIN networks n ON n.id = m.network_id
-            WHERE {where_sql}
             ORDER BY {order_by}
-            LIMIT ? OFFSET ?
             """,
             params + [limit, offset],
         ).fetchall()
 
-        items = [
-            {
+        items = []
+        for r in rows:
+            body = r["body_full"] or ""
+            # Кількість цифр (0–9) у повному тексті перехоплення.
+            digit_count = sum(1 for ch in body if "0" <= ch <= "9")
+            items.append({
                 "id":           int(r["id"]),
                 "created_at":   r["created_at"] or "",
                 "is_read":      int(r["is_read"]),
                 "frequency":    r["frequency"] or "",
                 "mask":         r["mask"] or "",
                 "unit":         r["unit"] or "",
-                "body_preview": r["body_preview"] or "",
-                "digit_count":  int(r["digit_count"] or 0),
-            }
-            for r in rows
-        ]
+                "body_preview": body[:120],
+                "digit_count":  digit_count,
+            })
         return {"ok": True, "total": int(total), "items": items}
     finally:
         conn.close()
