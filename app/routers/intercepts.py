@@ -1410,7 +1410,19 @@ def monitor_playlist(
             f"""
             SELECT m.id, m.created_at, COALESCE(m.is_read, 0) AS is_read,
                    n.frequency, n.mask, n.unit,
-                   substr(m.body_text, 1, 120) AS body_preview
+                   substr(m.body_text, 1, 120) AS body_preview,
+                   (
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '0', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '1', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '2', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '3', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '4', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '5', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '6', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '7', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '8', ''))) +
+                     (LENGTH(m.body_text) - LENGTH(REPLACE(m.body_text, '9', '')))
+                   ) AS digit_count
             FROM messages m
             LEFT JOIN networks n ON n.id = m.network_id
             WHERE {where_sql}
@@ -1429,6 +1441,7 @@ def monitor_playlist(
                 "mask":         r["mask"] or "",
                 "unit":         r["unit"] or "",
                 "body_preview": r["body_preview"] or "",
+                "digit_count":  int(r["digit_count"] or 0),
             }
             for r in rows
         ]

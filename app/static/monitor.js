@@ -1828,11 +1828,17 @@
     const freqStr = item.frequency || "—";
     const matched = _matchTags(item.body_preview || "");
 
-    const tagsHtml = matched.length
+    let tagsHtml = matched.length
       ? matched.map(t =>
           `<span class="mon-tag-icon" title="${_esc(t.name)}">${_esc(t.icon)}</span>`
         ).join("")
       : "";
+
+    // Окремий тег-квадрат: кількість цифр у тексті перехоплення (якщо є хоча б одна).
+    const digitCount = Number(item.digit_count || 0);
+    if (digitCount > 0) {
+      tagsHtml += `<span class="mon-tag-digits" title="Цифр у тексті перехоплення: ${digitCount}">${digitCount}</span>`;
+    }
 
     // Single line: [time] [freq/mask] [tags...]
     el.innerHTML =

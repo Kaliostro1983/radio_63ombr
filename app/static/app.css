@@ -5457,6 +5457,25 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
   flex-shrink:0;
 }
 
+/* Тег-квадрат: кількість цифр у тексті перехоплення */
+.mon-tag-digits{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  height:20px;
+  padding:0 4px;
+  border-radius:3px;
+  font-size:12px;
+  font-weight:700;
+  line-height:1;
+  background:var(--bg);
+  border:1px solid color-mix(in srgb, var(--accent,#7cc4ff) 60%, var(--border));
+  color:var(--accent,#7cc4ff);
+  cursor:default;
+  flex-shrink:0;
+}
+
 /* ── Tags table in settings modal ── */
 .mon-tags-table{
   width:100%;
