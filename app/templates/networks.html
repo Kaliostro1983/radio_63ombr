@@ -908,12 +908,18 @@
     const qs = new URLSearchParams(location.search);
     const initialTab = (qs.get("tab") || "").toLowerCase();
     const pick = qs.get("pick");
+    // Сторінка результатів пошуку картки (POST /networks/search) — форма пошуку
+    // живе в модалці «Картка р/м», тож після сабміту її треба знову відкрити
+    // (інакше натискання «Пошук» виглядало як «вікно закрилося»).
+    const isCardSearch = location.pathname.replace(/\/+$/, "") === "/networks/search";
     if (isReload) {
       // Прибрати ?pick/?tab з адреси, щоб стан був чистим після перезавантаження.
       if (pick || initialTab) history.replaceState(null, "", location.pathname);
     } else if (initialTab && initialTab in modals) {
       openModal(initialTab);
     } else if (pick) {
+      openModal("card");
+    } else if (isCardSearch) {
       openModal("card");
     }
 
