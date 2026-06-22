@@ -1927,10 +1927,20 @@ button.secondary{
 .lm-modal-card.modal-card {
   max-width: min(96vw, 920px);
   width: min(96vw, 920px);
+  /* Flex-колонка з обмеженою висотою: шапка й футер («Зберегти») лишаються
+     видимими, а тіло прокручується (інакше високий вміст — карта+коментар —
+     виштовхував футер за межі екрана). */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 40px);
+  margin: 20px auto;
 }
 
 .lm-modal-body {
   padding-top: 8px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .lm-modal-grid {
