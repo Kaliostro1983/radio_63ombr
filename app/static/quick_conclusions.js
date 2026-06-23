@@ -114,6 +114,9 @@
           activePoints.splice(idx, 1);
         }
         refreshPointButtonLabels();
+        // Одразу показуємо/оновлюємо точки на карті при виборі (а не лише на
+        // «Згенерувати») — інакше при кліку по пункту точка не з'являлась.
+        setMapMarkers(activePoints);
       });
       pointBtnsWrap.appendChild(btn);
     });
