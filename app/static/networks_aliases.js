@@ -166,6 +166,17 @@
           .join("");
         wrap.appendChild(box);
         index = -1;
+        // Вибір пункту обробляємо ПРЯМО на дропдауні через mousedown:
+        // preventDefault не дає інпуту втратити фокус до обробки, і це не
+        // залежить від document-click (який ставав ненадійним після того, як
+        // модалку «портують» у <body> через __modalToFront).
+        box.addEventListener("mousedown", (e) => {
+          const btn = e.target.closest(".callsign-autocomplete__item");
+          if (!btn) return;
+          e.preventDefault();
+          const idx = Number(btn.dataset.index || -1);
+          if (idx >= 0 && items[idx]) pick(items[idx]);
+        });
       } catch (e) {
         closeAc();
       }
