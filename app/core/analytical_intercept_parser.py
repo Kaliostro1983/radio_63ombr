@@ -35,28 +35,36 @@ RE_MGRS_ANY = re.compile(
     flags=re.IGNORECASE,
 )
 
-# Службовий маркер «[Палітра: N]» (порядковий id палітри, з якої взято точку).
-# Додається у редакторі висновку після перехоплення; на парсингу його треба
-# відділити від тіла перехоплення, щоб він не псував шаблонний парсер.
-RE_PALETTE_TAG = re.compile(r"\[\s*Палітра\s*:\s*([^\]]*)\]", flags=re.IGNORECASE)
+# Службовий рядок «Палітра: N» (порядковий id палітри, з якої взято точку).
+# Додається у редакторі висновку МІЖ аналітичним висновком/координатами та
+# роздільником. На парсингу його треба відділити, щоб він не потрапив у текст
+# висновку. Підтримуємо новий формат «Палітра: N» та старий «[Палітра: N]».
+RE_PALETTE_LINE = re.compile(
+    r"^\s*\[?\s*Палітра\s*:\s*([0-9][0-9,\s]*?)\s*\]?\s*$",
+    flags=re.IGNORECASE,
+)
 
 
 def _extract_palette_tag(text: str) -> tuple[str, list[int]]:
-    """Витягти «[Палітра: N, …]» з тексту.
+    """Витягти рядки «Палітра: N, …» з тексту (порядковий id палітри).
 
-    Повертає (текст_без_тегу, [порядкові_id]). Тег видаляється разом із
-    порожніми рядками навколо нього.
+    Повертає (текст_без_рядка, [порядкові_id]). Прибираємо рядок цілком, тож
+    не зачіпаємо інший текст висновку (напр. «Палітра: червоних» — без числа —
+    лишається, бо це не індекс).
     """
     seqs: list[int] = []
-    for m in RE_PALETTE_TAG.finditer(text or ""):
-        for tok in re.split(r"[,\s]+", (m.group(1) or "").strip()):
-            if tok.isdigit():
-                n = int(tok)
-                if n not in seqs:
-                    seqs.append(n)
-    cleaned = RE_PALETTE_TAG.sub("", text or "")
-    # Прибрати осиротілі порожні рядки/пробіли, що лишилися від тегу.
-    cleaned = re.sub(r"\n\s*\n\s*$", "", cleaned).rstrip()
+    kept: list[str] = []
+    for line in (text or "").splitlines():
+        m = RE_PALETTE_LINE.match(line)
+        if m:
+            for tok in re.split(r"[,\s]+", (m.group(1) or "").strip()):
+                if tok.isdigit():
+                    n = int(tok)
+                    if n not in seqs:
+                        seqs.append(n)
+            continue  # службовий рядок — у текст не додаємо
+        kept.append(line)
+    cleaned = "\n".join(kept).strip()
     return cleaned, seqs
 
 
@@ -146,6 +154,9 @@ def is_analytical_intercept(text: str) -> bool:
     if not preface or not tail:
         return False
 
+    # «Палітра: N» лежить у префейсі (між висновком і роздільником) — прибираємо,
+    # щоб не зламати/забруднити висновок. З хвоста — для зворотної сумісності.
+    preface, _seq_pre = _extract_palette_tag(preface)
     conclusion, _mgrs = _extract_analytical_conclusion_and_mgrs(preface)
     if not conclusion:
         return False
@@ -172,12 +183,15 @@ def parse_analytical_intercept(text: str) -> Dict[str, Any]:
     if not tail:
         return {"ok": False, "error": "analytical_header_not_found"}
 
+    # Відокремити службовий рядок «Палітра: N» (новий формат — у префейсі, між
+    # висновком і роздільником; старий «[Палітра: N]» міг бути в хвості).
+    preface, seqs_pre = _extract_palette_tag(preface)
+    tail, seqs_tail = _extract_palette_tag(tail)
+    palette_seqs = seqs_pre + [s for s in seqs_tail if s not in seqs_pre]
+
     conclusion, mgrs_codes = _extract_analytical_conclusion_and_mgrs(preface)
     if not conclusion:
         return {"ok": False, "error": "analytical_conclusion_not_found"}
-
-    # Відокремити службовий маркер «[Палітра: N]» від тіла перехоплення.
-    tail, palette_seqs = _extract_palette_tag(tail)
 
     parsed = parse_template_intercept(tail)
     if not parsed.get("ok", False):

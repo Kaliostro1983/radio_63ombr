@@ -740,18 +740,18 @@
     const parts = [];
     if (conclusion) parts.push(conclusion);
     if (coords)     parts.push(coords);
-    if (separator)  parts.push(separator);
-    if (intercept)  parts.push(intercept);
-    // Якщо висновок зроблено завдяки палітрі (обрано її точку) — після
-    // перехоплення додаємо «[Палітра: N]» (N — порядковий id, як «#N»). Кілька
-    // різних палітр → перелік через кому. Цей параметр відділяється від тіла
-    // перехоплення при парсингу (_bodyOnly / analytical_intercept_parser).
+    // Якщо висновок зроблено завдяки палітрі (обрано її точку) — між аналітичним
+    // висновком/координатами та роздільником додаємо «Палітра: N» (N — порядковий
+    // id, як «#N»). Кілька різних палітр → перелік через кому. Парсер аналітичного
+    // висновку (analytical_intercept_parser) відділяє цей рядок, щоб не зламатись.
     const palTag = _conclPaletteTag();
     if (palTag) parts.push(palTag);
+    if (separator)  parts.push(separator);
+    if (intercept)  parts.push(intercept);
     return parts.join("\n\n");
   }
 
-  /* «[Палітра: N]» з обраних точок палітри (порядкові id, distinct, за зрост.). */
+  /* «Палітра: N» з обраних точок палітри (порядкові id, distinct, за зрост.). */
   function _conclPaletteTag() {
     const seqs = [];
     _conclFixedMarkers.forEach(e => {
@@ -760,7 +760,7 @@
     });
     if (!seqs.length) return "";
     seqs.sort((a, b) => a - b);
-    return `[Палітра: ${seqs.join(", ")}]`;
+    return `Палітра: ${seqs.join(", ")}`;
   }
 
   /* ═════════════════════════════════════════
@@ -3583,14 +3583,17 @@
     return m ? m[1] : s;
   }
 
-  /* Прибирає службовий маркер «[Палітра: N]» (та порожні рядки навколо нього)
-     з тексту — щоб він не потрапляв у тіло перехоплення при парсингу квадратів
-     і п'ятизначних. Тег додається у _buildConclFullText після перехоплення. */
+  /* Прибирає службовий рядок «Палітра: N» (як новий формат без дужок, так і
+     старий «[Палітра: N]») — щоб він не потрапляв у тіло перехоплення при
+     парсингу квадратів і п'ятизначних. Лінійний фільтр: рядок цілком. */
   function _stripPaletteTag(text) {
+    const re = /^\s*\[?\s*Палітра\s*:\s*[0-9][0-9,\s]*\]?\s*$/i;
     return String(text || "")
-      .replace(/\n\s*\n\s*\[Палітра:[^\]]*\]\s*$/u, "")
-      .replace(/\s*\[Палітра:[^\]]*\]\s*$/u, "")
-      .trimEnd();
+      .split(/\r?\n/)
+      .filter(ln => !re.test(ln))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   /* Квадрати: усі унікальні пари двозначних чисел.
