@@ -3596,6 +3596,18 @@
       .trim();
   }
 
+  /* Прибирає дату (dd.mm.yyyy) і час (hh:mm[:ss]) — щоб блок дати/часу
+     перехоплення не зливався у фейкову координату при автопошуку. Інакше
+     склейка цифр через крапки/пробіли робить «23.06.2026 13:15:04» →
+     «2306202613» → пара 23062/02613 → УСК 5423062/7402613 (хибно). Заміна
+     на \n — бар'єр, що розриває склейку. (_bodyOnly не рятує, коли дата стоїть
+     окремим блоком ПІСЛЯ першого порожнього рядка.) */
+  function _stripDateTime(text) {
+    return String(text || "")
+      .replace(/\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b/g, "\n")
+      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "\n");
+  }
+
   /* Квадрати: усі унікальні пари двозначних чисел.
      Два проходи:
        1) у радіусі ±40 символів від слова «квадрат*» дозволяємо роздільником
@@ -4004,7 +4016,7 @@
     }
 
     document.getElementById("conclFindSquareBtn")?.addEventListener("click", () => {
-      const squares = _extractSquares(_bodyOnly(ta ? ta.value : ""));
+      const squares = _extractSquares(_stripDateTime(_bodyOnly(ta ? ta.value : "")));
       if (!squares.length) { if (window.appToast) window.appToast("Квадрат не знайдено", "info", 1600); return; }
       squares.forEach(sq => _submitCoordInput(sq));
       if (window.appToast && squares.length > 1) window.appToast(`Знайдено квадратів: ${squares.length}`, "success", 1800);
@@ -4015,7 +4027,7 @@
       // вирізаємо тому що "." тепер входить у роздільник склейки —
       // інакше "06.06.2026 13:01:37" склеїлось би у фейковий 10-значний
       // кластер з фейковою парою X/Y.
-      const body = _bodyOnly(fullText);
+      const body = _stripDateTime(_bodyOnly(fullText));
       let pairs = _extractUskPairsV2(body);
       // Fallback на старий, якщо новий нічого не знайшов.
       if (!pairs.length) pairs = _extractUskPairs(body);
