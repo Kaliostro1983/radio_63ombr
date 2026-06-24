@@ -241,7 +241,7 @@ def api_network_callsigns_xlsx(network_id: int):
     from openpyxl import Workbook
     from openpyxl.drawing.image import Image as XLImage
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from openpyxl.utils import get_column_letter
+    from PIL import Image as PILImage
 
     with get_conn() as conn:
         net = conn.execute(
@@ -290,6 +290,31 @@ def api_network_callsigns_xlsx(network_id: int):
 
     icons_dir = _Path(__file__).resolve().parent.parent / "static" / "photos" / "callsign_statuses"
 
+    # Кеш зменшених іконок (PNG-байти 32×32) по status_id — повнорозмірні фото
+    # ~2 МБ кожне, тож вбудовувати їх напряму повільно й роздуває файл.
+    _icon_cache: dict = {}
+
+    def _icon_png(sid) -> bytes | None:
+        key = int(sid) if (sid is not None and str(sid).strip() != "") else "_default"
+        if key in _icon_cache:
+            return _icon_cache[key]
+        path = icons_dir / (f"{key}.png" if key != "_default" else "_default.png")
+        if not path.exists():
+            path = icons_dir / "_default.png"
+        data = None
+        if path.exists():
+            try:
+                with PILImage.open(path) as im:
+                    im = im.convert("RGBA")
+                    im.thumbnail((32, 32))
+                    buf = io.BytesIO()
+                    im.save(buf, format="PNG")
+                    data = buf.getvalue()
+            except Exception:
+                data = None
+        _icon_cache[key] = data
+        return data
+
     thin = Side(style="thin", color="999999")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     head_fill = PatternFill("solid", fgColor="DDDDDD")
@@ -325,16 +350,10 @@ def api_network_callsigns_xlsx(network_id: int):
             ws.cell(row=rownum, column=col).border = border
         ws.row_dimensions[rownum].height = 26
 
-        sid = row["sid"]
-        png = icons_dir / (f"{int(sid)}.png" if sid is not None and str(sid).strip() != "" else "_default.png")
-        if not png.exists():
-            png = icons_dir / "_default.png"
-        if png.exists():
+        png_bytes = _icon_png(row["sid"])
+        if png_bytes:
             try:
-                img = XLImage(str(png))
-                scale = 30.0 / max(img.width or 1, img.height or 1)
-                img.width = max(1, int((img.width or 1) * scale))
-                img.height = max(1, int((img.height or 1) * scale))
+                img = XLImage(io.BytesIO(png_bytes))
                 ws.add_image(img, f"C{rownum}")
             except Exception:
                 pass
