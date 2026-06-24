@@ -76,6 +76,17 @@
         }).join("");
         wrap.appendChild(box);
         index = -1;
+        // Вибір пункту обробляємо ПРЯМО на дропдауні через mousedown
+        // (preventDefault не дає інпуту втратити фокус до обробки). Document-level
+        // click ставав ненадійним, коли модалку «портують» у <body>
+        // (__modalToFront), тож пункти не клікались — напр. у «Картка р/м».
+        box.addEventListener("mousedown", (e) => {
+          const btn = e.target.closest(".callsign-autocomplete__item");
+          if (!btn) return;
+          e.preventDefault();
+          const idx = Number(btn.dataset.index || -1);
+          if (idx >= 0 && items[idx]) pick(items[idx]);
+        });
       } catch (e) {
         close();
       }
