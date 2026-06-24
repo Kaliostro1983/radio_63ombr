@@ -238,10 +238,10 @@ def api_network_callsigns_xlsx(network_id: int):
     from pathlib import Path as _Path
     from urllib.parse import quote as _quote
 
+    import cairosvg
     from openpyxl import Workbook
     from openpyxl.drawing.image import Image as XLImage
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from PIL import Image as PILImage
 
     with get_conn() as conn:
         net = conn.execute(
@@ -252,64 +252,41 @@ def api_network_callsigns_xlsx(network_id: int):
             return JSONResponse({"ok": False, "error": "Радіомережу не знайдено"}, status_code=404)
 
         rows = conn.execute(
-            "SELECT c.id, c.name, c.comment, "
-            "       COALESCE(c.callsign_status_id, c.status_id) AS sid "
+            "SELECT c.id, c.name, c.comment, c.callsign_status_id AS sid, "
+            "       cs.name AS role_name "
             "FROM callsigns c "
+            "LEFT JOIN callsign_statuses cs ON cs.id = c.callsign_status_id "
             "WHERE c.network_id=? AND c.name <> 'НВ' "
             "ORDER BY c.name COLLATE NOCASE",
             (network_id,),
         ).fetchall()
 
-        roles_by_cs: dict[int, set] = {}
-        for r in conn.execute(
-            "SELECT mc.callsign_id AS cid, mc.role AS role "
-            "FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id "
-            "WHERE c.network_id=? GROUP BY mc.callsign_id, mc.role",
-            (network_id,),
-        ).fetchall():
-            roles_by_cs.setdefault(int(r["cid"]), set()).add(r["role"])
-
     freq = (net["frequency"] or "").strip()
     unit = (net["unit"] or "").strip()
     zone = (net["zone"] or "").strip()
-
-    def _role_label(cid: int) -> str:
-        rs = roles_by_cs.get(cid, set())
-        caller, callee = "caller" in rs, "callee" in rs
-        if caller and callee:
-            return "Хто викликає / Кого викликають"
-        if caller:
-            return "Хто викликає"
-        if callee:
-            return "Кого викликають"
-        return ""
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Позивні"
 
-    icons_dir = _Path(__file__).resolve().parent.parent / "static" / "photos" / "callsign_statuses"
-
-    # Кеш зменшених іконок (PNG-байти 32×32) по status_id — повнорозмірні фото
-    # ~2 МБ кожне, тож вбудовувати їх напряму повільно й роздуває файл.
+    # Іконка = SVG «Швидкої ідентифікації» статусу позивного
+    # (app/static/icons/callsign_statuses/{callsign_status_id}.svg).
+    # xlsx вимагає растр, тож рендеримо SVG → PNG 32×32 (cairosvg) один раз
+    # на кожен унікальний статус і кешуємо по status_id.
+    icons_dir = _Path(__file__).resolve().parent.parent / "static" / "icons" / "callsign_statuses"
     _icon_cache: dict = {}
 
     def _icon_png(sid) -> bytes | None:
-        key = int(sid) if (sid is not None and str(sid).strip() != "") else "_default"
+        if sid is None or str(sid).strip() == "":
+            return None
+        key = int(sid)
         if key in _icon_cache:
             return _icon_cache[key]
-        path = icons_dir / (f"{key}.png" if key != "_default" else "_default.png")
-        if not path.exists():
-            path = icons_dir / "_default.png"
+        path = icons_dir / f"{key}.svg"
         data = None
         if path.exists():
             try:
-                with PILImage.open(path) as im:
-                    im = im.convert("RGBA")
-                    im.thumbnail((32, 32))
-                    buf = io.BytesIO()
-                    im.save(buf, format="PNG")
-                    data = buf.getvalue()
+                data = cairosvg.svg2png(url=str(path), output_width=32, output_height=32)
             except Exception:
                 data = None
         _icon_cache[key] = data
@@ -335,16 +312,15 @@ def api_network_callsigns_xlsx(network_id: int):
         cell.alignment = Alignment(horizontal="center", vertical="center")
         cell.border = border
 
-    widths = {"A": 6, "B": 24, "C": 8, "D": 30, "E": 44}
+    widths = {"A": 6, "B": 24, "C": 8, "D": 18, "E": 60}
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
 
     rownum = 3
     for i, row in enumerate(rows, start=1):
-        cid = int(row["id"])
         ws.cell(row=rownum, column=1, value=i).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(row=rownum, column=2, value=row["name"] or "").alignment = Alignment(vertical="center")
-        ws.cell(row=rownum, column=4, value=_role_label(cid)).alignment = Alignment(vertical="center", wrap_text=True)
+        ws.cell(row=rownum, column=4, value=row["role_name"] or "").alignment = Alignment(vertical="center", wrap_text=True)
         ws.cell(row=rownum, column=5, value=row["comment"] or "").alignment = Alignment(vertical="center", wrap_text=True)
         for col in range(1, 6):
             ws.cell(row=rownum, column=col).border = border
