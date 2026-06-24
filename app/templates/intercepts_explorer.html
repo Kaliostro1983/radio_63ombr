@@ -891,7 +891,11 @@
         const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
         setVal("periodStart",   qs.get("period_start") || "");
         setVal("periodEnd",     qs.get("period_end")   || "");
-        setVal("networkQuery",  qs.get("network")      || "");
+        // «Частоти» — чіпи: заповнюємо через API контролера (а не setVal на
+        // #networkQuery, який вже не має name="network").
+        const _net = qs.get("network") || "";
+        if (window.itFreqChips) window.itFreqChips.set(_net ? [_net] : []);
+        else { const nh = document.getElementById("networkHidden"); if (nh) nh.value = _net; }
         setVal("callsignQuery", qs.get("callsign")     || "");
         const form = document.getElementById("interceptsFilterForm");
         if (form) {
