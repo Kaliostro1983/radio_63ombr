@@ -934,14 +934,22 @@
           location_wkt = "";
         }
       } else if (id_geom === 2) {
-        if (editor.verts.length < 3) throw new Error("Для «Зони» потрібно щонайменше 3 вершини");
+        // Дозволяємо зберегти БЕЗ координат (0 вершин) — «орієнтир існує, місце
+        // невідоме». Але якщо почали малювати — фігуру треба завершити (≥3).
+        if (editor.verts.length > 0 && editor.verts.length < 3) {
+          throw new Error("Для «Зони» потрібно 3+ вершини — або жодної (без координат)");
+        }
       } else if (id_geom === 3) {
-        if (editor.verts.length < 2) throw new Error("Для «Кривої» потрібно щонайменше 2 точки");
+        if (editor.verts.length > 0 && editor.verts.length < 2) {
+          throw new Error("Для «Кривої» потрібно 2+ точки — або жодної (без координат)");
+        }
       }
 
       const payload = {
         name: name,
-        location_mgrs: location_mgrs,
+        // MGRS лише для точки; для зони/кривої — порожньо (інакше при відсутній
+        // геометрії сервер вважатиме, що координати «задані частково»).
+        location_mgrs: id_geom === 1 ? location_mgrs : "",
         location_wkt: location_wkt,
         id_geom: id_geom,
         id_type: id_type ? Number(id_type) : null,
