@@ -968,8 +968,13 @@
         }
       }
     } catch (e) {
-      editErr.textContent = e.message || "Помилка";
+      const msg = e.message || "Помилка";
+      editErr.textContent = msg;
       editErr.style.display = "block";
+      // Помилка-рядок унизу прокручуваного тіла модалки може бути поза зором —
+      // тож дублюємо тостом (завжди видно) і доводимо до видимості.
+      try { editErr.scrollIntoView({ block: "nearest" }); } catch (_) {}
+      if (window.appToast) window.appToast(msg, "error", 3200);
     } finally {
       editSaveBtn.disabled = false;
     }
