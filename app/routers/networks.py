@@ -241,7 +241,10 @@ def api_network_callsigns_xlsx(network_id: int):
     import cairosvg
     from openpyxl import Workbook
     from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+    from openpyxl.drawing.xdr import XDRPositiveSize2D
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils.units import pixels_to_EMU
 
     with get_conn() as conn:
         net = conn.execute(
@@ -319,8 +322,11 @@ def api_network_callsigns_xlsx(network_id: int):
     rownum = 3
     for i, row in enumerate(rows, start=1):
         ws.cell(row=rownum, column=1, value=i).alignment = Alignment(horizontal="center", vertical="center")
-        ws.cell(row=rownum, column=2, value=row["name"] or "").alignment = Alignment(vertical="center")
-        ws.cell(row=rownum, column=4, value=row["role_name"] or "").alignment = Alignment(vertical="center", wrap_text=True)
+        c_name = ws.cell(row=rownum, column=2, value=row["name"] or "")
+        c_name.alignment = Alignment(horizontal="center", vertical="center")
+        c_name.font = Font(bold=True)
+        ws.cell(row=rownum, column=3).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=rownum, column=4, value=row["role_name"] or "").alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         ws.cell(row=rownum, column=5, value=row["comment"] or "").alignment = Alignment(vertical="center", wrap_text=True)
         for col in range(1, 6):
             ws.cell(row=rownum, column=col).border = border
@@ -330,7 +336,22 @@ def api_network_callsigns_xlsx(network_id: int):
         if png_bytes:
             try:
                 img = XLImage(io.BytesIO(png_bytes))
-                ws.add_image(img, f"C{rownum}")
+                # Центруємо іконку 32×32 у клітинці C (плаваюче зображення не
+                # реагує на вирівнювання клітинки — рахуємо відступи вручну).
+                icon_px = 32
+                col_w_px = int(widths["C"] * 7 + 5)   # ширина стовпця у px
+                row_h_px = int(26 * 96 / 72)           # висота рядка (26pt) у px
+                col_off = max(0, (col_w_px - icon_px) // 2)
+                row_off = max(0, (row_h_px - icon_px) // 2)
+                marker = AnchorMarker(
+                    col=2, colOff=pixels_to_EMU(col_off),
+                    row=rownum - 1, rowOff=pixels_to_EMU(row_off),
+                )
+                img.anchor = OneCellAnchor(
+                    _from=marker,
+                    ext=XDRPositiveSize2D(pixels_to_EMU(icon_px), pixels_to_EMU(icon_px)),
+                )
+                ws.add_image(img)
             except Exception:
                 pass
         rownum += 1
