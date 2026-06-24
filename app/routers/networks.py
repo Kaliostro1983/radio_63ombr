@@ -319,6 +319,21 @@ def api_network_callsigns_xlsx(network_id: int):
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
 
+    # Висота рядка під коментар: Excel не авто-підганяє надійно для всіх
+    # переглядачів, тож рахуємо к-ть рядків (явні \n + перенесення по ширині
+    # стовпця E) і виставляємо висоту явно, аби весь коментар було видно одразу.
+    _e_chars = max(1, int(widths["E"] * 0.92))  # ~символів у рядок стовпця E
+    _line_pt = 15.0                              # висота текстового рядка, pt
+
+    def _row_height(text) -> float:
+        s = str(text or "").replace("\r", "")
+        if not s.strip():
+            return 26.0
+        lines = 0
+        for seg in s.split("\n"):
+            lines += max(1, -(-len(seg) // _e_chars))  # ceil-ділення
+        return min(409.0, max(26.0, lines * _line_pt + 2))
+
     rownum = 3
     for i, row in enumerate(rows, start=1):
         ws.cell(row=rownum, column=1, value=i).alignment = Alignment(horizontal="center", vertical="center")
@@ -330,7 +345,8 @@ def api_network_callsigns_xlsx(network_id: int):
         ws.cell(row=rownum, column=5, value=row["comment"] or "").alignment = Alignment(vertical="center", wrap_text=True)
         for col in range(1, 6):
             ws.cell(row=rownum, column=col).border = border
-        ws.row_dimensions[rownum].height = 26
+        rh = _row_height(row["comment"])
+        ws.row_dimensions[rownum].height = rh
 
         png_bytes = _icon_png(row["sid"])
         if png_bytes:
@@ -340,7 +356,7 @@ def api_network_callsigns_xlsx(network_id: int):
                 # реагує на вирівнювання клітинки — рахуємо відступи вручну).
                 icon_px = 32
                 col_w_px = int(widths["C"] * 7 + 5)   # ширина стовпця у px
-                row_h_px = int(26 * 96 / 72)           # висота рядка (26pt) у px
+                row_h_px = int(rh * 96 / 72)           # фактична висота рядка у px
                 col_off = max(0, (col_w_px - icon_px) // 2)
                 row_off = max(0, (row_h_px - icon_px) // 2)
                 marker = AnchorMarker(
