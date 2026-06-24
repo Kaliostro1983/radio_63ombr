@@ -371,4 +371,17 @@
       window.open(`/callsigns?${qs.toString()}`, "_blank");
     });
   }
+
+  // Скачати позивні радіомережі (xlsx). Браузер сам обробить
+  // Content-Disposition: attachment і завантажить файл.
+  const btnExport = $("netGraphExportCallsigns");
+  if (btnExport) {
+    btnExport.addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = `/api/networks/${encodeURIComponent(networkId)}/callsigns.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+  }
 })();

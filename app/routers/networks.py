@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 from app.services.network_search import search_network_rows
 
 from fastapi import APIRouter, Depends, Request, Form
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -224,6 +224,133 @@ def api_network_callsign_graph(network_id: int, days: int = 14):
         )
 
     return {"ok": True, "nodes": nodes, "edges": edges, "meta": {"days": days_n, "start_dt": start_dt}}
+
+
+@router.get("/api/networks/{network_id}/callsigns.xlsx")
+def api_network_callsigns_xlsx(network_id: int):
+    """Експорт позивних радіомережі у .xlsx.
+
+    Колонки: н/п, позивний, іконка (PNG статусу), роль (caller/callee), коментар.
+    У заголовку таблиці та назві файлу — частота, підрозділ, зона функціонування.
+    """
+    import io
+    import re as _re
+    from pathlib import Path as _Path
+    from urllib.parse import quote as _quote
+
+    from openpyxl import Workbook
+    from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    with get_conn() as conn:
+        net = conn.execute(
+            "SELECT id, frequency, mask, unit, zone FROM networks WHERE id=?",
+            (network_id,),
+        ).fetchone()
+        if not net:
+            return JSONResponse({"ok": False, "error": "Радіомережу не знайдено"}, status_code=404)
+
+        rows = conn.execute(
+            "SELECT c.id, c.name, c.comment, "
+            "       COALESCE(c.callsign_status_id, c.status_id) AS sid "
+            "FROM callsigns c "
+            "WHERE c.network_id=? AND c.name <> 'НВ' "
+            "ORDER BY c.name COLLATE NOCASE",
+            (network_id,),
+        ).fetchall()
+
+        roles_by_cs: dict[int, set] = {}
+        for r in conn.execute(
+            "SELECT mc.callsign_id AS cid, mc.role AS role "
+            "FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id "
+            "WHERE c.network_id=? GROUP BY mc.callsign_id, mc.role",
+            (network_id,),
+        ).fetchall():
+            roles_by_cs.setdefault(int(r["cid"]), set()).add(r["role"])
+
+    freq = (net["frequency"] or "").strip()
+    unit = (net["unit"] or "").strip()
+    zone = (net["zone"] or "").strip()
+
+    def _role_label(cid: int) -> str:
+        rs = roles_by_cs.get(cid, set())
+        caller, callee = "caller" in rs, "callee" in rs
+        if caller and callee:
+            return "Хто викликає / Кого викликають"
+        if caller:
+            return "Хто викликає"
+        if callee:
+            return "Кого викликають"
+        return ""
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Позивні"
+
+    icons_dir = _Path(__file__).resolve().parent.parent / "static" / "photos" / "callsign_statuses"
+
+    thin = Side(style="thin", color="999999")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    head_fill = PatternFill("solid", fgColor="DDDDDD")
+
+    # Заголовок-рядок із частотою / підрозділом / зоною.
+    title = "Позивні р/м — " + " | ".join(p for p in (freq, unit, zone) if p)
+    ws.merge_cells("A1:E1")
+    ws["A1"] = title
+    ws["A1"].font = Font(bold=True, size=12)
+    ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 20
+
+    headers = ["н/п", "позивний", "іконка", "роль", "коментар"]
+    for col, h in enumerate(headers, start=1):
+        cell = ws.cell(row=2, column=col, value=h)
+        cell.font = Font(bold=True)
+        cell.fill = head_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    widths = {"A": 6, "B": 24, "C": 8, "D": 30, "E": 44}
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = w
+
+    rownum = 3
+    for i, row in enumerate(rows, start=1):
+        cid = int(row["id"])
+        ws.cell(row=rownum, column=1, value=i).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=rownum, column=2, value=row["name"] or "").alignment = Alignment(vertical="center")
+        ws.cell(row=rownum, column=4, value=_role_label(cid)).alignment = Alignment(vertical="center", wrap_text=True)
+        ws.cell(row=rownum, column=5, value=row["comment"] or "").alignment = Alignment(vertical="center", wrap_text=True)
+        for col in range(1, 6):
+            ws.cell(row=rownum, column=col).border = border
+        ws.row_dimensions[rownum].height = 26
+
+        sid = row["sid"]
+        png = icons_dir / (f"{int(sid)}.png" if sid is not None and str(sid).strip() != "" else "_default.png")
+        if not png.exists():
+            png = icons_dir / "_default.png"
+        if png.exists():
+            try:
+                img = XLImage(str(png))
+                scale = 30.0 / max(img.width or 1, img.height or 1)
+                img.width = max(1, int((img.width or 1) * scale))
+                img.height = max(1, int((img.height or 1) * scale))
+                ws.add_image(img, f"C{rownum}")
+            except Exception:
+                pass
+        rownum += 1
+
+    bio = io.BytesIO()
+    wb.save(bio)
+
+    raw = " ".join(p for p in ("Позивні", freq, unit, zone) if p)
+    safe = _re.sub(r"\s+", " ", _re.sub(r'[\\/:*?"<>|]+', " ", raw)).strip() or "Позивні"
+    fn = safe + ".xlsx"
+    return Response(
+        content=bio.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + _quote(fn)},
+    )
 
 
 @router.get("/api/networks/{network_id}/intercept-stats")
