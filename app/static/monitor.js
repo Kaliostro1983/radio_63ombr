@@ -19,6 +19,10 @@
   const PAGE_SIZE = 50;
   // Bump version key → forces fresh defaults when defaults change
   const LS_TAGS   = "monitorTags_v2";
+  // Прив'язка відкритого висновку до перехоплення (message_id). Дублюємо в
+  // прихованому полі + localStorage, бо _currentItem живе лише в пам'яті й
+  // губиться при перезавантаженні — тоді заповнена форма стає незбережуваною.
+  const LS_CONCL_MSGID = "monitorConclMsgId_v1";
 
   const DEFAULT_TAGS = [
     {
@@ -791,7 +795,11 @@
 
   /* Зберегти/оновити висновок. Повертає Promise<bool> (успіх). */
   function _saveConclusion() {
-    if (!_currentItem || !_currentItem.id) {
+    // Прив'язка до перехоплення: спершу з пам'яті (_currentItem), інакше — з
+    // прихованого поля (переживає перезавантаження/повторне відкриття модалки).
+    const msgId = (_currentItem && _currentItem.id)
+      || Number(document.getElementById("conclMsgId")?.value || 0);
+    if (!msgId) {
       if (window.appToast) window.appToast("Спершу оберіть перехоплення у «Моніторингу»", "warn", 2800);
       return Promise.resolve(false);
     }
@@ -810,7 +818,7 @@
         mgrs:       _latLonToMgrs(e.lat, e.lon),
       }));
     const body = {
-      message_id:      _currentItem.id,
+      message_id:      msgId,
       conclusion_text: (document.getElementById("conclText").value || "").trim(),
       mgrs:            _collectConclMgrs(),
       intercept_text:  (document.getElementById("conclInterceptTa")?.value || "").trim(),
@@ -1482,6 +1490,14 @@
     // Збереження висновку: кнопка 💾, відстеження змін, запит при закритті (одноразово)
     if (!_conclSaveWired) {
       _conclSaveWired = true;
+      // Після перезавантаження браузер відновлює textarea (чернетку висновку),
+      // але _currentItem порожній. Відновлюємо message_id у приховане поле,
+      // щоб така чернетка лишалась збережуваною.
+      try {
+        const hid = document.getElementById("conclMsgId");
+        const savedId = localStorage.getItem(LS_CONCL_MSGID);
+        if (hid && !hid.value && savedId) hid.value = savedId;
+      } catch (_) {}
       document.getElementById("conclSaveBtn")?.addEventListener("click", _saveConclusion);
       ["conclText", "conclInterceptTa", "conclCoords"].forEach(id => {
         document.getElementById(id)?.addEventListener("input", () => { _conclSaved = false; });
@@ -1699,6 +1715,14 @@
     const ta = document.getElementById("conclInterceptTa");
     if (!ta) return;
     ta.value = item ? _buildPasteText(item) : "";
+    // Прив'язка до перехоплення — у приховане поле + localStorage, щоб
+    // збереження працювало навіть коли _currentItem загубився (перезавантаження).
+    const hid = document.getElementById("conclMsgId");
+    if (hid) hid.value = item && item.id ? String(item.id) : "";
+    try {
+      if (item && item.id) localStorage.setItem(LS_CONCL_MSGID, String(item.id));
+      else localStorage.removeItem(LS_CONCL_MSGID);
+    } catch (_) {}
     _conclSaved = false;   // нове перехоплення → новий незбережений висновок
     // Зони-«очі»: скинути попередні зони й показати кнопки за наявності перехоплення
     _clearZone("freq"); _clearZone("unit");
