@@ -226,6 +226,27 @@
       </div><!-- /it-modal-card -->
       </div><!-- /itModalLm -->
 
+      <!-- ── Modal: Фільтр плейлиста за частотами/масками ──────── -->
+      <div id="monFilterModal" class="modal hidden it-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-mon-filter-close></div>
+      <div class="modal-card it-modal-card mon-filter-modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div class="modal-title">Оберіть частоти / маски</div>
+          <button type="button" class="secondary" data-mon-filter-close style="padding:4px 10px">✕</button>
+        </div>
+        <div class="modal-body mon-filter-modal-body">
+          <div class="freq-chips home-freq-input-wrap" id="monFilterChips">
+            <input id="monFilterInput" type="text" placeholder="Частоти / маски — по одній, через кому або в стовпчик…" autocomplete="off">
+          </div>
+          <div class="mon-filter-warn" id="monFilterWarn" style="display:none"></div>
+        </div>
+        <div class="modal-foot mon-filter-foot">
+          <button type="button" class="secondary" id="monFilterReset">Скинути фільтри</button>
+          <button type="button" id="monFilterApply">Застосувати</button>
+        </div>
+      </div>
+      </div><!-- /monFilterModal -->
+
       <!-- ── Моніторинг (основний контент сторінки) ───────────── -->
       <section
         id="itPaneMonitor"
@@ -258,13 +279,6 @@
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 2.5h13l-5 6v5l-3-2v-3z"/></svg>
               </button>
               <span id="monUnreadInline" class="mon-unread-inline hidden" title="Непрочитані повідомлення"></span>
-            </div>
-            <!-- Панель фільтра плейлиста за частотами/масками (приховано до кліку) -->
-            <div class="mon-filter-panel hidden" id="monFilterPanel">
-              <div class="freq-chips home-freq-input-wrap" id="monFilterChips">
-                <input id="monFilterInput" type="text" placeholder="Частоти / маски…" autocomplete="off">
-              </div>
-              <div class="mon-filter-warn" id="monFilterWarn" style="display:none"></div>
             </div>
           </div>
 
@@ -1018,7 +1032,7 @@
 <script src="/static/intercepts_freq_chips.js?v=2"></script>
 <script src="/static/intercepts_explorer.js?v=29"></script>
 <script src="/static/monitor.js?v=125"></script>
-<script src="/static/monitor_playlist_filter.js?v=1"></script>
+<script src="/static/monitor_playlist_filter.js?v=2"></script>
 <script src="/static/landmarks.js?v=18" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>
 <script src="/static/networks_autocomplete.js?v=7" defer></script>
