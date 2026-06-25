@@ -1365,6 +1365,7 @@ def monitor_playlist(
     since: str | None = Query(None),
     since_id: int | None = Query(None),
     min_id: int | None = Query(None),
+    networks: str | None = Query(None),
 ):
     """Return playlist items for the monitoring tab, newest first.
 
@@ -1386,6 +1387,14 @@ def monitor_playlist(
         ]
         params: list[object] = []
         order_by = "m.created_at DESC, m.id DESC"
+
+        # Фільтр по радіомережах (за частотами/масками — клієнт резолвить їх у
+        # network_id). CSV id; ігноруємо некоректні значення.
+        if networks:
+            net_ids = [int(x) for x in str(networks).split(",") if x.strip().lstrip("-").isdigit()]
+            if net_ids:
+                where.append("m.network_id IN (%s)" % ",".join("?" * len(net_ids)))
+                params.extend(net_ids)
 
         if min_id is not None:
             where.append("m.id > ?")

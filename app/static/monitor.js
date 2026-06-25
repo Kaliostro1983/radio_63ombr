@@ -58,6 +58,7 @@
   let _activeThumb = null;
   let _currentItem = null;
   let _tags        = _loadTags();
+  let _freqFilter  = "";   // CSV network_id для фільтра плейлиста по частотах/масках ("" = без фільтра)
 
   /* DOM refs (set in initMonitor) */
   let _playlist, _detail, _markAllBtn, _showMoreBtn, _unreadBadge, _settingsBtn;
@@ -1773,9 +1774,13 @@
      Data loading
   ═════════════════════════════════════════ */
 
+  function _freqFilterQS() {
+    return _freqFilter ? `&networks=${encodeURIComponent(_freqFilter)}` : "";
+  }
+
   async function _loadPage(offset) {
     try {
-      const res  = await fetch(`/api/monitor/playlist?limit=${PAGE_SIZE}&offset=${offset}`);
+      const res  = await fetch(`/api/monitor/playlist?limit=${PAGE_SIZE}&offset=${offset}${_freqFilterQS()}`);
       const data = await res.json();
       if (!data.ok) return;
 
@@ -1809,7 +1814,7 @@
       // повідомлення з минулим часом у тілі, бо парсить header). Сервер у
       // цьому режимі сортує за id DESC — щоб _maxLoadedId зростав монотонно
       // і нічого не пропускалось між запитами.
-      const url = `/api/monitor/playlist?limit=200&min_id=${encodeURIComponent(_maxLoadedId)}`;
+      const url = `/api/monitor/playlist?limit=200&min_id=${encodeURIComponent(_maxLoadedId)}${_freqFilterQS()}`;
       const res  = await fetch(url);
       const data = await res.json();
       if (!data.ok || !data.items.length) return;
@@ -1829,6 +1834,19 @@
       }
     } catch (e) { console.error("[monitor] pollNew", e); }
   }
+
+  /* Застосувати фільтр плейлиста по радіомережах (за частотами/масками).
+     ids — масив network_id або CSV; порожньо = зняти фільтр. Перезавантажує
+     плейлист із сервера (фільтрація серверна, тож працює і з пагінацією). */
+  window.monApplyPlaylistFilter = function (ids) {
+    const csv = Array.isArray(ids) ? ids.join(",") : String(ids || "");
+    if (csv === _freqFilter) return;
+    _freqFilter = csv;
+    _offset = 0;
+    _maxLoadedId = 0;
+    _loadedIds.clear();
+    _loadPage(0);
+  };
 
   /* Вставити thumb у позицію, що відповідає created_at (плейлист
      впорядкований DESC). Якщо запізніле повідомлення — потрапляє в середину;
