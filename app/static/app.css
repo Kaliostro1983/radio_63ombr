@@ -321,11 +321,15 @@ h2.pel-title { display:none; }
   position:fixed;
   right:18px;
   bottom:18px;
-  z-index:2000;
+  /* Вище за модалки (.it-modal/.cn-modal мають z-index:9999 !important, а
+     портал __modalToFront піднімає їх ще вище). Інакше тости — зокрема
+     попередження «Заповніть поля» при збереженні висновку — ховаються за
+     відкритою модалкою, і здається, що кнопка «нічого не робить».
+     __modalToFront рахує максимум лише серед .modal, тож тости його не зсувають. */
+  z-index:2147483000;
   display:flex;
   flex-direction:column;
   gap:8px;
-  z-index:90;
   pointer-events:none;
 }
 
