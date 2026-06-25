@@ -4124,8 +4124,8 @@ button.secondary{
 
 /* ── Left column (фіксована ширина: інакше теги-іконки виштовхуються за межі) ── */
 .monitor-left{
-  width:260px;
-  flex:0 0 260px;
+  width:286px;
+  flex:0 0 286px;
   display:flex;
   flex-direction:column;
   border-right:1px solid var(--border);
@@ -4192,7 +4192,7 @@ button.secondary{
   border-top:1px solid var(--border);
   display:flex;
   align-items:center;
-  justify-content:space-around;
+  justify-content:center;
   gap:4px;
   flex-shrink:0;
 }
@@ -4200,7 +4200,8 @@ button.secondary{
   display:flex;
   align-items:center;
   justify-content:center;
-  flex:1;
+  flex:0 0 auto;
+  width:38px;
   height:38px;
   border-radius:6px;
   border:1px solid transparent;
