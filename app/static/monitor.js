@@ -794,19 +794,26 @@
   function _conclComplete() { return _conclMissingFields().length === 0; }
 
   /* Зберегти/оновити висновок. Повертає Promise<bool> (успіх). */
-  function _saveConclusion() {
+  async function _saveConclusion() {
+    const miss = _conclMissingFields();
+    if (miss.length) {
+      if (window.appToast) window.appToast("Заповніть поля для збереження: " + miss.join(", "), "warn", 3400);
+      return false;
+    }
+    const interceptText = (document.getElementById("conclInterceptTa")?.value || "").trim();
     // Прив'язка до перехоплення: спершу з пам'яті (_currentItem), інакше — з
     // прихованого поля (переживає перезавантаження/повторне відкриття модалки).
     const msgId = (_currentItem && _currentItem.id)
       || Number(document.getElementById("conclMsgId")?.value || 0);
+    // Перехоплення вставлене (способи 2/3) — message_id немає. Визначаємо мережу
+    // з частоти в тексті; сервер за нею + датою/часом спробує знайти message_id
+    // у базі. Якщо не знайде — поверне зрозумілу помилку.
+    let networkId = 0;
     if (!msgId) {
-      if (window.appToast) window.appToast("Спершу оберіть перехоплення у «Моніторингу»", "warn", 2800);
-      return Promise.resolve(false);
-    }
-    const miss = _conclMissingFields();
-    if (miss.length) {
-      if (window.appToast) window.appToast("Заповніть поля для збереження: " + miss.join(", "), "warn", 3400);
-      return Promise.resolve(false);
+      try {
+        const ctx = await _palCtxFromText(interceptText);
+        networkId = (ctx && ctx.network_id) || 0;
+      } catch (_) {}
     }
     // Точки палітр, обрані оператором у цьому висновку (для обліку ефективності
     // палітр). Беремо лише фіксовані маркери, позначені палітрою.
@@ -818,31 +825,31 @@
         mgrs:       _latLonToMgrs(e.lat, e.lon),
       }));
     const body = {
-      message_id:      msgId,
+      message_id:      msgId || 0,
+      network_id:      networkId,
       conclusion_text: (document.getElementById("conclText").value || "").trim(),
       mgrs:            _collectConclMgrs(),
-      intercept_text:  (document.getElementById("conclInterceptTa")?.value || "").trim(),
+      intercept_text:  interceptText,
       palette_points:  palettePoints,
     };
-    return fetch("/api/conclusions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (!d || !d.ok) {
-          if (window.appToast) window.appToast(d && d.error ? d.error : "Помилка збереження", "error", 3400);
-          return false;
-        }
-        _conclSaved = true;
-        if (window.appToast) window.appToast(d.created ? "Висновок збережено" : "Висновок оновлено", "success", 1800);
-        return true;
-      })
-      .catch(() => {
-        if (window.appToast) window.appToast("Помилка з'єднання при збереженні", "error", 2800);
-        return false;
+    try {
+      const r = await fetch("/api/conclusions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
+      const d = await r.json();
+      if (!d || !d.ok) {
+        if (window.appToast) window.appToast(d && d.error ? d.error : "Помилка збереження", "error", 3400);
+        return false;
+      }
+      _conclSaved = true;
+      if (window.appToast) window.appToast(d.created ? "Висновок збережено" : "Висновок оновлено", "success", 1800);
+      return true;
+    } catch (_) {
+      if (window.appToast) window.appToast("Помилка з'єднання при збереженні", "error", 2800);
+      return false;
+    }
   }
 
   /* Запит на збереження при закритті модалки, якщо все заповнено й не збережено.

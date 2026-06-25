@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -521,6 +522,64 @@ def _classify_conclusion(conn, conclusion_text: str) -> int:
     return best_id
 
 
+_RE_DATE = re.compile(r"\b(\d{2})\.(\d{2})\.(\d{4})\b")
+_RE_TIME = re.compile(r"\b(\d{2}):(\d{2}):(\d{2})\b")
+
+
+def _resolve_message_id_from_text(conn, intercept_text: str, network_id_hint: int = 0):
+    """Best-effort lookup of messages.id for a *pasted* intercept (способи 2/3).
+
+    The conclusion editor's «Перехоплення» field can be filled three ways: from
+    Моніторинг (we already have message_id), or by pasting text (button / Ctrl+V)
+    — where there is no message_id. A pasted intercept is usually a real, already
+    ingested intercept, so we try to recover its message_id and keep full
+    integration (network/time/callsign links, UNIQUE upsert).
+
+    Strategy (network is taken from the client hint — it resolves it from the
+    frequency robustly):
+      1) network + exact created_at parsed from the pasted text (near-unique key),
+         disambiguated by the transcript (body_text) being contained in the paste;
+      2) fallback — body_text containment among that network's messages.
+    Returns int message_id or None.
+    """
+    text = str(intercept_text or "")
+    if not text.strip() or not network_id_hint:
+        return None
+    net_id = int(network_id_hint)
+
+    # 1) network + exact datetime
+    dm = _RE_DATE.search(text)
+    tm = _RE_TIME.search(text)
+    if dm and tm:
+        dd, mm, yyyy = dm.groups()
+        created_at = f"{yyyy}-{mm}-{dd} {tm.group(0)}"
+        rows = conn.execute(
+            "SELECT id, body_text FROM messages WHERE network_id = ? AND created_at = ?",
+            (net_id, created_at),
+        ).fetchall()
+        if len(rows) == 1:
+            return int(rows[0]["id"])
+        for r in rows:
+            bt = (r["body_text"] or "").strip()
+            if bt and bt in text:
+                return int(r["id"])
+        if rows:
+            return int(rows[0]["id"])
+
+    # 2) fallback — match the transcript itself within the paste
+    rows = conn.execute(
+        "SELECT id, body_text FROM messages WHERE network_id = ? "
+        "ORDER BY created_at DESC LIMIT 5000",
+        (net_id,),
+    ).fetchall()
+    best = None
+    for r in rows:
+        bt = (r["body_text"] or "").strip()
+        if len(bt) >= 15 and bt in text and (best is None or len(bt) > best[1]):
+            best = (int(r["id"]), len(bt))
+    return best[0] if best else None
+
+
 @router.post("/api/conclusions")
 async def api_conclusion_save(request: Request):
     """Create or update an analytical conclusion for a given intercept.
@@ -536,10 +595,13 @@ async def api_conclusion_save(request: Request):
     """
     payload: Dict[str, Any] = await request.json()
 
+    # message_id може бути відсутнім: «Перехоплення» заповнюють і вставкою тексту
+    # (кнопка / Ctrl+V), де прив'язки до повідомлення немає. У такому разі нижче
+    # пробуємо знайти message_id у БД за текстом перехоплення.
     try:
-        message_id = int(payload.get("message_id"))
+        message_id = int(payload.get("message_id") or 0)
     except (TypeError, ValueError):
-        return JSONResponse({"ok": False, "error": "message_id обовʼязковий"}, status_code=400)
+        message_id = 0
 
     conclusion_text = (payload.get("conclusion_text") or "").strip()
     mgrs_list = [_normalize_mgrs_str(m) for m in (payload.get("mgrs") or []) if str(m).strip()]
@@ -558,6 +620,25 @@ async def api_conclusion_save(request: Request):
     mgrs_json = json.dumps(mgrs_list, ensure_ascii=False)
 
     with get_conn() as conn:
+        # Вставлене перехоплення (способи 2/3) — шукаємо message_id у базі за
+        # текстом (мережа + дата/час + збіг транскрипту). Якщо знайшли — далі
+        # все як завжди (мережа/час/позивні беруться з повідомлення).
+        if not message_id:
+            try:
+                net_hint = int(payload.get("network_id") or 0)
+            except (TypeError, ValueError):
+                net_hint = 0
+            message_id = _resolve_message_id_from_text(
+                conn, payload.get("intercept_text"), net_hint
+            ) or 0
+
+        if not message_id:
+            return JSONResponse(
+                {"ok": False, "error": "Перехоплення не знайдено в базі. Оберіть його "
+                 "в «Моніторингу» або вставте текст саме цього перехоплення."},
+                status_code=404,
+            )
+
         msg = conn.execute(
             "SELECT id, network_id, created_at FROM messages WHERE id = ?", (message_id,)
         ).fetchone()
