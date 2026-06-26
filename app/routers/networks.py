@@ -1033,12 +1033,13 @@ def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0):
     if (format or "").lower() == "text":
         lines: list[str] = []
         if int(with_mask or 0):
-            # Одна колонка: частота і маска (якщо є) — кожна на окремому рядку.
-            # Це збігається з виглядом модалки "Очерет" на /networks і з тим,
-            # що очікують операторські скрипти (read line-by-line).
+            # Одна колонка, один рядок на р/м: якщо є маска — лише маска,
+            # інакше частота. Збігається з виглядом модалки "Очерет" на
+            # /networks і з тим, що очікують операторські скрипти (line-by-line).
             for it in items:
-                if it["frequency"]: lines.append(it["frequency"])
-                if it["mask"]:      lines.append(it["mask"])
+                v = it["mask"] or it["frequency"]
+                if v:
+                    lines.append(v)
         else:
             lines = [it["frequency"] for it in items if it["frequency"]]
         return PlainTextResponse("\n".join(lines), media_type="text/plain; charset=utf-8")

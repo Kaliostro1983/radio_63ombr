@@ -829,11 +829,12 @@
           empty.style.display = "";
           return;
         }
-        // Одна колонка: частота і маска (якщо є) — кожна окремим рядком.
+        // Одна колонка, один рядок на р/м: якщо є маска — беремо ТІЛЬКИ маску,
+        // інакше частоту (маска — це канонічний шаблон для фільтрації).
         const lines = [];
         for (const r of rows) {
-          if (r.frequency) lines.push(r.frequency);
-          if (r.mask)      lines.push(r.mask);
+          const v = r.mask ? r.mask : r.frequency;
+          if (v) lines.push(v);
         }
         ta.value = lines.join("\n");
       } catch (e) {
