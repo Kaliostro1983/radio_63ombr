@@ -175,6 +175,7 @@
   </div>
 
   <form method="post" action="/networks/save" style="margin-top:14px">
+    <input type="hidden" name="embed" value="{{ '1' if is_embed else '' }}">
     <div class="row">
       <div class="field">
         <label>Частота</label>

@@ -1668,9 +1668,15 @@ def networks_save(
     tag_ids: List[int] = Form(default=[]),
     start_date_str: str = Form(""),
     end_date_str: str = Form(""),
+    embed: str = Form(""),
     actor=Depends(get_actor),
 ):
     """Insert or update a network record from the networks page form."""
+    # Зберігаємо embed-режим у редиректі: картку р/м відкривають як iframe
+    # (/networks?pick=ID&embed=1) у модалці на /home. Без цього після збереження
+    # редирект веде на звичайну сторінку, і всередині iframe зʼявляється повна
+    # сторінка «Радіомережі» з вкладеною карткою.
+    embed_qs = "&embed=1" if (embed or "").strip() == "1" else ""
     freq_norm = normalize_freq(frequency)
 
     # Normalize mask using the same rules as ingest/network_service so that
@@ -1720,7 +1726,7 @@ def networks_save(
                 "missing_fields": missing_keys,
             },
         )
-        return RedirectResponse(url=f"/networks?msg={message}", status_code=303)
+        return RedirectResponse(url=f"/networks?msg={message}{embed_qs}", status_code=303)
 
     now = datetime.utcnow().isoformat(timespec="seconds")
 
@@ -1771,4 +1777,4 @@ def networks_save(
     _sync_gsheets_bg(get_conn)
 
     request.session.pop("network_save_draft", None)
-    return RedirectResponse(url=f"/networks?pick={network_id}", status_code=303)
+    return RedirectResponse(url=f"/networks?pick={network_id}{embed_qs}", status_code=303)
