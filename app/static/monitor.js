@@ -1560,6 +1560,13 @@
           return true;
         }
 
+        // «@<назва>» — орієнтир за назвою (точний збіг, інакше перший).
+        if (val.startsWith("@")) {
+          const name = val.slice(1).trim();
+          if (name) _landmarkLookupAndPlace(name);
+          return true;
+        }
+
         // Квадрат із равликом: "25 17 4"
         const sqSnail = val.match(/^(\d{2})\s+(\d{2})\s+([1-9])$/);
         if (sqSnail) {
@@ -1611,11 +1618,99 @@
         return true; // дозволяємо палітрі мовчазно нічого не знайти
       }
 
+      // ── Автокомпліт орієнтирів за префіксом «@» ──────────────────
+      const _coordWrap = document.getElementById("conclCoordWrap");
+      let _lmAc = null, _lmAcItems = [], _lmAcIdx = -1, _lmAcTimer = null;
+
+      function _closeLmAc() {
+        if (_lmAc) _lmAc.remove();
+        _lmAc = null; _lmAcItems = []; _lmAcIdx = -1;
+      }
+      function _hlLmAc() {
+        if (!_lmAc) return;
+        _lmAc.querySelectorAll(".callsign-autocomplete__item").forEach((el, i) =>
+          el.classList.toggle("is-selected", i === _lmAcIdx));
+      }
+      async function _placeLandmarkById(id) {
+        try {
+          const r = await fetch(`/api/landmarks/${id}`, { headers: { Accept: "application/json" } });
+          const d = await r.json();
+          if (d && d.landmark && _conclMap) _placeLandmark(_conclMap, d.landmark);
+        } catch (_) {}
+      }
+      function _pickLm(it) {
+        if (it && it.id) _placeLandmarkById(it.id);
+        coordIn.value = "";
+        _closeLmAc();
+        coordIn.focus();
+      }
+      async function _lmAcLookup(name) {
+        const q = String(name || "").trim();
+        _closeLmAc();
+        if (!q) return;
+        let items = [];
+        try {
+          const r = await fetch(`/api/landmarks/search?name=${encodeURIComponent(q)}&limit=10`, { headers: { Accept: "application/json" } });
+          const d = await r.json();
+          items = Array.isArray(d.items) ? d.items : [];
+        } catch (_) { return; }
+        if (!items.length || !_coordWrap) return;
+        _lmAcItems = items; _lmAcIdx = -1;
+        _lmAc = document.createElement("div");
+        _lmAc.className = "callsign-autocomplete concl-lm-ac";
+        _lmAc.innerHTML = items.map((it, i) =>
+          `<button type="button" class="callsign-autocomplete__item" data-idx="${i}">📍 ${_esc(it.name)}</button>`).join("");
+        _coordWrap.appendChild(_lmAc);
+      }
+      // Пошук+постановка орієнтира за назвою (Enter без вибору з автокомпліту).
+      async function _landmarkLookupAndPlace(name) {
+        const q = String(name || "").trim();
+        if (!q) return;
+        try {
+          const r = await fetch(`/api/landmarks/search?name=${encodeURIComponent(q)}&limit=10`, { headers: { Accept: "application/json" } });
+          const d = await r.json();
+          const items = Array.isArray(d.items) ? d.items : [];
+          const exact = items.find(it => String(it.name || "").trim().toLowerCase() === q.toLowerCase());
+          const pick = exact || items[0];
+          if (pick) _placeLandmarkById(pick.id);
+          else if (window.appToast) window.appToast("Орієнтир не знайдено: " + q, "warn", 2200);
+        } catch (_) {}
+      }
+      // mousedown по пункту (preventDefault — щоб інпут не втратив фокус).
+      if (_coordWrap) {
+        _coordWrap.addEventListener("mousedown", (e) => {
+          const it = e.target.closest(".callsign-autocomplete__item");
+          if (!it) return;
+          e.preventDefault();
+          const i = Number(it.dataset.idx);
+          if (_lmAcItems[i]) _pickLm(_lmAcItems[i]);
+        });
+      }
+      coordIn.addEventListener("input", () => {
+        const v = coordIn.value;
+        if (v.startsWith("@")) {
+          clearTimeout(_lmAcTimer);
+          const name = v.slice(1);
+          _lmAcTimer = setTimeout(() => _lmAcLookup(name), 200);
+        } else {
+          _closeLmAc();
+        }
+      });
+      coordIn.addEventListener("blur", () => setTimeout(_closeLmAc, 150));
+
       coordIn.addEventListener("keydown", e => {
+        // Навігація автокомпліту орієнтирів має пріоритет.
+        if (_lmAc && _lmAcItems.length) {
+          if (e.key === "ArrowDown") { e.preventDefault(); _lmAcIdx = (_lmAcIdx + 1) % _lmAcItems.length; _hlLmAc(); return; }
+          if (e.key === "ArrowUp")   { e.preventDefault(); _lmAcIdx = (_lmAcIdx - 1 + _lmAcItems.length) % _lmAcItems.length; _hlLmAc(); return; }
+          if (e.key === "Escape")    { _closeLmAc(); return; }
+          if (e.key === "Enter" && _lmAcIdx >= 0 && _lmAcItems[_lmAcIdx]) { e.preventDefault(); _pickLm(_lmAcItems[_lmAcIdx]); return; }
+        }
         if (e.key !== "Enter") return;
         if (!_conclMap) return;
         const raw = coordIn.value.trim();
         if (!raw) return;
+        _closeLmAc();
 
         // Якщо є коми — розбиваємо і обробляємо кожну частину окремо.
         if (raw.includes(",")) {

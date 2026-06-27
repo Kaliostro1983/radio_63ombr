@@ -4394,6 +4394,13 @@ button.secondary{
   display:flex;
   flex-direction:column;
   gap:4px;
+  position:relative;   /* якір для автокомпліту орієнтирів «@» */
+}
+/* Випадаючий список орієнтирів («@…») — над картою Leaflet (її пейни до ~620). */
+#conclCoordWrap .concl-lm-ac{
+  z-index:1000;
+  max-height:260px;
+  overflow-y:auto;
 }
 /* Контейнер чіпів — прихований коли порожній */
 .concl-coord-chips{
