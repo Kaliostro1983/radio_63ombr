@@ -1868,7 +1868,9 @@
 
   function _buildThumb(item) {
     const el  = document.createElement("div");
-    el.className = "mon-thumb" + (item.is_read ? "" : " mon-thumb--unread");
+    // Червоний правий край, якщо р/м — штабний зв'язок (підрозділ «ШтЗ …»).
+    const isShtz = String(item.unit || "").split(/\s+/).includes("ШтЗ");
+    el.className = "mon-thumb" + (item.is_read ? "" : " mon-thumb--unread") + (isShtz ? " mon-thumb--shtz" : "");
     el.dataset.id = item.id;
     el.dataset.createdAt = item.created_at || "";  // потрібно для _insertThumbByDate
     el.title = "Клік — відкрити перехоплення\nCtrl+Клік — Перегляд по цій частоті (−5 год / +10 хв)";
