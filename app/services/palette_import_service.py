@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from xml.etree import ElementTree as ET
 
-from app.core.palette_fold import fold_code
+from app.core.palette_fold import fold_code, display_code
 
 # --------------------------------------------------------------------------- #
 #  Parsing
@@ -662,7 +662,7 @@ def persist_palette(
                     color, lat, lon, mgrs, comment)
                 VALUES (?, ?, ?, ?, ?, ?, ?, '', '')
                 """,
-                (palette_id, region_id, p.code, fold_code(p.code),
+                (palette_id, region_id, display_code(p.code), fold_code(p.code),
                  p.color, p.lat, p.lon),
             )
             point_id = int(pcur.lastrowid)

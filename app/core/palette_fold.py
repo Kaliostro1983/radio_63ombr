@@ -17,6 +17,14 @@ case-insensitively for the user.
 
 from __future__ import annotations
 
+import re
+
+# Розділові знаки в межах коду (між літерою та цифрою тощо), які прибираємо:
+# пробіли, дефіси/тире, підкреслення, крапка, середня крапка. НЕ чіпаємо
+# підстановки масок ``*``/``%`` і GLOB-спецсимволи ``[]?`` — вони потрібні
+# для пошуку за маскою (mask_to_glob).
+_SEP_RE = re.compile(r"[\s‐-―\-_.·]+")
+
 # Cyrillic uppercase → visually identical Latin uppercase.
 # Only includes letters that are genuine homoglyphs; non-confusable Cyrillic
 # letters (Б, Г, Д, Ж …) are left as-is so they never collide with Latin codes.
@@ -31,21 +39,31 @@ _CONFUSABLE = {
 _GLOB_SPECIALS = set("*?[]")
 
 
+def display_code(value: str) -> str:
+    """Нормалізований *видимий* код палітри: UPPERCASE + без розділових знаків,
+    зі збереженням абетки (кирилиця лишається кирилицею, латиниця — латиницею).
+
+    Уніфікація позначень: ``г-11`` / ``г 11`` / ``Г-11`` → ``Г11``; ``z-108`` →
+    ``Z108``. Конфузіблі НЕ перекладаємо (це лише для пошукового ключа fold_code).
+    """
+    if not value:
+        return ""
+    return _SEP_RE.sub("", value.strip().upper())
+
+
 def fold_code(value: str) -> str:
     """Return the canonical fold key for a palette point code.
 
     Розкладко- та регістронезалежний ключ: UPPERCASE, конфузіблі кирилиці →
-    латинські двійники, схлопнуті пробіли.
+    латинські двійники, БЕЗ розділових знаків (``г-11`` ≡ ``Г 11`` ≡ ``Г11``).
+    Підстановки масок ``*``/``%`` зберігаються (їх обробляє mask_to_glob).
     """
     if not value:
         return ""
     up = value.strip().upper()
-    out = []
-    for ch in up:
-        out.append(_CONFUSABLE.get(ch, ch))
-    folded = "".join(out)
-    # Collapse any internal whitespace runs to a single space.
-    return " ".join(folded.split())
+    folded = "".join(_CONFUSABLE.get(ch, ch) for ch in up)
+    # Прибираємо розділові знаки (між літерою та цифрою тощо).
+    return _SEP_RE.sub("", folded)
 
 
 def mask_to_glob(mask: str) -> str:
