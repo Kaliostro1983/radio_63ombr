@@ -241,6 +241,25 @@
     return _conclCoordFmt === "MGRS" ? _latLonToMgrs(lat, lon) : _latLonToUsk(lat, lon);
   }
 
+  /* Дедуп координат: ключ — MGRS 5-знаків (без пробілів). */
+  function _coordKey(lat, lon) {
+    return _latLonToMgrs(lat, lon).replace(/\s+/g, "");
+  }
+  /* true, якщо у висновку вже є точка/квадрат/орієнтир із такою ж координатою. */
+  function _isCoordDuplicate(lat, lon) {
+    const key = _coordKey(lat, lon);
+    if (!key) return false;
+    return _conclFixedMarkers.some(e => {
+      if (!e) return false;
+      const c = e.isSquare ? e.centerLatLon : { lat: e.lat, lon: e.lon };
+      if (!c || c.lat == null || c.lon == null) return false;
+      return _coordKey(c.lat, c.lon) === key;
+    });
+  }
+  function _coordDupToast() {
+    if (window.appToast) window.appToast("Цю координату вже додано", "warn", 1600);
+  }
+
   /* ── СК-42 (Pulkovo 1942 / Gauss-Krüger) → WGS84 ──
      x = northing (5428000), y = easting із префіксом зони (7417000) */
   function _sk42ToLatLon(x, y) {
@@ -314,6 +333,7 @@
     }
     const latlngs = corners.map(c => [c.lat, c.lon]);
     const center  = _sk42ToLatLon(xBase + size / 2, yBase + size / 2);
+    if (center && _isCoordDuplicate(center.lat, center.lon)) { _coordDupToast(); return; }
 
     const layer = L.polygon(latlngs, {
       color: "#ef4444", weight: 2, fillColor: "#ef4444", fillOpacity: 0.35,
@@ -473,6 +493,7 @@
   /* Додати фіксовану точку (з Enter або з "Вибрати точку").
      label — назва точки палітри (показується в чипі замість координати). */
   function _addFixedMarker(map, lat, lon, label, palette) {
+    if (_isCoordDuplicate(lat, lon)) { _coordDupToast(); return; }
     const marker = L.marker([lat, lon], {
       icon: _iconPicked(),
       bubblingMouseEvents: false,
@@ -1408,8 +1429,9 @@
       } catch(_){}
     }
     if (!layer){ if (window.appToast) window.appToast("В орієнтира немає геометрії", "warn", 1800); return; }
-    layer.addTo(map);
     const at  = layer.getLatLng ? layer.getLatLng() : layer.getBounds().getCenter();
+    if (_isCoordDuplicate(at.lat, at.lng)) { _coordDupToast(); return; }
+    layer.addTo(map);
     const del = L.marker(at, { icon:_delHandleIcon(), pane:"conclAnchors", bubblingMouseEvents:false }).addTo(map);
     const entry = { type:"landmark", layers:[layer, del] };
     del.on("click", (e) => { if (e.originalEvent) L.DomEvent.stop(e.originalEvent); _removeDrawn(entry); });
@@ -4875,6 +4897,7 @@
      Поводиться як «квадрат» (isSquare) — у textarea йде координата центру. */
   function _addCodedSquare(map, lat, lon, code) {
     if (!map || !isFinite(lat) || !isFinite(lon)) return;
+    if (_isCoordDuplicate(lat, lon)) { _coordDupToast(); return; }
     // Центр у прямокутних УСК-2000 (X northing, Y easting), кути ±100 м.
     const uskStr = _latLonToUsk(lat, lon);
     const m = String(uskStr).match(/^(\d+)\s+(\d+)$/);
