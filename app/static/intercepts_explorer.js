@@ -1766,15 +1766,38 @@
    * Attaches all event handlers (callsigns, landmarks, comment, copy).
    * Called by monitor.js when displaying an intercept in Monitoring / Висновок.
    */
+  /* Завантаження картки з повторами: короткі розриви зв'язку (нестабільний
+     Tailscale на сервері) спричиняли «Помилка: Failed to fetch» при кліку.
+     Повторюємо мережеві збої та 5xx, але НЕ 4xx (реальна відповідь сервера). */
+  async function _fetchItemWithRetry(messageId, tries = 3) {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      let res;
+      try {
+        res = await fetch(`/api/intercepts-explorer/${messageId}`);
+      } catch (e) {
+        lastErr = e;  // мережевий збій (розрив зв'язку) → повтор
+        if (i < tries - 1) { await new Promise(r => setTimeout(r, 500 * (i + 1))); continue; }
+        throw lastErr;
+      }
+      if (res.ok) return await res.json();
+      if (res.status < 500) {  // 4xx — не повторюємо
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.detail || "HTTP " + res.status);
+      }
+      lastErr = new Error("HTTP " + res.status);  // 5xx → повтор
+      if (i < tries - 1) await new Promise(r => setTimeout(r, 500 * (i + 1)));
+    }
+    throw lastErr;
+  }
+
   window.interceptsExplorerMountCard = async function (messageId, container) {
     if (!container) return;
     _mountedCards.set(Number(messageId), container);
     container.innerHTML = '<div class="intercepts-main-card__empty">Завантаження…</div>';
 
     try {
-      const res  = await fetch(`/api/intercepts-explorer/${messageId}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "HTTP " + res.status);
+      const data = await _fetchItemWithRetry(messageId);
 
       const apiItem = data.item;
 
@@ -1814,7 +1837,17 @@
       if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(container);
 
     } catch (e) {
-      container.innerHTML = `<div class="intercepts-main-card__empty">Помилка: ${escapeHtml(String(e.message || e))}</div>`;
+      // «Failed to fetch» = розрив зв'язку (нестабільний Tailscale), а не помилка
+      // даних. Показуємо зрозуміле повідомлення + кнопку повтору.
+      const isNet = String(e && e.message || "").toLowerCase().includes("fetch");
+      const msg = isNet
+        ? "Втрачено зв'язок із сервером (Tailscale). Повторіть."
+        : "Помилка: " + escapeHtml(String(e.message || e));
+      container.innerHTML =
+        `<div class="intercepts-main-card__empty">${msg}` +
+        `<div style="margin-top:10px"><button type="button" class="secondary" data-mount-retry="${escapeHtml(String(messageId))}">Повторити</button></div></div>`;
+      const btn = container.querySelector("[data-mount-retry]");
+      if (btn) btn.addEventListener("click", () => window.interceptsExplorerMountCard(messageId, container));
     }
   };
 
