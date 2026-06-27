@@ -1421,6 +1421,11 @@ def monitor_playlist(
             f"""
             SELECT m.id, m.created_at, COALESCE(m.is_read, 0) AS is_read,
                    n.frequency, n.mask, n.unit,
+                   EXISTS(
+                       SELECT 1 FROM network_tag_links ntl
+                       JOIN network_tags nt ON nt.id = ntl.tag_id
+                       WHERE ntl.network_id = m.network_id AND nt.name = 'ШД'
+                   ) AS has_shd,
                    m.body_text AS body_full
             FROM (
                 SELECT id FROM messages m
@@ -1447,6 +1452,7 @@ def monitor_playlist(
                 "frequency":    r["frequency"] or "",
                 "mask":         r["mask"] or "",
                 "unit":         r["unit"] or "",
+                "has_shd":      int(r["has_shd"] or 0),
                 "body_preview": body[:120],
                 "digit_count":  digit_count,
             })

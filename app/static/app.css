@@ -4171,9 +4171,9 @@ button.secondary{
   border-color:var(--accent);
   background:color-mix(in srgb,var(--accent) 10%,var(--card));
 }
-/* Червоний правий край — р/м штабного звʼязку (підрозділ «ШтЗ …»).
+/* Червоний правий край — р/м із тегом «ШД».
    Inset box-shadow поважає border-radius і не зсуває розкладку. */
-.mon-thumb--shtz{
+.mon-thumb--shd{
   box-shadow:inset -4px 0 0 0 #ef4444;
 }
 .mon-thumb-time{
