@@ -427,6 +427,8 @@ async def api_landmark_update(request: Request, landmark_id: int):
     if id_geom == 2:
         name = _strip_district(name)
 
+    name = name.upper()  # назви орієнтирів зберігаємо КАПСОМ (key_word лишається lower)
+
     key_word = _normalize_keyword(name)
     if not key_word:
         raise HTTPException(status_code=400, detail="Некоректна назва")
@@ -563,6 +565,8 @@ async def api_landmark_create(request: Request):
     # (інакше він потрапив би в key_word і зламав матчинг).
     if id_geom == 2:
         name = _strip_district(name)
+
+    name = name.upper()  # назви орієнтирів зберігаємо КАПСОМ (key_word лишається lower)
 
     key_word = _normalize_keyword(name)
     if not key_word:
