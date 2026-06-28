@@ -476,6 +476,13 @@
                 data-action="select"
                 data-id="${item.id}"
               >
+                <button
+                  type="button"
+                  class="intercepts-copy-btn intercepts-copy-icon-btn"
+                  data-message-id="${item.id}"
+                  title="Скопіювати перехоплення у стандартному форматі"
+                  aria-label="Копіювати"
+                ><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg></button>
                 <div class="intercept-card__line intercept-card__line--dt">
                   ${escapeHtml(header.dt)}
                 </div>
@@ -485,29 +492,7 @@
                 <div class="intercept-card__line intercept-card__line--net">
                   ${escapeHtml(header.rest)}
                 </div>
-                <div style="display:flex; justify-content:flex-end; margin-bottom:8px">
-                  <button
-                    type="button"
-                    class="intercepts-copy-btn secondary"
-                    data-message-id="${item.id}"
-                    title="Скопіювати перехоплення у стандартному форматі"
-                  >Копіювати</button>
-                </div>
                 <div class="intercept-card__text">${highlightedText}</div>
-              </div>
-
-              <div class="intercept-card__comment-under">
-                <form class="intercepts-comment-form intercepts-comment-form--under" data-message-id="${detail.id}">
-                  <label class="intercepts-editor-label">Висновок / коментар</label>
-                  <textarea
-                    class="intercepts-comment-textarea intercepts-comment-textarea--under"
-                    name="comment"
-                    placeholder="Коментар"
-                  >${escapeHtml(detail.comment || "")}</textarea>
-                  <div class="intercepts-comment-actions intercepts-comment-actions--compact">
-                    <button type="submit" class="intercepts-save-btn">Зберегти</button>
-                  </div>
-                </form>
               </div>
             </section>
 

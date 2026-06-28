@@ -2340,6 +2340,29 @@ button.secondary{
 
 .intercept-card__left--static {
   cursor: default;
+  position: relative;
+}
+/* Кнопка-іконка «Копіювати» — у верхньому правому куті контейнера перехоплення */
+.intercepts-copy-icon-btn{
+  position:absolute;
+  top:0;
+  right:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:30px;
+  height:30px;
+  padding:0;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--card);
+  color:var(--muted);
+  cursor:pointer;
+  z-index:2;
+}
+.intercepts-copy-icon-btn:hover{
+  color:var(--fg);
+  border-color:var(--accent,#2563eb);
 }
 
 .intercept-card__line--dt {
