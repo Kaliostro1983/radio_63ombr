@@ -286,6 +286,7 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
                 "net_description": "",
                 "body_text":       "",
                 "intercept_text":  "",
+                "message_id":      None,
                 "analytics":       [],
                 "battalions":      [],
             }
@@ -301,7 +302,7 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
         a_rows = conn.execute(
             """
             SELECT ac.network_id, ac.created_at, ac.conclusion_text, ac.mgrs_json,
-                   msg.body_text, msg.net_description, n.frequency, n.unit
+                   ac.message_id, msg.body_text, msg.net_description, n.frequency, n.unit
             FROM analytical_conclusions ac
             LEFT JOIN messages msg ON msg.id = ac.message_id
             LEFT JOIN networks n   ON n.id   = ac.network_id
@@ -331,6 +332,8 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
         if not slot["net_description"] and not slot["body_text"]:
             slot["net_description"] = r["net_description"] or ""
             slot["body_text"]       = r["body_text"] or ""
+        if slot["message_id"] is None and r["message_id"] is not None:
+            slot["message_id"] = int(r["message_id"])
 
     for r in b_rows:
         slot = _slot(r["network_id"], r["created_at"], r["frequency"], r["unit"])
@@ -342,6 +345,30 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
         if not slot["intercept_text"]:
             slot["intercept_text"] = r["intercept_text"] or ""
 
+    # Позивні (caller/callee) для перехоплень з «Аналітики 63» — щоб у першій
+    # колонці показати перехоплення за повним шаблоном.
+    msg_ids = [s["message_id"] for s in rows.values() if s["message_id"]]
+    callsigns_by_msg: Dict[int, Dict[str, list]] = {}
+    if msg_ids:
+        with get_conn() as conn:
+            ph = ",".join("?" * len(msg_ids))
+            for r in conn.execute(
+                f"SELECT mc.message_id AS mid, mc.role AS role, c.name AS name "
+                f"FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id "
+                f"WHERE mc.message_id IN ({ph}) ORDER BY mc.message_id, c.name",
+                msg_ids,
+            ).fetchall():
+                d = callsigns_by_msg.setdefault(int(r["mid"]), {"caller": [], "callee": []})
+                if r["role"] == "caller":
+                    d["caller"].append(r["name"])
+                elif r["role"] in ("callee", "mentioned"):
+                    d["callee"].append(r["name"])
+
+    def _fmt_dt(s: str) -> str:
+        v = str(s or "").replace("T", " ").strip()
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[ ](\d{2}:\d{2}:\d{2})", v)
+        return f"{m.group(3)}.{m.group(2)}.{m.group(1)}, {m.group(4)}" if m else v
+
     out: List[Dict[str, Any]] = []
     for slot in rows.values():
         a, b = slot["analytics"], slot["battalions"]
@@ -352,8 +379,26 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
         else:
             category = "only_one"
 
-        parts = [p for p in (slot["net_description"], slot["body_text"]) if p]
-        intercept = "\n\n".join(parts) if parts else slot["intercept_text"]
+        # Перша колонка — перехоплення за шаблоном: дата/час, частота, опис
+        # мережі, позивні (хто викликає / кого), порожній рядок, текст.
+        if slot["net_description"] or slot["body_text"]:
+            cs = callsigns_by_msg.get(slot["message_id"], {"caller": [], "callee": []})
+            lines: List[str] = []
+            dt = _fmt_dt(slot["created_at"])
+            if dt:
+                lines.append(dt)
+            if slot["frequency"]:
+                lines.append(slot["frequency"])
+            if slot["net_description"]:
+                lines.append(slot["net_description"])
+            lines.extend(cs["caller"])
+            lines.extend(cs["callee"])
+            if slot["body_text"]:
+                lines.append("")
+                lines.append(slot["body_text"])
+            intercept = "\n".join(lines)
+        else:
+            intercept = slot["intercept_text"]
 
         out.append({
             "created_at":     slot["created_at"],

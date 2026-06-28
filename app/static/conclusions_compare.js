@@ -50,13 +50,18 @@
     const cls = r.category === "match" ? "cn-cmp-row--match"
               : r.category === "diff"  ? "cn-cmp-row--diff"
               : "";
-    const meta = `${fmtDt(r.created_at)}${r.frequency ? " · " + escapeHtml(r.frequency) : ""}` +
-                 `${r.unit ? " · " + escapeHtml(r.unit) : ""}`;
-    const intercept = r.intercept_text
-      ? `<div class="cn-cmp-intercept">${escapeHtml(r.intercept_text)}</div>`
+    const txt = r.intercept_text || "";
+    const cell = txt
+      ? `<div class="cn-cmp-intercept-wrap">` +
+          `<button type="button" class="cn-cmp-copy-btn" title="Копіювати перехоплення" data-intercept="${escapeHtml(txt)}">` +
+            `<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">` +
+              `<rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg>` +
+          `</button>` +
+          `<div class="cn-cmp-intercept">${escapeHtml(txt)}</div>` +
+        `</div>`
       : '<span class="cn-cmp-empty-cell">—</span>';
     return `<tr class="${cls}">` +
-      `<td><div class="cn-cmp-meta">${meta}</div>${intercept}</td>` +
+      `<td>${cell}</td>` +
       `<td>${renderConclusions(r.analytics, false)}</td>` +
       `<td>${renderConclusions(r.battalions, true)}</td>` +
       `</tr>`;
@@ -131,6 +136,20 @@
 
     const form = $("cnCompareFilter");
     if (form) form.addEventListener("submit", function (e) { e.preventDefault(); load(); });
+
+    // Кнопка-іконка «Копіювати» в контейнері перехоплення (делеговано на tbody).
+    const bodyEl = $("cnCmpBody");
+    if (bodyEl) bodyEl.addEventListener("click", function (e) {
+      const btn = e.target.closest(".cn-cmp-copy-btn");
+      if (!btn) return;
+      const text = btn.dataset.intercept || "";
+      if (!text) return;
+      const done = function (ok) {
+        if (window.appToast) window.appToast(ok ? "Скопійовано" : "Помилка копіювання", ok ? "success" : "error", 1500);
+      };
+      if (window.clipboardWrite) window.clipboardWrite(text).then(done);
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    });
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {

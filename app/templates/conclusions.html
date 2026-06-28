@@ -42,12 +42,17 @@
   .cn-cmp--diff  { background: color-mix(in srgb,#dc2626 16%,var(--card)); border-color: color-mix(in srgb,#dc2626 45%,var(--border)); }
   .cn-cmp--only  { background: var(--card); }
   .cn-cmp-table { width:100%; border-collapse:collapse; }
-  .cn-cmp-table th { text-align:left; padding:6px 10px; border-bottom:1px solid var(--border); }
+  .cn-cmp-table th { text-align:center; padding:6px 10px; border-bottom:1px solid var(--border); }
   .cn-cmp-table td { vertical-align:top; padding:8px 10px; border-top:1px solid var(--border); }
   .cn-cmp-row--match td { background: color-mix(in srgb,#16a34a 10%, transparent); }
   .cn-cmp-row--diff  td { background: color-mix(in srgb,#dc2626 10%, transparent); }
   .cn-cmp-meta { font-size:.8em; opacity:.6; margin-bottom:4px; }
   .cn-cmp-intercept { white-space:pre-wrap; font-size:.86em; opacity:.92; }
+  .cn-cmp-intercept-wrap { position:relative; padding-right:26px; }
+  .cn-cmp-copy-btn { position:absolute; top:0; right:0; display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; padding:0; border:1px solid var(--border); border-radius:5px;
+    background:var(--card); color:var(--muted); cursor:pointer; opacity:.7; }
+  .cn-cmp-copy-btn:hover { opacity:1; color:var(--fg); border-color:var(--accent,#2563eb); }
   .cn-cmp-concl { white-space:pre-wrap; }
   .cn-cmp-concl + .cn-cmp-concl { margin-top:8px; border-top:1px dashed var(--border); padding-top:8px; }
   .cn-cmp-marker { font-size:.72em; opacity:.6; text-transform:uppercase; }
@@ -313,9 +318,9 @@
             <table id="cnCmpTable" class="cn-cmp-table" style="display:none">
               <thead>
                 <tr>
-                  <th style="width:34%">Перехоплення</th>
-                  <th style="width:33%">Аналітика 63</th>
-                  <th style="width:33%">Батальйони 63</th>
+                  <th style="width:34%; text-align:center">Перехоплення</th>
+                  <th style="width:33%; text-align:center">Аналітика 63</th>
+                  <th style="width:33%; text-align:center">Батальйони 63</th>
                 </tr>
               </thead>
               <tbody id="cnCmpBody"></tbody>
@@ -658,6 +663,6 @@
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/conclusions.js?v=29" defer></script>
 <script src="/static/quick_conclusions.js?v=17" defer></script>
-<script src="/static/conclusions_compare.js?v=1" defer></script>
+<script src="/static/conclusions_compare.js?v=2" defer></script>
 <script src="/static/palette_efficiency.js?v=4" defer></script>
 {% endblock %}
