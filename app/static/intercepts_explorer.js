@@ -1801,13 +1801,14 @@
         });
       }
 
-      /* Store full detail (callsigns) */
+      /* Store full detail (callsigns + network, з тегами для іконок). */
       state.detailById[apiItem.id] = {
         id:         apiItem.id,
         network_id: apiItem.network_id,
         text:       apiItem.text    || "",
         comment:    apiItem.comment || "",
         callsigns:  apiItem.callsigns || [],
+        network:    apiItem.network  || {},
       };
       state.landmarkMatchesByMessageId[apiItem.id] =
         state.landmarkMatchesByMessageId[apiItem.id] || [];
