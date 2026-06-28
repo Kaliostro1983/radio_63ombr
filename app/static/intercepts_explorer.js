@@ -455,6 +455,18 @@
     const callee = callsigns.filter((x) => x.role === "callee");
     const mentioned = callsigns.filter((x) => x.role === "mentioned");
 
+    // Іконки-теги радіомережі (з detail.network.tags; з'являються після
+    // підвантаження деталей — дешевий індексований запит на бекенді).
+    const netTags = (detail.network && Array.isArray(detail.network.tags) && detail.network.tags)
+      || (item.network && Array.isArray(item.network.tags) && item.network.tags) || [];
+    const netTagsHtml = netTags.length
+      ? `<div class="intercept-card__nettags">${netTags.map((t) =>
+          `<img class="net-tag-icon" src="/static/icons/network_tags/${Number(t.id)}.svg" ` +
+          `title="${escapeHtml(t.name || "")}" alt="${escapeHtml(t.name || "")}" ` +
+          `onerror="this.onerror=null;this.src='/static/icons/network_tags/_default.svg'">`
+        ).join("")}</div>`
+      : "";
+
     return `
         <article class="intercept-card" data-id="${item.id}">
           <div class="intercept-card__body intercept-card__body--compact">
@@ -480,6 +492,7 @@
                 <div class="intercept-card__line intercept-card__line--net">
                   ${escapeHtml(header.rest)}
                 </div>
+                ${netTagsHtml}
                 <div class="intercept-card__text">${highlightedText}</div>
               </div>
             </section>

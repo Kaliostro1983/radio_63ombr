@@ -705,6 +705,18 @@ def intercepts_explorer_detail(message_id: int):
             (message_id,),
         ).fetchall()
 
+        # Теги радіомережі (іконки) — дешевий індексований запит по network_id.
+        tag_rows = conn.execute(
+            """
+            SELECT nt.id, nt.name
+            FROM network_tag_links ntl
+            JOIN network_tags nt ON nt.id = ntl.tag_id
+            WHERE ntl.network_id = ?
+            ORDER BY nt.tag_group, nt.name
+            """,
+            (message_row["network_id"],),
+        ).fetchall()
+
         return JSONResponse(
             {
                 "item": {
@@ -723,6 +735,10 @@ def intercepts_explorer_detail(message_id: int):
                         "zone":       message_row["zone"] or "",
                         "group_id":   message_row["network_group_id"],
                         "group_name": message_row["network_group_name"] or "",
+                        "tags": [
+                            {"id": int(t["id"]), "name": t["name"] or ""}
+                            for t in tag_rows
+                        ],
                     },
                     "callsigns": [
                         {

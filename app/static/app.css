@@ -2364,6 +2364,14 @@ button.secondary{
   color:var(--fg);
   border-color:var(--accent,#2563eb);
 }
+/* Іконки-теги радіомережі в контейнері перехоплення */
+.intercept-card__nettags{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:2px;
+  margin:2px 0 10px;
+}
 
 .intercept-card__line--dt {
   font-size: 22px;
