@@ -887,6 +887,31 @@
     `;
   }
 
+  /* GET JSON з повторами — короткі розриви зв'язку (нестабільний Tailscale на
+     сервері) інакше валили список «Не вдалося завантажити перехоплення».
+     Повторюємо мережеві збої та 5xx, але НЕ 4xx (реальна відповідь сервера). */
+  async function _getJsonWithRetry(url, tries = 3) {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      let res;
+      try {
+        res = await fetch(url, { method: "GET", headers: { Accept: "application/json" } });
+      } catch (e) {
+        lastErr = e;  // мережевий збій (розрив зв'язку) → повтор
+        if (i < tries - 1) { await new Promise((r) => setTimeout(r, 500 * (i + 1))); continue; }
+        throw lastErr;
+      }
+      if (res.ok) return await res.json();
+      if (res.status < 500) {
+        const t = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${t}`);
+      }
+      lastErr = new Error(`HTTP ${res.status}`);  // 5xx → повтор
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+    throw lastErr;
+  }
+
   async function loadIntercepts() {
     if (state.loadingList) {
       return;
@@ -902,17 +927,7 @@
 
     try {
       const query = buildQuery();
-      const response = await fetch(`/api/intercepts-explorer?${query}`, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`HTTP ${response.status}: ${text}`);
-      }
-
-      const data = await response.json();
+      const data = await _getJsonWithRetry(`/api/intercepts-explorer?${query}`);
       state.total = Number(data.total || 0);
       state.items = Array.isArray(data.items) ? data.items : [];
       state.offset = state.items.length;
@@ -956,17 +971,7 @@
 
     try {
       const query = buildQuery();
-      const response = await fetch(`/api/intercepts-explorer?${query}`, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`HTTP ${response.status}: ${text}`);
-      }
-
-      const data = await response.json();
+      const data = await _getJsonWithRetry(`/api/intercepts-explorer?${query}`);
       state.total = Number(data.total || state.total);
       const newItems = Array.isArray(data.items) ? data.items : [];
 
