@@ -22,6 +22,7 @@
   let offset = 0;
   let loading = false;
   let reachedEnd = false;
+  let lastPhrase = "";
 
   function setWarn(msg) {
     if (!warn) return;
@@ -29,12 +30,52 @@
     warn.style.display = msg ? "block" : "none";
   }
 
+  function escapeRegExp(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  /* Підсвічуємо пошукову фразу в тексті картки. Ходимо по ТЕКСТОВИХ вузлах,
+     щоб не зламати наявні span-и (підсвітка орієнтирів) і не пере-екранувати. */
+  function highlightPhrase(root, phrase) {
+    const q = String(phrase || "").trim();
+    if (!q || !root) return;
+    const reTest = new RegExp(escapeRegExp(q), "i");
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      const p = node.parentNode;
+      if (p && p.classList && p.classList.contains("hl")) continue;   // вже підсвічено
+      if (reTest.test(node.nodeValue)) nodes.push(node);
+    }
+    nodes.forEach((n) => {
+      const text = n.nodeValue;
+      const re = new RegExp(escapeRegExp(q), "gi");
+      const frag = document.createDocumentFragment();
+      let last = 0, m;
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const span = document.createElement("span");
+        span.className = "hl";
+        span.textContent = m[0];
+        frag.appendChild(span);
+        last = m.index + m[0].length;
+        if (re.lastIndex === m.index) re.lastIndex += 1;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      n.parentNode.replaceChild(frag, n);
+    });
+  }
+
   function mountCard(id) {
     const cell = document.createElement("div");
     cell.className = "it-search-result";
     results.appendChild(cell);
     if (window.interceptsExplorerMountCard) {
-      window.interceptsExplorerMountCard(id, cell);
+      Promise.resolve(window.interceptsExplorerMountCard(id, cell)).then(() => {
+        const textEl = cell.querySelector(".intercept-card__text");
+        if (textEl) highlightPhrase(textEl, lastPhrase);
+      });
     } else {
       cell.textContent = "Не вдалося відобразити картку.";
     }
@@ -47,6 +88,7 @@
     const days = (daysI && daysI.value) || "70";
 
     if (reset) { offset = 0; reachedEnd = false; results.innerHTML = ""; }
+    lastPhrase = phrase;
     if (!phrase && !frequency) {
       setWarn("Вкажіть слово або частоту/маску для пошуку.");
       if (moreBtn) moreBtn.classList.add("hidden");
