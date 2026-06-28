@@ -94,16 +94,37 @@
           <div class="modal-title">Пошук</div>
           <button type="button" class="secondary" data-it-modal-close="search" style="padding:4px 10px">✕</button>
         </div>
-        <div class="modal-body it-modal-body" style="padding:0">
+        <div class="modal-body it-modal-body">
       <section
         id="itPaneSearch"
         role="region"
         aria-label="Пошук"
       >
-        <iframe
-          src="/intercepts?embed=1"
-          style="width:100%; height: 78vh; border:0; background:var(--bg); display:block;"
-        ></iframe>
+        <form id="itSearchForm" class="intercepts-filter-form intercepts-filter-form--rows" autocomplete="off">
+          <div class="if-row">
+            <div class="field" style="flex:2">
+              <label for="itSearchPhrase">Фраза</label>
+              <input id="itSearchPhrase" type="text" placeholder="принял" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="itSearchFreq">Частота/маска</label>
+              <input id="itSearchFreq" type="text" placeholder="149.200" autocomplete="off">
+            </div>
+            <div class="field field-days">
+              <label for="itSearchDays">Днів</label>
+              <input id="itSearchDays" type="number" min="1" max="365" value="70">
+            </div>
+            <div class="field field-btn">
+              <label>&nbsp;</label>
+              <div class="action-buttons">
+                <button type="submit">Пошук</button>
+              </div>
+            </div>
+          </div>
+        </form>
+        <div id="itSearchWarning" class="warning" style="display:none"></div>
+        <div id="itSearchResults" class="intercepts-list"></div>
+        <button id="itSearchMore" class="mon-show-more secondary hidden" type="button">Показати ще</button>
       </section>
         </div><!-- /it-modal-body -->
       </div><!-- /it-modal-card -->
@@ -1031,6 +1052,7 @@
 </style>
 <script src="/static/intercepts_freq_chips.js?v=2"></script>
 <script src="/static/intercepts_explorer.js?v=32"></script>
+<script src="/static/intercepts_search_modal.js?v=1"></script>
 <script src="/static/monitor.js?v=129"></script>
 <script src="/static/monitor_playlist_filter.js?v=2"></script>
 <script src="/static/landmarks.js?v=18" defer></script>
