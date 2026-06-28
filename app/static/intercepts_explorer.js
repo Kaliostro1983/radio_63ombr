@@ -404,18 +404,6 @@
           ${renderCompactRole("Кого викликають", "callee", callee)}
           ${renderCompactRole("Згадувані", "mentioned", mentioned)}
         </div>
-
-        <form class="intercepts-comment-form intercepts-comment-form--compact" data-message-id="${detail.id}">
-          <label class="intercepts-editor-label">Висновок / коментар</label>
-          <textarea
-            class="intercepts-comment-textarea intercepts-comment-textarea--compact"
-            name="comment"
-            placeholder="Коментар"
-          >${escapeHtml(detail.comment || "")}</textarea>
-          <div class="intercepts-comment-actions intercepts-comment-actions--compact">
-            <button type="submit" class="intercepts-save-btn">Зберегти</button>
-          </div>
-        </form>
       </div>
     `;
   }
