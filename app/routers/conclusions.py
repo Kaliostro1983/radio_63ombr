@@ -14,6 +14,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.core.config import settings
+from app.core.conclusion_classify import conclusion_match_text
 from app.core.db import get_conn
 
 router = APIRouter(tags=["conclusions"])
@@ -550,7 +551,7 @@ def api_conclusions_by_point(
 
 def _classify_conclusion(conn, conclusion_text: str) -> int:
     """Pick the best-matching conclusion type_id by keyword hits (0 = невідомо)."""
-    text = (conclusion_text or "").lower()
+    text = conclusion_match_text(conclusion_text)
     rows = conn.execute(
         "SELECT id, keywords_json FROM conclusion_types WHERE id > 0 "
         "ORDER BY sort_order ASC, id ASC"
@@ -1026,7 +1027,7 @@ def api_reclassify_conclusion(ac_id: int):
             "WHERE id > 0 ORDER BY sort_order ASC, id ASC"
         ).fetchall()
 
-        text = (ac["conclusion_text"] or "").lower()
+        text = conclusion_match_text(ac["conclusion_text"])
         best_id, best_score = 0, 0
         for t in types:
             try:

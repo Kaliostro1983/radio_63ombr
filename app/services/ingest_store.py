@@ -23,6 +23,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from app.core.config import settings
+from app.core.conclusion_classify import conclusion_match_text
 from app.db_utils import safe_execute
 
 
@@ -332,7 +333,7 @@ def _score_conclusion_type(cur, conclusion_text: str) -> int:
     except Exception:
         return 0
 
-    text = (conclusion_text or "").lower()
+    text = conclusion_match_text(conclusion_text)
     best_id, best_score = 0, 0
     for row in rows:
         try:
