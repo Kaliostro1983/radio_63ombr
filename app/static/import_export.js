@@ -331,12 +331,15 @@
         <td class="ie-col-fmt"><code>${esc(format)}</code></td>
         <td class="ie-col-reason"><span class="ie-error-badge">${esc(reasonLabel(reason))}</span></td>
         <td class="ie-col-text">
-          <div class="ie-raw-text">${esc(item.raw_text || "")}</div>
+          ${!reviewed
+            ? `<textarea class="ie-raw-text ie-raw-edit" data-id="${item.id}" spellcheck="false">${esc(item.raw_text || "")}</textarea>`
+            : `<div class="ie-raw-text">${esc(item.raw_text || "")}</div>`}
         </td>
         <td class="ie-col-actions">
           <div class="ie-row-actions">
             ${!reviewed
-              ? `<button class="ie-btn-sm retry"   data-retry="${item.id}"   title="Повторно обробити">▶</button>
+              ? `<button class="ie-btn-sm save"    data-save="${item.id}"    title="Зберегти зміни тексту">💾</button>
+                 <button class="ie-btn-sm retry"   data-retry="${item.id}"   title="Повторно обробити">▶</button>
                  <button class="ie-btn-sm dismiss" data-dismiss="${item.id}" title="Позначити як переглянуто">✓</button>`
               : ""}
           </div>
@@ -350,8 +353,25 @@
   function handleTableClick(e) {
     const dismiss = e.target.closest("[data-dismiss]");
     const retry   = e.target.closest("[data-retry]");
+    const save    = e.target.closest("[data-save]");
     if (dismiss) dismissRow(Number(dismiss.dataset.dismiss));
     if (retry)   retryRow(Number(retry.dataset.retry));
+    if (save)    saveRow(Number(save.dataset.save));
+  }
+
+  async function saveRow(id) {
+    const ta = botTbody.querySelector(`textarea.ie-raw-edit[data-id="${id}"]`);
+    if (!ta) return;
+    const btn = botTbody.querySelector(`[data-save="${id}"]`);
+    if (btn) btn.disabled = true;
+    const data = await apiFetch(`/api/ingest/${id}/raw-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: ta.value }),
+    });
+    if (btn) btn.disabled = false;
+    if (data.ok) toast("Текст збережено — можна тиснути ▶ для обробки", "success", 2800);
+    else toast("Помилка: " + (data.error || "?"), "error");
   }
   // Bind once to the static element (avoids duplicates on reload)
   qs("#ieBotTbody") && qs("#ieBotTbody").addEventListener("click", handleTableClick);

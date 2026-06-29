@@ -114,3 +114,28 @@ def retry_ingest_error(ingest_id: int):
     if not result.get("ok") and result.get("error"):
         return JSONResponse(result, status_code=400)
     return result
+
+
+@router.post("/api/ingest/{ingest_id}/raw-text")
+async def update_ingest_raw_text(ingest_id: int, request: Request):
+    """Update the raw_text of a rejected ingest row, so the operator can fix
+    small errors before re-running it (retry re-parses from raw_text)."""
+    payload = await request.json()
+    raw_text = str(payload.get("raw_text") or "")
+    with get_conn() as conn:
+        result = conn.execute(
+            """
+            UPDATE ingest_messages
+            SET raw_text = ?
+            WHERE id = ?
+              AND parse_status IN ('parse_error', 'skipped_unknown_format')
+              AND reviewed_at IS NULL
+            """,
+            (raw_text, ingest_id),
+        )
+        if result.rowcount == 0:
+            return JSONResponse(
+                {"ok": False, "error": "рядок не знайдено або вже переглянуто"},
+                status_code=404,
+            )
+    return {"ok": True}

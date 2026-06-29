@@ -382,6 +382,8 @@
 .ie-btn-sm.dismiss:hover { background: color-mix(in srgb, #16a34a 10%, var(--card)); }
 .ie-btn-sm.retry   { border-color: var(--accent); color: var(--accent); }
 .ie-btn-sm.retry:hover { background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+.ie-btn-sm.save    { border-color: #f59e0b; color: #f59e0b; }
+.ie-btn-sm.save:hover { background: color-mix(in srgb, #f59e0b 12%, var(--card)); }
 .ie-btn-sm:disabled { opacity: .4; cursor: default; pointer-events: none; }
 
 /* ── Raw message text (inline column) ────────────────────────── */
@@ -397,9 +399,19 @@
   border-radius: 5px;
   background: var(--input-bg);
 }
+/* Редагований варіант тексту (виправлення дрібних помилок перед обробкою) */
+textarea.ie-raw-text {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 120px;
+  resize: vertical;
+  color: var(--text);
+}
+textarea.ie-raw-text:focus { outline: none; border-color: var(--accent); }
 </style>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/import_export.js?v=8" defer></script>
+<script src="/static/import_export.js?v=9" defer></script>
 {% endblock %}
