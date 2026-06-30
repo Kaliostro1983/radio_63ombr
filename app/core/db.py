@@ -1708,6 +1708,14 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         conn, "analytical_conclusions", "sended",
         "sended INTEGER NOT NULL DEFAULT 0",
     )
+    # --- analytical_conclusions: delta_attempted flag ---
+    # Set to 1 once the ingest pipeline has actually attempted a Delta auto-send
+    # (all gating passed). Lets the background re-send worker retry only failed
+    # *ingest* sends, never manually-created conclusions or the pre-deploy backlog.
+    _ensure_column(
+        conn, "analytical_conclusions", "delta_attempted",
+        "delta_attempted INTEGER NOT NULL DEFAULT 0",
+    )
 
     # --- conclusion_types: icon_filename for map markers (legacy SVG files) ---
     _ensure_column(conn, "conclusion_types", "icon_filename", "icon_filename TEXT NOT NULL DEFAULT ''")

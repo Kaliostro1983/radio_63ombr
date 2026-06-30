@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json as _json
 import re as _re
+import threading as _threading
+import time as _time
 import urllib.error as _uerr
 import urllib.request as _ureq
 from typing import Any, Dict, List
@@ -155,6 +157,15 @@ def _try_delta_auto_send(
             )
             return  # delta_auto_send is off for this type
 
+        # Mark that an auto-send was attempted (all gating passed). The background
+        # re-send worker uses this to retry ONLY failed ingest sends — never
+        # manually-created conclusions (operator-controlled) nor the pre-deploy
+        # backlog (which has delta_attempted=0).
+        conn.execute(
+            "UPDATE analytical_conclusions SET delta_attempted=1 WHERE id=?",
+            (ac_id,),
+        )
+
         # Network for frequency / unit
         net_row = conn.execute(
             "SELECT frequency, unit FROM networks WHERE id=?", (network_id,)
@@ -226,6 +237,131 @@ def _try_delta_auto_send(
     except Exception as exc:
         log.warning("_try_delta_auto_send: exception (ac_id=%s): %s", ac_id, exc)
         pass  # best-effort; never break ingest
+
+
+# ---------------------------------------------------------------------------
+# Delta re-send worker
+# ---------------------------------------------------------------------------
+# The ingest-time Delta send is ONE-SHOT with no retry, so a transient blip
+# (bot/WhatsApp/connectivity) leaves a classified conclusion stuck at sended=0.
+# This background sweep re-attempts those failures. It is scoped tightly so it
+# self-heals recent failures WITHOUT flooding the chat:
+#   * sended = 0                  — not yet delivered
+#   * delta_attempted = 1         — ingest tried & failed (excludes manual + backlog)
+#   * created within window_hours — bounds retries for a permanently-stuck row
+# Throttled (small batch + per-send delay) to avoid bursting the group.
+
+_RESEND_WINDOW_HOURS = 24
+_RESEND_BATCH = 10
+_RESEND_POLL_SEC = 180
+
+_resend_worker_started = False
+_resend_worker_lock = _threading.Lock()
+
+
+def resend_unsent_recent_conclusions(
+    window_hours: int = _RESEND_WINDOW_HOURS,
+    batch_size: int = _RESEND_BATCH,
+) -> int:
+    """Re-attempt the Delta auto-send for recently-failed conclusions.
+
+    Returns the number successfully (re-)sent this sweep. Best-effort: any
+    error is logged and swallowed so the worker keeps running.
+    """
+    from datetime import datetime, timedelta
+
+    cutoff = (datetime.now() - timedelta(hours=window_hours)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    # 1) Fetch a small batch in one short read, then release the connection so
+    #    the per-send POSTs below never hold a DB lock across the network call.
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT ac.id, ac.type_id, ac.conclusion_text, ac.created_at,
+                       ac.network_id, ac.mgrs_json, m.body_text
+                FROM analytical_conclusions ac
+                JOIN conclusion_types ct ON ct.id = ac.type_id
+                LEFT JOIN messages m ON m.id = ac.message_id
+                WHERE COALESCE(ac.sended, 0) = 0
+                  AND COALESCE(ac.delta_attempted, 0) = 1
+                  AND ac.type_id > 0
+                  AND ct.delta_auto_send = 1
+                  AND REPLACE(ac.created_at, 'T', ' ') >= ?
+                ORDER BY ac.created_at ASC
+                LIMIT ?
+                """,
+                (cutoff, batch_size),
+            ).fetchall()
+            batch = [dict(r) for r in rows]
+    except Exception as exc:
+        log.warning("resend_unsent_recent_conclusions: fetch failed: %s", exc)
+        return 0
+
+    sent = 0
+    for r in batch:
+        try:
+            mgrs_list = _json.loads(r.get("mgrs_json") or "[]")
+            if not isinstance(mgrs_list, list):
+                mgrs_list = []
+        except Exception:
+            mgrs_list = []
+        try:
+            with get_conn() as conn:
+                _try_delta_auto_send(
+                    conn,
+                    ac_id=int(r["id"]),
+                    type_id=int(r["type_id"]),
+                    conclusion_text=r.get("conclusion_text") or "",
+                    body_text=r.get("body_text") or "",
+                    created_at=r.get("created_at") or "",
+                    network_id=int(r["network_id"]),
+                    mgrs_list=mgrs_list,
+                )
+                after = conn.execute(
+                    "SELECT sended FROM analytical_conclusions WHERE id=?",
+                    (int(r["id"]),),
+                ).fetchone()
+                if after and int(after[0] or 0) == 1:
+                    sent += 1
+        except Exception as exc:
+            log.warning("resend sweep: send failed (ac=%s): %s", r.get("id"), exc)
+        _time.sleep(0.4)  # throttle — не спамити чат
+    return sent
+
+
+def start_delta_resend_worker(
+    poll_interval_sec: int = _RESEND_POLL_SEC,
+    window_hours: int = _RESEND_WINDOW_HOURS,
+    batch_size: int = _RESEND_BATCH,
+) -> None:
+    """Start the background Delta re-send worker (idempotent, daemon thread)."""
+    global _resend_worker_started
+    with _resend_worker_lock:
+        if _resend_worker_started:
+            return
+        _resend_worker_started = True
+
+    def _loop():
+        while True:
+            try:
+                n = resend_unsent_recent_conclusions(
+                    window_hours=window_hours, batch_size=batch_size
+                )
+                if n:
+                    log.info("delta-resend-worker: re-sent %d conclusion(s)", n)
+            except Exception as exc:
+                log.warning("delta-resend-worker: loop error: %s", exc)
+            _time.sleep(poll_interval_sec)
+
+    th = _threading.Thread(target=_loop, name="delta-resend-worker", daemon=True)
+    th.start()
+    log.info(
+        "delta-resend-worker: started (poll=%ss window=%sh batch=%s)",
+        poll_interval_sec, window_hours, batch_size,
+    )
 
 
 def _content_type_from_format(message_format: str) -> str:

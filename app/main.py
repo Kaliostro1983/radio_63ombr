@@ -120,6 +120,10 @@ def create_app() -> FastAPI:
         maybe_backup_db()
         if settings.landmark_auto_match_enabled:
             start_landmark_match_worker()
+        # Background re-send of conclusions whose one-shot ingest Delta send
+        # failed (transient blip). Self-heals recent failures, throttled.
+        from app.services.ingest_service import start_delta_resend_worker
+        start_delta_resend_worker()
 
     @app.get("/")
     def root():
