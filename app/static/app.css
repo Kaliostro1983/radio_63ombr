@@ -5794,6 +5794,10 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cs-life-toggle.cs-life--200{ background:#1f2937; color:#fff; border-color:#1f2937; }
 .cs-life-toggle.cs-life--300{ background:#dc2626; color:#fff; border-color:#dc2626; }
 
+/* Обводка іконки позивного за станом: 200 — чорна, 300 — червона. */
+.cs-ico-wrap.cs-life-ring-200 > img{ border-radius:50%; box-shadow:0 0 0 2px #1f2937; }
+.cs-ico-wrap.cs-life-ring-300 > img{ border-radius:50%; box-shadow:0 0 0 2px #dc2626; }
+
 /* Чіп у перехопленні: числовий бейдж статусу поряд з іконкою позивного. */
 .cs-life-badge{
   display:inline-flex; align-items:center; justify-content:center;

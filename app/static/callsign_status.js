@@ -45,13 +45,18 @@
   // `wrap` = елемент .cs-ico-wrap (має data-concl-cs-id). Бейдж кладемо
   // одразу після іконки, у той самий контейнер-чіп.
   function applyChipBadge(wrap, life) {
-    var host = wrap && wrap.parentNode;
+    if (!wrap) return;
+    var info = badge(life);
+    // Обводка іконки за станом (200 — чорна, 300 — червона; живий — без обводки).
+    wrap.classList.remove("cs-life-ring-200", "cs-life-ring-300");
+    if (info) wrap.classList.add("cs-life-ring-" + info.key);
+    // Числовий бейдж поряд з іконкою.
+    var host = wrap.parentNode;
     if (!host) return;
     var existing = null, c = host.firstChild;
     for (; c; c = c.nextSibling) {
       if (c.nodeType === 1 && c.classList && c.classList.contains("cs-life-badge")) { existing = c; break; }
     }
-    var info = badge(life);
     if (!info) { if (existing) existing.remove(); return; }
     var el = existing || document.createElement("span");
     el.className = "cs-life-badge cs-life-badge--" + info.key;

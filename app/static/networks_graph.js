@@ -226,6 +226,13 @@
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("r", "14");
       circle.classList.add("net-graph-node__dot");
+      // Обводка вузла за станом носія (200 — чорна, 300 — червона). Inline-стиль
+      // перебиває CSS .net-graph-node__dot. Колір — зі спільного CallsignStatus.
+      const lifeInfo = window.CallsignStatus ? window.CallsignStatus.badge(n.life_status) : null;
+      if (lifeInfo) {
+        circle.style.stroke = lifeInfo.bg;
+        circle.style.strokeWidth = "2.5";
+      }
       g.appendChild(circle);
 
       const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
