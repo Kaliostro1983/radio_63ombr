@@ -598,6 +598,69 @@ def api_network_by_id(id: int):
         }
 
 
+_UNKNOWN_CHAT_NAME = "Невідомо"
+
+
+@router.get("/api/chats")
+def api_chats_list():
+    """Чати-джерела з лічильником закріплених р/м (для керування в картці р/м)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT c.id, c.name, "
+            "       (SELECT COUNT(*) FROM networks n WHERE n.chat_id = c.id) AS used "
+            "FROM chats c ORDER BY c.name COLLATE NOCASE"
+        ).fetchall()
+        unk = conn.execute(
+            "SELECT id FROM chats WHERE name = ? LIMIT 1", (_UNKNOWN_CHAT_NAME,)
+        ).fetchone()
+    return {
+        "ok": True,
+        "chats": [{"id": int(r["id"]), "name": r["name"], "used": int(r["used"] or 0)} for r in rows],
+        "unknown_id": int(unk["id"]) if unk else 0,
+    }
+
+
+@router.post("/api/chats")
+async def api_chat_create(request: Request):
+    """Створити чат-джерело."""
+    payload = await request.json()
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "Назва не може бути порожньою"}, status_code=400)
+    with get_conn() as conn:
+        ex = conn.execute("SELECT id FROM chats WHERE lower(name) = lower(?)", (name,)).fetchone()
+        if ex:
+            return JSONResponse({"ok": False, "error": "Чат з такою назвою вже існує"}, status_code=409)
+        cur = conn.execute("INSERT INTO chats (name) VALUES (?)", (name,))
+        cid = int(cur.lastrowid)
+    return {"ok": True, "id": cid, "name": name}
+
+
+@router.post("/api/chats/{chat_id}/delete")
+def api_chat_delete(chat_id: int):
+    """Видалити чат: усі його р/м переходять на «Невідомо». «Невідомо» — незмінний."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, name FROM chats WHERE id = ?", (chat_id,)).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Чат не знайдено"}, status_code=404)
+        if row["name"] == _UNKNOWN_CHAT_NAME:
+            return JSONResponse(
+                {"ok": False, "error": "Чат «Невідомо» видаляти не можна"}, status_code=400
+            )
+        unk = conn.execute(
+            "SELECT id FROM chats WHERE name = ? LIMIT 1", (_UNKNOWN_CHAT_NAME,)
+        ).fetchone()
+        if not unk:
+            return JSONResponse(
+                {"ok": False, "error": "Немає чату «Невідомо» для перепризначення"}, status_code=400
+            )
+        moved = conn.execute(
+            "UPDATE networks SET chat_id = ? WHERE chat_id = ?", (int(unk["id"]), chat_id)
+        ).rowcount
+        conn.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+    return {"ok": True, "moved": int(moved or 0)}
+
+
 @router.get("/api/networks/{network_id}/cross-analysis")
 def api_network_cross_analysis(
     network_id: int,

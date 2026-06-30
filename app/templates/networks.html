@@ -218,13 +218,28 @@
         </select>
       </div>
 
-      <div class="field">
-        <label>Чат (джерело)</label>
-        <select name="chat_id" class="{% if draft and 'chat_id' in draft.missing_fields %}input-error{% endif %}" required>
+      <div class="field" style="position:relative">
+        <label style="display:flex; align-items:center; justify-content:space-between">
+          <span>Чат (джерело)</span>
+          <button type="button" id="netChatManageBtn" class="lm-type-manage-btn" title="Керувати чатами">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+            </svg>
+          </button>
+        </label>
+        <select id="netChatSelect" name="chat_id" class="{% if draft and 'chat_id' in draft.missing_fields %}input-error{% endif %}" required>
           {% for c in chats %}
             <option value="{{ c.id }}" {% if (current and current.chat_id==c.id) or (draft and draft.chat_id|int==c.id) %}selected{% endif %}>{{ c.name }}</option>
           {% endfor %}
         </select>
+        <div id="netChatManagePanel" class="lm-type-manage-panel hidden">
+          <div class="lm-type-manage-add">
+            <input id="netChatManageName" type="text" placeholder="Назва нового чату…" autocomplete="off" maxlength="80">
+            <button type="button" id="netChatManageAddBtn" class="lm-type-manage-add-btn" title="Додати">+</button>
+          </div>
+          <div id="netChatManageList" class="lm-type-manage-list"></div>
+          <div id="netChatManageErr" class="small lm-type-manage-err" style="display:none"></div>
+        </div>
       </div>
 
       <div class="field">
@@ -807,6 +822,107 @@
     document.getElementById("netOpenEtalons")?.addEventListener("click",  () => openModal("etalons"));
     document.getElementById("netOpenAkademik")?.addEventListener("click", () => openModal("akademik"));
     document.getElementById("netOpenOcheret")?.addEventListener("click",  () => { openModal("ocheret"); loadOcheretList(); });
+
+    // ── Керування чатами-джерелами (іконка над полем «Чат (джерело)») ──
+    (function initNetChatManage() {
+      const btn     = document.getElementById("netChatManageBtn");
+      const panel   = document.getElementById("netChatManagePanel");
+      const addBtn  = document.getElementById("netChatManageAddBtn");
+      const nameInp = document.getElementById("netChatManageName");
+      const list    = document.getElementById("netChatManageList");
+      const errEl   = document.getElementById("netChatManageErr");
+      const sel     = document.getElementById("netChatSelect");
+      if (!btn || !panel) return;
+      let unknownId = 0;
+
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+        c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+      function showErr(m) { if (errEl) { errEl.textContent = m || ""; errEl.style.display = m ? "block" : "none"; } }
+
+      function repopulateSelect(chats) {
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = chats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+        if (chats.some(c => String(c.id) === cur)) sel.value = cur;
+      }
+
+      async function load() {
+        showErr("");
+        let d;
+        try {
+          d = await (await fetch("/api/chats", { headers: { Accept: "application/json" } })).json();
+        } catch (e) { showErr("Помилка завантаження"); return; }
+        if (!d || !d.ok) { showErr((d && d.error) || "Помилка"); return; }
+        unknownId = d.unknown_id || 0;
+        list.innerHTML = "";
+        d.chats.forEach(c => {
+          const isUnk = (c.id === unknownId);
+          const row = document.createElement("div");
+          row.className = "lm-type-manage-row";
+          const title = isUnk ? "Системний — не можна видалити"
+                              : (c.used > 0 ? "Видалити (р/м перейдуть у «Невідомо»)" : "Видалити");
+          row.innerHTML =
+            `<span class="${isUnk ? "is-system" : ""}">${esc(c.name)}</span>` +
+            `<span style="display:flex;align-items:center">` +
+              `<span class="lm-type-manage-row-meta">${isUnk ? "системний" : (c.used > 0 ? "× " + c.used : "")}</span>` +
+              `<button type="button" class="lm-type-manage-del-btn" data-id="${c.id}" ${isUnk ? "disabled" : ""} title="${title}">✕</button>` +
+            `</span>`;
+          list.appendChild(row);
+        });
+        list.querySelectorAll(".lm-type-manage-del-btn").forEach(b =>
+          b.addEventListener("click", () => onDelete(Number(b.dataset.id), d.chats)));
+        repopulateSelect(d.chats);
+      }
+
+      async function onAdd() {
+        const name = (nameInp && nameInp.value || "").trim();
+        if (!name) return;
+        showErr("");
+        try {
+          const r = await fetch("/api/chats", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          const d = await r.json();
+          if (!d.ok) { showErr(d.error || "Помилка"); return; }
+          if (nameInp) nameInp.value = "";
+          await load();
+          if (sel) sel.value = String(d.id);
+          if (window.appToast) window.appToast("Чат додано: " + name, "success", 1400);
+        } catch (e) { showErr("Помилка додавання"); }
+      }
+
+      async function onDelete(id, chats) {
+        const c = (chats || []).find(x => x.id === id);
+        const nm = c ? c.name : "";
+        const usedMsg = (c && c.used > 0) ? `\n${c.used} р/м буде перепризначено на «Невідомо».` : "";
+        if (!confirm(`Видалити чат «${nm}»?${usedMsg}`)) return;
+        showErr("");
+        try {
+          const r = await fetch(`/api/chats/${id}/delete`, { method: "POST" });
+          const d = await r.json();
+          if (!d.ok) { showErr(d.error || "Помилка"); return; }
+          await load();
+          if (window.appToast) window.appToast(`Чат видалено${d.moved ? ` (перепризначено ${d.moved} р/м)` : ""}`, "success", 1800);
+        } catch (e) { showErr("Помилка видалення"); }
+      }
+
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const willOpen = panel.classList.contains("hidden");
+        panel.classList.toggle("hidden");
+        if (willOpen) load();
+      });
+      document.addEventListener("click", (e) => {
+        if (panel.classList.contains("hidden")) return;
+        if (panel.contains(e.target) || btn.contains(e.target)) return;
+        panel.classList.add("hidden");
+      });
+      if (addBtn) addBtn.addEventListener("click", onAdd);
+      if (nameInp) nameInp.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); onAdd(); }
+      });
+    })();
 
     // ── Очерет: завантаження списку + копія в буфер ───────────────
     async function loadOcheretList() {
