@@ -422,6 +422,156 @@
     }
   }
 
+  // ─── Налаштування: цільовий чат для надсилання помилок імпорту ────────────
+  // Дзеркало селектора чату з налаштувань аналітичних висновків. Зберігає у
+  // app_settings ключі import_err_chat_id / import_err_chat_name /
+  // import_err_platform / import_err_send_enabled.
+
+  let ieErrPlatform = localStorage.getItem("ieErrPlatform") || "whatsapp";
+  let ieErrChatId   = localStorage.getItem("ieErrChatId")   || "";
+  let ieErrChatName = localStorage.getItem("ieErrChatName") || "";
+  let _ieErrChatsCache = {};
+
+  async function saveAppSettings(pairs) {
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pairs),
+      });
+    } catch (_) { /* best-effort */ }
+  }
+  function ieErrSavePlatform(p) {
+    ieErrPlatform = p;
+    localStorage.setItem("ieErrPlatform", p);
+    saveAppSettings({ import_err_platform: p });
+  }
+  function ieErrSaveChat(id, name) {
+    ieErrChatId = id; ieErrChatName = name;
+    localStorage.setItem("ieErrChatId", id);
+    localStorage.setItem("ieErrChatName", name);
+    saveAppSettings({ import_err_chat_id: id, import_err_chat_name: name });
+  }
+  function ieErrUpdatePlatformBtn() {
+    const btn = qs("#ieErrPlatformBtn");
+    if (!btn) return;
+    if (ieErrPlatform === "signal") {
+      btn.textContent = "S"; btn.className = "qc-platform-btn qc-platform-btn--signal";
+      btn.title = "Signal (натисни для WhatsApp)";
+    } else {
+      btn.textContent = "W"; btn.className = "qc-platform-btn qc-platform-btn--wa";
+      btn.title = "WhatsApp (натисни для Signal)";
+    }
+  }
+  async function ieErrLoadChats(platform) {
+    if (_ieErrChatsCache[platform]) return _ieErrChatsCache[platform];
+    try {
+      const r = await fetch("/api/push/chats?platform=" + platform + "&only_groups=1");
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.chats)) { _ieErrChatsCache[platform] = d.chats; return d.chats; }
+    } catch (_) {}
+    return [];
+  }
+  function ieErrRenderDrop(chats, query) {
+    const drop = qs("#ieErrChatDrop");
+    if (!drop) return;
+    const q = (query || "").toLowerCase();
+    const filtered = q ? chats.filter(c => c.name.toLowerCase().includes(q)) : chats;
+    if (!filtered.length) { drop.classList.add("hidden"); return; }
+    drop.innerHTML = "";
+    filtered.slice(0, 40).forEach(chat => {
+      const item = document.createElement("div");
+      item.className = "qc-chat-drop-item";
+      item.innerHTML = `<span>${esc(chat.name)}</span><span class="qc-chat-drop-item__type">група</span>`;
+      item.addEventListener("mousedown", e => {
+        e.preventDefault();
+        const inp = qs("#ieErrChatInput");
+        if (inp) inp.value = chat.name;
+        ieErrSaveChat(chat.id, chat.name);
+        drop.classList.add("hidden");
+      });
+      drop.appendChild(item);
+    });
+    drop.classList.remove("hidden");
+  }
+  function setupIeErrChatSelector() {
+    const input = qs("#ieErrChatInput");
+    const drop  = qs("#ieErrChatDrop");
+    const platBtn = qs("#ieErrPlatformBtn");
+    if (!input) return;
+    ieErrUpdatePlatformBtn();
+    if (ieErrChatName) input.value = ieErrChatName;
+
+    if (platBtn) platBtn.addEventListener("click", () => {
+      ieErrSavePlatform(ieErrPlatform === "whatsapp" ? "signal" : "whatsapp");
+      ieErrUpdatePlatformBtn();
+      ieErrChatId = ""; ieErrChatName = "";
+      localStorage.removeItem("ieErrChatId"); localStorage.removeItem("ieErrChatName");
+      input.value = "";
+      _ieErrChatsCache = {};
+      ieErrLoadChats(ieErrPlatform);
+    });
+    input.addEventListener("focus", async () => {
+      ieErrRenderDrop(await ieErrLoadChats(ieErrPlatform), input.value);
+    });
+    input.addEventListener("input", async () => {
+      if (input.value !== ieErrChatName) { ieErrChatId = ""; ieErrChatName = input.value; }
+      ieErrRenderDrop(await ieErrLoadChats(ieErrPlatform), input.value);
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(() => drop && drop.classList.add("hidden"), 160);
+    });
+    input.addEventListener("keydown", e => {
+      if (!drop || drop.classList.contains("hidden")) return;
+      const items = drop.querySelectorAll(".qc-chat-drop-item");
+      const focused = drop.querySelector(".qc-chat-drop-item.focused");
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!focused) items[0]?.classList.add("focused");
+        else { focused.classList.remove("focused"); (focused.nextElementSibling || items[0])?.classList.add("focused"); }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!focused) items[items.length-1]?.classList.add("focused");
+        else { focused.classList.remove("focused"); (focused.previousElementSibling || items[items.length-1])?.classList.add("focused"); }
+      } else if (e.key === "Enter" && focused) {
+        e.preventDefault(); focused.dispatchEvent(new MouseEvent("mousedown"));
+      } else if (e.key === "Escape") drop.classList.add("hidden");
+    });
+    ieErrLoadChats(ieErrPlatform);
+  }
+  function setupIeErrSendEnabled() {
+    const chk = qs("#ieErrSendEnabled");
+    if (!chk) return;
+    chk.addEventListener("change", () => {
+      saveAppSettings({ import_err_send_enabled: chk.checked ? "1" : "0" });
+    });
+  }
+  async function ieErrLoadSettings() {
+    try {
+      const r = await fetch("/api/settings?keys=import_err_send_enabled,import_err_chat_id,import_err_platform,import_err_chat_name");
+      const d = await r.json();
+      const srv = (d && d.settings) || {};
+      const chk = qs("#ieErrSendEnabled");
+      if (chk) chk.checked = (srv.import_err_send_enabled ?? "1") === "1";
+
+      if (srv.import_err_chat_id) {
+        ieErrChatId   = srv.import_err_chat_id;
+        ieErrChatName = srv.import_err_chat_name || "";
+        localStorage.setItem("ieErrChatId", ieErrChatId);
+        localStorage.setItem("ieErrChatName", ieErrChatName);
+      } else if (ieErrChatId) {
+        saveAppSettings({ import_err_chat_id: ieErrChatId, import_err_chat_name: ieErrChatName, import_err_platform: ieErrPlatform });
+      }
+      if (srv.import_err_platform) {
+        ieErrPlatform = srv.import_err_platform;
+        localStorage.setItem("ieErrPlatform", ieErrPlatform);
+      }
+    } catch (_) { /* defaults */ }
+    setupIeErrChatSelector();
+    setupIeErrSendEnabled();
+  }
+  ieErrLoadSettings();
+
   // Авто-завантаження звіту "Чат-бот" — у самому кінці IIFE, коли всі
   // const-залежності (botLoader, botOnlyNew, …) вже ініціалізовані.
   loadErrors();

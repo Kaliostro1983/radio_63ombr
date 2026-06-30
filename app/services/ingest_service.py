@@ -239,6 +239,80 @@ def _try_delta_auto_send(
         pass  # best-effort; never break ingest
 
 
+def _try_import_error_send(ingest_id: int) -> None:
+    """Notify a messenger chat that an ingested message failed to parse and
+    landed in the Import/Export error queue.
+
+    Gated by app_settings: `import_err_send_enabled` (default "1") and a
+    configured `import_err_chat_id`/`import_err_platform`. Runs AFTER the
+    ingest transaction has committed, in its own short read — fully best-effort
+    so it can never affect ingest. Only fires for rows whose final
+    parse_status is an error-queue status.
+    """
+    from app.core.config import settings as _cfg  # local import to avoid circulars
+
+    try:
+        if not _cfg.bot_service_url:
+            return
+        with get_conn() as conn:
+            srv = {
+                r["key"]: r["value"]
+                for r in conn.execute(
+                    "SELECT key, value FROM app_settings WHERE key IN "
+                    "('import_err_send_enabled','import_err_chat_id','import_err_platform')"
+                ).fetchall()
+            }
+            if str(srv.get("import_err_send_enabled", "1")) != "1":
+                return
+            chat_id = (srv.get("import_err_chat_id") or "").strip()
+            if not chat_id:
+                return
+            platform = (srv.get("import_err_platform") or "whatsapp").strip() or "whatsapp"
+            row = conn.execute(
+                "SELECT parse_status, parse_error, source_chat_name, message_format, raw_text "
+                "FROM ingest_messages WHERE id=?",
+                (ingest_id,),
+            ).fetchone()
+        if not row:
+            return
+        status = str(row["parse_status"] or "")
+        if status not in ("parse_error", "skipped_unknown_format"):
+            return  # not an error-queue row → nothing to notify
+
+        reason = str(row["parse_error"] or (
+            "невідомий формат" if status == "skipped_unknown_format" else "помилка розбору"
+        ))
+        src = str(row["source_chat_name"] or "")
+        fmt = str(row["message_format"] or "")
+        body = str(row["raw_text"] or "").strip()
+
+        lines = ["⚠️ Помилка імпорту перехоплення"]
+        if src:
+            lines.append("Чат: " + src)
+        if fmt:
+            lines.append("Формат: " + fmt)
+        lines.append("Причина: " + reason)
+        text = "\n".join(lines) + ("\n\n" + body if body else "")
+
+        payload = _json.dumps(
+            {"platform": platform, "chat_id": chat_id, "text": text}
+        ).encode("utf-8")
+        req = _ureq.Request(
+            f"{_cfg.bot_service_url.rstrip('/')}/api/push/send",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with _ureq.urlopen(req, timeout=8) as resp:
+            rd = _json.loads(resp.read())
+            if rd.get("ok"):
+                log.info("_try_import_error_send: sent OK (ingest_id=%s chat=%s)", ingest_id, chat_id)
+            else:
+                log.warning("_try_import_error_send: bot returned not-ok (ingest_id=%s): %s", ingest_id, rd)
+    except Exception as exc:
+        log.warning("_try_import_error_send: exception (ingest_id=%s): %s", ingest_id, exc)
+
+
 # ---------------------------------------------------------------------------
 # Delta re-send worker
 # ---------------------------------------------------------------------------
@@ -1116,7 +1190,7 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "actions": actions,
             }
 
-        return _run_ingest_pipeline(
+        result = _run_ingest_pipeline(
             conn,
             cur,
             ingest_id=ingest_id,
@@ -1126,6 +1200,16 @@ def process_whatsapp_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             published_at_platform=published_at_platform,
             actions=actions,
         )
+
+    # Transaction committed above. If this message ended up in the Import/Export
+    # error queue, optionally notify a messenger chat (best-effort, gated by
+    # app settings). Runs outside the tx so it never holds a DB lock or rolls
+    # back ingest.
+    try:
+        _try_import_error_send(ingest_id)
+    except Exception:
+        pass
+    return result
 
 
 def reprocess_ingest_message(ingest_id: int) -> Dict[str, Any]:
