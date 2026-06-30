@@ -304,6 +304,12 @@
       circle.setAttribute("r", isCenter ? "18" : "14");
       circle.classList.add("net-graph-node__dot");
       if (isCenter) circle.classList.add("net-graph-node__dot--center");
+      // Обводка вузла за станом носія (200 — чорна, 300 — червона). Спільний CallsignStatus.
+      const lifeInfo = window.CallsignStatus ? window.CallsignStatus.badge(n.life_status) : null;
+      if (lifeInfo) {
+        circle.style.stroke = lifeInfo.bg;
+        circle.style.strokeWidth = "2.5";
+      }
       g.appendChild(circle);
 
       const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
@@ -313,6 +319,15 @@
       img.setAttribute("width", isCenter ? "24" : "20");
       img.setAttribute("height", isCenter ? "24" : "20");
       g.appendChild(img);
+
+      // Кутовий числовий бейдж (200/300) — той самий модуль, що й у чіпах/мережному графі.
+      if (window.CallsignStatus) {
+        const lifeBadge = window.CallsignStatus.svgBadge(n.life_status);
+        if (lifeBadge) {
+          lifeBadge.setAttribute("transform", isCenter ? "translate(3,3)" : "translate(1,1)");
+          g.appendChild(lifeBadge);
+        }
+      }
 
       const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.textContent = n.name || "";
