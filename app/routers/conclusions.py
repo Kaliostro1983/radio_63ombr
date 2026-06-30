@@ -461,22 +461,31 @@ def api_conclusion_zone_points(
     where_sql = " AND ".join(wheres)
     with get_conn() as conn:
         rows = conn.execute(
-            f"SELECT ac.mgrs_json FROM analytical_conclusions ac WHERE {where_sql}",
+            f"SELECT ac.mgrs_json, ac.created_at FROM analytical_conclusions ac WHERE {where_sql}",
             params,
         ).fetchall()
 
-    seen: set = set()
-    points: List[str] = []
+    # Per distinct point keep the MOST RECENT conclusion date — the client uses
+    # it to fade older points (relevance/actuality). `last_at` is the raw Kyiv
+    # timestamp; age is computed on the client (its clock is the same zone).
+    latest: Dict[str, str] = {}
+    order: List[str] = []
     for r in rows:
+        ca = str(r["created_at"] or "").replace("T", " ")
         try:
             for m in json.loads(r["mgrs_json"] or "[]"):
                 code = str(m).strip()
-                if code and code not in seen:
-                    seen.add(code)
-                    points.append(code)
+                if not code:
+                    continue
+                if code not in latest:
+                    order.append(code)
+                    latest[code] = ca
+                elif ca > latest[code]:
+                    latest[code] = ca
         except Exception:
             continue
 
+    points = [{"mgrs": code, "last_at": latest[code]} for code in order]
     return {"ok": True, "points": points, "count": len(points)}
 
 

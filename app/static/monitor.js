@@ -948,20 +948,39 @@
     _setEyeActive("unit", false);
   }
 
+  /* Видимість точки за актуальністю: 100% перші 7 повних днів, далі −10%
+     видимості за кожний додатковий повний день. Мінімум лишаємо ненульовим,
+     щоб дуже стара точка не зникала повністю й лишалась клікабельною.
+     Вік рахуємо на клієнті — його годинник у тій самій зоні, що й created_at. */
+  function _pointFreshnessOpacity(lastAt) {
+    const FULL = 1.0, MIN = 0.12, FRESH_DAYS = 7, STEP = 0.10;
+    if (!lastAt) return FULL;
+    const t = Date.parse(String(lastAt).replace(" ", "T"));
+    if (!isFinite(t)) return FULL;
+    const ageDays = Math.floor((Date.now() - t) / 86400000);
+    if (ageDays <= FRESH_DAYS) return FULL;
+    return Math.max(MIN, FULL - STEP * (ageDays - FRESH_DAYS));
+  }
+
   function _drawZone(kind, codes, color, qctx) {
     _clearZone(kind);
     if (!_conclMap) return;
     const latlngs = [];
     const layers = [];
-    codes.forEach(c => {
-      const ll = _mgrsToLatLon(c);
+    codes.forEach(pt => {
+      const isObj = pt && typeof pt === "object";
+      const code = isObj ? pt.mgrs : pt;
+      const ll = _mgrsToLatLon(code);
       if (!ll) return;
       latlngs.push(ll);
+      const op = _pointFreshnessOpacity(isObj ? pt.last_at : null);
+      // Білі точки з кольоровим обведенням — помітніші за суцільні кольорові.
       const cm = L.circleMarker([ll.lat, ll.lon], {
-        radius: 4, color: color, weight: 1, fillColor: color, fillOpacity: 0.9,
+        radius: 5, color: color, weight: 3,
+        fillColor: "#ffffff", fillOpacity: op, opacity: op,
         bubblingMouseEvents: false,   // клік по точці не створює новий маркер на карті
       });
-      cm.on("click", () => _showPointConclusions(cm, c, qctx));
+      cm.on("click", () => _showPointConclusions(cm, code, qctx));
       layers.push(cm);
     });
     if (!latlngs.length) return;
