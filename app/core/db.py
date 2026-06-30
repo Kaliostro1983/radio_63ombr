@@ -788,6 +788,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")
     _ensure_column(conn, "callsigns", "is_position", "is_position INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "callsigns", "has_air_defense", "has_air_defense INTEGER NOT NULL DEFAULT 0")
+    # life_status: фізичний стан носія позивного — 'alive' (живий, типове),
+    # '200' (Груз 200, ліквідований), '300' (Груз 300, поранений).
+    _ensure_column(conn, "callsigns", "life_status", "life_status TEXT NOT NULL DEFAULT 'alive'")
     _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
     _ensure_column(conn, "network_tags", "conclusions", "conclusions TEXT")
 

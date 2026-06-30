@@ -12,6 +12,7 @@
   const modalId = $("csModalId");
   const modalTitle = $("csModalTitle");
   const modalName = $("csModalName");
+  const modalLifeToggle = $("csModalLifeToggle");
   const modalStatus = $("csModalStatus");
   const modalSource = $("csModalSource");
   const modalComment = $("csModalComment");
@@ -58,6 +59,24 @@
   let CURRENT_STATUS_ID = null;
   let CURRENT_SOURCE_ID = null;
   let CURRENT_NETWORK_ID = null;
+  let CURRENT_LIFE = "alive";
+
+  // Перемикач «Живий» → 200 → 300 (клік по колу). Логіка вигляду — у CallsignStatus.
+  function renderLifeToggle() {
+    if (!modalLifeToggle || !window.CallsignStatus) return;
+    const m = window.CallsignStatus.meta(CURRENT_LIFE);
+    modalLifeToggle.textContent = m.label;
+    modalLifeToggle.className = "cs-life-toggle cs-life--" + m.key;
+    modalLifeToggle.title = "Стан: " + m.title + " — клік: живий → 200 → 300";
+  }
+  if (modalLifeToggle) {
+    modalLifeToggle.addEventListener("click", function () {
+      CURRENT_LIFE = window.CallsignStatus
+        ? window.CallsignStatus.next(CURRENT_LIFE)
+        : (CURRENT_LIFE === "alive" ? "200" : CURRENT_LIFE === "200" ? "300" : "alive");
+      renderLifeToggle();
+    });
+  }
   let OPEN_CONTEXT = null; // passed to onSave when saving
   let onSaveCallback = null;
 
@@ -674,6 +693,8 @@
     if (modalComment) modalComment.value = row.comment || "";
     if (modalIsPosition) modalIsPosition.checked = !!row.is_position;
     if (modalHasAA) modalHasAA.checked = !!row.has_air_defense;
+    CURRENT_LIFE = window.CallsignStatus ? window.CallsignStatus.norm(row.life_status) : "alive";
+    renderLifeToggle();
     CURRENT_STATUS_ID = row.status_id || null;
     CURRENT_SOURCE_ID = row.source_id || null;
     CURRENT_NETWORK_ID = row.network_id || null;
@@ -729,6 +750,8 @@
     if (modalComment) modalComment.value = "";
     if (modalIsPosition) modalIsPosition.checked = false;
     if (modalHasAA) modalHasAA.checked = false;
+    CURRENT_LIFE = "alive";
+    renderLifeToggle();
     CURRENT_STATUS_ID = null;
     CURRENT_SOURCE_ID = null;
     CURRENT_NETWORK_ID = null;
@@ -787,6 +810,7 @@
           source_id,
           is_position: !!(modalIsPosition && modalIsPosition.checked),
           has_air_defense: !!(modalHasAA && modalHasAA.checked),
+          life_status: CURRENT_LIFE,
           network_id:
             modalNetwork && modalNetwork.value
               ? parseInt(modalNetwork.value, 10)
@@ -1247,10 +1271,12 @@
       const d = await r.json();
       const concl = new Set((d && d.ok && d.with_conclusions) ? d.with_conclusions : []);
       const aa = new Set((d && d.ok && d.with_aa) ? d.with_aa : []);
+      const life = (d && d.ok && d.life) ? d.life : {};
       nodes.forEach((n) => {
         const id = parseInt(n.getAttribute("data-concl-cs-id"), 10);
         n.classList.toggle("cs-has-concl", concl.has(id));
         n.classList.toggle("cs-has-aa", aa.has(id));
+        if (window.CallsignStatus) window.CallsignStatus.applyChipBadge(n, life[String(id)] || "alive");
       });
     } catch (_) { /* мовчки — оверлей не критичний */ }
   };

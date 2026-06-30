@@ -237,6 +237,15 @@
       img.classList.add("net-graph-node__icon");
       g.appendChild(img);
 
+      // Кутовий бейдж життєвого статусу (200/300) — спільна логіка CallsignStatus.
+      if (window.CallsignStatus) {
+        const lifeBadge = window.CallsignStatus.svgBadge(n.life_status);
+        if (lifeBadge) {
+          lifeBadge.setAttribute("transform", "translate(1,1)");  // правий-нижній кут іконки
+          g.appendChild(lifeBadge);
+        }
+      }
+
       const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.textContent = n.name || "";
       text.setAttribute("x", "18");

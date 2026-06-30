@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=135"/>
+  <link rel="stylesheet" href="/static/app.css?v=136"/>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
   <script src="/static/app.js?v=2" defer></script>
   {% block extra_head %}{% endblock %}
@@ -168,7 +168,11 @@
         <div class="cs-profile-fields">
           <div>
             <label class="small">Позивний</label>
-            <input id="csModalName" type="text" />
+            <div class="cs-name-row">
+              <input id="csModalName" type="text" />
+              <button type="button" id="csModalLifeToggle" class="cs-life-toggle cs-life--alive"
+                      title="Стан носія — клік змінює: живий → 200 → 300">Живий</button>
+            </div>
           </div>
 
           <div style="margin-top:10px">
@@ -539,7 +543,8 @@
 <script src="/static/vendor/leaflet/leaflet.js" defer></script>
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/vendor/proj4.js" defer></script>
-<script src="/static/callsign_modal.js?v=27" defer></script>
+<script src="/static/callsign_status.js?v=1" defer></script>
+<script src="/static/callsign_modal.js?v=28" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 /* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається

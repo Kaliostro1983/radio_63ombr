@@ -519,6 +519,7 @@ def api_callsign_by_id(id: int):
                 c.source_id AS source_id,
                 c.is_position AS is_position,
                 c.has_air_defense AS has_air_defense,
+                c.life_status AS life_status,
                 s.name AS status_label,
                 src.name AS source_label,
                 n.frequency AS frequency,
@@ -559,6 +560,7 @@ def api_callsign_by_id(id: int):
             "has_conclusions": has_conclusions,
             "is_position": bool(row["is_position"]),
             "has_air_defense": bool(row["has_air_defense"]),
+            "life_status": row["life_status"] or "alive",
         },
     }
 
@@ -568,8 +570,10 @@ def api_callsign_conclusion_flags(ids: str = ""):
     """Return marker flags for the given callsign ids: which have analytical
     conclusions (green dot) and which have air defense (red dot).
 
-    Query: ids=1,2,3  →  {"ok": True, "with_conclusions": [1,3], "with_aa": [2]}
-    Used to overlay badges on callsign status icons in lists.
+    Query: ids=1,2,3  →  {"ok": True, "with_conclusions": [1,3], "with_aa": [2],
+                          "life": {"2": "200"}}
+    Used to overlay badges on callsign status icons in lists. `life` maps a
+    callsign id → '200'/'300' (alive omitted) for the life-status badge.
     """
     id_list = []
     for part in (ids or "").split(","):
@@ -577,7 +581,7 @@ def api_callsign_conclusion_flags(ids: str = ""):
         if part.isdigit():
             id_list.append(int(part))
     if not id_list:
-        return {"ok": True, "with_conclusions": [], "with_aa": []}
+        return {"ok": True, "with_conclusions": [], "with_aa": [], "life": {}}
 
     id_list = list(dict.fromkeys(id_list))  # de-dup, keep order
     placeholders = ",".join("?" * len(id_list))
@@ -592,10 +596,16 @@ def api_callsign_conclusion_flags(ids: str = ""):
             f"WHERE has_air_defense = 1 AND id IN ({placeholders})",
             tuple(id_list),
         ).fetchall()
+        life = conn.execute(
+            f"SELECT id, life_status FROM callsigns "
+            f"WHERE life_status IN ('200','300') AND id IN ({placeholders})",
+            tuple(id_list),
+        ).fetchall()
     return {
         "ok": True,
         "with_conclusions": [int(r["callsign_id"]) for r in concl],
         "with_aa": [int(r["id"]) for r in aa],
+        "life": {str(r["id"]): r["life_status"] for r in life},
     }
 
 
@@ -717,7 +727,8 @@ def api_callsign_graph(
             SELECT
               id,
               name,
-              COALESCE(callsign_status_id, status_id) AS status_id
+              COALESCE(callsign_status_id, status_id) AS status_id,
+              life_status
             FROM callsigns
             WHERE id IN ({placeholders})
               AND name <> 'НВ'
@@ -734,7 +745,11 @@ def api_callsign_graph(
         nid = int(r["id"])
         ok_ids.add(nid)
         level = 0 if nid == cid else (1 if nid in lvl1 else 2)
-        nodes.append({"id": nid, "name": r["name"] or "", "status_id": sid_num, "icon": icon, "level": level})
+        nodes.append({
+            "id": nid, "name": r["name"] or "", "status_id": sid_num,
+            "icon": icon, "level": level,
+            "life_status": r["life_status"] or "alive",
+        })
 
     edges = []
     for r in edges_rows:
@@ -781,6 +796,10 @@ async def api_callsign_save(request: Request):
     is_position = 1 if payload.get("is_position") else 0
     has_air_defense = 1 if payload.get("has_air_defense") else 0
 
+    life_status = str(payload.get("life_status") or "alive").strip()
+    if life_status not in ("alive", "200", "300"):
+        life_status = "alive"
+
     if not name:
         return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
 
@@ -822,9 +841,10 @@ async def api_callsign_save(request: Request):
                         source_id,
                         is_position,
                         has_air_defense,
+                        life_status,
                         updated_at,
                         last_seen_dt
-                    ) VALUES (?,?,?,?,?,?,?,?,?)
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         network_id or None,
@@ -834,6 +854,7 @@ async def api_callsign_save(request: Request):
                         source_id or None,
                         is_position,
                         has_air_defense,
+                        life_status,
                         now_dt,
                         None,
                     ),
@@ -864,6 +885,7 @@ async def api_callsign_save(request: Request):
                         source_id=?,
                         is_position=?,
                         has_air_defense=?,
+                        life_status=?,
                         updated_at=?
                     WHERE id=?
                     """,
@@ -875,6 +897,7 @@ async def api_callsign_save(request: Request):
                         source_id or None,
                         is_position,
                         has_air_defense,
+                        life_status,
                         now_dt,
                         callsign_id,
                     ),
@@ -922,6 +945,7 @@ async def api_callsign_save(request: Request):
         "status_label": sname,
         "source_id": int(source_id) if source_id else None,
         "source_label": source_name,
+        "life_status": life_status,
         "frequency": freq,
         "unit": unit,
     }
