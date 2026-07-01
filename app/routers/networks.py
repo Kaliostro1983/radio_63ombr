@@ -1066,10 +1066,11 @@ def api_networks_verify(body: NetworkVerifyIn):
 
 
 @router.get("/api/networks/ocheret-frequencies")
-def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0):
-    """Return current active "Очерет"-watched network frequencies.
+def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0, chat: str = "Очерет"):
+    """Return current active watched network frequencies for a source chat.
 
-    Filter: `chats.name = 'Очерет'` AND `statuses.name = 'Спостерігається'`.
+    Filter: `chats.name = <chat>` (default 'Очерет') AND
+    `statuses.name = 'Спостерігається'`.
     Used by operator scripts on multiple PCs that need an always-up-to-date
     list without manually syncing a local text file.
 
@@ -1095,9 +1096,10 @@ def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0):
             FROM networks n
             JOIN chats    c ON c.id = n.chat_id
             JOIN statuses s ON s.id = n.status_id
-            WHERE c.name = 'Очерет' AND s.name = 'Спостерігається'
+            WHERE c.name = ? AND s.name = 'Спостерігається'
             ORDER BY n.frequency
-            """
+            """,
+            (chat or "Очерет",),
         ).fetchall()
 
     items = [

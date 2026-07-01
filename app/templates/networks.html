@@ -576,7 +576,7 @@
     <!-- ── Modal: Очерет (читабельний список частот + копія) ─────── -->
     <div id="netModalOcheret" class="modal hidden net-modal" aria-hidden="true">
     <div class="modal-backdrop" data-net-modal-close="ocheret"></div>
-    <div class="modal-card net-modal-card net-modal-card--ocheret" role="dialog" aria-modal="true" aria-labelledby="netModalOcheretTitle" style="max-width:940px">
+    <div class="modal-card net-modal-card net-modal-card--ocheret" role="dialog" aria-modal="true" aria-labelledby="netModalOcheretTitle" style="max-width:1120px">
       <div class="modal-head">
         <div id="netModalOcheretTitle" class="modal-title">Очерет — частоти і маски</div>
         <button type="button" class="secondary" data-net-modal-close="ocheret" style="padding:4px 10px">✕</button>
@@ -586,29 +586,37 @@
           Список р/м зі статусом <strong>Спостерігається</strong> і чатом-джерелом <strong>Очерет</strong>.
           Три колонки — усі, лише з тегом <strong>ШД</strong>, і без <strong>ШД</strong>. Кожну можна скопіювати окремо.
         </div>
-        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px">
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px">
           <div class="net-ocheret-col">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px">
-              <strong class="small">Усі (<span id="netOcheretCountAll">0</span>)</strong>
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px">
+              <span class="small"><strong>Очерет (усі)</strong> · <span id="netOcheretCountAll" style="opacity:.6">0</span></span>
               <button type="button" class="secondary net-ocheret-copy" data-col="all" title="Скопіювати" style="padding:2px 8px">📋</button>
             </div>
             <textarea id="netOcheretTextAll" readonly rows="20"
               style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
           </div>
           <div class="net-ocheret-col">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px">
-              <strong class="small">ШД (<span id="netOcheretCountShd">0</span>)</strong>
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px">
+              <span class="small"><strong>Очерет (ШД)</strong> · <span id="netOcheretCountShd" style="opacity:.6">0</span></span>
               <button type="button" class="secondary net-ocheret-copy" data-col="shd" title="Скопіювати" style="padding:2px 8px">📋</button>
             </div>
             <textarea id="netOcheretTextShd" readonly rows="20"
               style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
           </div>
           <div class="net-ocheret-col">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px">
-              <strong class="small">Без ШД (<span id="netOcheretCountNoShd">0</span>)</strong>
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px">
+              <span class="small"><strong>Очерет (не ШД)</strong> · <span id="netOcheretCountNoShd" style="opacity:.6">0</span></span>
               <button type="button" class="secondary net-ocheret-copy" data-col="noshd" title="Скопіювати" style="padding:2px 8px">📋</button>
             </div>
             <textarea id="netOcheretTextNoShd" readonly rows="20"
+              style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
+          </div>
+          <div class="net-ocheret-col">
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px">
+              <span class="small"><strong>Вавилон (усі)</strong> · <span id="netOcheretCountVavilon" style="opacity:.6">0</span></span>
+              <button type="button" class="secondary net-ocheret-copy" data-col="vavilon" title="Скопіювати" style="padding:2px 8px">📋</button>
+            </div>
+            <textarea id="netOcheretTextVavilon" readonly rows="20"
               style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
           </div>
         </div>
@@ -953,45 +961,48 @@
       const taAll   = document.getElementById("netOcheretTextAll");
       const taShd   = document.getElementById("netOcheretTextShd");
       const taNoShd = document.getElementById("netOcheretTextNoShd");
+      const taVav   = document.getElementById("netOcheretTextVavilon");
       const empty   = document.getElementById("netOcheretEmpty");
       const err     = document.getElementById("netOcheretError");
       if (!taAll) return;
-      taAll.value = "Завантаження…"; taShd.value = ""; taNoShd.value = "";
+      const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = String(n); };
+      const valOf = (r) => (r.mask ? r.mask : r.frequency);  // маска канонічна, інакше частота
+      taAll.value = "Завантаження…"; taShd.value = ""; taNoShd.value = ""; taVav.value = "Завантаження…";
       empty.style.display = "none";
       err.style.display = "none";
       try {
-        const resp = await fetch("/api/networks/ocheret-frequencies?format=json", {
-          headers: { Accept: "application/json" },
-        });
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        const data = await resp.json();
-        const rows = (data && data.frequencies) || [];
-        if (!rows.length) {
-          taAll.value = "";
-          empty.style.display = "";
-          document.getElementById("netOcheretCountAll").textContent = "0";
-          document.getElementById("netOcheretCountShd").textContent = "0";
-          document.getElementById("netOcheretCountNoShd").textContent = "0";
-          return;
-        }
-        // Значення р/м: якщо є маска — ТІЛЬКИ маска, інакше частота
-        // (маска — канонічний шаблон для фільтрації). Колонки:
-        //   усі; лише з тегом ШД; усі мінус ШД.
+        const [oResp, vResp] = await Promise.all([
+          fetch("/api/networks/ocheret-frequencies?format=json", { headers: { Accept: "application/json" } }),
+          fetch("/api/networks/ocheret-frequencies?format=json&chat=" + encodeURIComponent("Вавилон"), { headers: { Accept: "application/json" } }),
+        ]);
+        if (!oResp.ok) throw new Error("HTTP " + oResp.status);
+
+        // Очерет: усі / ШД / не ШД
+        const oRows = ((await oResp.json()) || {}).frequencies || [];
         const all = [], shd = [], noShd = [];
-        for (const r of rows) {
-          const v = r.mask ? r.mask : r.frequency;
+        for (const r of oRows) {
+          const v = valOf(r);
           if (!v) continue;
           all.push(v);
           if (r.has_shd) shd.push(v); else noShd.push(v);
         }
-        taAll.value   = all.join("\n");
-        taShd.value   = shd.join("\n");
-        taNoShd.value = noShd.join("\n");
-        document.getElementById("netOcheretCountAll").textContent   = String(all.length);
-        document.getElementById("netOcheretCountShd").textContent   = String(shd.length);
-        document.getElementById("netOcheretCountNoShd").textContent = String(noShd.length);
+        taAll.value = all.join("\n"); taShd.value = shd.join("\n"); taNoShd.value = noShd.join("\n");
+        setCount("netOcheretCountAll", all.length);
+        setCount("netOcheretCountShd", shd.length);
+        setCount("netOcheretCountNoShd", noShd.length);
+
+        // Вавилон: усі (окремий чат)
+        const vav = [];
+        if (vResp.ok) {
+          const vRows = ((await vResp.json()) || {}).frequencies || [];
+          for (const r of vRows) { const v = valOf(r); if (v) vav.push(v); }
+        }
+        taVav.value = vav.join("\n");
+        setCount("netOcheretCountVavilon", vav.length);
+
+        if (!all.length && !vav.length) empty.style.display = "";
       } catch (e) {
-        taAll.value = "";
+        taAll.value = ""; taVav.value = "";
         err.textContent = "Помилка завантаження: " + (e.message || e);
         err.style.display = "";
       }
@@ -1020,6 +1031,7 @@
         const col = btn.getAttribute("data-col");
         const id = col === "shd" ? "netOcheretTextShd"
                  : col === "noshd" ? "netOcheretTextNoShd"
+                 : col === "vavilon" ? "netOcheretTextVavilon"
                  : "netOcheretTextAll";
         copyTextarea(document.getElementById(id));
       });
