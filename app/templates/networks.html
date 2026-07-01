@@ -576,21 +576,42 @@
     <!-- ── Modal: Очерет (читабельний список частот + копія) ─────── -->
     <div id="netModalOcheret" class="modal hidden net-modal" aria-hidden="true">
     <div class="modal-backdrop" data-net-modal-close="ocheret"></div>
-    <div class="modal-card net-modal-card net-modal-card--ocheret" role="dialog" aria-modal="true" aria-labelledby="netModalOcheretTitle" style="max-width:560px">
+    <div class="modal-card net-modal-card net-modal-card--ocheret" role="dialog" aria-modal="true" aria-labelledby="netModalOcheretTitle" style="max-width:940px">
       <div class="modal-head">
         <div id="netModalOcheretTitle" class="modal-title">Очерет — частоти і маски</div>
         <button type="button" class="secondary" data-net-modal-close="ocheret" style="padding:4px 10px">✕</button>
       </div>
       <div class="modal-body net-modal-body">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
-          <div class="small" style="opacity:.75">
-            Список р/м зі статусом <strong>Спостерігається</strong> і чатом-джерелом <strong>Очерет</strong>.
-          </div>
-          <button type="button" id="netOcheretCopyBtn" class="secondary" title="Скопіювати" style="padding:4px 10px">📋</button>
+        <div class="small" style="opacity:.75; margin-bottom:10px">
+          Список р/м зі статусом <strong>Спостерігається</strong> і чатом-джерелом <strong>Очерет</strong>.
+          Три колонки — усі, лише з тегом <strong>ШД</strong>, і без <strong>ШД</strong>. Кожну можна скопіювати окремо.
         </div>
-        <textarea id="netOcheretText" readonly rows="20"
-          style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical">
-        </textarea>
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px">
+          <div class="net-ocheret-col">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px">
+              <strong class="small">Усі (<span id="netOcheretCountAll">0</span>)</strong>
+              <button type="button" class="secondary net-ocheret-copy" data-col="all" title="Скопіювати" style="padding:2px 8px">📋</button>
+            </div>
+            <textarea id="netOcheretTextAll" readonly rows="20"
+              style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
+          </div>
+          <div class="net-ocheret-col">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px">
+              <strong class="small">ШД (<span id="netOcheretCountShd">0</span>)</strong>
+              <button type="button" class="secondary net-ocheret-copy" data-col="shd" title="Скопіювати" style="padding:2px 8px">📋</button>
+            </div>
+            <textarea id="netOcheretTextShd" readonly rows="20"
+              style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
+          </div>
+          <div class="net-ocheret-col">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px">
+              <strong class="small">Без ШД (<span id="netOcheretCountNoShd">0</span>)</strong>
+              <button type="button" class="secondary net-ocheret-copy" data-col="noshd" title="Скопіювати" style="padding:2px 8px">📋</button>
+            </div>
+            <textarea id="netOcheretTextNoShd" readonly rows="20"
+              style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
+          </div>
+        </div>
         <div id="netOcheretEmpty" class="small" style="display:none; margin-top:8px; opacity:.65">Жодної р/м не знайдено.</div>
         <div id="netOcheretError" class="small" style="display:none; margin-top:8px; color:var(--danger)"></div>
       </div>
@@ -927,13 +948,15 @@
       });
     })();
 
-    // ── Очерет: завантаження списку + копія в буфер ───────────────
+    // ── Очерет: 3 колонки (усі / ШД / без ШД) + поколонкова копія ──
     async function loadOcheretList() {
-      const ta    = document.getElementById("netOcheretText");
-      const empty = document.getElementById("netOcheretEmpty");
-      const err   = document.getElementById("netOcheretError");
-      if (!ta) return;
-      ta.value = "Завантаження…";
+      const taAll   = document.getElementById("netOcheretTextAll");
+      const taShd   = document.getElementById("netOcheretTextShd");
+      const taNoShd = document.getElementById("netOcheretTextNoShd");
+      const empty   = document.getElementById("netOcheretEmpty");
+      const err     = document.getElementById("netOcheretError");
+      if (!taAll) return;
+      taAll.value = "Завантаження…"; taShd.value = ""; taNoShd.value = "";
       empty.style.display = "none";
       err.style.display = "none";
       try {
@@ -944,34 +967,43 @@
         const data = await resp.json();
         const rows = (data && data.frequencies) || [];
         if (!rows.length) {
-          ta.value = "";
+          taAll.value = "";
           empty.style.display = "";
+          document.getElementById("netOcheretCountAll").textContent = "0";
+          document.getElementById("netOcheretCountShd").textContent = "0";
+          document.getElementById("netOcheretCountNoShd").textContent = "0";
           return;
         }
-        // Одна колонка, один рядок на р/м: якщо є маска — беремо ТІЛЬКИ маску,
-        // інакше частоту (маска — це канонічний шаблон для фільтрації).
-        const lines = [];
+        // Значення р/м: якщо є маска — ТІЛЬКИ маска, інакше частота
+        // (маска — канонічний шаблон для фільтрації). Колонки:
+        //   усі; лише з тегом ШД; усі мінус ШД.
+        const all = [], shd = [], noShd = [];
         for (const r of rows) {
           const v = r.mask ? r.mask : r.frequency;
-          if (v) lines.push(v);
+          if (!v) continue;
+          all.push(v);
+          if (r.has_shd) shd.push(v); else noShd.push(v);
         }
-        ta.value = lines.join("\n");
+        taAll.value   = all.join("\n");
+        taShd.value   = shd.join("\n");
+        taNoShd.value = noShd.join("\n");
+        document.getElementById("netOcheretCountAll").textContent   = String(all.length);
+        document.getElementById("netOcheretCountShd").textContent   = String(shd.length);
+        document.getElementById("netOcheretCountNoShd").textContent = String(noShd.length);
       } catch (e) {
-        ta.value = "";
+        taAll.value = "";
         err.textContent = "Помилка завантаження: " + (e.message || e);
         err.style.display = "";
       }
     }
 
-    document.getElementById("netOcheretCopyBtn")?.addEventListener("click", async () => {
-      const ta = document.getElementById("netOcheretText");
+    async function copyTextarea(ta) {
       if (!ta) return;
       const text = ta.value || "";
       try {
         if (navigator.clipboard && window.isSecureContext) {
           await navigator.clipboard.writeText(text);
         } else {
-          // Fallback: select + execCommand
           ta.removeAttribute("readonly");
           ta.select();
           document.execCommand("copy");
@@ -982,6 +1014,15 @@
       } catch (e) {
         if (window.appToast) window.appToast("Помилка копіювання", "error", 1800);
       }
+    }
+    document.querySelectorAll(".net-ocheret-copy").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const col = btn.getAttribute("data-col");
+        const id = col === "shd" ? "netOcheretTextShd"
+                 : col === "noshd" ? "netOcheretTextNoShd"
+                 : "netOcheretTextAll";
+        copyTextarea(document.getElementById(id));
+      });
     });
 
     // Close handlers (X / backdrop)

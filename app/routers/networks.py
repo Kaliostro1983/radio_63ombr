@@ -1086,7 +1086,12 @@ def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0):
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT n.frequency, COALESCE(n.mask, '') AS mask
+            SELECT n.frequency, COALESCE(n.mask, '') AS mask,
+                   EXISTS(
+                     SELECT 1 FROM network_tag_links ntl
+                     JOIN network_tags nt ON nt.id = ntl.tag_id
+                     WHERE ntl.network_id = n.id AND nt.name = 'ШД'
+                   ) AS has_shd
             FROM networks n
             JOIN chats    c ON c.id = n.chat_id
             JOIN statuses s ON s.id = n.status_id
@@ -1095,7 +1100,14 @@ def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0):
             """
         ).fetchall()
 
-    items = [{"frequency": r["frequency"] or "", "mask": r["mask"] or ""} for r in rows]
+    items = [
+        {
+            "frequency": r["frequency"] or "",
+            "mask": r["mask"] or "",
+            "has_shd": bool(r["has_shd"]),
+        }
+        for r in rows
+    ]
 
     if (format or "").lower() == "text":
         lines: list[str] = []
