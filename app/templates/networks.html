@@ -452,6 +452,7 @@
               <th>Назва р/м</th>
               <th style="min-width:120px">Теги</th>
               <th style="width:80px" title="Перехоплень за останні 7 днів">7 днів</th>
+              <th style="width:90px" title="Аналітичних висновків за останні 7 діб">Аналітика</th>
               <th style="width:220px">Чат</th>
               <th style="width:110px">Еталонка</th>
             </tr>
@@ -483,6 +484,7 @@
                   {% endif %}
                 </td>
                 <td style="text-align:center; font-weight:600">{{ r['intercepts_7d'] }}</td>
+                <td style="text-align:center; font-weight:600">{{ r['analytics_7d'] }}</td>
                 <td>{{ r['chat_name'] }}</td>
                 <td class="small" style="white-space:nowrap; color:#fff">
                   {%- if r['etalon_updated_at'] -%}

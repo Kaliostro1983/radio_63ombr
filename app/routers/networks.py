@@ -86,7 +86,10 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
            WHERE m.network_id = n.id
              AND m.is_valid = 1
              AND coalesce(m.content_type, 'intercept') = 'intercept'
-             AND REPLACE(m.created_at, 'T', ' ') >= ?) AS intercepts_7d
+             AND REPLACE(m.created_at, 'T', ' ') >= ?) AS intercepts_7d,
+        (SELECT COUNT(*) FROM analytical_conclusions ac
+           WHERE ac.network_id = n.id
+             AND REPLACE(ac.created_at, 'T', ' ') >= ?) AS analytics_7d
     FROM networks n
     JOIN chats c    ON c.id = n.chat_id
     JOIN groups g   ON g.id = n.group_id
@@ -95,9 +98,10 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
     """
 
     clauses = []
-    # First bind param feeds the intercepts_7d subquery in the SELECT above.
+    # First two bind params feed the intercepts_7d + analytics_7d subqueries
+    # in the SELECT above (same 7-day cutoff for both).
     since_7d = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
-    params = [since_7d]
+    params = [since_7d, since_7d]
 
     def add_in(field, values):
         if not values:
