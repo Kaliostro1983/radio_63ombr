@@ -556,6 +556,9 @@
     const itemsHtml = state.items.map((item) => renderInterceptCardHtml(item)).join("");
     mainCard.innerHTML = `<div class="intercepts-list">${itemsHtml}<div class="intercepts-infinite-sentinel" id="interceptsInfiniteSentinel" aria-hidden="true"></div></div>${renderListFooterHtml()}`;
     setupInfiniteScrollObserver();
+    // Оверлеї на іконках позивних (зелена крапка — є висновки; стан 200/300) —
+    // так само як у моніторингу.
+    if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(mainCard);
   }
 
   async function loadDetail(messageId) {
@@ -994,6 +997,7 @@
         } else {
           listEl.insertAdjacentHTML("beforeend", chunk);
         }
+        if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(listEl);
         replaceListFooter();
         if (listHasMore()) {
           setupInfiniteScrollObserver();
@@ -1616,6 +1620,7 @@
     if (!item) return;
     container.innerHTML = renderInterceptCardHtml(item);
     _attachCardEvents(container);
+    if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(container);
     focusCallsignInput(messageId, state._lastRole || "");
   }
 
