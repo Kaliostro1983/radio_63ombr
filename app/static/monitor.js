@@ -4492,6 +4492,7 @@
       _palEditState = {
         paletteId: p.id, original: orig, current: cur,
         origUnits: new Set(curUnitIds), curUnits: new Set(curUnitIds),
+        origName: p.name || "",
       };
 
       const unitChips = _palUnitOptions().map(o =>
@@ -4512,6 +4513,9 @@
         : '<div class="pal-empty" style="margin-top:6px">У палітрі немає регіонів.</div>';
 
       body.innerHTML =
+        `<label style="display:block;font-size:12px;color:#667085;margin-bottom:3px">Назва палітри</label>` +
+        `<input type="text" id="palEditName" value="${_esc(p.name || "")}" spellcheck="false" ` +
+          `style="width:100%;box-sizing:border-box;margin-bottom:10px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;background:var(--input-bg);color:var(--text);font-size:14px">` +
         `<label style="display:block;font-size:12px;color:#667085;margin-bottom:3px">Підрозділи (теги)</label>` +
         `<div id="palEditUnits" class="pal-item-units" style="margin-bottom:8px">${unitChips}</div>` +
         colorList;
@@ -4541,7 +4545,7 @@
 
   async function _palSaveEdit() {
     if (!_palEditState) return _palCloseEditDialog();
-    const { paletteId, original, current, origUnits, curUnits } = _palEditState;
+    const { paletteId, original, current, origUnits, curUnits, origName } = _palEditState;
 
     const changes = [];
     current.forEach((color, rid) => {
@@ -4552,9 +4556,21 @@
     const unitsChanged = !origUnits || origUnits.size !== curUnits.size ||
       [...curUnits].some(id => !origUnits.has(id));
 
-    if (!changes.length && !unitsChanged) { _palCloseEditDialog(); return; }
+    const nameInput = document.getElementById("palEditName");
+    const newName = nameInput ? nameInput.value.trim() : "";
+    const nameChanged = !!newName && newName !== (origName || "");
+
+    if (!changes.length && !unitsChanged && !nameChanged) { _palCloseEditDialog(); return; }
 
     try {
+      if (nameChanged) {
+        const r = await fetch(`/api/palettes/${paletteId}/rename`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newName }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.detail || "Помилка назви");
+      }
       if (changes.length) {
         const r = await fetch(`/api/palettes/${paletteId}/colors`, {
           method: "POST", headers: { "Content-Type": "application/json" },

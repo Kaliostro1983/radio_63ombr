@@ -886,3 +886,17 @@ async def api_palette_set_units(palette_id: int, payload: dict = Body(...)):
         conn.commit()
 
     return {"ok": True, "unit_ids": unit_ids}
+
+
+@router.post("/api/palettes/{palette_id}/rename")
+async def api_palette_rename(palette_id: int, payload: dict = Body(...)):
+    """Rename a palette. Body: {"name": "<new name>"}."""
+    name = str((payload or {}).get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Порожня назва палітри")
+    with get_conn() as conn:
+        if not conn.execute("SELECT id FROM palettes WHERE id = ?", (palette_id,)).fetchone():
+            raise HTTPException(status_code=404, detail="Палітру не знайдено")
+        conn.execute("UPDATE palettes SET name = ? WHERE id = ?", (name, palette_id))
+        conn.commit()
+    return {"ok": True, "name": name}
