@@ -1601,8 +1601,8 @@
           return true;
         }
 
-        // «@<назва>» — орієнтир за назвою (точний збіг, інакше перший).
-        if (val.startsWith("@")) {
+        // «%<назва>» — орієнтир за назвою (точний збіг, інакше перший).
+        if (val.startsWith("%")) {
           const name = val.slice(1).trim();
           if (name) _landmarkLookupAndPlace(name);
           return true;
@@ -1659,7 +1659,7 @@
         return true; // дозволяємо палітрі мовчазно нічого не знайти
       }
 
-      // ── Автокомпліт орієнтирів за префіксом «@» ──────────────────
+      // ── Автокомпліт орієнтирів за префіксом «%» ──────────────────
       const _coordWrap = document.getElementById("conclCoordWrap");
       let _lmAc = null, _lmAcItems = [], _lmAcIdx = -1, _lmAcTimer = null;
 
@@ -1685,6 +1685,15 @@
         _closeLmAc();
         coordIn.focus();
       }
+      // З повної назви підрозділу орієнтира («36 мсп 67 мсд 25 ЗА») витягуємо
+      // тег полку/бригади («36 мсп»). Довші суфікси — першими; якщо не впізнали
+      // формат — показуємо повну назву (все одно розрізняє однойменні).
+      function _lmUnitTag(group) {
+        const g = String(group || "").trim();
+        if (!g) return "";
+        const m = g.match(/(\d+)\s*(омсбр|мсбр|омбр|тбр|сабр|абр|мсп|тп|сп|пдп|дшп|реап|бр|полк|бригад\w*)/i);
+        return m ? (m[1] + " " + m[2]) : g;
+      }
       async function _lmAcLookup(name) {
         const q = String(name || "").trim();
         _closeLmAc();
@@ -1699,8 +1708,15 @@
         _lmAcItems = items; _lmAcIdx = -1;
         _lmAc = document.createElement("div");
         _lmAc.className = "callsign-autocomplete concl-lm-ac";
-        _lmAc.innerHTML = items.map((it, i) =>
-          `<button type="button" class="callsign-autocomplete__item" data-idx="${i}">📍 ${_esc(it.name)}</button>`).join("");
+        // Тег підрозділу (полк/бригада) поряд із назвою — щоб розрізняти
+        // однойменні орієнтири різних частин.
+        _lmAc.innerHTML = items.map((it, i) => {
+          const tag = _lmUnitTag(it.group_name);
+          const tagHtml = tag
+            ? ` <span class="concl-lm-ac__unit" style="opacity:.6; font-size:.85em; margin-left:4px">${_esc(tag)}</span>`
+            : "";
+          return `<button type="button" class="callsign-autocomplete__item" data-idx="${i}">📍 ${_esc(it.name)}${tagHtml}</button>`;
+        }).join("");
         _coordWrap.appendChild(_lmAc);
       }
       // Пошук+постановка орієнтира за назвою (Enter без вибору з автокомпліту).
@@ -1729,7 +1745,7 @@
       }
       coordIn.addEventListener("input", () => {
         const v = coordIn.value;
-        if (v.startsWith("@")) {
+        if (v.startsWith("%")) {
           clearTimeout(_lmAcTimer);
           const name = v.slice(1);
           _lmAcTimer = setTimeout(() => _lmAcLookup(name), 200);
