@@ -86,7 +86,14 @@ def _strip_leading_icon(line: str) -> str:
 
 
 # 27.02.2026, 16:43:47  або  27.02.2026 16:00:21
-RE_DT = re.compile(r"^\s*\d{2}\.\d{2}\.\d{4}[,\s]+\d{2}:\d{2}:\d{2}\s*$")
+# Також приймаємо діапазон часу поряд із датою:
+#   04.07.2026 12:12:38 - 12:13:04  → лишаємо лише початок «12:12:38».
+RE_DT = re.compile(
+    r"^\s*\d{2}\.\d{2}\.\d{4}[,\s]+\d{2}:\d{2}:\d{2}"
+    r"(?:\s*[-–—]\s*\d{2}:\d{2}:\d{2})?\s*$"
+)
+# Хвіст діапазону часу («- 12:13:04») — відкидаємо тире й правий час.
+RE_DT_RANGE_SUFFIX = re.compile(r"\s*[-–—]\s*\d{2}:\d{2}:\d{2}\s*$")
 
 # 166.8000 / 300.3010 / 200.2720
 RE_FREQ = re.compile(r"^\s*\d{2,3}\.\d{4}\s*$")
@@ -324,6 +331,8 @@ def parse_template_intercept(text: str) -> Dict[str, Any]:
 
     if not RE_DT.match(published_at_text):
         return {"ok": False, "error": "dt_invalid"}
+    # Якщо поряд із датою вказано діапазон часу — лишаємо лише його початок.
+    published_at_text = RE_DT_RANGE_SUFFIX.sub("", published_at_text).strip()
 
     raw_freq = frequency.strip()
     norm_freq, norm_mask = normalize_freq_or_mask(raw_freq)
