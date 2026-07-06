@@ -775,11 +775,27 @@
           <input id="xaMinMatches" type="number" min="1" value="5" />
         </div>
         <button id="xaShowBtn" type="button">Показати</button>
+
+        <div class="xa-field">
+          <label class="small">Р/м для трансферу (частота)</label>
+          <div class="xa-ac-wrap">
+            <input id="xaTrFreq" type="text" autocomplete="off" placeholder="напр. 145.3250" />
+            <input id="xaTrNetId" type="hidden" value="" />
+            <div id="xaTrAcList" class="xa-ac-list hidden"></div>
+          </div>
+        </div>
+        <button id="xaTransferBtn" type="button" class="secondary">Трансфер</button>
       </div>
 
       <div id="xaSummary" class="xa-summary hidden"></div>
       <div id="xaMsg" class="small" style="opacity:.6; margin-top:10px"></div>
       <div id="xaTableWrap" class="xa-table-wrap"></div>
+
+      <div id="xaTransferMsg" class="small" style="opacity:.7; margin-top:14px"></div>
+      <div id="xaTransferWrap" class="xa-table-wrap"></div>
+      <div id="xaTransferActions" style="display:none; margin-top:10px; text-align:right">
+        <button id="xaDoTransferBtn" type="button" disabled>Провести трансфер</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1297,5 +1313,5 @@
 <script src="/static/networks_peleng.js?v=2" defer></script>
 <script src="/static/networks_aliases.js?v=2" defer></script>
 <script src="/static/networks_intercepts.js?v=1" defer></script>
-<script src="/static/networks_cross.js?v=1" defer></script>
+<script src="/static/networks_cross.js?v=2" defer></script>
 {% endblock %}

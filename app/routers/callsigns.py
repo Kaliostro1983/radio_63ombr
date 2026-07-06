@@ -609,6 +609,99 @@ def api_callsign_conclusion_flags(ids: str = ""):
     }
 
 
+@router.get("/api/callsigns/transfer-pairs")
+def api_callsign_transfer_pairs(source_id: int = 0, target_id: int = 0):
+    """Same-named callsigns present in BOTH networks — candidates for a data
+    transfer. Returns both networks' info and one row per shared name with the
+    callsign id + status of each side (for the transfer table)."""
+    src = _as_int(source_id, 0)
+    tgt = _as_int(target_id, 0)
+    if not src or not tgt:
+        return JSONResponse({"ok": False, "error": "Потрібні source_id і target_id"}, status_code=400)
+    if src == tgt:
+        return JSONResponse({"ok": False, "error": "Оберіть іншу радіомережу для трансферу"}, status_code=400)
+
+    with get_conn() as conn:
+        def _net(nid):
+            r = conn.execute(
+                "SELECT id, frequency, COALESCE(mask,'') mask, COALESCE(unit,'') unit "
+                "FROM networks WHERE id=?", (nid,),
+            ).fetchone()
+            return {"id": int(r["id"]), "frequency": r["frequency"] or "",
+                    "mask": r["mask"], "unit": r["unit"]} if r else None
+        s_info, t_info = _net(src), _net(tgt)
+        if not s_info or not t_info:
+            return JSONResponse({"ok": False, "error": "Радіомережу не знайдено"}, status_code=404)
+
+        # name unique per network (UNIQUE(network_id,name)); exact match works —
+        # усі назви зберігаються у верхньому регістрі.
+        rows = conn.execute(
+            """
+            SELECT s.id s_id, s.name name, s.callsign_status_id s_status, ss.name s_label,
+                   t.id t_id, t.callsign_status_id t_status, ts.name t_label
+            FROM callsigns s
+            JOIN callsigns t ON t.name = s.name AND t.network_id = ?
+            LEFT JOIN callsign_statuses ss ON ss.id = s.callsign_status_id
+            LEFT JOIN callsign_statuses ts ON ts.id = t.callsign_status_id
+            WHERE s.network_id = ? AND s.name <> 'НВ'
+            ORDER BY s.name
+            """,
+            (tgt, src),
+        ).fetchall()
+
+    pairs = [
+        {
+            "name": r["name"],
+            "source": {"callsign_id": int(r["s_id"]), "status_id": r["s_status"], "status_label": r["s_label"] or ""},
+            "target": {"callsign_id": int(r["t_id"]), "status_id": r["t_status"], "status_label": r["t_label"] or ""},
+        }
+        for r in rows
+    ]
+    return {"ok": True, "source": s_info, "target": t_info, "pairs": pairs}
+
+
+# Колонки картки позивного, які НЕ копіюються при трансфері (ідентичність рядка
+# та мережеві/часові поля). Решта — усі властивості — копіюються ДИНАМІЧНО, тож
+# нові стовпці автоматично потраплять у трансфер без правок коду.
+_TRANSFER_SKIP_COLS = {"id", "network_id", "name", "updated_at", "last_seen_dt"}
+
+
+@router.post("/api/callsigns/transfer")
+async def api_callsign_transfer(request: Request):
+    """Copy ALL data properties between same-named callsigns.
+
+    Body: {"transfers": [{"from_id": int, "to_id": int}, ...]}.
+    Every callsign column except identity/network/time fields is copied — done
+    via runtime introspection so future columns are included automatically.
+    """
+    payload: Dict[str, Any] = await request.json()
+    items = payload.get("transfers") or []
+    now = _now_sql()
+    done = 0
+    with get_conn() as conn:
+        all_cols = [r[1] for r in conn.execute("PRAGMA table_info(callsigns)")]
+        copy_cols = [c for c in all_cols if c not in _TRANSFER_SKIP_COLS]
+        if not copy_cols:
+            return {"ok": True, "count": 0}
+        set_clause = ", ".join(f"{c}=?" for c in copy_cols) + ", updated_at=?"
+        sel_clause = ", ".join(copy_cols)
+        for it in items:
+            fid = _as_int((it or {}).get("from_id"), 0)
+            tid = _as_int((it or {}).get("to_id"), 0)
+            if not fid or not tid or fid == tid:
+                continue
+            src = conn.execute(f"SELECT {sel_clause} FROM callsigns WHERE id=?", (fid,)).fetchone()
+            if not src:
+                continue
+            if not conn.execute("SELECT 1 FROM callsigns WHERE id=?", (tid,)).fetchone():
+                continue
+            vals = [src[c] for c in copy_cols] + [now, tid]
+            conn.execute(f"UPDATE callsigns SET {set_clause} WHERE id=?", vals)
+            done += 1
+        conn.commit()
+    return {"ok": True, "count": done}
+
+
 @router.get("/api/callsigns/{callsign_id}/graph")
 def api_callsign_graph(
     callsign_id: int,

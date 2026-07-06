@@ -6182,3 +6182,16 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .xa-cs-icon{ width:24px; height:24px; object-fit:contain; cursor:pointer; vertical-align:middle;
   border-radius:5px; transition:transform .1s; }
 .xa-cs-icon:hover{ transform:scale(1.25); }
+
+/* ── Трансфер даних між одноіменними позивними ── */
+.xa-th-np, .xa-td-np{ width:34px; opacity:.55; font-variant-numeric:tabular-nums; }
+.xa-th-dir, .xa-td-dir{ width:74px; }
+.xa-table--transfer th, .xa-table--transfer td{ padding:6px 12px; }
+.xa-dir-btn{
+  width:44px; height:28px; border-radius:7px; cursor:pointer; line-height:1;
+  font-size:20px; font-weight:800;
+  border:1px solid var(--border,#2b3340); background:var(--card,#1b1f24); color:#ef4444;
+  transition:color .12s, border-color .12s, background .12s;
+}
+.xa-dir-btn.xa-dir--on{ color:#22c55e; border-color:color-mix(in srgb,#22c55e 55%,var(--border,#2b3340)); }
+.xa-dir-btn:hover{ background:rgba(255,255,255,.06); }

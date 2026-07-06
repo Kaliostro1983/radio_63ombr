@@ -232,4 +232,181 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
   });
+
+  /* ══════════════════════════════════════════════════════════════════
+     Трансфер даних між одноіменними позивними двох р/м
+     ══════════════════════════════════════════════════════════════════ */
+  const trFreqInp  = $("xaTrFreq");
+  const trNetIdInp = $("xaTrNetId");
+  const trAcList   = $("xaTrAcList");
+  const transferBtn = $("xaTransferBtn");
+  const trMsg      = $("xaTransferMsg");
+  const trWrap     = $("xaTransferWrap");
+  const trActions  = $("xaTransferActions");
+  const doTransferBtn = $("xaDoTransferBtn");
+
+  let _trPairs = [];  // [{name, source:{callsign_id,status_id,status_label}, target:{...}, dir}]
+
+  /* ── Автокомпліт частоти для трансферної р/м ── */
+  let trAcTimer = null;
+  function hideTrAc() { if (trAcList) { trAcList.classList.add("hidden"); trAcList.innerHTML = ""; } }
+  async function runTrAc(q) {
+    if (!q.trim()) { hideTrAc(); return; }
+    try {
+      const r = await fetch("/api/networks/lookup?q=" + encodeURIComponent(q.trim()));
+      const d = await r.json();
+      const rows = (d && d.ok ? d.rows : []) || [];
+      if (!rows.length) { hideTrAc(); return; }
+      trAcList.innerHTML = rows.slice(0, 40).map((row) =>
+        `<div class="xa-ac-item" data-id="${row.id}" data-freq="${esc(row.frequency)}">` +
+        `<b>${esc(row.frequency)}</b>` +
+        (row.mask ? ` <span class="xa-ac-mask">${esc(row.mask)}</span>` : "") +
+        (row.unit ? ` <span class="xa-ac-unit">${esc(row.unit)}</span>` : "") + `</div>`).join("");
+      trAcList.classList.remove("hidden");
+    } catch (_) { hideTrAc(); }
+  }
+  if (trFreqInp) {
+    trFreqInp.addEventListener("input", () => {
+      if (trNetIdInp) trNetIdInp.value = "";
+      clearTimeout(trAcTimer);
+      trAcTimer = setTimeout(() => runTrAc(trFreqInp.value), 200);
+    });
+    trFreqInp.addEventListener("focus", () => { if (trFreqInp.value.trim()) runTrAc(trFreqInp.value); });
+  }
+  if (trAcList) {
+    trAcList.addEventListener("click", (e) => {
+      const it = e.target.closest(".xa-ac-item");
+      if (!it) return;
+      trFreqInp.value = it.dataset.freq || "";
+      trNetIdInp.value = it.dataset.id || "";
+      hideTrAc();
+    });
+  }
+  document.addEventListener("click", (e) => {
+    if (trAcList && !trAcList.contains(e.target) && e.target !== trFreqInp) hideTrAc();
+  });
+
+  async function resolveTrNetId() {
+    const id = parseInt(trNetIdInp.value, 10);
+    if (Number.isFinite(id) && id > 0) return id;
+    const freq = (trFreqInp.value || "").trim();
+    if (!freq) return null;
+    try {
+      const r = await fetch("/api/networks/lookup?q=" + encodeURIComponent(freq));
+      const d = await r.json();
+      const rows = (d && d.ok ? d.rows : []) || [];
+      const exact = rows.find((x) => (x.frequency || "").trim() === freq) || rows[0];
+      if (exact) { trNetIdInp.value = String(exact.id); return exact.id; }
+    } catch (_) {}
+    return null;
+  }
+
+  function _trReset() { _trPairs = []; trWrap.innerHTML = ""; trActions.style.display = "none"; }
+
+  async function loadTransfer() {
+    hideTrAc();
+    const sourceId = await resolveNetId();
+    if (!sourceId) { trMsg.textContent = "Спочатку оберіть вихідну радіомережу (верхнє поле)."; _trReset(); return; }
+    const trId = await resolveTrNetId();
+    if (!trId) { trMsg.textContent = "Задайте частоту радіомережі для трансферу."; _trReset(); return; }
+    if (trId === sourceId) { trMsg.textContent = "Оберіть р/м для трансферу, відмінну від вихідної."; _trReset(); return; }
+    trMsg.textContent = "Завантаження…"; _trReset();
+    let d;
+    try {
+      const r = await fetch(`/api/callsigns/transfer-pairs?source_id=${sourceId}&target_id=${trId}`);
+      d = await r.json();
+    } catch (_) { d = null; }
+    if (!d || !d.ok) { trMsg.textContent = (d && d.error) || "Помилка завантаження."; return; }
+    _trPairs = (d.pairs || []).map((p) => ({ ...p, dir: 0 }));
+    renderTransfer(d);
+  }
+
+  // dir: 0 = ✕ (без трансферу); -1 = «« (з трансферної → у вихідну, кол.5→кол.3);
+  //      1 = »» (з вихідної → у трансферну, кол.3→кол.5).
+  function dirBtnHtml(dir, idx) {
+    let cls = "xa-dir--none", label = "✕", title = "Без трансферу (клік — змінити напрямок)";
+    if (dir === -1) { cls = "xa-dir--on"; label = "«"; title = "Трансфер: з трансферної → у вихідну"; }
+    else if (dir === 1) { cls = "xa-dir--on"; label = "»"; title = "Трансфер: з вихідної → у трансферну"; }
+    return `<button type="button" class="xa-dir-btn ${cls}" data-idx="${idx}" title="${title}">${label}</button>`;
+  }
+
+  function renderTransfer(d) {
+    const s = d.source || {}, t = d.target || {};
+    if (!_trPairs.length) {
+      trMsg.textContent = "Немає спільних (одноіменних) позивних між цими р/м.";
+      _trReset(); return;
+    }
+    trMsg.textContent = "";
+    const head =
+      `<tr><th class="xa-th-np">№</th><th class="xa-th-name">Позивний</th>` +
+      `<th class="xa-th-col" title="${esc(s.unit)}">Вихідна<div class="xa-th-cnt">${esc(s.frequency)}</div></th>` +
+      `<th class="xa-th-dir">Трансфер</th>` +
+      `<th class="xa-th-col" title="${esc(t.unit)}">Трансферна<div class="xa-th-cnt">${esc(t.frequency)}</div></th></tr>`;
+    const body = _trPairs.map((p, i) =>
+      `<tr>` +
+      `<td class="xa-td-np">${i + 1}</td>` +
+      `<td class="xa-td-name"><span class="xa-name-txt">${esc(p.name)}</span></td>` +
+      `<td class="xa-td-cell">${csIcon(p.source, p.name)}</td>` +
+      `<td class="xa-td-dir">${dirBtnHtml(p.dir, i)}</td>` +
+      `<td class="xa-td-cell">${csIcon(p.target, p.name)}</td>` +
+      `</tr>`).join("");
+    trWrap.innerHTML = `<table class="xa-table xa-table--transfer"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+    trActions.style.display = "";
+    _updateDoTransfer();
+  }
+
+  function _updateDoTransfer() {
+    if (doTransferBtn) doTransferBtn.disabled = !_trPairs.some((p) => p.dir !== 0);
+  }
+
+  if (trWrap) {
+    trWrap.addEventListener("click", (e) => {
+      const b = e.target.closest(".xa-dir-btn");
+      if (b) {
+        const idx = parseInt(b.dataset.idx, 10);
+        if (_trPairs[idx]) {
+          const cur = _trPairs[idx].dir;
+          _trPairs[idx].dir = cur === 0 ? 1 : (cur === 1 ? -1 : 0);
+          b.outerHTML = dirBtnHtml(_trPairs[idx].dir, idx);
+          _updateDoTransfer();
+        }
+        return;
+      }
+      const ic = e.target.closest(".xa-cs-icon");
+      if (ic) {
+        const csId = parseInt(ic.dataset.csId, 10);
+        if (Number.isFinite(csId) && window.openCallsignEditModalById) {
+          window.openCallsignEditModalById(csId, { source: "transfer" });
+        }
+      }
+    });
+  }
+
+  async function doTransfer() {
+    const transfers = [];
+    for (const p of _trPairs) {
+      if (p.dir === 1) transfers.push({ from_id: p.source.callsign_id, to_id: p.target.callsign_id });
+      else if (p.dir === -1) transfers.push({ from_id: p.target.callsign_id, to_id: p.source.callsign_id });
+    }
+    if (!transfers.length) return;
+    if (!confirm(`Провести трансфер даних для ${transfers.length} позивних? Дані отримувача буде перезаписано.`)) return;
+    doTransferBtn.disabled = true;
+    try {
+      const r = await fetch("/api/callsigns/transfer", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transfers }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d.error || "Помилка");
+      if (window.appToast) window.appToast(`Трансфер виконано: ${d.count}`, "success", 2200);
+      loadTransfer();  // перезавантажити іконки статусів
+      if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(document);
+    } catch (e) {
+      if (window.appToast) window.appToast("Помилка трансферу: " + (e.message || e), "error", 2600);
+      doTransferBtn.disabled = false;
+    }
+  }
+
+  if (transferBtn) transferBtn.addEventListener("click", loadTransfer);
+  if (doTransferBtn) doTransferBtn.addEventListener("click", doTransfer);
 })();
