@@ -6186,10 +6186,16 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 /* ── Трансфер даних між одноіменними позивними ── */
 .xa-th-np, .xa-td-np{ width:34px; opacity:.55; font-variant-numeric:tabular-nums; }
 .xa-th-dir, .xa-td-dir{ width:74px; }
-.xa-table--transfer th, .xa-table--transfer td{ padding:6px 12px; }
+.xa-table--transfer{ width:auto; }
+.xa-table--transfer th, .xa-table--transfer td{ padding:6px 12px; vertical-align:middle; }
+/* У трансферній таблиці перша колонка — «№», тож назва НЕ має бути sticky-left
+   (інакше липне до лівого краю поверх «№» і рядок ламається). */
+.xa-table--transfer .xa-th-name,
+.xa-table--transfer .xa-td-name{ position:static; left:auto; z-index:auto; }
 .xa-dir-btn{
-  width:44px; height:28px; border-radius:7px; cursor:pointer; line-height:1;
-  font-size:20px; font-weight:800;
+  display:inline-flex; align-items:center; justify-content:center;
+  width:44px; height:28px; border-radius:7px; cursor:pointer;
+  font-size:18px; font-weight:800; line-height:1;
   border:1px solid var(--border,#2b3340); background:var(--card,#1b1f24); color:#ef4444;
   transition:color .12s, border-color .12s, background .12s;
 }

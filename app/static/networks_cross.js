@@ -131,6 +131,11 @@
     msg.textContent = "Завантаження…";
     summary.classList.add("hidden");
     tableWrap.innerHTML = "";
+    // Взаємне виключення: на екрані одна таблиця — ховаємо трансферну.
+    if (trMsg) trMsg.textContent = "";
+    if (trWrap) trWrap.innerHTML = "";
+    if (trActions) trActions.style.display = "none";
+    _trPairs = [];
 
     let d;
     try {
@@ -219,6 +224,13 @@
       summary.classList.add("hidden");
       tableWrap.innerHTML = "";
       msg.textContent = "";
+      // Чистий старт трансферу при кожному відкритті модалки.
+      if (trFreqInp) trFreqInp.value = "";
+      if (trNetIdInp) trNetIdInp.value = "";
+      if (trMsg) trMsg.textContent = "";
+      if (trWrap) trWrap.innerHTML = "";
+      if (trActions) trActions.style.display = "none";
+      _trPairs = [];
       openModal();
       if (netIdInp.value) load();
     });
@@ -305,6 +317,10 @@
 
   async function loadTransfer() {
     hideTrAc();
+    // Взаємне виключення: показуємо трансфер — ховаємо крос-таблицю й зведення.
+    tableWrap.innerHTML = "";
+    summary.classList.add("hidden");
+    msg.textContent = "";
     const sourceId = await resolveNetId();
     if (!sourceId) { trMsg.textContent = "Спочатку оберіть вихідну радіомережу (верхнє поле)."; _trReset(); return; }
     const trId = await resolveTrNetId();
