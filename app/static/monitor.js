@@ -2081,6 +2081,13 @@
     if (window.itFreqChips) window.itFreqChips.set(String(freq || "").trim() ? [String(freq).trim()] : []);
     else if (netInput) netInput.value = String(freq || "").trim();
 
+    // Скидаємо фільтри по позивних із попереднього виклику вікна — інакше пошук
+    // за частотою звужується старими позивними (часом до 0 результатів).
+    const csInput  = document.getElementById("callsignQuery");
+    const cs2Input = document.getElementById("callsign2Query");
+    if (csInput)  csInput.value  = "";
+    if (cs2Input) cs2Input.value = "";
+
     if (window.itSetTab) window.itSetTab("view");
 
     if (form) {
