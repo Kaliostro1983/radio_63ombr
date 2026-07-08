@@ -5761,6 +5761,16 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .concl-map-tool-btn--eye2{ top:144px; }
 .concl-map-tool-btn--eye1.is-active{ background:#2563eb; border-color:#2563eb; color:#fff; }
 .concl-map-tool-btn--eye2.is-active{ background:#d97706; border-color:#d97706; color:#fff; }
+
+/* «Орієнтири в області видимості» — верхній ряд, ліворуч від кнопки копіювання */
+.concl-map-tool-btn--lmview{ top:10px; right:54px; }
+.concl-map-tool-btn--lmview.is-active{ background:#f59e0b; border-color:#f59e0b; color:#111; }
+/* Підпис орієнтира на карті (тултіп) */
+.leaflet-tooltip.lm-view-label{
+  background:rgba(20,24,30,.85); color:#fde68a; border:none; box-shadow:none;
+  font-size:10px; font-weight:600; padding:1px 5px; border-radius:4px; white-space:nowrap;
+}
+.leaflet-tooltip.lm-view-label::before{ display:none; }
 /* Кнопки-іконки в модалці позивного (замість текстових написів). */
 .cs-icon-btn{ display:inline-flex !important; align-items:center !important; justify-content:center !important;
   box-sizing:border-box; width:38px; height:34px; padding:0 !important; flex:0 0 auto; }

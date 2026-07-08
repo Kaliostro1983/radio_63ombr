@@ -327,6 +327,34 @@ def api_landmarks_search(
     }
 
 
+@router.get("/api/landmarks/points")
+def api_landmarks_points():
+    """All active landmarks with a representative lat/lon — for the "show
+    landmarks in the visible area" map overlay in the conclusion editor.
+
+    The point is the FIRST coordinate of the stored WKT geometry (POINT vertex,
+    or first vertex of a polygon/line). Lightweight: id / name / lat / lon.
+    """
+    import re as _re
+    rx = _re.compile(r"(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)")
+    pts: list[dict] = []
+    with get_conn() as conn:
+        _expire_stale_landmarks(conn)
+        rows = conn.execute(
+            "SELECT id, name, id_geom, location_wkt FROM landmarks WHERE is_active = 1"
+        ).fetchall()
+    for r in rows:
+        m = rx.search(r["location_wkt"] or "")
+        if not m:
+            continue
+        lon = float(m.group(1))
+        lat = float(m.group(2))
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            continue
+        pts.append({"id": int(r["id"]), "name": _display_name(r["name"], r["id_geom"]), "lat": lat, "lon": lon})
+    return {"ok": True, "points": pts, "count": len(pts)}
+
+
 @router.get("/api/landmarks/{landmark_id}")
 def api_landmark_get(landmark_id: int):
     with get_conn() as conn:

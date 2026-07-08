@@ -948,6 +948,64 @@
     _setEyeActive("unit", false);
   }
 
+  /* ── Орієнтири в області видимості (перемикач) ─────────────────────
+     Показує/ховає орієнтири, координата яких потрапляє в поточний
+     видимий прямокутник карти. При повторному відкритті модалки —
+     сховані (скидається через _resetLmView зі спостерігача видимості). */
+  let _lmViewLayer = null;
+  let _lmViewOn = false;
+  let _lmAllPoints = null;   // кеш усіх орієнтирів {id,name,lat,lon}
+
+  async function _lmViewFetch() {
+    if (_lmAllPoints) return _lmAllPoints;
+    try {
+      const r = await fetch("/api/landmarks/points", { headers: { Accept: "application/json" } });
+      const d = await r.json();
+      _lmAllPoints = (d && d.ok && Array.isArray(d.points)) ? d.points : [];
+    } catch (_) { _lmAllPoints = []; }
+    return _lmAllPoints;
+  }
+  function _lmViewClearLayer() {
+    if (_lmViewLayer && _conclMap) { try { _conclMap.removeLayer(_lmViewLayer); } catch (_) {} }
+    _lmViewLayer = null;
+  }
+  function _lmViewRender() {
+    if (!_conclMap || !_lmViewOn || !_lmAllPoints) return;
+    _lmViewClearLayer();
+    const b = _conclMap.getBounds();
+    const inView = _lmAllPoints.filter(p => b.contains([p.lat, p.lon]));
+    const permanent = inView.length <= 50;   // багато точок → підписи лише на наведення
+    const layers = [];
+    inView.slice(0, 400).forEach(p => {
+      const cm = L.circleMarker([p.lat, p.lon], {
+        radius: 4, color: "#f59e0b", weight: 2, fillColor: "#fff7ed", fillOpacity: 1,
+        pane: "conclAnchors",
+      });
+      cm.bindTooltip(p.name || "", { permanent, direction: "right", className: "lm-view-label", offset: [6, 0] });
+      layers.push(cm);
+    });
+    _lmViewLayer = L.layerGroup(layers).addTo(_conclMap);
+  }
+  async function _toggleLmView() {
+    if (!_conclMap) return;
+    _lmViewOn = !_lmViewOn;
+    document.getElementById("conclLmViewBtn")?.classList.toggle("is-active", _lmViewOn);
+    if (_lmViewOn) {
+      await _lmViewFetch();
+      _lmViewRender();
+      _conclMap.on("moveend", _lmViewRender);
+    } else {
+      _conclMap.off("moveend", _lmViewRender);
+      _lmViewClearLayer();
+    }
+  }
+  function _resetLmView() {
+    _lmViewOn = false;
+    document.getElementById("conclLmViewBtn")?.classList.remove("is-active");
+    if (_conclMap) _conclMap.off("moveend", _lmViewRender);
+    _lmViewClearLayer();
+  }
+
   /* Видимість точки за актуальністю: 100% перші 7 повних днів, далі −10%
      видимості за кожний додатковий повний день. Мінімум лишаємо ненульовим,
      щоб дуже стара точка не зникала повністю й лишалась клікабельною.
@@ -1789,6 +1847,21 @@
 
     // Кнопка копіювання карти (поверх зображення)
     document.getElementById("conclMapCopyBtn")?.addEventListener("click", _copyConclMap);
+
+    // Перемикач «Орієнтири в області видимості»
+    document.getElementById("conclLmViewBtn")?.addEventListener("click", _toggleLmView);
+    // При КОЖНОМУ відкритті модалки висновку орієнтири мають бути сховані.
+    (function _lmViewResetOnOpen() {
+      const m = document.getElementById("itModalConclusion");
+      if (!m || m.__lmViewObs) return;
+      m.__lmViewObs = true;
+      let wasHidden = m.classList.contains("hidden");
+      new MutationObserver(() => {
+        const isHidden = m.classList.contains("hidden");
+        if (wasHidden && !isHidden) _resetLmView();   // щойно відкрилась
+        wasHidden = isHidden;
+      }).observe(m, { attributes: true, attributeFilter: ["class"] });
+    })();
 
     // Кнопка "+" та меню елементів карти
     const addBtn  = document.getElementById("conclMapAddBtn");
