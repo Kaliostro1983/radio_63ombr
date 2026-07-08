@@ -227,16 +227,32 @@
     const base = "/static/photos/callsign_statuses/";
     const defWebp = base + "_default.webp";
     const defPng = base + "_default.png";
+    const target = statusId ? (base + String(statusId) + ".webp") : defWebp;
+
+    // Вже показуємо потрібне фото й воно завантажене — нічого не робимо.
+    if (modalPhoto.getAttribute("src") === target && modalPhoto.dataset.photoReady === "1") return;
+
+    // Ховаємо поточне фото ДО завантаження нового, щоб не блимало попереднім
+    // позивним; показуємо (плавно) лише коли нове реально завантажилось.
+    modalPhoto.style.transition = "opacity .18s ease";
+    modalPhoto.style.opacity = "0";
+    modalPhoto.dataset.photoReady = "0";
+    modalPhoto.onload = function () {
+      modalPhoto.dataset.photoReady = "1";
+      modalPhoto.style.opacity = "1";
+    };
 
     if (!statusId) {
-      modalPhoto.src = defWebp;
       modalPhoto.dataset.photoTry = "default";
+      modalPhoto.onerror = function () {
+        modalPhoto.onerror = null;
+        modalPhoto.src = defPng;
+      };
+      modalPhoto.src = defWebp;
       return;
     }
 
     modalPhoto.dataset.photoTry = "webp";
-    modalPhoto.src = base + String(statusId) + ".webp";
-
     modalPhoto.onerror = function () {
       const t = modalPhoto.dataset.photoTry || "";
       if (t === "webp") {
@@ -250,6 +266,7 @@
         modalPhoto.src = defPng;
       }, { once: true });
     };
+    modalPhoto.src = base + String(statusId) + ".webp";
   }
 
   async function preselectNetworkById(networkId) {
