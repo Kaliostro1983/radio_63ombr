@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" role="img" aria-hidden="true">
+  <circle cx="12" cy="12" r="12" fill="#475569"/>
+  <circle cx="12" cy="12" r="10.8" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1"/>
+  <!-- Кермо -->
+  <circle cx="12" cy="12.3" r="6.2" fill="none" stroke="#F6F7F8" stroke-width="1.7"/>
+  <circle cx="12" cy="12.3" r="1.6" fill="#F6F7F8"/>
+  <path d="M12 13.8v4.1M10.6 11.5 6.7 9.6M13.4 11.5l3.9-1.9" stroke="#F6F7F8" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Маленький кривий шлях, бо водій “недолугий” -->
+  <path d="M5.8 5.4c1.9-.8 3 .8 4.5.1 1.3-.6 2.4-.9 3.6.1" fill="none" stroke="#FBBF24" stroke-width="1.2" stroke-linecap="round"/>
+</svg>
