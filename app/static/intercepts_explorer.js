@@ -467,6 +467,11 @@
         ).join("")}</div>`
       : "";
 
+    // Частота/маска та назва р/м клікабельні → відкривають картку цієї р/м.
+    const netId = detail.network_id || item.network_id || "";
+    const netLinkCls  = netId ? " intercept-card__netlink" : "";
+    const netLinkData = netId ? ` data-network-id="${netId}" title="Відкрити картку р/м"` : "";
+
     return `
         <article class="intercept-card" data-id="${item.id}">
           <div class="intercept-card__body intercept-card__body--compact">
@@ -486,10 +491,10 @@
                 <div class="intercept-card__line intercept-card__line--dt">
                   ${escapeHtml(header.dt)}
                 </div>
-                <div class="intercept-card__line intercept-card__line--freq">
+                <div class="intercept-card__line intercept-card__line--freq${netLinkCls}"${netLinkData}>
                   ${escapeHtml(header.freqMask)}
                 </div>
-                <div class="intercept-card__line intercept-card__line--net">
+                <div class="intercept-card__line intercept-card__line--net${netLinkCls}"${netLinkData}>
                   ${escapeHtml(header.rest)}
                 </div>
                 ${netTagsHtml}
@@ -1242,6 +1247,13 @@
       return;
     }
 
+    const netLink = event.target.closest(".intercept-card__netlink");
+    if (netLink && netLink.dataset.networkId) {
+      event.preventDefault();
+      openNetworkCardModal(netLink.dataset.networkId);
+      return;
+    }
+
     const chipClick = event.target.closest(".callsign-chip--clickable");
     if (chipClick && !event.target.closest(".callsign-chip__remove")) {
       const chip = chipClick;
@@ -1633,6 +1645,55 @@
    * Attach the same event delegation used by mainCard to any container.
    * Handlers work via event.target.closest() so they are container-agnostic.
    */
+  /* Модалка «Картка р/м» (iframe → /networks?pick=ID&embed=1). Створюється
+     ліниво і кладеться в <body>, тож працює всюди, де рендериться картка
+     перехоплення (Перегляд, Пошук, Моніторинг, вбудовані модалки). */
+  function closeNetworkCardModal() {
+    const overlay = document.getElementById("itNetCardModal");
+    if (!overlay) return;
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+    const frame = document.getElementById("itNetCardFrame");
+    if (frame) frame.src = "about:blank";
+  }
+  function openNetworkCardModal(networkId) {
+    const nid = Number(networkId) || 0;
+    if (!nid) return;
+    let overlay = document.getElementById("itNetCardModal");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "itNetCardModal";
+      overlay.className = "modal hidden it-netcard-modal";
+      overlay.setAttribute("aria-hidden", "true");
+      overlay.innerHTML =
+        '<div class="modal-backdrop" data-netcard-close="1"></div>' +
+        '<div class="modal-card it-netcard-card" role="dialog" aria-modal="true" style="max-width:1120px; width:96vw">' +
+          '<div class="modal-head">' +
+            '<div class="modal-title">Картка р/м</div>' +
+            '<button type="button" class="secondary cs-icon-btn" data-netcard-close="1" title="Закрити" aria-label="Закрити">' +
+              '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>' +
+            '</button>' +
+          '</div>' +
+          '<div class="modal-body" style="padding:0">' +
+            '<iframe id="itNetCardFrame" src="about:blank" title="Картка р/м" style="width:100%; height:82vh; border:0; display:block; background:var(--bg)"></iframe>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      overlay.addEventListener("click", (e) => {
+        if (e.target.closest && e.target.closest('[data-netcard-close="1"]')) closeNetworkCardModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeNetworkCardModal();
+      });
+    }
+    const frame = document.getElementById("itNetCardFrame");
+    if (frame) frame.src = "/networks?pick=" + encodeURIComponent(nid) + "&embed=1&_=" + Date.now();
+    overlay.classList.remove("hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    if (window.__modalToFront) window.__modalToFront(overlay);
+  }
+  window.openNetworkCardModal = openNetworkCardModal;
+
   function _attachCardEvents(container) {
     if (container.__cardEventsAttached) return;
     container.__cardEventsAttached = true;
@@ -1646,6 +1707,13 @@
         if (!text) return;
         const ok = await copyTextToClipboard(text);
         if (window.appToast) window.appToast(ok ? "Скопійовано в буфер." : "Не вдалося скопіювати.", ok ? "success" : "error", 1600);
+        return;
+      }
+
+      const netLink = event.target.closest(".intercept-card__netlink");
+      if (netLink && netLink.dataset.networkId) {
+        event.preventDefault();
+        openNetworkCardModal(netLink.dataset.networkId);
         return;
       }
 

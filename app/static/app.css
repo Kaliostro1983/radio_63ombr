@@ -2143,6 +2143,10 @@ button.secondary{
   margin-bottom: 14px;
 }
 
+/* Клікабельні частота/маска та назва р/м → відкривають картку р/м. */
+.intercept-card__netlink { cursor: pointer; }
+.intercept-card__netlink:hover { text-decoration: underline; text-underline-offset: 2px; }
+
 .intercept-card__text {
   font-size: 15px;
   line-height: 1.6;
