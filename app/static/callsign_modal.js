@@ -226,14 +226,13 @@
     if (!modalPhoto) return;
     const base = "/static/photos/callsign_statuses/";
     const defWebp = base + "_default.webp";
-    const defPng = base + "_default.png";
     const target = statusId ? (base + String(statusId) + ".webp") : defWebp;
 
     // Вже показуємо потрібне фото й воно завантажене — нічого не робимо.
     if (modalPhoto.getAttribute("src") === target && modalPhoto.dataset.photoReady === "1") return;
 
-    // Ховаємо поточне фото ДО завантаження нового, щоб не блимало попереднім
-    // позивним; показуємо (плавно) лише коли нове реально завантажилось.
+    // Ховаємо поточне фото ДО завантаження нового; показуємо (плавно) лише
+    // коли нове реально завантажилось — щоб не блимало попереднім позивним.
     modalPhoto.style.transition = "opacity .18s ease";
     modalPhoto.style.opacity = "0";
     modalPhoto.dataset.photoReady = "0";
@@ -241,32 +240,13 @@
       modalPhoto.dataset.photoReady = "1";
       modalPhoto.style.opacity = "1";
     };
-
-    if (!statusId) {
-      modalPhoto.dataset.photoTry = "default";
-      modalPhoto.onerror = function () {
-        modalPhoto.onerror = null;
-        modalPhoto.src = defPng;
-      };
-      modalPhoto.src = defWebp;
-      return;
-    }
-
-    modalPhoto.dataset.photoTry = "webp";
+    // Фото зберігаються лише у .webp; якщо немає — типове _default.webp.
     modalPhoto.onerror = function () {
-      const t = modalPhoto.dataset.photoTry || "";
-      if (t === "webp") {
-        modalPhoto.dataset.photoTry = "png";
-        modalPhoto.src = base + String(statusId) + ".png";
-        return;
-      }
-      modalPhoto.onerror = null;
-      modalPhoto.src = defWebp;
-      modalPhoto.addEventListener("error", function () {
-        modalPhoto.src = defPng;
-      }, { once: true });
+      modalPhoto.onerror = null;   // уникнути циклу
+      if (modalPhoto.getAttribute("src") !== defWebp) modalPhoto.src = defWebp;
+      else modalPhoto.style.opacity = "1";
     };
-    modalPhoto.src = base + String(statusId) + ".webp";
+    modalPhoto.src = target;
   }
 
   async function preselectNetworkById(networkId) {
