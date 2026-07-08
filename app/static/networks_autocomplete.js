@@ -28,6 +28,7 @@
     let items = [];
     let index = -1;
     let timer = null;
+    let reqSeq = 0;   // токен запиту — щоб застарілі (out-of-order) відповіді не малювали ще один дропдаун
 
     function close() {
       if (box) box.remove();
@@ -59,14 +60,19 @@
       const qs = String(q || "").trim();
       close();
       if (!qs || qs.length < 2) return;
+      const my = ++reqSeq;
       try {
         const resp = await fetch(`/api/networks/lookup?q=${encodeURIComponent(qs)}`, { headers: { Accept: "application/json" } });
+        if (my !== reqSeq) return;   // застаріла відповідь — новіший запит уже в роботі
         if (!resp.ok) return;
         const data = await resp.json();
+        if (my !== reqSeq) return;
         if (!data.ok) return;
         const rows = Array.isArray(data.rows) ? data.rows : [];
         if (!rows.length) return;
 
+        // Захисно прибираємо будь-який залишковий дропдаун перед новим.
+        if (box) { box.remove(); box = null; }
         items = rows;
         box = document.createElement("div");
         box.className = "callsign-autocomplete";
