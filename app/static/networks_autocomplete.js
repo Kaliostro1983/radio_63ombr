@@ -165,4 +165,16 @@
       if (btn) btn.click();
     }
   );
+
+  // Модалка «Пошук» перехоплень — поле «Частота/маска». Вибір із автокомпліту
+  // підставляє частоту/маску й одразу запускає пошук (форма — JS, тож
+  // requestSubmit, а не native submit, щоб спрацював обробник у search-modal).
+  setupNetworkFreqLookup(
+    document.getElementById("itSearchFreq"),
+    function () {
+      var f = document.getElementById("itSearchForm");
+      if (f && typeof f.requestSubmit === "function") f.requestSubmit();
+      else if (f) f.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }
+  );
 })();
