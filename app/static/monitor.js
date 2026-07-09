@@ -1858,7 +1858,7 @@
       let wasHidden = m.classList.contains("hidden");
       new MutationObserver(() => {
         const isHidden = m.classList.contains("hidden");
-        if (wasHidden && !isHidden) _resetLmView();   // щойно відкрилась
+        if (wasHidden && !isHidden) { _resetLmView(); _palResetForModalOpen(); }   // щойно відкрилась
         wasHidden = isHidden;
       }).observe(m, { attributes: true, attributeFilter: ["class"] });
     })();
@@ -4775,6 +4775,21 @@
     if (layers) { layers.forEach(l => l.remove()); _palRegionLayers.delete(id); }
   }
 
+  // Прибрати ВСІ намальовані зони палітр (напр., при відкритті модалки).
+  function _palClearAllRegions() {
+    _palRegionLayers.forEach(layers => layers.forEach(l => l.remove()));
+    _palRegionLayers.clear();
+  }
+
+  // Скидання панелі палітр при кожному відкритті модалки висновку:
+  // карта чиста (без зон) і панель зі списком палітр закрита.
+  function _palResetForModalOpen() {
+    _palClearAllRegions();
+    _palCloseCtxMenu();
+    const panel = document.getElementById("palPanel");
+    if (panel) { panel.classList.add("hidden"); panel.setAttribute("aria-hidden", "true"); }
+  }
+
   async function _palToggleRegions(id) {
     if (_palRegionLayers.has(id)) { _palClearRegions(id); return; }
     if (!_conclMap) return;
@@ -4799,8 +4814,22 @@
           layers.push(lbl);
         }
       });
-      _palRegionLayers.set(id, layers);
+      // Підпис із НАЗВОЮ палітри поверх зони — щоб було зрозуміло, яку саме
+      // показано (і яку закривати), коли на карті кілька зон.
       const bb = j.palette && j.palette.bbox;
+      if (bb && bb[0] != null) {
+        const pName = ((_palList || []).find(x => x.id === id) || {}).name || ("#" + id);
+        const nameLbl = L.marker([bb[2], (bb[1] + bb[3]) / 2], {
+          icon: L.divIcon({
+            className: "pal-name-label-wrap",
+            html: `<div class="pal-name-label">${_esc(pName)}</div>`,
+            iconSize: [0, 0],
+          }),
+          interactive: false, pane: "conclAbove",
+        }).addTo(_conclMap);
+        layers.push(nameLbl);
+      }
+      _palRegionLayers.set(id, layers);
       if (bb && bb[0] != null) _conclMap.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { maxZoom: 13, padding: [20, 20] });
     } catch (_) {
       if (window.appToast) window.appToast("Не вдалося завантажити області", "error", 1800);
