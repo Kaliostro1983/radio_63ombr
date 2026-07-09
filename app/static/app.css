@@ -1173,6 +1173,15 @@ button.secondary{
   min-height:0;
 }
 
+/* Модалка «Пошук» перехоплень — одразу повна висота (щоб коротка форма не
+   обрізала випадайку автокомпліту частоти); шапка фіксована, тіло прокручується. */
+#itModalSearch .modal-card{
+  display:flex; flex-direction:column;
+  height:calc(100vh - 40px); max-height:calc(100vh - 40px);
+  margin:20px auto;
+}
+#itModalSearch .modal-body{ flex:1 1 auto; min-height:0; overflow-y:auto; }
+
 /* Quick callsign identification buttons */
 .cs-quickid-wrap{
   display:flex;
