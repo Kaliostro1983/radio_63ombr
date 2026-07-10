@@ -226,7 +226,7 @@
     if (!modalPhoto) return;
     // Версія фото: URL без неї браузер тримає в кеші назавжди, тож після
     // оновлення зображень підтягувалось старе. Збільшувати при кожній заміні фото.
-    const VER = "?v=2";
+    const VER = "?v=3";
     const base = "/static/photos/callsign_statuses/";
     const defWebp = base + "_default.webp" + VER;
     const target = (statusId ? (base + String(statusId) + ".webp") : (base + "_default.webp")) + VER;
