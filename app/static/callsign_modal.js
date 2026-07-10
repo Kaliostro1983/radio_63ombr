@@ -224,9 +224,12 @@
 
   function setPhotoForStatus(statusId) {
     if (!modalPhoto) return;
+    // Версія фото: URL без неї браузер тримає в кеші назавжди, тож після
+    // оновлення зображень підтягувалось старе. Збільшувати при кожній заміні фото.
+    const VER = "?v=2";
     const base = "/static/photos/callsign_statuses/";
-    const defWebp = base + "_default.webp";
-    const target = statusId ? (base + String(statusId) + ".webp") : defWebp;
+    const defWebp = base + "_default.webp" + VER;
+    const target = (statusId ? (base + String(statusId) + ".webp") : (base + "_default.webp")) + VER;
 
     // Вже показуємо потрібне фото й воно завантажене — нічого не робимо.
     if (modalPhoto.getAttribute("src") === target && modalPhoto.dataset.photoReady === "1") return;
