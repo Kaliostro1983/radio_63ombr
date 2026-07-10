@@ -711,7 +711,7 @@
     if (_conclMap) _conclMap.invalidateSize();
     const anchorsPane = _conclMap && _conclMap.getPane("conclAnchors");
     const chrome = Array.from(mapDiv.parentElement
-      ? mapDiv.parentElement.querySelectorAll(".concl-map-tool-btn, .concl-map-add-menu")
+      ? mapDiv.parentElement.querySelectorAll(".concl-map-tool-btn, .concl-map-add-menu, .concl-text-del")
       : []);
     if (anchorsPane) anchorsPane.style.display = "none";
     chrome.forEach(el => { el.dataset._prevDisp = el.style.display; el.style.display = "none"; });
@@ -1401,6 +1401,41 @@
     _conclDrawn.push(entry);
   }
 
+  /* ── Текст (перетягуваний напис на карті; потрапляє у скріншот) ──
+     Маркер у стандартному marker-pane (тож html2canvas його захоплює);
+     кнопка «×» ховається під час скріншоту (клас .concl-text-del у списку
+     chrome, який приховує _captureConclMapCanvas). Подвійний клік — редагувати. */
+  function _addText(map){
+    let cur = "Текст";
+    function icon(){
+      return L.divIcon({
+        className: "concl-text-icon", iconSize: null, iconAnchor: [0, 0],
+        html: `<div class="concl-text-box"><span class="concl-text-label">${_esc(cur)}</span>` +
+              `<span class="concl-text-del" title="Видалити напис">×</span></div>`,
+      });
+    }
+    const m = L.marker(map.getCenter(), { draggable: true, icon: icon(), bubblingMouseEvents: false }).addTo(map);
+    const entry = { type: "text", layers: [m] };
+    _conclDrawn.push(entry);
+    m.on("click", (e) => {
+      const t = e.originalEvent && e.originalEvent.target;
+      if (t && t.closest && t.closest(".concl-text-del")) {
+        L.DomEvent.stop(e.originalEvent);
+        _removeDrawn(entry);
+      }
+    });
+    m.on("dblclick", (e) => {
+      if (e.originalEvent) L.DomEvent.stop(e.originalEvent);
+      const nt = prompt("Текст напису:", cur);
+      if (nt !== null) { cur = (nt.trim() || cur); m.setIcon(icon()); }
+    });
+    // одразу запропонувати ввести текст
+    setTimeout(() => {
+      const nt = prompt("Текст напису:", cur);
+      if (nt !== null && nt.trim()) { cur = nt.trim(); m.setIcon(icon()); }
+    }, 0);
+  }
+
   /* ── Зона (полігон з якорями вершин і середин сторін) ── */
   function _addZone(map){
     const c = map.getCenter();
@@ -1880,6 +1915,7 @@
         if (tool === "arrow")    _addArrow(_conclMap);
         else if (tool === "zone")     _addZone(_conclMap);
         else if (tool === "landmark") _openLandmarkPicker(_conclMap);
+        else if (tool === "text")     _addText(_conclMap);
       });
       document.addEventListener("click", (e) => {
         if (!addMenu.classList.contains("hidden") && !addMenu.contains(e.target) && e.target !== addBtn && !addBtn.contains(e.target)){
