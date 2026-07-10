@@ -27,9 +27,9 @@ def now_sql() -> str:
 def to_sql_dt(dt_text: str | None) -> str | None:
     """Convert intercept datetime text into ISO storage format.
 
-    Supported input formats:
-        - `DD.MM.YYYY, HH:MM:SS`
-        - `DD.MM.YYYY HH:MM:SS`
+    Supported input formats (секунди необов'язкові):
+        - `DD.MM.YYYY, HH:MM:SS` / `DD.MM.YYYY HH:MM:SS`
+        - `DD.MM.YYYY, HH:MM`    / `DD.MM.YYYY HH:MM`
 
     Args:
         dt_text: datetime string extracted from an intercept message.
@@ -41,14 +41,18 @@ def to_sql_dt(dt_text: str | None) -> str | None:
         return None
 
     s = str(dt_text).strip()
-    try:
-        if "," in s:
-            dt = datetime.strptime(s, "%d.%m.%Y, %H:%M:%S")
-        else:
-            dt = datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        return None
+    for fmt in (
+        "%d.%m.%Y, %H:%M:%S",
+        "%d.%m.%Y %H:%M:%S",
+        "%d.%m.%Y, %H:%M",
+        "%d.%m.%Y %H:%M",
+    ):
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    return None
 
 
 def calc_delay_sec(
