@@ -36,9 +36,11 @@ SENDER_PREFIX_RE = re.compile(r"^відправник\s*:", flags=re.IGNORECASE)
 RECIPIENTS_IN_HEADER_RE = re.compile(r"отримувач(?:\s*\(\s*і\s*\))?\s*:?", flags=re.IGNORECASE)
 SENDER_IN_HEADER_RE = re.compile(r"відправник\s*:?", flags=re.IGNORECASE)
 
-# Group-separator detector — line like "------- 🦁 63 ОМБр 🦁 -------".
-# Tolerant: any dashes (≥3) + "63 ОМБр" фрагмент кирилицею.
-SEPARATOR_RE = re.compile(r"-{3,}.*63\s*ОМБр.*-{3,}", flags=re.IGNORECASE)
+# Group-separator detector — line like "------- 🦁 63 ОМБр 🦁 -------"
+# або "---------- ꑍ ОБТВР ꑍ ----------" / "---------- ꑍ 60 ОМБр ꑍ ----------".
+# Tolerant: any dashes (≥3) + маркер (63 ОМБр | 60 ОМБр | ОБТВР) кирилицею.
+# Набір маркерів має збігатися з аналітичним парсером (RE_SEPARATOR).
+SEPARATOR_RE = re.compile(r"-{3,}.*(?:63\s*ОМБр|60\s*ОМБр|ОБТВР).*-{3,}", flags=re.IGNORECASE)
 
 
 def _split_recipient_chunks(values: list[str]) -> list[str]:
