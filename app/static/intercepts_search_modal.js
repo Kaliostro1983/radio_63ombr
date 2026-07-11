@@ -30,6 +30,26 @@
     warn.style.display = msg ? "block" : "none";
   }
 
+  function _sleep(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+
+  /* Транзієнтні мережеві збої (флап Tailscale-лінку) проявляються як
+     TypeError "Failed to fetch" — сам сервер відповідає нормально. Робимо
+     кілька повторів із короткою паузою, щоб одиничний обрив не ставав
+     помилкою пошуку. Повторюємо ЛИШЕ мережеві помилки (fetch reject), а не
+     HTTP-статуси. */
+  async function fetchSearch(url, attempts) {
+    let lastErr = null;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await fetch(url, { headers: { Accept: "application/json" } });
+      } catch (e) {
+        lastErr = e;
+        if (i < attempts - 1) await _sleep(600 * (i + 1));
+      }
+    }
+    throw lastErr;
+  }
+
   function escapeRegExp(s) {
     return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
@@ -102,7 +122,7 @@
         phrase, frequency, days: String(days),
         limit: String(LIMIT), offset: String(offset),
       });
-      const r = await fetch(`/api/intercepts/search?${params.toString()}`, { headers: { Accept: "application/json" } });
+      const r = await fetchSearch(`/api/intercepts/search?${params.toString()}`, 3);
       const d = await r.json().catch(() => null);
       if (!r.ok) throw new Error((d && d.detail) || ("HTTP " + r.status));
       if (d && d.warning) setWarn(d.warning);
@@ -115,7 +135,13 @@
       if (reset && !items.length) setWarn("За вибраними фільтрами нічого не знайдено.");
       if (moreBtn) moreBtn.classList.toggle("hidden", reachedEnd || !items.length);
     } catch (e) {
-      setWarn("Помилка пошуку: " + (e && e.message ? e.message : e));
+      const msg = (e && e.message ? e.message : String(e));
+      // "Failed to fetch" = обрив з'єднання (нестабільний Tailscale-лінк), а не помилка сервера.
+      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        setWarn("Немає зв'язку із сервером (нестабільне з'єднання). Спробуйте ще раз за кілька секунд.");
+      } else {
+        setWarn("Помилка пошуку: " + msg);
+      }
     } finally {
       loading = false;
     }
