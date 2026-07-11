@@ -898,12 +898,23 @@
   /* GET JSON з повторами — короткі розриви зв'язку (нестабільний Tailscale на
      сервері) інакше валили список «Не вдалося завантажити перехоплення».
      Повторюємо мережеві збої та 5xx, але НЕ 4xx (реальна відповідь сервера). */
+  /* fetch із тайм-аутом. Нативний fetch не має тайм-ауту: коли Tailscale-лінк
+     «підвисає» (stall, а не reset), запит висить безкінечно на «Завантаження…»,
+     і повтор не спрацьовує (немає помилки). AbortController перериває запит через
+     ms → stall стає помилкою → цикл повтору відпрацьовує нормально. */
+  function _fetchWithTimeout(url, opts, ms) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), ms || 8000);
+    return fetch(url, Object.assign({}, opts || {}, { signal: ctl.signal }))
+      .finally(() => clearTimeout(t));
+  }
+
   async function _getJsonWithRetry(url, tries = 3) {
     let lastErr;
     for (let i = 0; i < tries; i++) {
       let res;
       try {
-        res = await fetch(url, { method: "GET", headers: { Accept: "application/json" } });
+        res = await _fetchWithTimeout(url, { method: "GET", headers: { Accept: "application/json" } }, 8000);
       } catch (e) {
         lastErr = e;  // мережевий збій (розрив зв'язку) → повтор
         if (i < tries - 1) { await new Promise((r) => setTimeout(r, 500 * (i + 1))); continue; }
@@ -1838,7 +1849,7 @@
     for (let i = 0; i < tries; i++) {
       let res;
       try {
-        res = await fetch(`/api/intercepts-explorer/${messageId}`);
+        res = await _fetchWithTimeout(`/api/intercepts-explorer/${messageId}`, {}, 8000);
       } catch (e) {
         lastErr = e;  // мережевий збій (розрив зв'язку) → повтор
         if (i < tries - 1) { await new Promise(r => setTimeout(r, 500 * (i + 1))); continue; }
@@ -1902,11 +1913,13 @@
       if (window.decorateCallsignConclusions) window.decorateCallsignConclusions(container);
 
     } catch (e) {
-      // «Failed to fetch» = розрив зв'язку (нестабільний Tailscale), а не помилка
+      // «Failed to fetch» = розрив зв'язку, abort/timeout = запит «підвис» і був
+      // перерваний за тайм-аутом — усе це нестабільний Tailscale, а не помилка
       // даних. Показуємо зрозуміле повідомлення + кнопку повтору.
-      const isNet = String(e && e.message || "").toLowerCase().includes("fetch");
+      const em = String(e && (e.name + " " + e.message) || "").toLowerCase();
+      const isNet = /fetch|abort|timeout|network|signal/.test(em);
       const msg = isNet
-        ? "Втрачено зв'язок із сервером (Tailscale). Повторіть."
+        ? "Втрачено зв'язок із сервером (нестабільний Tailscale). Повторіть."
         : "Помилка: " + escapeHtml(String(e.message || e));
       container.innerHTML =
         `<div class="intercepts-main-card__empty">${msg}` +
