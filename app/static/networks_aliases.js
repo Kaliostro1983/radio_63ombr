@@ -112,9 +112,14 @@
     let index = -1;
     let timer = null;
     let syncingFromPick = false;
+    // seq — генерація запиту: захист від гонки, коли два асинхронні lookup
+    // створюють по дропдауну (другий перезаписує `box`, перший «осиротів»).
+    let seq = 0;
 
     function closeAc() {
-      if (box) box.remove();
+      seq++;   // інвалідуємо lookup, що ще «в польоті»
+      // прибираємо будь-які дропдауни в контейнері (у т.ч. осиротілі від гонки)
+      wrap.querySelectorAll(".callsign-autocomplete").forEach((el) => el.remove());
       box = null;
       items = [];
       index = -1;
@@ -130,6 +135,7 @@
       if (!it) return;
       const value = String(it.frequency || "").trim();
       if (!value) return;
+      clearTimeout(timer);   // скасувати відкладений lookup від набору
       syncingFromPick = true;
       input.value = value;
       hiddenIdInput.value = String(it.id);
@@ -144,12 +150,15 @@
       const qs = String(q || "").trim();
       closeAc();
       if (!qs || qs.length < 2) return;
+      const s = seq;   // генерація цього запиту (після closeAc — поточна)
       try {
         const resp = await fetch(`/api/networks/lookup?q=${encodeURIComponent(qs)}`, {
           headers: { Accept: "application/json" },
         });
+        if (s !== seq) return;   // застарілий запит (був вибір/закриття/новий набір) → не малюємо
         if (!resp.ok) return;
         const data = await resp.json();
+        if (s !== seq) return;
         if (!data.ok) return;
         const rows = Array.isArray(data.rows) ? data.rows : [];
         if (!rows.length) return;
