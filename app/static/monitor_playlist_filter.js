@@ -29,7 +29,9 @@
   let chips = [];
 
   // Автокомпліт
-  let acBox = null, acItems = [], acIndex = -1, acTimer = null;
+  // acSeq — генерація запиту: захист від гонки, коли асинхронний lookup()
+  // завершується вже після вибору чіпа/закриття й знову домальовує меню.
+  let acBox = null, acItems = [], acIndex = -1, acTimer = null, acSeq = 0;
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -158,6 +160,7 @@
 
   // ── Автокомпліт ──────────────────────────────────────────────
   function closeAc() {
+    acSeq++;                 // інвалідуємо будь-який lookup, що ще «в польоті»
     if (acBox) acBox.remove();
     acBox = null; acItems = []; acIndex = -1;
   }
@@ -175,6 +178,7 @@
       render();
     }
     input.value = "";
+    clearTimeout(acTimer);   // скасувати відкладений lookup від набору тексту
     closeAc();
     input.focus();
   }
@@ -182,7 +186,9 @@
     const qs = String(q || "").trim();
     closeAc();
     if (qs.length < 2) return;
+    const seq = acSeq;       // генерація цього запиту (після closeAc — поточна)
     const rows = await lookupRows(qs);
+    if (seq !== acSeq) return;  // застарілий запит (був вибір/закриття/новий набір) → не малюємо
     if (!rows.length) return;
     acItems = rows; acIndex = -1;
     acBox = document.createElement("div");
