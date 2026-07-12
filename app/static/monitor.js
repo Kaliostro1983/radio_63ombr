@@ -1754,9 +1754,10 @@
 
       // ── Автокомпліт орієнтирів за префіксом «%» ──────────────────
       const _coordWrap = document.getElementById("conclCoordWrap");
-      let _lmAc = null, _lmAcItems = [], _lmAcIdx = -1, _lmAcTimer = null;
+      let _lmAc = null, _lmAcItems = [], _lmAcIdx = -1, _lmAcTimer = null, _lmAcSeq = 0;
 
       function _closeLmAc() {
+        _lmAcSeq++;   // інвалідуємо lookup, що ще «в польоті» (гонка: домальовує меню після вибору/закриття)
         if (_lmAc) _lmAc.remove();
         _lmAc = null; _lmAcItems = []; _lmAcIdx = -1;
       }
@@ -1775,6 +1776,7 @@
       function _pickLm(it) {
         if (it && it.id) _placeLandmarkById(it.id);
         coordIn.value = "";
+        clearTimeout(_lmAcTimer);   // скасувати відкладений lookup від набору
         _closeLmAc();
         coordIn.focus();
       }
@@ -1791,12 +1793,14 @@
         const q = String(name || "").trim();
         _closeLmAc();
         if (!q) return;
+        const s = _lmAcSeq;   // генерація цього запиту (після _closeLmAc — поточна)
         let items = [];
         try {
           const r = await fetch(`/api/landmarks/search?name=${encodeURIComponent(q)}&limit=10`, { headers: { Accept: "application/json" } });
           const d = await r.json();
           items = Array.isArray(d.items) ? d.items : [];
         } catch (_) { return; }
+        if (s !== _lmAcSeq) return;   // застарілий запит (був вибір/закриття/новий набір) → не малюємо
         if (!items.length || !_coordWrap) return;
         _lmAcItems = items; _lmAcIdx = -1;
         _lmAc = document.createElement("div");

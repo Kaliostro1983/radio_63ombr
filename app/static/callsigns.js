@@ -59,8 +59,12 @@
   let acItems = [];
   let acIndex = -1;
   let acTarget = null; // "net" | "cs"
+  // acSeq — генерація запиту: захист від гонки, коли асинхронний lookup
+  // завершується вже після вибору/закриття й знову домальовує меню.
+  let acSeq = 0;
 
   function closeAc() {
+    acSeq++;   // інвалідуємо lookup, що ще «в польоті»
     if (acBox) acBox.remove();
     acBox = null;
     acItems = [];
@@ -101,10 +105,13 @@
   async function lookupNetworks(q) {
     const qs = String(q || "").trim();
     if (!qs || qs.length < 2) { closeAc(); return; }
+    const s = ++acSeq;   // генерація цього запиту
     try {
       const resp = await fetch(`/api/networks/lookup?q=${encodeURIComponent(qs)}`);
+      if (s !== acSeq) return;   // застарілий (був вибір/закриття/новий набір)
       if (!resp.ok) return;
       const data = await resp.json();
+      if (s !== acSeq) return;
       if (!data.ok) return;
       const rows = Array.isArray(data.rows) ? data.rows : [];
       showAc(elLinkFreq, rows, "net");
@@ -116,13 +123,16 @@
   async function lookupCallsigns(q) {
     const qs = String(q || "").trim();
     if (!qs || qs.length < 2) { closeAc(); return; }
+    const s = ++acSeq;   // генерація цього запиту
     try {
       let url = `/api/callsigns/autocomplete?q=${encodeURIComponent(qs)}`;
       const nid = elLinkNetworkId && elLinkNetworkId.value ? Number(elLinkNetworkId.value) : 0;
       if (nid) url += `&network_id=${encodeURIComponent(nid)}`;
       const resp = await fetch(url);
+      if (s !== acSeq) return;   // застарілий (був вибір/закриття/новий набір)
       if (!resp.ok) return;
       const data = await resp.json();
+      if (s !== acSeq) return;
       const rows = Array.isArray(data.items) ? data.items : [];
       showAc(elLinkCallsign, rows, "cs");
     } catch (e) {
@@ -918,6 +928,7 @@
             const it = acItems[acIndex];
             elLinkNetworkId.value = String(it.id || "");
             elLinkFreq.value = String(it.frequency || it.mask || "").trim();
+            clearTimeout(netTimer);
             closeAc();
           }
         }
@@ -942,6 +953,7 @@
             const it = acItems[acIndex];
             elLinkCallsignId.value = String(it.id || "");
             elLinkCallsign.value = String(it.name || "").trim();
+            clearTimeout(csTimer);
             closeAc();
           }
         }
@@ -963,6 +975,8 @@
         elLinkCallsignId.value = String(it.id || "");
         elLinkCallsign.value = String(it.name || "").trim();
       }
+      clearTimeout(netTimer);
+      clearTimeout(csTimer);
       closeAc();
     });
 

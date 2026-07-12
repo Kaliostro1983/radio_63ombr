@@ -22,6 +22,9 @@
   let acItems = [];
   let acIndex = -1;
   let acTimer = null;
+  // acSeq — генерація запиту: захист від гонки, коли асинхронний lookup()
+  // завершується вже після вибору чіпа/закриття й знову домальовує меню.
+  let acSeq = 0;
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -80,6 +83,7 @@
 
   // ── Автокомпліт ──────────────────────────────────────────────
   function closeAc() {
+    acSeq++;   // інвалідуємо lookup, що ще «в польоті»
     if (acBox) acBox.remove();
     acBox = null;
     acItems = [];
@@ -102,6 +106,7 @@
     const f = freqOf(it);
     if (f) addFreq(f);
     input.value = "";
+    clearTimeout(acTimer);   // скасувати відкладений lookup від набору
     closeAc();
     input.focus();
   }
@@ -110,6 +115,7 @@
     const qs = String(q || "").trim();
     closeAc();
     if (qs.length < 2) return;
+    const s = acSeq;   // генерація цього запиту (після closeAc — поточна)
     let rows = [];
     try {
       const r = await fetch("/api/networks/lookup?q=" + encodeURIComponent(qs),
@@ -117,6 +123,7 @@
       const d = await r.json();
       rows = (d && d.ok && Array.isArray(d.rows)) ? d.rows : [];
     } catch (_) { return; }
+    if (s !== acSeq) return;   // застарілий запит (був вибір/закриття/новий набір) → не малюємо
     if (!rows.length) return;
 
     acItems = rows;

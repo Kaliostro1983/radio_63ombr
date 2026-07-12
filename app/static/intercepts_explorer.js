@@ -25,6 +25,7 @@
     autocompleteInput: null,
     autocompleteItems: [],
     autocompleteIndex: -1,
+    autocompleteSeq: 0,
     hoverRefreshByMessageId: {},
     hoverRefreshInFlight: {},
     infiniteObserver: null,
@@ -229,6 +230,9 @@
   }
 
   function closeAutocomplete() {
+    // Інвалідуємо запит, що ще «в польоті» (гонка: асинхронний showAutocomplete
+    // домальовував меню вже після вибору позивного / закриття).
+    state.autocompleteSeq = (state.autocompleteSeq || 0) + 1;
     if (state.autocompleteBox) {
       state.autocompleteBox.remove();
     }
@@ -809,6 +813,10 @@
     return;
   }
 
+  // Генерація цього запиту — щоб застаріла відповідь (гонка) не домальовувала
+  // меню після вибору позивного / закриття / новішого набору.
+  const seq = ++state.autocompleteSeq;
+
   try {
     let url = `/api/callsigns/autocomplete?q=${encodeURIComponent(value)}`;
     if (detail.network_id) {
@@ -826,6 +834,7 @@
     }
 
     const data = await response.json();
+    if (seq !== state.autocompleteSeq) return;   // застарілий запит → не малюємо
     const items = Array.isArray(data.items) ? data.items : [];
 
     closeAutocomplete();
