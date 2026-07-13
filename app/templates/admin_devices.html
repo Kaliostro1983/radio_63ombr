@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="intercepts-page">
+  <div class="page-header">
+    <div class="it-page-header__title"><h1>Пристрої</h1></div>
+  </div>
+
+  <p class="small" style="opacity:.7;margin:0 0 14px">
+    Роль призначається робочому місцю (комп'ютеру). Нові пристрої з'являються як
+    <b>очікує</b> (без ролі, вимкнені) — призначте роль і увімкніть. Примус доступу
+    ще не активний (крок 2B.4).
+  </p>
+
+  <div id="admDevWarn" class="warning" style="display:none"></div>
+
+  <div style="overflow-x:auto">
+    <table class="data-table" id="admDevTable" style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr>
+          <th style="text-align:left">Мітка</th>
+          <th style="text-align:left">Роль</th>
+          <th style="text-align:center">Увімкнено</th>
+          <th style="text-align:left">Остання активність</th>
+          <th style="text-align:left">IP</th>
+          <th style="text-align:left">Ключ</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="admDevBody">
+        <tr><td colspan="7" class="small" style="opacity:.6;padding:12px">Завантаження…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<style>
+  #admDevTable th, #admDevTable td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  #admDevTable input[type=text], #admDevTable select { padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); }
+  .adm-dev--pending td { background:rgba(234,161,39,.08); }
+  .adm-key { font-family:monospace; font-size:12px; opacity:.6; }
+  .adm-btn { padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); cursor:pointer; }
+  .adm-btn--save { border-color:#2a78d6; color:#2a78d6; }
+  .adm-btn--del { border-color:#e24b4a; color:#e24b4a; }
+  .adm-badge { font-size:11px; padding:2px 7px; border-radius:6px; background:rgba(234,161,39,.18); color:#b06a00; margin-left:6px; }
+</style>
+
+<script>
+(function () {
+  "use strict";
+  const body = document.getElementById("admDevBody");
+  const warn = document.getElementById("admDevWarn");
+  let ROLES = ["admin", "analyst", "operator"];
+
+  function setWarn(m) { warn.textContent = m || ""; warn.style.display = m ? "block" : "none"; }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+  function roleOptions(sel) {
+    let h = `<option value="">— очікує —</option>`;
+    ROLES.forEach(r => { h += `<option value="${r}"${r === sel ? " selected" : ""}>${r}</option>`; });
+    return h;
+  }
+
+  async function load() {
+    setWarn("");
+    try {
+      const r = await fetch("/api/admin/devices", { headers: { Accept: "application/json" } });
+      if (r.status === 403) { setWarn("Доступ лише для адміністратора."); body.innerHTML = ""; return; }
+      const d = await r.json();
+      if (Array.isArray(d.roles)) ROLES = d.roles;
+      const devs = d.devices || [];
+      if (!devs.length) { body.innerHTML = `<tr><td colspan="7" class="small" style="opacity:.6;padding:12px">Пристроїв ще немає.</td></tr>`; return; }
+      body.innerHTML = devs.map(dev => {
+        const pending = !dev.role;
+        const short = esc(dev.device_key).slice(0, 10) + "…";
+        return `<tr class="${pending ? "adm-dev--pending" : ""}" data-key="${esc(dev.device_key)}">
+          <td><input type="text" class="adm-label" value="${esc(dev.label)}" placeholder="напр. ПК чергового №1" style="min-width:160px"></td>
+          <td><select class="adm-role">${roleOptions(dev.role)}</select>${pending ? '<span class="adm-badge">очікує</span>' : ''}</td>
+          <td style="text-align:center"><input type="checkbox" class="adm-enabled" ${dev.enabled ? "checked" : ""}></td>
+          <td class="small">${esc(dev.last_seen_at)}</td>
+          <td class="small">${esc(dev.last_ip)}</td>
+          <td class="adm-key" title="${esc(dev.device_key)}">${short}</td>
+          <td style="white-space:nowrap">
+            <button class="adm-btn adm-btn--save" data-act="save">Зберегти</button>
+            <button class="adm-btn adm-btn--del" data-act="del" title="Видалити пристрій">✕</button>
+          </td>
+        </tr>`;
+      }).join("");
+    } catch (e) { setWarn("Помилка завантаження: " + (e && e.message ? e.message : e)); }
+  }
+
+  body.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const tr = btn.closest("tr");
+    const key = tr.getAttribute("data-key");
+    if (btn.dataset.act === "save") {
+      const payload = {
+        device_key: key,
+        role: tr.querySelector(".adm-role").value || null,
+        label: tr.querySelector(".adm-label").value.trim(),
+        enabled: tr.querySelector(".adm-enabled").checked,
+      };
+      btn.disabled = true;
+      try {
+        const r = await fetch("/api/admin/devices/update", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        });
+        if (!r.ok) { const t = await r.json().catch(() => ({})); setWarn("Не збережено: " + (t.detail || r.status)); }
+        else { setWarn(""); await load(); }
+      } catch (err) { setWarn("Помилка: " + err); }
+      finally { btn.disabled = false; }
+    } else if (btn.dataset.act === "del") {
+      if (!confirm("Видалити цей пристрій? Він знову зареєструється як «очікує» при наступному візиті.")) return;
+      try {
+        await fetch("/api/admin/devices/delete", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device_key: key }),
+        });
+        await load();
+      } catch (err) { setWarn("Помилка: " + err); }
+    }
+  });
+
+  load();
+})();
+</script>
+{% endblock %}

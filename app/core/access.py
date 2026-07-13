@@ -139,6 +139,11 @@ def current_login(request) -> Optional[str]:
     return _session_login(request)
 
 
+def is_admin(request) -> bool:
+    """True, якщо залогінена особа має ефективну роль admin."""
+    return resolve_actor(request).role == "admin"
+
+
 # ── App-логін особи (Фаза 2B.2) ──────────────────────────────────────
 def get_user(login: str) -> Optional[dict]:
     """Повний рядок користувача або None."""
