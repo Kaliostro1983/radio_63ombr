@@ -21,10 +21,11 @@ Auth = Tailscale + аварійний адмін · три ролі (без view
 
 ### Реалізація
 - **Фаза 0 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** `secret_key` з env (+персист `database/session_secret.key`); `journal_mode=WAL` (перевірено на проді); `busy_timeout` вже був 30 с; бекап робить `wal_checkpoint` перед копією. Консистентний ручний бекап знято до змін (`backups/manual_pre_wal_*.db`).
-- **Фази 1–5 — попереду.**
+- **Фаза 1 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** таблиці `users`/`devices`/`audit_log`/`message_read_state` створено на проді; `app/core/access.py` (`resolve_actor`, `record_request`, `bootstrap_admin`); `AuditLogMiddleware` пише кожен не-GET у `audit_log` (перевірено — рядок з'явився). Bootstrap-адмін `admin`/role=admin засіяний. **Примусу прав немає** — усі й далі можуть усе. Актор поки = IP (identity з'явиться у Фазі 2).
+- **Фази 2–5 — попереду.**
 
 ### Найближчий крок
-Стартувати **Фазу 1** (фундамент даних + грубий аудит, лог-онлі): таблиці `users`/`devices`/`audit_log`/`message_read_state`, bootstrap адміна, резолвер `current_actor` (не блокує), middleware-журнал у режимі спостереження.
+**Фаза 2** (ідентичність і пристрої): `tailscale serve` з identity-заголовками + аварійний локальний адмін; механізм `device_key` + сторінка «Пристрої» + pending-екран; гейт мутацій «відомий `enabled`» проти «невідомий»; bind uvicorn за проксі + HTTPS. **Тут з'являється перше блокування** — потребує налаштування `tailscale serve` на сервері.
 
 ## 1. Поточний стан (базова точка, перевірено в коді)
 
