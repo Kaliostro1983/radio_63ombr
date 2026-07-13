@@ -1953,6 +1953,9 @@ def get_db() -> sqlite3.Connection:
     _register_sql_functions(conn)
     safe_execute(conn, "PRAGMA busy_timeout = 30000;", module="app.core.db", function="get_db")
     safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_db")
+    # WAL — постійна властивість файлу БД; вмикаємо ідемпотентно, щоб кілька
+    # одночасних записів (кілька операторів) не впиралися в "database is locked".
+    safe_execute(conn, "PRAGMA journal_mode = WAL;", module="app.core.db", function="get_db")
     return conn
 
 
@@ -1980,6 +1983,8 @@ def get_conn() -> sqlite3.Connection:
     _register_sql_functions(conn)
     safe_execute(conn, "PRAGMA busy_timeout = 30000;", module="app.core.db", function="get_conn")
     safe_execute(conn, "PRAGMA foreign_keys = ON;", module="app.core.db", function="get_conn")
+    # WAL — постійна властивість файлу БД; вмикаємо ідемпотентно (див. get_db).
+    safe_execute(conn, "PRAGMA journal_mode = WAL;", module="app.core.db", function="get_conn")
     try:
         yield conn
         conn.commit()

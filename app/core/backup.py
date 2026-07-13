@@ -16,6 +16,7 @@ ignored during rotation to avoid preventing the service from starting.
 from __future__ import annotations
 import os
 import shutil
+import sqlite3
 from datetime import datetime, timedelta
 from .config import settings
 
@@ -64,6 +65,16 @@ def maybe_backup_db():
     src = settings.db_path
     if not os.path.exists(src):
         return
+    # У режимі WAL свіжі коміти можуть лежати у файлі `-wal`, ще не злиті в
+    # основний файл. Перед копіюванням робимо чекпойнт, щоб бекап був повним.
+    try:
+        _c = sqlite3.connect(src, timeout=30)
+        try:
+            _c.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        finally:
+            _c.close()
+    except Exception:
+        pass
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dst = os.path.join(settings.backup_dir, f"radio_{stamp}.db")
     shutil.copy2(src, dst)

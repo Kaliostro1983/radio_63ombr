@@ -72,7 +72,7 @@ def create_app() -> FastAPI:
     """
     app = FastAPI(title=settings.app_name)
 
-    app.add_middleware(SessionMiddleware, secret_key="change_me_please", same_site="lax")
+    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, same_site="lax")
     app.add_middleware(HttpRequestLogMiddleware)
 
     templates_dir = Path(__file__).parent / "templates"
