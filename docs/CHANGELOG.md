@@ -12,6 +12,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Масштабування — Фаза 1 (фундамент даних + грубий аудит, лог-онлі, без примусу прав):** нові таблиці `users`, `devices`, `audit_log`, `message_read_state` (у `SCHEMA_SQL`); модуль `app/core/access.py` (резолвер актора `resolve_actor`, запис аудиту, `bootstrap_admin`); `AuditLogMiddleware` пише рядок у `audit_log` на кожен не-GET запит (актор/роль/пристрій/метод/шлях/статус/request_id/IP) через threadpool, best-effort. Bootstrap-адмін засівається на старті (env `BOOTSTRAP_ADMIN_LOGIN`, default `admin`). Ролі/права ще НЕ примушуються — усі й далі можуть усе (примус у Фазі 3). Деталі — `docs/MULTI_USER_RBAC_PLAN.md` §6.
+
 ### Changed
 - **Масштабування — Фаза 0 (безпекові передумови, без зміни поведінки):** (1) секрет cookie-сесій більше не захардкоджений — читається з env `SESSION_SECRET`, інакше генерується й персиститься у `database/session_secret.key` (стабільний між рестартами); (2) увімкнено `PRAGMA journal_mode=WAL` у `get_db`/`get_conn` — усуває «database is locked» при кількох одночасних записах (`busy_timeout` вже був 30 с); (3) бекап (`app/core/backup.py`) перед копіюванням робить `wal_checkpoint(TRUNCATE)`, щоб копія була повною в режимі WAL. Деталі — `docs/MULTI_USER_RBAC_PLAN.md`.
 
