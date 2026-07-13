@@ -21,11 +21,14 @@ Auth = Tailscale + аварійний адмін · три ролі (без view
 
 ### Реалізація
 - **Фаза 0 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** `secret_key` з env (+персист `database/session_secret.key`); `journal_mode=WAL` (перевірено на проді); `busy_timeout` вже був 30 с; бекап робить `wal_checkpoint` перед копією. Консистентний ручний бекап знято до змін (`backups/manual_pre_wal_*.db`).
-- **Фаза 1 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** таблиці `users`/`devices`/`audit_log`/`message_read_state` створено на проді; `app/core/access.py` (`resolve_actor`, `record_request`, `bootstrap_admin`); `AuditLogMiddleware` пише кожен не-GET у `audit_log` (перевірено — рядок з'явився). Bootstrap-адмін `admin`/role=admin засіяний. **Примусу прав немає** — усі й далі можуть усе. Актор поки = IP (identity з'явиться у Фазі 2).
-- **Фази 2–5 — попереду.**
+- **Фаза 1 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** таблиці `users`/`devices`/`audit_log`/`message_read_state` створено на проді; `app/core/access.py` (`resolve_actor`, `record_request`, `bootstrap_admin`); `AuditLogMiddleware` пише кожен не-GET у `audit_log` (перевірено). Bootstrap-адмін `admin`/role=admin засіяний. Примусу немає.
+- **Фаза 2 — обрано варіант B** (app-логін + роль з пристрою; §7.1 переглянуто через single-user tailnet).
+  - **2B.1 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** колонки пароля в `users`; `DeviceMiddleware` видає httpOnly `device_key` + авто-реєструє пристрій як `pending` (перевірено — cookie ставиться, реальні браузери вже зареєстровані як pending); `ENFORCE_ACCESS` flag (OFF). Не блокує.
+  - **2B.2–2B.4 — попереду.**
+- **Фази 3–5 — попереду.**
 
 ### Найближчий крок
-**Фаза 2 — варіант B** (переглянуто: tailnet single-user → app-логін для особи + роль з пристрою; §7.1). Майже повністю код, без `tailscale serve`/зміни bind. Під-кроки 2B.1→2B.4 (див. §6); блокування лише в 2B.4 за прапорцем `ENFORCE_ACCESS`. Починаємо з **2B.1** (схема пароля + device-cookie + авто-реєстрація пристрою, не блокує).
+**2B.2 — логін особи:** хешування пароля (`pbkdf2_hmac`), маршрути login/logout + сторінка, сесія тримає `login`; set-password для bootstrap-адміна лише з `127.0.0.1` (break-glass). Ще не обов'язково (без блокування).
 
 ## 1. Поточний стан (базова точка, перевірено в коді)
 
