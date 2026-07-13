@@ -478,13 +478,17 @@ CREATE INDEX IF NOT EXISTS idx_dictionary_terms_updated ON dictionary_terms(upda
 -- Актор аудиту = login (хто саме зробив). Роль береться переважно з ПРИСТРОЮ
 -- (§7.6); users.role — необов'язковий override, зазвичай лише для admin/break-glass.
 CREATE TABLE IF NOT EXISTS users (
-    login        TEXT PRIMARY KEY,
-    display_name TEXT NOT NULL DEFAULT '',
-    role         TEXT,                        -- NULL = роль з пристрою; 'admin' = override
-    enabled      INTEGER NOT NULL DEFAULT 1,
-    created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by   TEXT NOT NULL DEFAULT 'system',
-    last_seen_at TEXT
+    login          TEXT PRIMARY KEY,
+    display_name   TEXT NOT NULL DEFAULT '',
+    role           TEXT,                        -- NULL = роль з пристрою; 'admin' = override
+    enabled        INTEGER NOT NULL DEFAULT 1,
+    pw_hash        TEXT,                        -- NULL = пароль ще не задано
+    pw_salt        TEXT,
+    pw_algo        TEXT,
+    must_change_pw INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by     TEXT NOT NULL DEFAULT 'system',
+    last_seen_at   TEXT
 );
 
 -- Робоче місце (комп'ютер). device_key = Tailscale-ідентичність або cookie-UUID.
@@ -782,6 +786,12 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     """
     _ensure_column(conn, "statuses", "bg_color", "bg_color TEXT")
     _ensure_column(conn, "statuses", "border_color", "border_color TEXT")
+
+    # --- Масштабування, Фаза 2B: колонки пароля для app-логіну (§7.1 варіант B) ---
+    _ensure_column(conn, "users", "pw_hash", "pw_hash TEXT")
+    _ensure_column(conn, "users", "pw_salt", "pw_salt TEXT")
+    _ensure_column(conn, "users", "pw_algo", "pw_algo TEXT")
+    _ensure_column(conn, "users", "must_change_pw", "must_change_pw INTEGER NOT NULL DEFAULT 0")
 
     # --- Status consolidation migrations ---
     # 1. Merge "Спостерігається нами" / "Спостерігається сусідами" → "Спостерігається".

@@ -152,6 +152,34 @@ def record_request(
         pass
 
 
+def register_device(device_key: str, ip: Optional[str]) -> None:
+    """Авто-реєстрація/оновлення робочого місця (Фаза 2B.1). Best-effort.
+
+    Невідомий `device_key` додається як `pending` (роль NULL, `enabled=0`) —
+    доступ призначить адмін пізніше (§2.5). Наявний — лише оновлює last_seen/ip.
+    Нічого не блокує.
+    """
+    if not device_key:
+        return
+    try:
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO devices (device_key, first_seen_at, last_seen_at, last_ip) "
+                "VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)",
+                (device_key, ip),
+            )
+            conn.execute(
+                "UPDATE devices SET last_seen_at = CURRENT_TIMESTAMP, last_ip = ? WHERE device_key = ?",
+                (ip, device_key),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
 def bootstrap_admin() -> None:
     """Засіяти bootstrap-адміна (щоб не заблокувати себе в наступних фазах).
 

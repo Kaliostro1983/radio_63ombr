@@ -13,6 +13,7 @@
 ## [Unreleased]
 
 ### Added
+- **Масштабування — Фаза 2B.1 (схема пароля + ідентичність пристрою, не блокує):** обрано варіант B автентифікації (app-логін для особи + роль з пристрою) — бо tailnet single-user, і `tailscale serve` не розрізнив би операторів. Додано колонки пароля в `users` (`pw_hash`/`pw_salt`/`pw_algo`/`must_change_pw`, міграція `_ensure_column`); `DeviceMiddleware` видає httpOnly-cookie `device_key` на першому візиті й авто-реєструє пристрій у `devices` як `pending` (throttled last_seen); `register_device` у `app/core/access.py`; прапорець `ENFORCE_ACCESS` (default OFF). Блокування ще немає — вмикається у кроці 2B.4.
 - **Масштабування — Фаза 1 (фундамент даних + грубий аудит, лог-онлі, без примусу прав):** нові таблиці `users`, `devices`, `audit_log`, `message_read_state` (у `SCHEMA_SQL`); модуль `app/core/access.py` (резолвер актора `resolve_actor`, запис аудиту, `bootstrap_admin`); `AuditLogMiddleware` пише рядок у `audit_log` на кожен не-GET запит (актор/роль/пристрій/метод/шлях/статус/request_id/IP) через threadpool, best-effort. Bootstrap-адмін засівається на старті (env `BOOTSTRAP_ADMIN_LOGIN`, default `admin`). Ролі/права ще НЕ примушуються — усі й далі можуть усе (примус у Фазі 3). Деталі — `docs/MULTI_USER_RBAC_PLAN.md` §6.
 
 ### Changed

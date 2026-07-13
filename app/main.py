@@ -23,6 +23,7 @@ from fastapi.responses import Response, FileResponse
 
 from app.core.http_request_log_middleware import HttpRequestLogMiddleware
 from app.core.audit_middleware import AuditLogMiddleware
+from app.core.device_middleware import DeviceMiddleware
 from app.core.config import settings
 from app.core.version import read_git_revision
 from app.core.backup import maybe_backup_db
@@ -78,6 +79,8 @@ def create_app() -> FastAPI:
     app.add_middleware(HttpRequestLogMiddleware)
     # Масштабування, Фаза 1: грубий аудит кожного не-GET запиту (лог-онлі).
     app.add_middleware(AuditLogMiddleware)
+    # Масштабування, Фаза 2B.1: видача device_key + авто-реєстрація пристрою (не блокує).
+    app.add_middleware(DeviceMiddleware)
 
     templates_dir = Path(__file__).parent / "templates"
     app.state.templates = Jinja2Templates(directory=str(templates_dir))

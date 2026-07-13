@@ -83,6 +83,9 @@ class Settings:
     bot_service_url: str = ""
     # Cookie-session secret (resolved from env or persisted file; never the old default).
     session_secret: str = ""
+    # Масштабування, Фаза 2B: примус доступу (login+пристрій). Default OFF —
+    # машинерія будується без блокування; вмикається лише в кроці 2B.4.
+    enforce_access: bool = False
 
 
 def load_settings() -> Settings:
@@ -110,6 +113,7 @@ def load_settings() -> Settings:
         sheets_script_url=os.getenv("SHEETS_SCRIPT_URL", ""),
         bot_service_url=os.getenv("BOT_SERVICE_URL", ""),
         session_secret=_resolve_session_secret(db_path),
+        enforce_access=_env_bool("ENFORCE_ACCESS", default=False),
     )
 
 settings = load_settings()
