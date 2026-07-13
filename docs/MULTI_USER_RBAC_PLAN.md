@@ -23,12 +23,13 @@ Auth = Tailscale + аварійний адмін · три ролі (без view
 - **Фаза 0 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** `secret_key` з env (+персист `database/session_secret.key`); `journal_mode=WAL` (перевірено на проді); `busy_timeout` вже був 30 с; бекап робить `wal_checkpoint` перед копією. Консистентний ручний бекап знято до змін (`backups/manual_pre_wal_*.db`).
 - **Фаза 1 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** таблиці `users`/`devices`/`audit_log`/`message_read_state` створено на проді; `app/core/access.py` (`resolve_actor`, `record_request`, `bootstrap_admin`); `AuditLogMiddleware` пише кожен не-GET у `audit_log` (перевірено). Bootstrap-адмін `admin`/role=admin засіяний. Примусу немає.
 - **Фаза 2 — обрано варіант B** (app-логін + роль з пристрою; §7.1 переглянуто через single-user tailnet).
-  - **2B.1 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** колонки пароля в `users`; `DeviceMiddleware` видає httpOnly `device_key` + авто-реєструє пристрій як `pending` (перевірено — cookie ставиться, реальні браузери вже зареєстровані як pending); `ENFORCE_ACCESS` flag (OFF). Не блокує.
-  - **2B.2–2B.4 — попереду.**
+  - **2B.1 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** колонки пароля в `users`; `DeviceMiddleware` видає httpOnly `device_key` + авто-реєструє пристрій як `pending`; `ENFORCE_ACCESS` flag (OFF). Не блокує.
+  - **2B.2 — ✅ ЗРОБЛЕНО й задеплоєно (13.07.2026):** `passwords.py` (PBKDF2); `auth.py` (`/login`, `/logout`, `/setup` localhost-only); `login.html`/`setup.html`; `resolve_actor` бере особу з сесії → аудит фіксує реальний логін (перевірено наскрізно тестовим користувачем). Не блокує. **TODO адміну:** задати пароль bootstrap-адміна через `/setup` по SSH-тунелю.
+  - **2B.3–2B.4 — попереду.**
 - **Фази 3–5 — попереду.**
 
 ### Найближчий крок
-**2B.2 — логін особи:** хешування пароля (`pbkdf2_hmac`), маршрути login/logout + сторінка, сесія тримає `login`; set-password для bootstrap-адміна лише з `127.0.0.1` (break-glass). Ще не обов'язково (без блокування).
+**2B.3 — адмін-сторінки:** «Користувачі» (створити/увімкнути/вимкнути, ініціювати set-password) + «Пристрої» (призначити роль, enable/disable, мітка, pending-черга). Досі без блокування.
 
 ## 1. Поточний стан (базова точка, перевірено в коді)
 
