@@ -21,10 +21,12 @@ from dataclasses import dataclass
 from typing import Mapping, Optional
 
 from app.core.db import get_db
+from app.core.passwords import hash_password, verify_password
 
 VALID_ROLES = ("admin", "analyst", "operator")
 
 DEVICE_COOKIE = "device_key"
+SESSION_LOGIN_KEY = "login"
 
 # Заголовки Tailscale, що несуть саме ЛОГІН користувача (не назву пристрою).
 _LOGIN_HEADERS = (
@@ -58,17 +60,23 @@ def resolve_actor_parts(
     headers: Mapping[str, str],
     cookies: Mapping[str, str],
     client_ip: Optional[str],
+    session_login: Optional[str] = None,
 ) -> Actor:
     """Обчислити актора з примітивів (щоб можна було викликати поза event-loop).
 
-    Фаза 1: identity-проксі ще не налаштовано, тож зазвичай логін = fallback IP.
+    Варіант B (§7.1): особа (актор) = залогінений app-логін із сесії; якщо не
+    залогінений — fallback на Tailscale-заголовок або IP (для спостереження).
+    Роль — переважно з ПРИСТРОЮ (§7.6); `users.role` — override (зазвичай admin).
     Нічого не блокує — лише повертає структуру для логування/майбутнього примусу.
     """
-    login_hdr = _login_from_headers(headers)
-    if login_hdr:
-        login, verified = login_hdr, True
+    if session_login:
+        login, verified = session_login, True
     else:
-        login, verified = (client_ip or "unknown"), False
+        hdr = _login_from_headers(headers)
+        if hdr:
+            login, verified = hdr, True
+        else:
+            login, verified = (client_ip or "unknown"), False
 
     device_key = cookies.get(DEVICE_COOKIE) or None
 
@@ -79,13 +87,15 @@ def resolve_actor_parts(
     try:
         conn = get_db()
         try:
-            # 1) Override на рівні користувача (зазвичай лише admin / break-glass).
-            if login_hdr:
+            # 1) Override на рівні користувача (лише для ВЕРИФІКОВАНОГО логіну).
+            if verified:
                 urow = conn.execute(
                     "SELECT role, enabled FROM users WHERE login = ?", (login,)
                 ).fetchone()
-                if urow and urow["role"]:
-                    role, role_source, enabled = urow["role"], "user", bool(urow["enabled"])
+                if urow:
+                    enabled = bool(urow["enabled"])
+                    if urow["role"]:
+                        role, role_source = urow["role"], "user"
             # 2) Інакше — роль із пристрою (§7.6).
             if role is None and device_key:
                 drow = conn.execute(
@@ -96,7 +106,6 @@ def resolve_actor_parts(
         finally:
             conn.close()
     except Exception:
-        # Фаза 1 не має падати через відсутність таблиць/БД.
         pass
 
     return Actor(
@@ -109,10 +118,77 @@ def resolve_actor_parts(
     )
 
 
+def _session_login(request) -> Optional[str]:
+    try:
+        v = request.session.get(SESSION_LOGIN_KEY)
+        return v or None
+    except Exception:
+        return None
+
+
 def resolve_actor(request) -> Actor:
     """Зручна обгортка для роутів: приймає FastAPI Request."""
     client_ip = request.client.host if request.client else None
-    return resolve_actor_parts(request.headers, request.cookies, client_ip)
+    return resolve_actor_parts(
+        request.headers, request.cookies, client_ip, _session_login(request)
+    )
+
+
+def current_login(request) -> Optional[str]:
+    """Логін залогіненої особи із сесії (None якщо не залогінений)."""
+    return _session_login(request)
+
+
+# ── App-логін особи (Фаза 2B.2) ──────────────────────────────────────
+def get_user(login: str) -> Optional[dict]:
+    """Повний рядок користувача або None."""
+    if not login:
+        return None
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT login, display_name, role, enabled, pw_hash, pw_salt, pw_algo, "
+                "must_change_pw FROM users WHERE login = ?",
+                (login,),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def verify_user_credentials(login: str, password: str) -> Optional[dict]:
+    """Перевірити логін+пароль. Повертає {login, role, display_name} або None."""
+    row = get_user((login or "").strip())
+    if not row or not row.get("enabled"):
+        return None
+    if not verify_password(password, row.get("pw_algo"), row.get("pw_salt"), row.get("pw_hash")):
+        return None
+    return {"login": row["login"], "role": row["role"], "display_name": row["display_name"]}
+
+
+def set_user_password(login: str, password: str) -> bool:
+    """Задати/скинути пароль користувача. Повертає True якщо оновлено."""
+    login = (login or "").strip()
+    if not login or not password:
+        return False
+    algo, salt, h = hash_password(password)
+    try:
+        conn = get_db()
+        try:
+            cur = conn.execute(
+                "UPDATE users SET pw_algo = ?, pw_salt = ?, pw_hash = ?, must_change_pw = 0 "
+                "WHERE login = ?",
+                (algo, salt, h, login),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+    except Exception:
+        return False
 
 
 def record_request(
@@ -123,10 +199,11 @@ def record_request(
     headers: Mapping[str, str],
     cookies: Mapping[str, str],
     client_ip: Optional[str],
+    session_login: Optional[str] = None,
 ) -> None:
     """Записати грубий рядок аудиту для одного (не-GET) запиту. Best-effort."""
     try:
-        actor = resolve_actor_parts(headers, cookies, client_ip)
+        actor = resolve_actor_parts(headers, cookies, client_ip, session_login)
         conn = get_db()
         try:
             conn.execute(

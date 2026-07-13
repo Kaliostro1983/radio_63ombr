@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Встановлення пароля — {{ app_name }}</title>
+  <script>
+    (function () { try { var t = localStorage.getItem("theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {} })();
+  </script>
+  <link rel="stylesheet" href="/static/app.css"/>
+  <style>
+    .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 100%; max-width: 380px; background: rgba(127,127,127,.06); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
+    .auth-card h1 { font-size: 20px; margin: 0 0 4px; }
+    .auth-sub { opacity: .6; font-size: 13px; margin: 0 0 20px; }
+    .auth-field { margin-bottom: 14px; }
+    .auth-field label { display: block; font-size: 13px; margin-bottom: 6px; opacity: .7; }
+    .auth-field input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); outline: none; }
+    .auth-btn { width: 100%; padding: 11px; border: none; border-radius: 8px; background: #2a78d6; color: #fff; font-weight: 600; cursor: pointer; }
+    .auth-err { background: rgba(226,75,74,.12); border: 1px solid rgba(226,75,74,.4); color: #e24b4a; padding: 9px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+    .auth-ok { background: rgba(27,175,122,.12); border: 1px solid rgba(27,175,122,.4); color: #1baf7a; padding: 9px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <form class="auth-card" method="post" action="/setup" autocomplete="off">
+      <h1>Встановлення пароля</h1>
+      <p class="auth-sub">Break-glass · доступно лише з 127.0.0.1</p>
+      {% if error %}<div class="auth-err">{{ error }}</div>{% endif %}
+      {% if msg %}<div class="auth-ok">{{ msg }}</div>{% endif %}
+      <div class="auth-field">
+        <label for="login">Логін</label>
+        <input id="login" name="login" type="text" value="admin" autocomplete="off">
+      </div>
+      <div class="auth-field">
+        <label for="password">Новий пароль (мін. 8)</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" autofocus>
+      </div>
+      <div class="auth-field">
+        <label for="password2">Повторіть пароль</label>
+        <input id="password2" name="password2" type="password" autocomplete="new-password">
+      </div>
+      <button class="auth-btn" type="submit">Встановити пароль</button>
+    </form>
+  </div>
+</body>
+</html>

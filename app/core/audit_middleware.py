@@ -38,6 +38,10 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 headers = {k: v for k, v in request.headers.items()}
                 cookies = dict(request.cookies)
                 client_ip = request.client.host if request.client else None
+                try:
+                    session_login = request.session.get("login")
+                except Exception:
+                    session_login = None
                 await run_in_threadpool(
                     record_request,
                     request_id,
@@ -47,6 +51,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                     headers,
                     cookies,
                     client_ip,
+                    session_login,
                 )
         except Exception:
             pass

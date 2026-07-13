@@ -51,6 +51,7 @@ from app.routers.push import router as push_router
 from app.routers.casualties import router as casualties_router
 from app.routers.faq import router as faq_router
 from app.routers.overview import router as overview_router
+from app.routers.auth import router as auth_router
 from app.routers.palettes import router as palettes_router
 from app.services.landmark_match_service import start_landmark_match_worker
 
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     static_dir = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    app.include_router(auth_router)
     app.include_router(home_router)
     app.include_router(health_router)
     app.include_router(networks_router)
