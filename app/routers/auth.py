@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.core.access import (
     current_login,
+    resolve_actor,
     set_user_password,
     verify_user_credentials,
 )
@@ -100,6 +101,62 @@ def logout(request: Request):
     except Exception:
         pass
     return RedirectResponse(url="/login", status_code=303)
+
+
+@router.get("/api/me")
+def api_me(request: Request):
+    """Хто я (для навігації/UI). Не вимагає авторизації."""
+    actor = resolve_actor(request)
+    login = current_login(request)
+    return {
+        "ok": True,
+        "login": login,
+        "role": actor.role,
+        "is_admin": actor.role == "admin",
+        "device_key": actor.device_key,
+        "authenticated": bool(login),
+    }
+
+
+@router.get("/change-password", response_class=HTMLResponse)
+def change_password_page(request: Request):
+    if not current_login(request):
+        return RedirectResponse(url="/login", status_code=303)
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        "change_password.html",
+        {"request": request, "app_name": request.app.state.app_name, "msg": "", "error": ""},
+    )
+
+
+@router.post("/change-password", response_class=HTMLResponse)
+def change_password_submit(
+    request: Request,
+    current: str = Form(default=""),
+    password: str = Form(default=""),
+    password2: str = Form(default=""),
+):
+    login = current_login(request)
+    if not login:
+        return RedirectResponse(url="/login", status_code=303)
+    templates = request.app.state.templates
+
+    def _render(msg: str = "", error: str = "", status: int = 200):
+        return templates.TemplateResponse(
+            "change_password.html",
+            {"request": request, "app_name": request.app.state.app_name, "msg": msg, "error": error},
+            status_code=status,
+        )
+
+    if not verify_user_credentials(login, current):
+        return _render(error="Поточний пароль невірний.", status=401)
+    if len(password) < 8:
+        return _render(error="Новий пароль має бути не коротший за 8 символів.", status=400)
+    if password != password2:
+        return _render(error="Паролі не збігаються.", status=400)
+    if not set_user_password(login, password):
+        return _render(error="Не вдалося змінити пароль.", status=500)
+    return _render(msg="Пароль змінено.")
 
 
 @router.get("/setup", response_class=HTMLResponse)
