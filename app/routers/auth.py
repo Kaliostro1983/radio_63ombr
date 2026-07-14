@@ -21,8 +21,31 @@ from app.core.access import (
     set_user_password,
     verify_user_credentials,
 )
+from app.core.db import get_db
 
 router = APIRouter(tags=["auth"])
+
+
+def _log_failed_login(attempted_login: str, pw_len: int, ip: str | None) -> None:
+    """Зафіксувати невдалу спробу входу: ЯКИЙ логін прийшов і ДОВЖИНУ пароля.
+
+    Сам пароль ніде не зберігається й не логується — лише довжина, щоб можна
+    було відрізнити «порожнє поле» від «невірний пароль».
+    """
+    try:
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO audit_log (actor, ip, method, path, status, action, "
+                "entity_type, entity_id, summary) VALUES (?, ?, 'POST', '/login', 401, "
+                "'login_failed', 'user', ?, ?)",
+                (ip, ip, attempted_login, f"невдалий вхід; довжина пароля={pw_len}"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
 
 _LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
@@ -51,6 +74,11 @@ def login_submit(
 ):
     user = verify_user_credentials(login, password)
     if not user:
+        _log_failed_login(
+            (login or "").strip(),
+            len(password or ""),
+            request.client.host if request.client else None,
+        )
         templates = request.app.state.templates
         return templates.TemplateResponse(
             "login.html",
