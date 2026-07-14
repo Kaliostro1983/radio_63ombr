@@ -146,7 +146,8 @@ def is_admin(request) -> bool:
 
 # ── App-логін особи (Фаза 2B.2) ──────────────────────────────────────
 def get_user(login: str) -> Optional[dict]:
-    """Повний рядок користувача або None."""
+    """Повний рядок користувача або None. Логін нечутливий до регістру."""
+    login = (login or "").strip().lower()
     if not login:
         return None
     try:
@@ -154,7 +155,7 @@ def get_user(login: str) -> Optional[dict]:
         try:
             row = conn.execute(
                 "SELECT login, display_name, role, enabled, pw_hash, pw_salt, pw_algo, "
-                "must_change_pw FROM users WHERE login = ?",
+                "must_change_pw FROM users WHERE lower(login) = ?",
                 (login,),
             ).fetchone()
             return dict(row) if row else None
@@ -166,7 +167,7 @@ def get_user(login: str) -> Optional[dict]:
 
 def verify_user_credentials(login: str, password: str) -> Optional[dict]:
     """Перевірити логін+пароль. Повертає {login, role, display_name} або None."""
-    row = get_user((login or "").strip())
+    row = get_user(login)
     if not row or not row.get("enabled"):
         return None
     if not verify_password(password, row.get("pw_algo"), row.get("pw_salt"), row.get("pw_hash")):
@@ -176,7 +177,7 @@ def verify_user_credentials(login: str, password: str) -> Optional[dict]:
 
 def set_user_password(login: str, password: str) -> bool:
     """Задати/скинути пароль користувача. Повертає True якщо оновлено."""
-    login = (login or "").strip()
+    login = (login or "").strip().lower()
     if not login or not password:
         return False
     algo, salt, h = hash_password(password)
@@ -185,7 +186,7 @@ def set_user_password(login: str, password: str) -> bool:
         try:
             cur = conn.execute(
                 "UPDATE users SET pw_algo = ?, pw_salt = ?, pw_hash = ?, must_change_pw = 0 "
-                "WHERE login = ?",
+                "WHERE lower(login) = ?",
                 (algo, salt, h, login),
             )
             conn.commit()
