@@ -696,6 +696,7 @@ async function main() {
     freqChk.addEventListener("change", async () => {
       _showFreq = freqChk.checked;
       await placeMarkers({ skipFit: true });
+      applyTypeFilter();   // зберегти активний фільтр категорій (не показувати приховані)
     });
   }
   const unitChk = document.getElementById("cmShowUnitChk");
@@ -705,6 +706,7 @@ async function main() {
     unitChk.addEventListener("change", async () => {
       _showUnit = unitChk.checked;
       await placeMarkers({ skipFit: true });
+      applyTypeFilter();   // зберегти активний фільтр категорій (не показувати приховані)
     });
   }
 
