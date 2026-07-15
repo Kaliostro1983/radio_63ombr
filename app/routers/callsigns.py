@@ -213,7 +213,9 @@ def api_callsigns_by_frequency(frequency: str, days: int = 7):
     """
     q_raw = (frequency or "").strip()
     days = max(1, min(_as_int(days, 7), 365))
-    start_dt = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
+    # Space-роздільник — щоб збігалося з форматом last_seen_dt у БД (інакше
+    # рядкове порівняння 'T' vs ' ' ламає межу).
+    start_dt = (datetime.now() - timedelta(days=days)).isoformat(sep=" ", timespec="seconds")
 
     freq_part = q_raw
     mask_part: Optional[str] = None
@@ -454,12 +456,14 @@ def api_callsigns_wanted(
     min_messages = max(1, _as_int(min_messages, 5))
 
     now = datetime.now()
-    start_dt = (now - timedelta(days=days)).strftime("%Y-%m-%d") + "T00:00:00"
+    # Space-роздільник — щоб збігалося з форматом created_at у БД (інакше межа
+    # «сьогодні» ламається: 'YYYY-MM-DD HH:MM' vs 'YYYY-MM-DDT00:00' по рядку).
+    start_dt = (now - timedelta(days=days)).strftime("%Y-%m-%d") + " 00:00:00"
     if include_today:
-        end_dt = now.strftime("%Y-%m-%d") + "T23:59:59"
+        end_dt = now.strftime("%Y-%m-%d") + " 23:59:59"
     else:
         yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-        end_dt = yesterday + "T23:59:59"
+        end_dt = yesterday + " 23:59:59"
 
     with get_conn() as conn:
         rows = conn.execute(
@@ -732,7 +736,7 @@ def api_callsign_graph(
         days_n = 14
 
     adv = bool(int(advanced or 0))
-    start_dt = (datetime.now() - timedelta(days=days_n)).isoformat(timespec="seconds")
+    start_dt = (datetime.now() - timedelta(days=days_n)).isoformat(sep=" ", timespec="seconds")
 
     with get_conn() as conn:
         base = conn.execute(

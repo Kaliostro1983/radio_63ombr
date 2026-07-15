@@ -71,6 +71,8 @@ def insert_ingest_message(
     Returns:
         int: inserted `ingest_messages.id`.
     """
+    if received_at:
+        received_at = received_at.replace("T", " ")  # уніфікація формату (пробіл)
     safe_execute(
         cur,
         """
@@ -249,6 +251,12 @@ def insert_message(
     Returns:
         int: inserted `messages.id`.
     """
+    # Уніфікація формату: received_at зберігаємо з пробілом-роздільником (як
+    # created_at і CURRENT_TIMESTAMP), щоб рядкові порівняння з datetime('now')
+    # та ORDER BY не ламались через 'T' vs ' '.
+    if received_at:
+        received_at = received_at.replace("T", " ")
+
     message_cols = set(get_table_columns(cur, "messages"))
 
     insert_cols = [

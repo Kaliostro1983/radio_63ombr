@@ -765,6 +765,29 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _try_ddl(conn, "DROP TABLE IF EXISTS users", stage="drop_table:users")
     _try_ddl(conn, "DROP TABLE IF EXISTS message_read_state", stage="drop_table:message_read_state")
 
+    # Одноразова уніфікація формату received_at ('T' → пробіл), щоб збігалося з
+    # created_at і працювали порівняння з datetime('now') та ORDER BY. Guard —
+    # прапорець у app_settings, щоб не сканувати таблиці щоразу при старті.
+    try:
+        done = conn.execute(
+            "SELECT 1 FROM app_settings WHERE key = 'received_at_normalized'"
+        ).fetchone()
+        if not done:
+            conn.execute(
+                "UPDATE messages SET received_at = replace(received_at, 'T', ' ') "
+                "WHERE received_at LIKE '%T%'"
+            )
+            conn.execute(
+                "UPDATE ingest_messages SET received_at = replace(received_at, 'T', ' ') "
+                "WHERE received_at LIKE '%T%'"
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO app_settings (key, value) VALUES "
+                "('received_at_normalized', '1')"
+            )
+    except Exception:
+        pass
+
     # --- Status consolidation migrations ---
     # 1. Merge "Спостерігається нами" / "Спостерігається сусідами" → "Спостерігається".
     #    Idempotent: safe to run when old statuses no longer exist.

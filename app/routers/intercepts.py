@@ -288,7 +288,8 @@ def intercepts_search(
 
     conn = get_conn()
     try:
-        since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        # Space-роздільник — щоб збігалося з форматом created_at у БД.
+        since = (datetime.utcnow() - timedelta(days=days)).isoformat(sep=" ")
 
         where = ["m.created_at >= ?", "m.is_valid = 1", "coalesce(m.content_type, 'intercept') = 'intercept'"]
         params: list[object] = [since]
