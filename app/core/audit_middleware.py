@@ -35,23 +35,16 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         try:
             if request.method in _MUTATING and not _skip(request.url.path):
                 # Знімок примітивів ДО виходу з обробника (Request потім чіпати не варто).
-                headers = {k: v for k, v in request.headers.items()}
                 cookies = dict(request.cookies)
                 client_ip = request.client.host if request.client else None
-                try:
-                    session_login = request.session.get("login")
-                except Exception:
-                    session_login = None
                 await run_in_threadpool(
                     record_request,
                     request_id,
                     request.method,
                     request.url.path,
                     response.status_code,
-                    headers,
                     cookies,
                     client_ip,
-                    session_login,
                 )
         except Exception:
             pass

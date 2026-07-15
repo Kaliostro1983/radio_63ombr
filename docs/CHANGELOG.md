@@ -12,6 +12,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Масштабування — спрощення: прибрано логіни/паролі, доступ лише за пристроєм (device-токен).** Ідентичність, роль і авторство беруться виключно з пристрою (`device_key` cookie-токен → `devices.role` + `devices.mask`). Адмін = пристрій із роллю `admin`; керування пристроями також доступне з `127.0.0.1` (break-glass, SSH-тунель). Видалено: сторінки/маршрути `/login`, `/logout`, `/setup`, `/change-password`, `/admin/users` та їх API; `passwords.py`; таблицю `users` (разом із паролями) і `message_read_state` (DROP у міграції); bootstrap-адміна. `EnforcementMiddleware` і `/api/me` переведено на device-модель. Автентифікація «відкритими ключами» лишається на мережевому рівні (Tailscale/WireGuard).
+
 ### Added
 - **Масштабування — Фаза 2C (атрибуція правок за пристроєм «Маска»):** нова властивість `devices.mask` (текст авторства) у `/admin/devices`; колонки `networks/callsigns.last_edited_by/at`. При збереженні картки радіомережі (`/networks/save`) та позивного (`/api/callsigns/save`) фіксується Маска пристрою + дата-час. У картці р/м і позивного дрібним шрифтом показується «Крайні правки: {Маска} · {дата-час}». Помічник `access.current_device_mask`. Кеш: `callsign_modal.js?v=33`.
 - **Масштабування — Фаза 2B.3a (сторінка «Пристрої», адмін):** `app/routers/admin.py` + `admin_devices.html` — сторінка `/admin/devices` зі списком пристроїв, призначенням ролі (`admin`/`analyst`/`operator`), enable/disable, міткою, видаленням. Ендпоінти гейтяться на роль `admin` (нові, тож без ризику для решти). Глобального примусу ще немає (2B.4).

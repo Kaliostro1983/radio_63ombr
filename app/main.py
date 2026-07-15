@@ -29,7 +29,6 @@ from app.core.config import settings
 from app.core.version import read_git_revision
 from app.core.backup import maybe_backup_db
 from app.core.db import init_db
-from app.core.access import bootstrap_admin
 from app.routers.networks import router as networks_router
 from app.routers.all_networks import router as all_networks_router
 from app.routers.etalons import router as etalons_router
@@ -133,8 +132,6 @@ def create_app() -> FastAPI:
         - a database backup is performed if backup policy deems it necessary.
         """
         init_db()
-        # Масштабування, Фаза 1: засіяти bootstrap-адміна (щоб не заблокувати себе).
-        bootstrap_admin()
         maybe_backup_db()
         if settings.landmark_auto_match_enabled:
             start_landmark_match_worker()

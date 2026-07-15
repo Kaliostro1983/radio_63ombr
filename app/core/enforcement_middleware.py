@@ -30,11 +30,12 @@ from app.core.access import enforcement_level, resolve_actor
 _MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 
 _EXEMPT_PATHS = {
-    "/login", "/logout", "/setup", "/api/me", "/change-password",
+    "/api/me",
     "/favicon.ico", "/health", "/api/client-errors",
     "/ingest/whatsapp", "/api/ingest/whatsapp",
 }
 _EXEMPT_PREFIXES = ("/static/",)
+_LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 _PENDING_HTML = """<!doctype html><html lang="uk"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -44,10 +45,9 @@ _PENDING_HTML = """<!doctype html><html lang="uk"><head><meta charset="utf-8">
   <div style="max-width:440px;text-align:center;background:rgba(127,127,127,.06);border:1px solid var(--border);border-radius:14px;padding:32px">
     <h1 style="font-size:20px;margin:0 0 10px">Робоче місце очікує підтвердження</h1>
     <p style="opacity:.75;line-height:1.6;margin:0 0 18px">
-      Ви увійшли, але цьому комп'ютеру ще не призначено роль. Зверніться до
-      адміністратора, щоб він увімкнув це робоче місце в розділі «Пристрої».
+      Цьому комп'ютеру ще не призначено роль. Зверніться до адміністратора, щоб
+      він увімкнув це робоче місце в розділі «Пристрої».
     </p>
-    <a href="/logout" style="display:inline-block;padding:9px 16px;border:1px solid var(--border);border-radius:8px;color:var(--fg);text-decoration:none">Вийти</a>
   </div>
 </div></body></html>"""
 
@@ -68,6 +68,11 @@ class EnforcementMiddleware(BaseHTTPMiddleware):
         if _exempt(path):
             return await call_next(request)
 
+        # Break-glass: із 127.0.0.1 (SSH-тунель) ніколи не блокуємо.
+        client_ip = request.client.host if request.client else ""
+        if client_ip in _LOCAL_HOSTS:
+            return await call_next(request)
+
         mutating = request.method in _MUTATING
         gated = mutating or level == "full"
         if not gated:
@@ -75,23 +80,18 @@ class EnforcementMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         actor = resolve_actor(request)
+        if actor.authorized:
+            return await call_next(request)
+
+        # Пристрій без активної ролі («очікує»).
         navigational = (
             request.method == "GET"
             and "text/html" in request.headers.get("accept", "").lower()
             and not path.startswith("/api/")
         )
-
-        if not actor.authenticated:
-            if navigational:
-                return RedirectResponse(url="/login", status_code=303)
-            return JSONResponse({"ok": False, "error": "Потрібна авторизація"}, status_code=401)
-
-        if not actor.authorized:
-            if navigational:
-                return HTMLResponse(_PENDING_HTML, status_code=200)
-            return JSONResponse(
-                {"ok": False, "error": "Робоче місце очікує підтвердження адміністратором"},
-                status_code=403,
-            )
-
-        return await call_next(request)
+        if navigational:
+            return HTMLResponse(_PENDING_HTML, status_code=200)
+        return JSONResponse(
+            {"ok": False, "error": "Робоче місце очікує підтвердження адміністратором"},
+            status_code=403,
+        )

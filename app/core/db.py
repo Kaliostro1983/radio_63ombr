@@ -474,24 +474,8 @@ CREATE INDEX IF NOT EXISTS idx_dictionary_terms_network ON dictionary_terms(netw
 CREATE INDEX IF NOT EXISTS idx_dictionary_terms_term    ON dictionary_terms(term);
 CREATE INDEX IF NOT EXISTS idx_dictionary_terms_updated ON dictionary_terms(updated_at DESC);
 
--- ── Масштабування (Фаза 1): користувачі, пристрої, аудит ──────────────
--- Актор аудиту = login (хто саме зробив). Роль береться переважно з ПРИСТРОЮ
--- (§7.6); users.role — необов'язковий override, зазвичай лише для admin/break-glass.
-CREATE TABLE IF NOT EXISTS users (
-    login          TEXT PRIMARY KEY,
-    display_name   TEXT NOT NULL DEFAULT '',
-    role           TEXT,                        -- NULL = роль з пристрою; 'admin' = override
-    enabled        INTEGER NOT NULL DEFAULT 1,
-    pw_hash        TEXT,                        -- NULL = пароль ще не задано
-    pw_salt        TEXT,
-    pw_algo        TEXT,
-    must_change_pw INTEGER NOT NULL DEFAULT 0,
-    created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by     TEXT NOT NULL DEFAULT 'system',
-    last_seen_at   TEXT
-);
-
--- Робоче місце (комп'ютер). device_key = Tailscale-ідентичність або cookie-UUID.
+-- ── Масштабування: пристрої, аудит (модель за пристроєм, без логінів) ──
+-- Робоче місце (комп'ютер). device_key = cookie-токен.
 -- Нові пристрої — вимкнені (pending), доки адмін не призначить роль (§2.5).
 CREATE TABLE IF NOT EXISTS devices (
     device_key    TEXT PRIMARY KEY,
@@ -527,17 +511,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_log_ts     ON audit_log(ts_utc DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_actor  ON audit_log(actor);
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
-
--- Персональний статус "переглянуто" для оператора (per-user), щоб не чіпати
--- глобальний messages.is_read аналітиків (§3.5). Використовується у Фазі 3.
-CREATE TABLE IF NOT EXISTS message_read_state (
-    user_login TEXT NOT NULL,
-    message_id INTEGER NOT NULL,
-    read_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_login, message_id),
-    FOREIGN KEY(message_id) REFERENCES messages(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_message_read_state_user ON message_read_state(user_login);
 """
 
 
@@ -787,11 +760,10 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "statuses", "bg_color", "bg_color TEXT")
     _ensure_column(conn, "statuses", "border_color", "border_color TEXT")
 
-    # --- Масштабування, Фаза 2B: колонки пароля для app-логіну (§7.1 варіант B) ---
-    _ensure_column(conn, "users", "pw_hash", "pw_hash TEXT")
-    _ensure_column(conn, "users", "pw_salt", "pw_salt TEXT")
-    _ensure_column(conn, "users", "pw_algo", "pw_algo TEXT")
-    _ensure_column(conn, "users", "must_change_pw", "must_change_pw INTEGER NOT NULL DEFAULT 0")
+    # --- Масштабування: модель за пристроєм, без логінів/паролів ---
+    # Таблиця users і паролі більше не використовуються — прибираємо разом із даними.
+    _try_ddl(conn, "DROP TABLE IF EXISTS users", stage="drop_table:users")
+    _try_ddl(conn, "DROP TABLE IF EXISTS message_read_state", stage="drop_table:message_read_state")
 
     # --- Status consolidation migrations ---
     # 1. Merge "Спостерігається нами" / "Спостерігається сусідами" → "Спостерігається".

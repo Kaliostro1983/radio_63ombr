@@ -1,198 +1,27 @@
-"""Автентифікація особи (Фаза 2B.2, варіант B).
+"""Ідентичність за пристроєм (device-only, без логінів/паролів).
 
-Маршрути:
-- `GET  /login`  — сторінка входу;
-- `POST /login`  — перевірка логін+пароль → сесія;
-- `GET  /logout` — вихід;
-- `GET/POST /setup` — задати пароль користувачу, **лише з 127.0.0.1** (break-glass
-  для першого пароля bootstrap-адміна через SSH-тунель).
-
-Блокування доступу тут НЕМАЄ (це крок 2B.4). Залогінитись можна, але поки не
-обов'язково. Паролі задають самі користувачі; у відкритому вигляді не зберігаються.
+Лишається лише `GET /api/me` — для навігації (показати адмін-пункти) та
+відлагодження. Роль/автор беруться з пристрою (`device_key` cookie).
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Request
 
-from app.core.access import (
-    current_login,
-    resolve_actor,
-    set_user_password,
-    verify_user_credentials,
-)
-from app.core.db import get_db
+from app.core.access import current_device_mask, resolve_actor
 
 router = APIRouter(tags=["auth"])
 
 
-def _log_failed_login(attempted_login: str, pw_len: int, ip: str | None) -> None:
-    """Зафіксувати невдалу спробу входу: ЯКИЙ логін прийшов і ДОВЖИНУ пароля.
-
-    Сам пароль ніде не зберігається й не логується — лише довжина, щоб можна
-    було відрізнити «порожнє поле» від «невірний пароль».
-    """
-    try:
-        conn = get_db()
-        try:
-            conn.execute(
-                "INSERT INTO audit_log (actor, ip, method, path, status, action, "
-                "entity_type, entity_id, summary) VALUES (?, ?, 'POST', '/login', 401, "
-                "'login_failed', 'user', ?, ?)",
-                (ip, ip, attempted_login, f"невдалий вхід; довжина пароля={pw_len}"),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-    except Exception:
-        pass
-
-_LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
-
-
-def _is_local(request: Request) -> bool:
-    host = request.client.host if request.client else ""
-    return host in _LOCAL_HOSTS
-
-
-@router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
-    if current_login(request):
-        return RedirectResponse(url="/home", status_code=303)
-    templates = request.app.state.templates
-    return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "app_name": request.app.state.app_name, "error": ""},
-    )
-
-
-@router.post("/login", response_class=HTMLResponse)
-def login_submit(
-    request: Request,
-    login: str = Form(default=""),
-    password: str = Form(default=""),
-):
-    user = verify_user_credentials(login, password)
-    if not user:
-        _log_failed_login(
-            (login or "").strip(),
-            len(password or ""),
-            request.client.host if request.client else None,
-        )
-        templates = request.app.state.templates
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": request.app.state.app_name,
-                "error": "Невірний логін або пароль (або акаунт вимкнено).",
-            },
-            status_code=401,
-        )
-    request.session["login"] = user["login"]
-    return RedirectResponse(url="/home", status_code=303)
-
-
-@router.get("/logout")
-def logout(request: Request):
-    try:
-        request.session.pop("login", None)
-    except Exception:
-        pass
-    return RedirectResponse(url="/login", status_code=303)
-
-
 @router.get("/api/me")
 def api_me(request: Request):
-    """Хто я (для навігації/UI). Не вимагає авторизації."""
+    """Хто я (за пристроєм). Не блокує."""
     actor = resolve_actor(request)
-    login = current_login(request)
     return {
         "ok": True,
-        "login": login,
-        "role": actor.role,
-        "is_admin": actor.role == "admin",
         "device_key": actor.device_key,
-        "authenticated": bool(login),
+        "mask": current_device_mask(request),
+        "role": actor.role,
+        "is_admin": actor.role == "admin" and actor.role_enabled,
+        "authorized": actor.authorized,
     }
-
-
-@router.get("/change-password", response_class=HTMLResponse)
-def change_password_page(request: Request):
-    if not current_login(request):
-        return RedirectResponse(url="/login", status_code=303)
-    templates = request.app.state.templates
-    return templates.TemplateResponse(
-        "change_password.html",
-        {"request": request, "app_name": request.app.state.app_name, "msg": "", "error": ""},
-    )
-
-
-@router.post("/change-password", response_class=HTMLResponse)
-def change_password_submit(
-    request: Request,
-    current: str = Form(default=""),
-    password: str = Form(default=""),
-    password2: str = Form(default=""),
-):
-    login = current_login(request)
-    if not login:
-        return RedirectResponse(url="/login", status_code=303)
-    templates = request.app.state.templates
-
-    def _render(msg: str = "", error: str = "", status: int = 200):
-        return templates.TemplateResponse(
-            "change_password.html",
-            {"request": request, "app_name": request.app.state.app_name, "msg": msg, "error": error},
-            status_code=status,
-        )
-
-    if not verify_user_credentials(login, current):
-        return _render(error="Поточний пароль невірний.", status=401)
-    if len(password) < 8:
-        return _render(error="Новий пароль має бути не коротший за 8 символів.", status=400)
-    if password != password2:
-        return _render(error="Паролі не збігаються.", status=400)
-    if not set_user_password(login, password):
-        return _render(error="Не вдалося змінити пароль.", status=500)
-    return _render(msg="Пароль змінено.")
-
-
-@router.get("/setup", response_class=HTMLResponse)
-def setup_page(request: Request):
-    if not _is_local(request):
-        return HTMLResponse("Доступно лише з 127.0.0.1 (SSH-тунель).", status_code=403)
-    templates = request.app.state.templates
-    return templates.TemplateResponse(
-        "setup.html",
-        {"request": request, "app_name": request.app.state.app_name, "msg": "", "error": ""},
-    )
-
-
-@router.post("/setup", response_class=HTMLResponse)
-def setup_submit(
-    request: Request,
-    login: str = Form(default="admin"),
-    password: str = Form(default=""),
-    password2: str = Form(default=""),
-):
-    if not _is_local(request):
-        return HTMLResponse("Доступно лише з 127.0.0.1 (SSH-тунель).", status_code=403)
-    templates = request.app.state.templates
-
-    def _render(msg: str = "", error: str = "", status: int = 200):
-        return templates.TemplateResponse(
-            "setup.html",
-            {"request": request, "app_name": request.app.state.app_name, "msg": msg, "error": error},
-            status_code=status,
-        )
-
-    pw = password or ""
-    if len(pw) < 8:
-        return _render(error="Пароль має бути не коротший за 8 символів.", status=400)
-    if pw != (password2 or ""):
-        return _render(error="Паролі не збігаються.", status=400)
-    if set_user_password(login, pw):
-        return _render(msg=f"Пароль для «{login}» встановлено. Тепер можна увійти на /login.")
-    return _render(error=f"Користувача «{login}» не знайдено.", status=404)
