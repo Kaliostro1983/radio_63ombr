@@ -21,6 +21,7 @@ let _layerGroups = {};      // typeId → L.LayerGroup
 let _allMarkers  = [];      // [{row, marker, typeId}]
 let _showFreq    = false;   // чекбокс «Частоти» — підпис біля кожного маркера
 let _showUnit    = false;   // чекбокс «Підрозділ» — кольорове коло з номером
+let _panelRow    = null;    // висновок, відкритий у правій панелі (для дій)
 
 /** Витягнути НОМЕР бригади/полка з опису р/м (порт з peleng.js). */
 function extractUnitNumber(unitText) {
@@ -571,7 +572,90 @@ function openDetailPanel(row, clickedMgrs) {
     coordsDiv.appendChild(tag);
   }
 
+  // ── Дії панелі: селектор типу + видалення ──
+  _panelRow = row;
+  const typeSel = document.getElementById("rpTypeSelect");
+  if (typeSel) {
+    const items = [{ id: 0, type: "невідомо" }, ..._types.filter(t => t.id !== 0)];
+    typeSel.innerHTML = items
+      .map(t => `<option value="${t.id}"${t.id === (row.type_id || 0) ? " selected" : ""}>${_escMap(t.type || "невідомо")}</option>`)
+      .join("");
+    typeSel.onchange = () => changeConclusionType(row.id, parseInt(typeSel.value, 10) || 0);
+  }
+  const delBtn = document.getElementById("rpDeleteBtn");
+  if (delBtn) delBtn.onclick = () => deleteConclusion(row.id);
+
   document.getElementById("rightHandle").style.display = "none";
+}
+
+function _escMap(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** Оновити бейдж типу в панелі (без перемалювання карти). */
+function refreshPanelBadge(row) {
+  const typeInfo = _types.find(t => t.id === row.type_id)
+    || { type: "невідомо", color: "#6b7280", icon_filename: "", icon_sidc: "" };
+  const badge = document.getElementById("rpTypeBadge");
+  badge.style.background = `${typeInfo.color}33`;
+  badge.style.border = `1px solid ${typeInfo.color}88`;
+  const badgeIcon = badge.querySelector(".rp-badge-icon");
+  if (typeInfo.icon_sidc) {
+    const info = getSidcIcon(typeInfo.icon_sidc);
+    badgeIcon.src = info ? info.url : iconUrl(typeInfo.icon_filename);
+  } else {
+    badgeIcon.src = iconUrl(typeInfo.icon_filename);
+  }
+  badge.querySelector(".rp-badge-label").textContent = typeInfo.type;
+}
+
+/** Зміна типу висновку — оновлюємо ЛИШЕ маркери цього об'єкта (без redraw карти). */
+async function changeConclusionType(acId, typeId) {
+  try {
+    const res = await fetch(`/api/conclusions/${acId}/type`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type_id: typeId }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) { mapToast(data.error || "Помилка зміни типу"); return; }
+
+    const newTypeId = data.type_id;
+    const typeMap = {}; for (const t of _types) typeMap[t.id] = t;
+    const icd = await resolveIconData(typeMap[newTypeId] || null);
+    for (const m of _allMarkers) {
+      if (m.row.id !== acId) continue;
+      m.row.type_id = newTypeId;
+      m.typeId = newTypeId;
+      let icon = makeLeafletIcon(icd.url, icd.w, icd.h);
+      if (_showUnit) { const n = extractUnitNumber(m.row.unit); if (n) icon = makeUnitIcon(n); }
+      m.marker.setIcon(icon);
+    }
+    if (_panelRow && _panelRow.id === acId) { _panelRow.type_id = newTypeId; refreshPanelBadge(_panelRow); }
+    renderTypeChips();
+    mapToast("Тип оновлено: " + (data.type_label || "невідомо"));
+  } catch (e) { mapToast("Помилка: " + (e && e.message ? e.message : e)); }
+}
+
+/** Видалення висновку — прибираємо ЛИШЕ його маркери + закриваємо панель. */
+async function deleteConclusion(acId) {
+  if (!confirm("Видалити цей аналітичний висновок?")) return;
+  try {
+    const res = await fetch(`/api/conclusions/${acId}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || (data && data.ok === false)) { mapToast((data && data.error) || "Помилка видалення"); return; }
+    for (let i = _allMarkers.length - 1; i >= 0; i--) {
+      if (_allMarkers[i].row.id === acId) {
+        try { _allMarkers[i].marker.remove(); } catch (_) {}
+        _allMarkers.splice(i, 1);
+      }
+    }
+    closeRightPanel();
+    renderTypeChips();
+    updateCountBadge(_allMarkers.length);
+    mapToast("Висновок видалено");
+  } catch (e) { mapToast("Помилка: " + (e && e.message ? e.message : e)); }
 }
 
 function closeRightPanel() {
