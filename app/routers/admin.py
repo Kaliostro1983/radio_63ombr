@@ -56,7 +56,7 @@ def api_admin_devices_list(request: Request):
     _require_admin_api(request)
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT device_key, label, role, enabled, first_seen_at, last_seen_at, last_ip "
+            "SELECT device_key, label, mask, role, enabled, first_seen_at, last_seen_at, last_ip "
             "FROM devices ORDER BY (role IS NULL) DESC, last_seen_at DESC"
         ).fetchall()
     return {
@@ -66,6 +66,7 @@ def api_admin_devices_list(request: Request):
             {
                 "device_key": r["device_key"],
                 "label": r["label"] or "",
+                "mask": r["mask"] or "",
                 "role": r["role"] or "",
                 "enabled": int(r["enabled"] or 0),
                 "first_seen_at": r["first_seen_at"] or "",
@@ -90,12 +91,13 @@ async def api_admin_devices_update(request: Request):
     if role is not None and role not in VALID_ROLES:
         raise HTTPException(status_code=400, detail="Невідома роль")
     label = str(body.get("label") or "").strip()
+    mask = str(body.get("mask") or "").strip()
     enabled = 1 if body.get("enabled") else 0
 
     with get_conn() as conn:
         cur = conn.execute(
-            "UPDATE devices SET role = ?, label = ?, enabled = ? WHERE device_key = ?",
-            (role, label, enabled, device_key),
+            "UPDATE devices SET role = ?, label = ?, mask = ?, enabled = ? WHERE device_key = ?",
+            (role, label, mask, enabled, device_key),
         )
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="Пристрій не знайдено")

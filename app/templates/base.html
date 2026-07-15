@@ -252,6 +252,8 @@
         <textarea id="csModalComment" rows="5" style="width:100%; min-height:108px"></textarea>
       </div>
 
+      <div id="csModalEdited" class="small" style="margin-top:8px; opacity:.55; font-size:11px; display:none"></div>
+
       <div class="cs-flags" style="margin-top:10px; display:flex; gap:18px; flex-wrap:wrap">
         <label class="cs-flag-check" style="display:flex; align-items:center; gap:7px; cursor:pointer">
           <input id="csModalIsPosition" type="checkbox"> <span>Позиція</span>
@@ -589,7 +591,7 @@
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/vendor/proj4.js" defer></script>
 <script src="/static/callsign_status.js?v=2" defer></script>
-<script src="/static/callsign_modal.js?v=32" defer></script>
+<script src="/static/callsign_modal.js?v=33" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 /* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається

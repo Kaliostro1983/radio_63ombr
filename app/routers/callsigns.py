@@ -23,6 +23,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.core.db import get_conn
+from app.core.access import current_device_mask
 from app.core.normalize import normalize_freq
 from app.services.callsign_service import link_message_callsigns
 
@@ -520,6 +521,8 @@ def api_callsign_by_id(id: int):
                 c.is_position AS is_position,
                 c.has_air_defense AS has_air_defense,
                 c.life_status AS life_status,
+                c.last_edited_by AS last_edited_by,
+                c.last_edited_at AS last_edited_at,
                 s.name AS status_label,
                 src.name AS source_label,
                 n.frequency AS frequency,
@@ -561,6 +564,8 @@ def api_callsign_by_id(id: int):
             "is_position": bool(row["is_position"]),
             "has_air_defense": bool(row["has_air_defense"]),
             "life_status": row["life_status"] or "alive",
+            "last_edited_by": row["last_edited_by"] or "",
+            "last_edited_at": row["last_edited_at"] or "",
         },
     }
 
@@ -897,6 +902,7 @@ async def api_callsign_save(request: Request):
         return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
 
     now_dt = _now_sql()
+    editor = current_device_mask(request)  # Маска пристрою — авторство правки (2C.2)
 
     with get_conn() as conn:
         if status_id:
@@ -936,8 +942,10 @@ async def api_callsign_save(request: Request):
                         has_air_defense,
                         life_status,
                         updated_at,
-                        last_seen_dt
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                        last_seen_dt,
+                        last_edited_by,
+                        last_edited_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         network_id or None,
@@ -950,6 +958,8 @@ async def api_callsign_save(request: Request):
                         life_status,
                         now_dt,
                         None,
+                        editor,
+                        now_dt,
                     ),
                 )
                 callsign_id = int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"])
@@ -979,7 +989,9 @@ async def api_callsign_save(request: Request):
                         is_position=?,
                         has_air_defense=?,
                         life_status=?,
-                        updated_at=?
+                        updated_at=?,
+                        last_edited_by=?,
+                        last_edited_at=?
                     WHERE id=?
                     """,
                     (
@@ -991,6 +1003,8 @@ async def api_callsign_save(request: Request):
                         is_position,
                         has_air_defense,
                         life_status,
+                        now_dt,
+                        editor,
                         now_dt,
                         callsign_id,
                     ),

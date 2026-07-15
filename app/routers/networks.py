@@ -31,6 +31,7 @@ from app.core.config import settings
 from app.core.db import get_conn
 from app.core.normalize import normalize_freq, normalize_freq_or_mask
 from app.core.auth_context import get_actor
+from app.core.access import current_device_mask
 
 router = APIRouter()
 
@@ -1812,16 +1813,18 @@ def networks_save(
 
     now = datetime.utcnow().isoformat(timespec="seconds")
 
+    editor = current_device_mask(request)  # Маска пристрою — авторство правки (2C.2)
+
     with get_conn() as conn:
         existing = _fetchone(conn, "SELECT id FROM networks WHERE frequency=?", (freq_norm,))
 
         if not existing:
             cur = conn.execute(
                 """
-                INSERT INTO networks (frequency, mask, unit, zone, chat_id, group_id, status_id, comment, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                INSERT INTO networks (frequency, mask, unit, zone, chat_id, group_id, status_id, comment, updated_at, last_edited_by, last_edited_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
                 """,
-                (freq_norm, mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now),
+                (freq_norm, mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now, editor, now),
             )
             network_id = int(cur.lastrowid)
         else:
@@ -1829,10 +1832,10 @@ def networks_save(
             conn.execute(
                 """
                 UPDATE networks
-                SET mask=?, unit=?, zone=?, chat_id=?, group_id=?, status_id=?, comment=?, updated_at=?
+                SET mask=?, unit=?, zone=?, chat_id=?, group_id=?, status_id=?, comment=?, updated_at=?, last_edited_by=?, last_edited_at=?
                 WHERE id=?
                 """,
-                (mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now, network_id),
+                (mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now, editor, now, network_id),
             )
 
         _set_tags(conn, network_id, tag_ids)

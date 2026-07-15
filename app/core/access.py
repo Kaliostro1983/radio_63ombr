@@ -206,6 +206,33 @@ def is_admin(request) -> bool:
     return resolve_actor(request).role == "admin"
 
 
+def device_mask_for_key(device_key: Optional[str]) -> str:
+    """Текст авторства (Маска пристрою). Fallback: mask → label → короткий ключ."""
+    if not device_key:
+        return ""
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT mask, label FROM devices WHERE device_key = ?", (device_key,)
+            ).fetchone()
+            if row:
+                val = (row["mask"] or "").strip() or (row["label"] or "").strip()
+                if val:
+                    return val
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return device_key[:8]
+
+
+def current_device_mask(request) -> str:
+    """Маска поточного пристрою (для запису «хто змінив»)."""
+    dk = request.cookies.get(DEVICE_COOKIE) or getattr(request.state, "device_key", None)
+    return device_mask_for_key(dk)
+
+
 # ── App-логін особи (Фаза 2B.2) ──────────────────────────────────────
 def get_user(login: str) -> Optional[dict]:
     """Повний рядок користувача або None. Логін нечутливий до регістру."""

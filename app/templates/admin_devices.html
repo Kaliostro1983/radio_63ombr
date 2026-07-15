@@ -19,6 +19,7 @@
       <thead>
         <tr>
           <th style="text-align:left">Мітка</th>
+          <th style="text-align:left">Маска (авторство)</th>
           <th style="text-align:left">Роль</th>
           <th style="text-align:center">Увімкнено</th>
           <th style="text-align:left">Остання активність</th>
@@ -28,7 +29,7 @@
         </tr>
       </thead>
       <tbody id="admDevBody">
-        <tr><td colspan="7" class="small" style="opacity:.6;padding:12px">Завантаження…</td></tr>
+        <tr><td colspan="8" class="small" style="opacity:.6;padding:12px">Завантаження…</td></tr>
       </tbody>
     </table>
   </div>
@@ -69,12 +70,13 @@
       const d = await r.json();
       if (Array.isArray(d.roles)) ROLES = d.roles;
       const devs = d.devices || [];
-      if (!devs.length) { body.innerHTML = `<tr><td colspan="7" class="small" style="opacity:.6;padding:12px">Пристроїв ще немає.</td></tr>`; return; }
+      if (!devs.length) { body.innerHTML = `<tr><td colspan="8" class="small" style="opacity:.6;padding:12px">Пристроїв ще немає.</td></tr>`; return; }
       body.innerHTML = devs.map(dev => {
         const pending = !dev.role;
         const short = esc(dev.device_key).slice(0, 10) + "…";
         return `<tr class="${pending ? "adm-dev--pending" : ""}" data-key="${esc(dev.device_key)}">
-          <td><input type="text" class="adm-label" value="${esc(dev.label)}" placeholder="напр. ПК чергового №1" style="min-width:160px"></td>
+          <td><input type="text" class="adm-label" value="${esc(dev.label)}" placeholder="напр. ПК чергового №1" style="min-width:150px"></td>
+          <td><input type="text" class="adm-mask" value="${esc(dev.mask)}" placeholder="напр. Черговий-1" style="min-width:130px"></td>
           <td><select class="adm-role">${roleOptions(dev.role)}</select>${pending ? '<span class="adm-badge">очікує</span>' : ''}</td>
           <td style="text-align:center"><input type="checkbox" class="adm-enabled" ${dev.enabled ? "checked" : ""}></td>
           <td class="small">${esc(dev.last_seen_at)}</td>
@@ -99,6 +101,7 @@
         device_key: key,
         role: tr.querySelector(".adm-role").value || null,
         label: tr.querySelector(".adm-label").value.trim(),
+        mask: tr.querySelector(".adm-mask").value.trim(),
         enabled: tr.querySelector(".adm-enabled").checked,
       };
       btn.disabled = true;

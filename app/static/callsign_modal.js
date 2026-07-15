@@ -16,6 +16,7 @@
   const modalStatus = $("csModalStatus");
   const modalSource = $("csModalSource");
   const modalComment = $("csModalComment");
+  const modalEdited = $("csModalEdited");
   const modalIsPosition = $("csModalIsPosition");
   const modalHasAA = $("csModalHasAA");
   const modalNetworkQuery = $("csModalNetworkQuery");
@@ -691,6 +692,18 @@
     if (modalTitle) modalTitle.textContent = row.name || "—";
     if (modalName) modalName.value = row.name || "";
     if (modalComment) modalComment.value = row.comment || "";
+    // Авторство останньої правки: «Змінив: Маска · дата-час» (дрібним шрифтом).
+    if (modalEdited) {
+      var by = (row.last_edited_by || "").trim();
+      var at = (row.last_edited_at || "").trim();
+      if (by || at) {
+        modalEdited.textContent = "Крайні правки: " + (by || "невідомо") + (at ? " · " + at : "");
+        modalEdited.style.display = "";
+      } else {
+        modalEdited.textContent = "";
+        modalEdited.style.display = "none";
+      }
+    }
     if (modalIsPosition) modalIsPosition.checked = !!row.is_position;
     if (modalHasAA) modalHasAA.checked = !!row.has_air_defense;
     CURRENT_LIFE = window.CallsignStatus ? window.CallsignStatus.norm(row.life_status) : "alive";
@@ -748,6 +761,7 @@
     if (modalTitle) modalTitle.textContent = "Новий позивний";
     if (modalName) modalName.value = "";
     if (modalComment) modalComment.value = "";
+    if (modalEdited) { modalEdited.textContent = ""; modalEdited.style.display = "none"; }
     if (modalIsPosition) modalIsPosition.checked = false;
     if (modalHasAA) modalHasAA.checked = false;
     CURRENT_LIFE = "alive";

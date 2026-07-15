@@ -174,6 +174,12 @@
     </div>
   </div>
 
+  {% if current and current.last_edited_by %}
+    <div class="small" style="opacity:.55; font-size:11px; margin-top:4px">
+      Крайні правки: {{ current.last_edited_by }}{% if current.last_edited_at %} · {{ current.last_edited_at }}{% endif %}
+    </div>
+  {% endif %}
+
   <form method="post" action="/networks/save" style="margin-top:14px">
     <input type="hidden" name="embed" value="{{ '1' if is_embed else '' }}">
     <div class="row">

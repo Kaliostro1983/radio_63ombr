@@ -862,6 +862,15 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     # life_status: фізичний стан носія позивного — 'alive' (живий, типове),
     # '200' (Груз 200, ліквідований), '300' (Груз 300, поранений).
     _ensure_column(conn, "callsigns", "life_status", "life_status TEXT NOT NULL DEFAULT 'alive'")
+
+    # Масштабування, Фаза 2C: атрибуція правок за пристроєм.
+    # devices.mask — текст авторства, що показується в картках («хто змінив»).
+    _ensure_column(conn, "devices", "mask", "mask TEXT NOT NULL DEFAULT ''")
+    # Хто (Маска пристрою) та коли вносив крайні правки в картку.
+    _ensure_column(conn, "networks", "last_edited_by", "last_edited_by TEXT")
+    _ensure_column(conn, "networks", "last_edited_at", "last_edited_at TEXT")
+    _ensure_column(conn, "callsigns", "last_edited_by", "last_edited_by TEXT")
+    _ensure_column(conn, "callsigns", "last_edited_at", "last_edited_at TEXT")
     _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
     _ensure_column(conn, "network_tags", "conclusions", "conclusions TEXT")
 
