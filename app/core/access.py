@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
@@ -27,6 +28,49 @@ VALID_ROLES = ("admin", "analyst", "operator")
 
 DEVICE_COOKIE = "device_key"
 SESSION_LOGIN_KEY = "login"
+
+# Рівень примусу доступу (2B.4). Джерело істини — app_settings['access_enforce_level'];
+# env ENFORCE_ACCESS — лише fallback. Значення: off | mutations | full.
+_ENFORCE_LEVELS = ("off", "mutations", "full")
+_ENFORCE_SETTING_KEY = "access_enforce_level"
+_ENFORCE_CACHE: dict = {"val": None, "ts": 0.0}
+_ENFORCE_TTL = 5.0  # сек — щоб зміну підхоплювало швидко, але не бити БД щоразу
+
+
+def enforcement_level() -> str:
+    """Поточний рівень примусу (кешовано ~5с). Читає app_settings, fallback — env."""
+    now = time.monotonic()
+    if _ENFORCE_CACHE["val"] is not None and (now - _ENFORCE_CACHE["ts"]) < _ENFORCE_TTL:
+        return _ENFORCE_CACHE["val"]
+
+    val = None
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = ?", (_ENFORCE_SETTING_KEY,)
+            ).fetchone()
+            if row and row["value"]:
+                v = str(row["value"]).strip().lower()
+                if v in _ENFORCE_LEVELS:
+                    val = v
+        finally:
+            conn.close()
+    except Exception:
+        val = None
+
+    if val is None:
+        env = (os.getenv("ENFORCE_ACCESS") or "").strip().lower()
+        if env == "full":
+            val = "full"
+        elif env in ("1", "true", "yes", "on", "mutations"):
+            val = "mutations"
+        else:
+            val = "off"
+
+    _ENFORCE_CACHE["val"] = val
+    _ENFORCE_CACHE["ts"] = now
+    return val
 
 # Заголовки Tailscale, що несуть саме ЛОГІН користувача (не назву пристрою).
 _LOGIN_HEADERS = (
@@ -39,13 +83,25 @@ _LOGIN_HEADERS = (
 
 @dataclass
 class Actor:
-    """Розв'язаний актор запиту (Фаза 1 — інформаційно, без примусу)."""
+    """Розв'язаний актор запиту."""
     login: str                 # хто (для аудиту)
-    login_verified: bool       # True — з identity-заголовка; False — fallback (IP)
-    device_key: Optional[str]  # робоче місце (cookie/Tailscale), None якщо немає
+    login_verified: bool       # True — залогінений (сесія); False — fallback (IP)
+    user_known: bool           # логін є в таблиці users
+    user_enabled: bool         # акаунт користувача активний
+    device_key: Optional[str]  # робоче місце (cookie), None якщо немає
     role: Optional[str]        # ефективна роль: users.role override → devices.role
     role_source: str           # 'user' | 'device' | 'none'
-    enabled: bool              # чи активний носій ролі
+    role_enabled: bool         # носій ролі (user-override або device) активний
+
+    @property
+    def authenticated(self) -> bool:
+        """Особа підтверджена й акаунт активний."""
+        return self.login_verified and self.user_known and self.user_enabled
+
+    @property
+    def authorized(self) -> bool:
+        """Має активну роль (з пристрою або override) поверх автентифікації."""
+        return self.authenticated and (self.role in VALID_ROLES) and self.role_enabled
 
 
 def _login_from_headers(headers: Mapping[str, str]) -> Optional[str]:
@@ -80,29 +136,33 @@ def resolve_actor_parts(
 
     device_key = cookies.get(DEVICE_COOKIE) or None
 
+    user_known = False
+    user_enabled = False
     role: Optional[str] = None
     role_source = "none"
-    enabled = False
+    role_enabled = False
 
     try:
         conn = get_db()
         try:
-            # 1) Override на рівні користувача (лише для ВЕРИФІКОВАНОГО логіну).
+            # 1) Особа (лише для ВЕРИФІКОВАНОГО логіну) + override ролі.
             if verified:
                 urow = conn.execute(
-                    "SELECT role, enabled FROM users WHERE login = ?", (login,)
+                    "SELECT role, enabled FROM users WHERE lower(login) = ?",
+                    (login.strip().lower(),),
                 ).fetchone()
                 if urow:
-                    enabled = bool(urow["enabled"])
+                    user_known = True
+                    user_enabled = bool(urow["enabled"])
                     if urow["role"]:
-                        role, role_source = urow["role"], "user"
+                        role, role_source, role_enabled = urow["role"], "user", user_enabled
             # 2) Інакше — роль із пристрою (§7.6).
             if role is None and device_key:
                 drow = conn.execute(
                     "SELECT role, enabled FROM devices WHERE device_key = ?", (device_key,)
                 ).fetchone()
                 if drow and drow["role"]:
-                    role, role_source, enabled = drow["role"], "device", bool(drow["enabled"])
+                    role, role_source, role_enabled = drow["role"], "device", bool(drow["enabled"])
         finally:
             conn.close()
     except Exception:
@@ -111,10 +171,12 @@ def resolve_actor_parts(
     return Actor(
         login=login,
         login_verified=verified,
+        user_known=user_known,
+        user_enabled=user_enabled,
         device_key=device_key,
         role=role,
         role_source=role_source,
-        enabled=enabled,
+        role_enabled=role_enabled,
     )
 
 

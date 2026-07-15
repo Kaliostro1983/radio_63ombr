@@ -23,6 +23,7 @@ from fastapi.responses import Response, FileResponse
 
 from app.core.http_request_log_middleware import HttpRequestLogMiddleware
 from app.core.audit_middleware import AuditLogMiddleware
+from app.core.enforcement_middleware import EnforcementMiddleware
 from app.core.device_middleware import DeviceMiddleware
 from app.core.config import settings
 from app.core.version import read_git_revision
@@ -77,6 +78,10 @@ def create_app() -> FastAPI:
     """
     app = FastAPI(title=settings.app_name)
 
+    # Масштабування, Фаза 2B.4: гейт примусу. Додається ПЕРШИМ, щоб бути
+    # «всередині» SessionMiddleware і бачити сесію на етапі запиту. Рівень —
+    # off/mutations/full з app_settings (default off, тож наразі no-op).
+    app.add_middleware(EnforcementMiddleware)
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, same_site="lax")
     app.add_middleware(HttpRequestLogMiddleware)
     # Масштабування, Фаза 1: грубий аудит кожного не-GET запиту (лог-онлі).
