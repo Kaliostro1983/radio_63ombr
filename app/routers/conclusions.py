@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from app.core.access import require_capability
 from app.core.config import settings
 from app.core.conclusion_classify import conclusion_match_text
 from app.core.db import get_conn
@@ -648,6 +649,7 @@ async def api_conclusion_save(request: Request):
     is auto-classified by keyword, exactly like the ingest path, so a manually
     saved conclusion behaves like any other "Аналітика 63" conclusion.
     """
+    require_capability(request, "conclusion.write")
     payload: Dict[str, Any] = await request.json()
 
     # message_id може бути відсутнім: «Перехоплення» заповнюють і вставкою тексту
@@ -784,6 +786,7 @@ async def api_conclusion_edit(ac_id: int, request: Request):
     the coordinate list. The conclusion type is left unchanged (use the type
     badge or ♻ re-classify to change it).
     """
+    require_capability(request, "conclusion.write")
     payload: Dict[str, Any] = await request.json()
     conclusion_text = (payload.get("conclusion_text") or "").strip()
     if not conclusion_text:
@@ -819,9 +822,10 @@ async def api_conclusion_edit(ac_id: int, request: Request):
 
 
 @router.delete("/api/conclusions/{ac_id}")
-def api_conclusion_delete(ac_id: int):
+def api_conclusion_delete(ac_id: int, request: Request):
     """Delete an analytical conclusion. The linked intercept (message) is kept —
     only the analytical conclusion row is removed."""
+    require_capability(request, "conclusion.write")
     with get_conn() as conn:
         row = conn.execute(
             "SELECT id FROM analytical_conclusions WHERE id = ?", (ac_id,)
@@ -996,6 +1000,7 @@ async def api_conclusion_type_update(type_id: int, request: Request):
 @router.patch("/api/conclusions/{ac_id}/type")
 async def api_patch_conclusion_type(ac_id: int, request: Request):
     """Manually set the type_id on a single analytical_conclusion row."""
+    require_capability(request, "conclusion.write")
     payload: Dict[str, Any] = await request.json()
     if "type_id" not in payload:
         return JSONResponse({"ok": False, "error": "type_id required"}, status_code=400)
@@ -1019,10 +1024,11 @@ async def api_patch_conclusion_type(ac_id: int, request: Request):
 # ---------------------------------------------------------------------------
 
 @router.post("/api/conclusions/{ac_id}/reclassify")
-def api_reclassify_conclusion(ac_id: int):
+def api_reclassify_conclusion(ac_id: int, request: Request):
     """Re-score the conclusion text against all conclusion_types keywords and
     assign the best-matching type (most keyword hits). If no type matches,
     type_id stays 0 (невідомо)."""
+    require_capability(request, "conclusion.write")
     with get_conn() as conn:
         ac = conn.execute(
             "SELECT id, conclusion_text, type_id FROM analytical_conclusions WHERE id=?",
@@ -1063,8 +1069,9 @@ def api_reclassify_conclusion(ac_id: int):
 
 
 @router.post("/api/conclusions/{ac_id}/mark-sended")
-def api_mark_sended(ac_id: int):
+def api_mark_sended(ac_id: int, request: Request):
     """Mark an analytical conclusion as Delta-sent (sended=1)."""
+    require_capability(request, "message.forward")
     with get_conn() as conn:
         conn.execute(
             "UPDATE analytical_conclusions SET sended=1 WHERE id=?", (ac_id,)
@@ -1320,6 +1327,7 @@ async def api_publish(request: Request):
     The bot must have a "FastAPI → chat" automation configured; our request
     simply delivers the payload — the target group is resolved by the bot.
     """
+    require_capability(request, "message.forward")
     if not settings.publish_bot_url:
         return JSONResponse(
             {"ok": False, "error": "PUBLISH_BOT_URL не налаштовано в config.env"},

@@ -129,6 +129,42 @@ def is_admin(request) -> bool:
     return a.role == "admin" and a.role_enabled
 
 
+# ── Мінімальні капабіліті (Фаза 3, мінімальний гейт) ─────────────────────────
+# Узгоджені обмеження ролі «оператор» (§3.1 плану): без пересилання в
+# месенджери (message.forward) та без збереження/зміни аналітичних висновків
+# (conclusion.write). admin/analyst мають обидві.
+_ROLE_CAPS = {
+    "admin": {"message.forward", "conclusion.write"},
+    "analyst": {"message.forward", "conclusion.write"},
+    "operator": set(),
+}
+
+_LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def require_capability(request, cap: str) -> None:
+    """Гейт мутуючого ендпоінта: 403, якщо роль пристрою не має капабіліті.
+
+    Правила:
+    - примус off → не блокує (єдиний рубильник відкату — як у EnforcementMiddleware);
+    - 127.0.0.1 → break-glass, не блокує;
+    - інакше роль пристрою мусить мати `cap` у _ROLE_CAPS.
+    """
+    if enforcement_level() == "off":
+        return
+    client_ip = request.client.host if request.client else ""
+    if client_ip in _LOCAL_HOSTS:
+        return
+    actor = resolve_actor(request)
+    if actor.authorized and cap in _ROLE_CAPS.get(actor.role or "", set()):
+        return
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=403,
+        detail="Роль вашого робочого місця не дозволяє цю дію. Зверніться до адміністратора.",
+    )
+
+
 def device_mask_for_key(device_key: Optional[str]) -> str:
     """Текст авторства (Маска пристрою). Fallback: mask → label → короткий ключ."""
     if not device_key:

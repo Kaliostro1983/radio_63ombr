@@ -33,6 +33,7 @@ from typing import Any, Dict, Optional, Tuple
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from app.core.access import require_capability
 from app.core.config import settings
 from app.core.db import get_conn
 from app.core.logging import get_logger
@@ -225,6 +226,7 @@ async def api_client_errors(request: Request):
 
 @router.post("/api/push/send")
 async def api_push_send(request: Request):
+    require_capability(request, "message.forward")
     req_id = uuid.uuid4().hex[:8]
     started = time.monotonic()
     payload: Dict[str, Any] = {}
