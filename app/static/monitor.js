@@ -862,7 +862,7 @@
       });
       const d = await r.json();
       if (!d || !d.ok) {
-        if (window.appToast) window.appToast(d && d.error ? d.error : "Помилка збереження", "error", 3400);
+        if (window.appToast) window.appToast((d && (d.error || d.detail)) || "Помилка збереження", "error", 3400);
         return false;
       }
       _conclSaved = true;
@@ -3570,7 +3570,7 @@
       if (res.ok && data.ok) {
         if (window.appToast) window.appToast("Висновок надіслано", "success");
       } else {
-        if (window.appToast) window.appToast(data.error || "Помилка надсилання", "error");
+        if (window.appToast) window.appToast(data.error || data.detail || "Помилка надсилання", "error");
       }
     } catch(e) {
       if (window.appToast) window.appToast("Помилка: " + e.message, "error");
@@ -3861,7 +3861,7 @@
     const btn  = modal.querySelector("#monShareSendBtn");
     if (btn) { btn.disabled = true; btn.style.opacity = ".4"; }
 
-    let sent = 0, errors = 0;
+    let sent = 0, errors = 0, lastErr = "";
     for (const r of selected) {
       try {
         const body = { platform: r.platform, chat_id: r.chatId, text };
@@ -3872,13 +3872,13 @@
         });
         const d = await res.json().catch(() => ({}));
         if (res.ok && d.ok) sent++;
-        else errors++;
+        else { errors++; lastErr = String(d.error || d.detail || ""); }
       } catch(_) { errors++; }
     }
 
     if (btn) { btn.disabled = false; btn.style.opacity = ""; }
     if (errors > 0) {
-      _shareSetError(`Помилка надсилання (${errors} з ${selected.length})`);
+      _shareSetError(lastErr || `Помилка надсилання (${errors} з ${selected.length})`);
     } else {
       if (window.appToast) window.appToast(`Надіслано: ${sent}`, "success");
       _closeShareModal(modal);

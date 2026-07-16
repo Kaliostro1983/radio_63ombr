@@ -641,7 +641,7 @@
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.ok) return { ok: true };
-      return { ok: false, error: d.error || "Помилка надсилання" };
+      return { ok: false, error: d.error || d.detail || "Помилка надсилання" };
     } catch (err) {
       return { ok: false, error: err.message };
     }

@@ -559,7 +559,7 @@
       if (!d.ok) {
         const msg = (typeof d.error === "object")
           ? JSON.stringify(d.error)
-          : (d.error || d.message || "Помилка відправки");
+          : (d.error || d.detail || d.message || "Помилка відправки");
         toast(msg, "error", 5000);
         return;
       }
