@@ -95,6 +95,13 @@
               var a = document.getElementById("navAdminDevices");
               if (a) a.style.display = "";
             }
+            // Роль пристрою у футері сайдбара
+            var ROLE_UA = { admin: "адміністратор", analyst: "аналітик", operator: "оператор" };
+            var roleEl = document.getElementById("appRoleLabel");
+            if (roleEl) {
+              roleEl.textContent = "Роль: " + (d.authorized ? (ROLE_UA[d.role] || d.role) : "очікує підтвердження");
+              if (d.mask) roleEl.title = d.mask;
+            }
           })
           .catch(function () {});
       })();
@@ -114,6 +121,9 @@
       <div class="sb-status-row">
         <span class="app-statusbar__dot" aria-hidden="true"></span>
         <span class="app-statusbar__text sb-status-label">Система активна</span>
+      </div>
+      <div class="sb-status-row sb-status-row--role">
+        <span id="appRoleLabel" class="app-statusbar__text">Роль: —</span>
       </div>
       <div class="sb-status-row sb-status-row--meta">
         <a href="/changelog" target="_blank" class="app-statusbar__version">v{{ app_version }}</a>
