@@ -46,8 +46,9 @@
     </div>
 
     <div class="rp-actions" id="rpActions" style="display:flex; gap:8px; align-items:center; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.1); flex-wrap:wrap">
-      <select id="rpTypeSelect" title="Тип об'єкта" style="flex:1 1 130px; min-width:110px; padding:6px 8px; border:1px solid rgba(255,255,255,.18); border-radius:6px; background:#1e293b; color:#e2e8f0"></select>
-      <button id="rpDeleteBtn" class="rp-act-btn rp-act-del" title="Видалити висновок" style="padding:6px 10px; border:1px solid #e24b4a; color:#e24b4a; border-radius:6px; background:transparent; cursor:pointer; white-space:nowrap">🗑 Видалити</button>
+      <select id="rpTypeSelect" title="Тип об'єкта" style="flex:1 1 120px; min-width:100px; padding:6px 8px; border:1px solid rgba(255,255,255,.18); border-radius:6px; background:#1e293b; color:#e2e8f0"></select>
+      <button id="rpEditBtn" class="rp-act-btn" title="Редагувати висновок" style="padding:6px 10px; border:1px solid rgba(255,255,255,.28); color:#e2e8f0; border-radius:6px; background:transparent; cursor:pointer; white-space:nowrap">✏ Правка</button>
+      <button id="rpDeleteBtn" class="rp-act-btn rp-act-del" title="Видалити висновок" style="padding:6px 10px; border:1px solid #e24b4a; color:#e24b4a; border-radius:6px; background:transparent; cursor:pointer; white-space:nowrap">🗑</button>
     </div>
 
     <div class="rp-meta">
@@ -62,6 +63,16 @@
       <div>
         <div class="rp-section-label">Аналітичний висновок</div>
         <div id="rpConclusionText" class="rp-text"></div>
+        <textarea id="rpEditText" style="display:none; width:100%; min-height:120px; box-sizing:border-box; padding:8px; border:1px solid rgba(255,255,255,.18); border-radius:6px; background:#0f172a; color:#e2e8f0; resize:vertical; font:inherit"></textarea>
+      </div>
+
+      <div id="rpEditCoordsWrap" style="display:none">
+        <div class="rp-section-label">Координати MGRS (через кому)</div>
+        <input id="rpEditCoords" type="text" placeholder="37U DQ 12345 67890, …" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid rgba(255,255,255,.18); border-radius:6px; background:#0f172a; color:#e2e8f0; font:inherit">
+        <div style="display:flex; gap:8px; margin-top:10px">
+          <button id="rpEditSaveBtn" style="flex:1; padding:8px; border:0; border-radius:6px; background:#2563eb; color:#fff; cursor:pointer; font-weight:600">Зберегти</button>
+          <button id="rpEditCancelBtn" style="padding:8px 14px; border:1px solid rgba(255,255,255,.22); border-radius:6px; background:transparent; color:#e2e8f0; cursor:pointer">Скасувати</button>
+        </div>
       </div>
 
       <div id="rpBodySection">
@@ -129,7 +140,7 @@
 </script>
 
 <!-- Map logic -->
-<script src="/static/conclusions_map.js?v=16"></script>
+<script src="/static/conclusions_map.js?v=17"></script>
 
 </body>
 </html>

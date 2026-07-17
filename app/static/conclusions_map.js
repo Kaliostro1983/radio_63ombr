@@ -584,8 +584,82 @@ function openDetailPanel(row, clickedMgrs) {
   }
   const delBtn = document.getElementById("rpDeleteBtn");
   if (delBtn) delBtn.onclick = () => deleteConclusion(row.id);
+  const editBtn = document.getElementById("rpEditBtn");
+  if (editBtn) editBtn.onclick = () => startEditPanel();
+  const saveBtn = document.getElementById("rpEditSaveBtn");
+  if (saveBtn) saveBtn.onclick = () => saveEditPanel();
+  const cancelBtn = document.getElementById("rpEditCancelBtn");
+  if (cancelBtn) cancelBtn.onclick = () => setEditMode(false);
 
+  setEditMode(false);   // завжди відкриваємо панель у режимі перегляду
   document.getElementById("rightHandle").style.display = "none";
+}
+
+/** Перемкнути панель між переглядом і правкою. */
+function setEditMode(on) {
+  const show = (id, v) => { const el = document.getElementById(id); if (el) el.style.display = v; };
+  show("rpConclusionText", on ? "none" : "");
+  show("rpEditText",       on ? "" : "none");
+  show("rpEditCoordsWrap", on ? "" : "none");
+  const coordsSection = document.getElementById("rpCoords");
+  if (coordsSection && coordsSection.parentElement) {
+    coordsSection.parentElement.style.display = on ? "none" : "";  // ховаємо секцію «Координати MGRS»
+  }
+  const editBtn = document.getElementById("rpEditBtn");
+  if (editBtn) editBtn.style.display = on ? "none" : "";
+}
+
+/** Увійти в режим правки — заповнити поля з поточного висновку. */
+function startEditPanel() {
+  if (!_panelRow) return;
+  const ta = document.getElementById("rpEditText");
+  const ci = document.getElementById("rpEditCoords");
+  if (ta) ta.value = (_panelRow.conclusion_text || "").trim();
+  if (ci) ci.value = (_panelRow.mgrs || []).join(", ");
+  setEditMode(true);
+  if (ta) ta.focus();
+}
+
+/** Зберегти правку — PUT, оновити рядок, перемалювати маркери за потреби. */
+async function saveEditPanel() {
+  if (!_panelRow) return;
+  const text = (document.getElementById("rpEditText").value || "").trim();
+  if (!text) { mapToast("Висновок не може бути порожнім"); return; }
+  const coordsRaw = (document.getElementById("rpEditCoords").value || "").trim();
+  const mgrsIn = coordsRaw ? coordsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+
+  const saveBtn = document.getElementById("rpEditSaveBtn");
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "…"; }
+  try {
+    const res = await fetch(`/api/conclusions/${_panelRow.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conclusion_text: text, mgrs: mgrsIn }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) { mapToast(data.error || data.detail || "Помилка збереження"); return; }
+
+    const oldMgrs = (_panelRow.mgrs || []).join("|");
+    _panelRow.conclusion_text = data.conclusion_text != null ? data.conclusion_text : text;
+    if (Array.isArray(data.mgrs)) _panelRow.mgrs = data.mgrs;
+
+    // Оновлюємо перегляд.
+    document.getElementById("rpConclusionText").textContent = (_panelRow.conclusion_text || "").trim();
+    setEditMode(false);
+
+    // Якщо координати змінились — перемальовуємо маркери (зберігаючи фільтри).
+    if ((_panelRow.mgrs || []).join("|") !== oldMgrs) {
+      await placeMarkers({ skipFit: true });
+      applyTypeFilter();
+      // Оновити перелік координат у панелі.
+      openDetailPanel(_panelRow, (_panelRow.mgrs || [])[0] || "");
+    }
+    mapToast("Висновок збережено");
+  } catch (e) {
+    mapToast("Помилка: " + (e && e.message ? e.message : e));
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Зберегти"; }
+  }
 }
 
 function _escMap(s) {
