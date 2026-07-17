@@ -4195,6 +4195,70 @@
     return result;
   }
 
+  /* Токенізує сегмент у групи цифр із прапорцем «перед групою була кома».
+   * Кома — маркер радіо-повтору для підтвердження ("54, 54", "0 17, 0 17"). */
+  function _segTokens(seg) {
+    const toks = [];
+    let last = 0;
+    for (const m of String(seg).matchAll(/\d+/g)) {
+      const sep = seg.slice(last, m.index);
+      toks.push({ value: m[0], comma: sep.includes(",") });
+      last = m.index + m[0].length;
+    }
+    return toks;
+  }
+
+  /* Згортає повторювані СУСІДНІ блоки груп (радіо-підтвердження), АЛЕ лише коли
+   * друга поява починається ПІСЛЯ КОМИ. Так "54, 54"→"54" і "0 17, 0 17"→"0 17"
+   * (повтори), а "3 6 6" НЕ чіпаємо — це дві окремі продиктовані цифри через
+   * пробіл. Блоки до 3 груп. Приймає токени з _segTokens. */
+  function _collapseRunRepeats(toks) {
+    let arr = toks.slice();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let block = 1; block <= 3 && !changed; block++) {
+        for (let i = 0; i + 2 * block <= arr.length; i++) {
+          let eq = true;
+          for (let j = 0; j < block; j++) {
+            if (arr[i + j].value !== arr[i + block + j].value) { eq = false; break; }
+          }
+          if (eq && arr[i + block].comma) { arr.splice(i + block, block); changed = true; break; }
+        }
+      }
+    }
+    return arr;
+  }
+
+  /* Рятувальний екстрактор УСК-2000 для КОМА-розділеної диктовки з повторами
+   * ("54, 54 32, 32, 0 17, 0 17" → X=5432017). Основний V2-екстрактор вважає
+   * кому бар'єром і фрагментує таку координату. Тут працюємо ПОСЕГМЕНТНО
+   * (репліка = межа між крапками/?/!/рядками): у сегменті згортаємо повтори
+   * груп і зливаємо всі цифри в один потік. Приймаємо лише сильний сигнал —
+   * рівно 7 цифр із префіксом 54 (X) / 74 (Y), або 14 цифр (X+Y разом). X та Y
+   * зіставляємо попарно за порядком. Консервативно → мало хибних спрацювань. */
+  function _extractUskRepeatSalvage(text) {
+    const body = _stripDateTime(_bodyOnly(text)).toLowerCase();
+    if (!body) return [];
+    const xs = [], ys = [], direct = [];
+    for (const seg of body.split(/[.\n!?]+/)) {
+      const toks = _segTokens(seg);
+      if (toks.length < 2) continue;
+      const digits = _collapseRunRepeats(toks).map(t => t.value).join("");
+      if (digits.length === 7) {
+        if (digits.startsWith("54")) xs.push(digits);
+        else if (digits.startsWith("74")) ys.push(digits);
+      } else if (digits.length === 14) {
+        const a = digits.slice(0, 7), b = digits.slice(7);
+        if (a.startsWith("54") && b.startsWith("74")) direct.push({ x: a, y: b });
+        else if (a.startsWith("74") && b.startsWith("54")) direct.push({ x: b, y: a });
+      }
+    }
+    const out = direct.slice();
+    for (let i = 0; i < xs.length && i < ys.length; i++) out.push({ x: xs[i], y: ys[i] });
+    return out;
+  }
+
   /* Ставить точку УСК-2000, приймаючи 5- або 7-значні X та Y.
    * 5-значні автоматично доповнюються префіксами 54 / 74. */
   function _placeUskPair(x, y) {
@@ -4353,6 +4417,16 @@
       let pairs = _extractUskPairsV2(body);
       // Fallback на старий, якщо новий нічого не знайшов.
       if (!pairs.length) pairs = _extractUskPairs(body);
+      // Доповнюємо рятувальним екстрактором (кома-розділена диктовка з
+      // повторами), який V2 не ловить. Мерджимо з дедуплікацією за x_y.
+      const salvage = _extractUskRepeatSalvage(fullText);
+      if (salvage.length) {
+        const seen = new Set(pairs.map(p => `${p.x}_${p.y}`));
+        for (const p of salvage) {
+          const k = `${p.x}_${p.y}`;
+          if (!seen.has(k)) { seen.add(k); pairs.push(p); }
+        }
+      }
       if (!pairs.length) { if (window.appToast) window.appToast("Координати не знайдено", "info", 1600); return; }
       pairs.forEach(p => _placeUskPair(p.x, p.y));
       const ci = document.getElementById("conclCoordInput");
