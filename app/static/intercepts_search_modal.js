@@ -105,7 +105,7 @@
     if (loading) return;
     const phrase = (phraseI && phraseI.value.trim()) || "";
     const frequency = (freqI && freqI.value.trim()) || "";
-    const days = (daysI && daysI.value) || "70";
+    const days = (daysI && daysI.value) || "10";
 
     if (reset) { offset = 0; reachedEnd = false; results.innerHTML = ""; }
     lastPhrase = phrase;
