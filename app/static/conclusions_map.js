@@ -586,6 +586,8 @@ function openDetailPanel(row, clickedMgrs) {
   if (delBtn) delBtn.onclick = () => deleteConclusion(row.id);
   const editBtn = document.getElementById("rpEditBtn");
   if (editBtn) editBtn.onclick = () => startEditPanel();
+  const deltaBtn = document.getElementById("rpDeltaBtn");
+  if (deltaBtn) deltaBtn.onclick = () => quickSendDelta(row.id);
   const saveBtn = document.getElementById("rpEditSaveBtn");
   if (saveBtn) saveBtn.onclick = () => saveEditPanel();
   const cancelBtn = document.getElementById("rpEditCancelBtn");
@@ -730,6 +732,39 @@ async function deleteConclusion(acId) {
     updateCountBadge(_allMarkers.length);
     mapToast("Висновок видалено");
   } catch (e) { mapToast("Помилка: " + (e && e.message ? e.message : e)); }
+}
+
+/** Швидке відсилання в Delta: сервер будує звіт → шлемо через push/send → mark-sended. */
+async function quickSendDelta(acId) {
+  const btn = document.getElementById("rpDeltaBtn");
+  if (btn) { btn.disabled = true; btn.style.opacity = ".5"; }
+  try {
+    // 1. Сервер формує текст звіту + цільовий чат.
+    const tRes = await fetch(`/api/conclusions/${acId}/delta-text`);
+    const tData = await tRes.json().catch(() => ({}));
+    if (!tRes.ok || !tData.ok) { mapToast(tData.error || tData.detail || "Не вдалося сформувати звіт"); return; }
+
+    const chatLabel = tData.chat_name || tData.chat_id;
+    if (!confirm(`Надіслати звіт у Delta?\nЧат: ${chatLabel}`)) return;
+
+    // 2. Надсилаємо (гейт message.forward — оператор отримає 403).
+    const sRes = await fetch("/api/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform: tData.platform, chat_id: tData.chat_id, text: tData.text }),
+    });
+    const sData = await sRes.json().catch(() => ({}));
+    if (!sRes.ok || !sData.ok) { mapToast(sData.error || sData.detail || "Помилка надсилання"); return; }
+
+    // 3. Позначаємо як надіслане (best-effort).
+    fetch(`/api/conclusions/${acId}/mark-sended`, { method: "POST" }).catch(() => {});
+    if (_panelRow && _panelRow.id === acId) _panelRow.sended = 1;
+    mapToast("✓ Надіслано в Delta");
+  } catch (e) {
+    mapToast("Помилка: " + (e && e.message ? e.message : e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ""; }
+  }
 }
 
 function closeRightPanel() {

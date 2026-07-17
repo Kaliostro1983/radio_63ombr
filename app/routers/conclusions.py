@@ -1079,6 +1079,92 @@ def api_mark_sended(ac_id: int, request: Request):
     return {"ok": True}
 
 
+@router.get("/api/conclusions/{ac_id}/delta-text")
+def api_conclusion_delta_text(ac_id: int):
+    """Build the Delta report text for a conclusion (same server format as
+    auto-send) and return it with the configured target chat. Read-only —
+    used by the map panel «швидке відсилання» (client then POSTs /api/push/send
+    + mark-sended). Text = header-lines + conclusion (route points filled) + body.
+    """
+    from app.services.ingest_service import _fill_route_points
+
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT ac.type_id, ac.network_id, ac.created_at, ac.conclusion_text,
+                   ac.mgrs_json, msg.body_text, n.frequency, n.unit
+            FROM analytical_conclusions ac
+            LEFT JOIN messages msg ON msg.id = ac.message_id
+            LEFT JOIN networks n   ON n.id   = ac.network_id
+            WHERE ac.id = ?
+            """,
+            (ac_id,),
+        ).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Висновок не знайдено"}, status_code=404)
+        srv = {
+            r["key"]: r["value"]
+            for r in conn.execute(
+                "SELECT key, value FROM app_settings WHERE key IN "
+                "('delta_chat_id','delta_platform','delta_chat_name')"
+            ).fetchall()
+        }
+        type_row = conn.execute(
+            "SELECT delta_type, delta_identification, delta_source, delta_presence "
+            "FROM conclusion_types WHERE id=?",
+            (row["type_id"],),
+        ).fetchone()
+
+    chat_id   = (srv.get("delta_chat_id") or "").strip()
+    platform  = (srv.get("delta_platform") or "whatsapp").strip() or "whatsapp"
+    chat_name = (srv.get("delta_chat_name") or "").strip()
+    if not chat_id:
+        return JSONResponse(
+            {"ok": False, "error": "Цільовий чат Delta не налаштовано (вкладка «Налаштування»)."},
+            status_code=400,
+        )
+
+    try:
+        mgrs_list = json.loads(row["mgrs_json"] or "[]")
+    except Exception:
+        mgrs_list = []
+
+    dt_fmt = (row["created_at"] or "")
+    try:
+        raw_dt = dt_fmt.replace("T", " ")
+        dp, tp = raw_dt.split(" ", 1)
+        y, mo, d = dp.split("-")
+        dt_fmt = f"{d}.{mo}.{y} {tp}"
+    except Exception:
+        pass
+
+    mgrs_compact   = ", ".join(m.replace(" ", "") for m in mgrs_list if m)
+    delta_type     = str((type_row["delta_type"] if type_row else "") or "")
+    identification = _normalize_delta_identification(type_row["delta_identification"]) if type_row else ""
+    source         = str((type_row["delta_source"] if type_row else "") or "")
+    presence       = str((type_row["delta_presence"] if type_row else "") or "")
+
+    header_lines: list[str] = []
+    if delta_type:     header_lines.append(f"Тип: {delta_type}")
+    if row["frequency"]: header_lines.append(f"Назва: {row['frequency']}")
+    if identification: header_lines.append(f"Ідентифікація: {identification}")
+    if row["unit"]:    header_lines.append(f"Підрозділ: {row['unit']}")
+    if presence:       header_lines.append(f"Присутність: {presence}")
+    if source:         header_lines.append(f"Джерело: {source}")
+    if dt_fmt:         header_lines.append(f"Час виявлення: {dt_fmt}")
+    if mgrs_compact:   header_lines.append(f"MGRS: {mgrs_compact}")
+
+    text = "\n\n".join(
+        p for p in [
+            "\n".join(header_lines),
+            _fill_route_points((row["conclusion_text"] or "").strip(), mgrs_list),
+            (row["body_text"] or "").strip(),
+        ]
+        if p
+    )
+    return {"ok": True, "text": text, "platform": platform, "chat_id": chat_id, "chat_name": chat_name}
+
+
 # ---------------------------------------------------------------------------
 # App settings (global key-value store)
 # ---------------------------------------------------------------------------
