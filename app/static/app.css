@@ -6251,3 +6251,19 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 }
 .xa-dir-btn.xa-dir--on{ color:#22c55e; border-color:color-mix(in srgb,#22c55e 55%,var(--border,#2b3340)); }
 .xa-dir-btn:hover{ background:rgba(255,255,255,.06); }
+
+/* Картка р/м — оверлей завантаження (нестабільний Tailscale) */
+.it-netcard-loader{
+  position:absolute; inset:0; z-index:2;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  background:var(--bg,#0b0f14); text-align:center; padding:24px;
+}
+.it-netcard-loader__text{ opacity:.75; font-size:14px; max-width:360px; line-height:1.5; }
+.it-netcard-spinner{
+  width:34px; height:34px; border-radius:50%;
+  border:3px solid rgba(255,255,255,.14);
+  border-top-color:var(--accent,#3b82f6);
+  animation:itNetCardSpin .8s linear infinite;
+}
+@keyframes itNetCardSpin{ to{ transform:rotate(360deg); } }
+.it-netcard-retry{ padding:8px 18px; border-radius:8px; cursor:pointer; }

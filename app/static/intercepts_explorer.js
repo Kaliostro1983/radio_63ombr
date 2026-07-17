@@ -1673,6 +1673,7 @@
     if (!overlay) return;
     overlay.classList.add("hidden");
     overlay.setAttribute("aria-hidden", "true");
+    if (_netCardTimer) { clearTimeout(_netCardTimer); _netCardTimer = null; }
     const frame = document.getElementById("itNetCardFrame");
     if (frame) frame.src = "about:blank";
   }
@@ -1694,23 +1695,65 @@
               '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>' +
             '</button>' +
           '</div>' +
-          '<div class="modal-body" style="padding:0">' +
+          '<div class="modal-body" style="padding:0; position:relative">' +
+            '<div id="itNetCardLoader" class="it-netcard-loader">' +
+              '<div class="it-netcard-spinner" aria-hidden="true"></div>' +
+              '<div class="it-netcard-loader__text">Завантаження картки…</div>' +
+              '<button type="button" id="itNetCardRetry" class="secondary it-netcard-retry" style="display:none">Повторити</button>' +
+            '</div>' +
             '<iframe id="itNetCardFrame" src="about:blank" title="Картка р/м" style="width:100%; height:82vh; border:0; display:block; background:var(--bg)"></iframe>' +
           '</div>' +
         '</div>';
       document.body.appendChild(overlay);
       overlay.addEventListener("click", (e) => {
         if (e.target.closest && e.target.closest('[data-netcard-close="1"]')) closeNetworkCardModal();
+        if (e.target.closest && e.target.closest("#itNetCardRetry")) {
+          const nid = Number(overlay.dataset.networkId || 0);
+          if (nid) _netCardLoad(nid);
+        }
       });
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeNetworkCardModal();
       });
     }
-    const frame = document.getElementById("itNetCardFrame");
-    if (frame) frame.src = "/networks?pick=" + encodeURIComponent(nid) + "&embed=1&_=" + Date.now();
+    overlay.dataset.networkId = String(nid);
+    _netCardLoad(nid);
     overlay.classList.remove("hidden");
     overlay.setAttribute("aria-hidden", "false");
     if (window.__modalToFront) window.__modalToFront(overlay);
+  }
+
+  /* Завантажити iframe картки: показати спінер, зняти його на onload,
+     а якщо лінк «завис» (нестабільний Tailscale) — за 12 с показати «Повторити». */
+  let _netCardTimer = null;
+  function _netCardLoad(nid) {
+    const frame = document.getElementById("itNetCardFrame");
+    const loader = document.getElementById("itNetCardLoader");
+    const retry = document.getElementById("itNetCardRetry");
+    const txt = loader ? loader.querySelector(".it-netcard-loader__text") : null;
+    const spin = loader ? loader.querySelector(".it-netcard-spinner") : null;
+    if (!frame) return;
+
+    if (loader) loader.style.display = "";
+    if (retry) retry.style.display = "none";
+    if (spin) spin.style.display = "";
+    if (txt) txt.textContent = "Завантаження картки…";
+
+    if (_netCardTimer) clearTimeout(_netCardTimer);
+    _netCardTimer = setTimeout(() => {
+      // Не завантажилось вчасно — ймовірно обрив/флап лінку.
+      if (txt) txt.textContent = "Не вдалося завантажити (нестабільний зв'язок).";
+      if (spin) spin.style.display = "none";
+      if (retry) retry.style.display = "";
+    }, 12000);
+
+    frame.onload = () => {
+      // about:blank теж дає onload — реагуємо лише на реальний src.
+      if (frame.src.indexOf("about:blank") !== -1) return;
+      if (_netCardTimer) { clearTimeout(_netCardTimer); _netCardTimer = null; }
+      if (loader) loader.style.display = "none";
+    };
+    frame.src = "/networks?pick=" + encodeURIComponent(nid) + "&embed=1&_=" + Date.now();
   }
   window.openNetworkCardModal = openNetworkCardModal;
 
