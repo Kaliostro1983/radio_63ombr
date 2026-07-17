@@ -296,12 +296,21 @@ def intercepts_search(
         warning = None
 
         if phrase:
-            words = [w.strip() for w in phrase.split() if w.strip()]
-            words = [w for w in words if len(w) >= 2]
-
-            for word in words:
-                where.append("pylower(m.body_text) LIKE ?")
-                params.append(f"%{word.lower()}%")
+            # Пошук СУЦІЛЬНОЇ фрази: точний підрядок (регістронезалежно), а не
+            # окремі слова. Пробіли нормалізуємо ("6   2  3" -> "6 2 3"), щоб
+            # зайві пробіли у запиті не ламали збіг.
+            needle = " ".join(phrase.split())
+            if len(needle) < 2:
+                # Порожній/надто короткий запит НЕ повертає все — попереджаємо.
+                return JSONResponse(
+                    {
+                        "warning": "Замало символів для пошуку (мінімум 2).",
+                        "total": 0,
+                        "items": [],
+                    }
+                )
+            where.append("pylower(m.body_text) LIKE ?")
+            params.append(f"%{needle.lower()}%")
 
         exact_freq, freq_mask = normalize_freq_or_mask(frequency_raw)
 
