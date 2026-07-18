@@ -849,6 +849,10 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "messages", "tags_json", "tags_json TEXT DEFAULT '[]'")
     _ensure_column(conn, "messages", "is_read", "is_read INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "callsign_statuses", "icon", "icon TEXT")
+    # Чи показувати іконку статусу в блоці «Швидка ідентифікація» картки позивного.
+    # DEFAULT 1 — щоб наявна поведінка (показуються всі) не змінилася після оновлення.
+    _ensure_column(conn, "callsign_statuses", "quick_access",
+                   "quick_access INTEGER NOT NULL DEFAULT 1")
     _ensure_column(conn, "callsigns", "last_seen_dt", "last_seen_dt TEXT")
     _ensure_column(conn, "callsigns", "callsign_status_id", "callsign_status_id INTEGER")
     _ensure_column(conn, "callsigns", "source_id", "source_id INTEGER")

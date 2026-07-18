@@ -1274,6 +1274,12 @@ button.secondary{
   background:transparent; border:1px solid var(--border); color:var(--fg); cursor:pointer;
 }
 .cs-stmgr-btn:hover{ background:rgba(255,255,255,.08); }
+/* Чекбокс «швидкий доступ» у рядку керування статусами */
+.cs-stmgr-qa{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:4px;
+  font-size:11px; opacity:.75; cursor:pointer; user-select:none; white-space:nowrap;
+}
+.cs-stmgr-qa input{ cursor:pointer; margin:0; }
 .cs-stmgr-btn--save{ color:#22c55e;
   border-color:color-mix(in srgb, #22c55e 50%, var(--border)); }
 .cs-stmgr-btn--del{ color:var(--danger);

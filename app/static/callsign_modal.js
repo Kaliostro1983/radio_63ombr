@@ -381,9 +381,12 @@
     const rerSourceId = getSourceIdByName("РЕР");
     if (rerSourceId == null) return;
 
-    const list = QUICK_STATUS_WHITELIST
+    const base = QUICK_STATUS_WHITELIST
       ? STATUS_LIST.filter((s) => QUICK_STATUS_WHITELIST.includes(Number(s.id)))
       : STATUS_LIST;
+    // Прапорець «Швидкий доступ» — ставиться чекбоксом у «Керування статусами».
+    // Невизначене значення трактуємо як увімкнене (сумісність зі старими даними).
+    const list = base.filter((s) => s.quick_access !== false && s.quick_access !== 0);
 
     quickWrap.innerHTML = "";
 
@@ -562,8 +565,47 @@
       delBtn.innerHTML =
         '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4.5h4V6M6 6l.7 9.5a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L15 6"/></svg>';
 
+      // Чекбокс «Швидкий доступ» — чи показувати іконку статусу в блоці
+      // «Швидка ідентифікація» картки позивного. Зберігається одразу.
+      const qaLabel = document.createElement("label");
+      qaLabel.className = "cs-stmgr-qa";
+      qaLabel.title = "Швидкий доступ — показувати іконку в блоці «Швидка ідентифікація»";
+      const qaBox = document.createElement("input");
+      qaBox.type = "checkbox";
+      qaBox.checked = s.quick_access !== false && s.quick_access !== 0;
+      qaBox.addEventListener("change", async function () {
+        const want = qaBox.checked;
+        qaBox.disabled = true;
+        try {
+          const r = await fetch("/api/callsigns/statuses/" + sid, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ quick_access: want }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok || !d.ok) {
+            qaBox.checked = !want;                       // відкат
+            showStMgrError(d.error || d.detail || "Не вдалося зберегти");
+            return;
+          }
+          showStMgrError("");
+          s.quick_access = want;                          // оновити локальний список
+          const item = STATUS_LIST.find((x) => Number(x.id) === sid);
+          if (item) item.quick_access = want;
+          renderQuickIdButtons();                         // одразу перемалювати іконки
+        } catch (e) {
+          qaBox.checked = !want;
+          showStMgrError("Помилка зв'язку");
+        } finally {
+          qaBox.disabled = false;
+        }
+      });
+      qaLabel.appendChild(qaBox);
+      qaLabel.appendChild(document.createTextNode("швидкий"));
+
       row.appendChild(img);
       row.appendChild(inp);
+      row.appendChild(qaLabel);
       row.appendChild(saveBtn);
       row.appendChild(delBtn);
       stMgrList.appendChild(row);

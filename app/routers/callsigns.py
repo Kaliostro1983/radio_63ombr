@@ -62,10 +62,14 @@ def api_statuses():
     """Return list of callsign statuses for UI dropdowns."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, name FROM callsign_statuses ORDER BY name"
+            "SELECT id, name, COALESCE(quick_access, 1) AS quick_access "
+            "FROM callsign_statuses ORDER BY name"
         ).fetchall()
 
-    return [{"id": int(r["id"]), "name": r["name"]} for r in rows]
+    return [
+        {"id": int(r["id"]), "name": r["name"], "quick_access": bool(r["quick_access"])}
+        for r in rows
+    ]
 
 
 @router.post("/api/callsigns/statuses")
@@ -98,32 +102,57 @@ async def api_status_create(request: Request):
 
 
 @router.put("/api/callsigns/statuses/{status_id}")
-async def api_status_rename(status_id: int, request: Request):
-    """Rename an existing callsign status. Expects JSON: `{ "name": "..." }`."""
+async def api_status_update(status_id: int, request: Request):
+    """Update a callsign status.
+
+    Приймає JSON із будь-яким із полів (часткове оновлення):
+      * `name`         — нова назва (перейменування);
+      * `quick_access` — чи показувати іконку в блоці «Швидка ідентифікація».
+    """
     payload: Dict[str, Any] = await request.json()
+    has_name = "name" in payload
+    has_quick = "quick_access" in payload
     name = (payload.get("name") or "").strip()
-    if not name:
+    if has_name and not name:
         return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
+    if not has_name and not has_quick:
+        return JSONResponse({"ok": False, "error": "nothing to update"}, status_code=400)
 
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM callsign_statuses WHERE id = ?", (status_id,)
+            "SELECT id, name, COALESCE(quick_access,1) AS quick_access "
+            "FROM callsign_statuses WHERE id = ?",
+            (status_id,),
         ).fetchone()
         if not row:
             return JSONResponse({"ok": False, "error": "Статус не знайдено"}, status_code=404)
-        dup = conn.execute(
-            "SELECT 1 FROM callsign_statuses WHERE lower(name)=lower(?) AND id<>? LIMIT 1",
-            (name, status_id),
-        ).fetchone()
-        if dup:
-            return JSONResponse({"ok": False, "error": "Статус з такою назвою вже існує"}, status_code=400)
+
+        if has_name:
+            dup = conn.execute(
+                "SELECT 1 FROM callsign_statuses WHERE lower(name)=lower(?) AND id<>? LIMIT 1",
+                (name, status_id),
+            ).fetchone()
+            if dup:
+                return JSONResponse({"ok": False, "error": "Статус з такою назвою вже існує"}, status_code=400)
+
         try:
-            conn.execute("UPDATE callsign_statuses SET name = ? WHERE id = ?", (name, status_id))
+            if has_name:
+                conn.execute("UPDATE callsign_statuses SET name = ? WHERE id = ?", (name, status_id))
+            if has_quick:
+                conn.execute(
+                    "UPDATE callsign_statuses SET quick_access = ? WHERE id = ?",
+                    (1 if payload.get("quick_access") else 0, status_id),
+                )
             conn.commit()
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
-    return {"ok": True, "id": status_id, "name": name}
+    return {
+        "ok": True,
+        "id": status_id,
+        "name": name if has_name else row["name"],
+        "quick_access": bool(payload.get("quick_access")) if has_quick else bool(row["quick_access"]),
+    }
 
 
 @router.delete("/api/callsigns/statuses/{status_id}")
