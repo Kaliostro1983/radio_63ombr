@@ -4696,10 +4696,14 @@
     const btn = document.getElementById(btnId);
     const list = document.getElementById(listId);
     if (!btn || !list) return;
+    // Секцію теж треба «стиснути»: .pal-section--grow має flex:1 1 auto і
+    // розтягується на всю висоту навіть із прихованим списком.
+    const section = list.closest(".pal-section--grow");
     const apply = (open) => {
       list.style.display = open ? "" : "none";
       btn.setAttribute("aria-expanded", open ? "true" : "false");
       btn.classList.toggle("is-collapsed", !open);
+      if (section) section.classList.toggle("is-collapsed", !open);
     };
     let open = true;
     try { open = localStorage.getItem(key) !== "0"; } catch (_) {}
@@ -4914,7 +4918,11 @@
           `<button class="pal-btn" data-act="cancel" type="button">Скасувати</button>` +
         `</div>` +
       `</div>`;
-    document.body.appendChild(wrap);
+    // ВАЖЛИВО: .pal-dialog має z-index:1300 і position:absolute — його треба
+    // класти в контейнер панелі палітр, інакше він опиняється ПІД модалкою
+    // висновку (.it-modal, z-index 9999) і візуально «нічого не відбувається».
+    const host = (document.getElementById("palPanel") || {}).parentElement || document.body;
+    host.appendChild(wrap);
     const close = () => wrap.remove();
     wrap.addEventListener("click", async (e) => {
       const b = e.target.closest("[data-act]");

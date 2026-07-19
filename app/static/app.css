@@ -6305,3 +6305,7 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .trk-field input[type="color"]{ width:56px; height:32px; padding:2px; cursor:pointer;
   border:1px solid var(--border); border-radius:7px; background:var(--bg); }
 .trk-units{ display:flex; flex-wrap:wrap; gap:8px 14px; }
+
+/* Згорнута секція не має розтягуватись на всю висоту панелі */
+.pal-section--grow.is-collapsed{ flex:0 0 auto; }
+.pal-section--grow.is-collapsed .pal-section-title{ margin-bottom:0; }
