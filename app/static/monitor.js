@@ -4494,8 +4494,13 @@
       if (willOpen) {
         _palScope.clear(); _palSaveScope();   // при відкритті — жодна палітра не виділена (пошук по всіх)
         _palLoadUnits(); _palLoadList();
+        _trkLoadList();                        // блок «Треки» — той самий життєвий цикл
       }
     });
+    // Спойлери секцій (стан запам'ятовується між сеансами).
+    _trkSpoilerInit("palSpoilerBtn", "palList", "palSpoilerOpen");
+    _trkSpoilerInit("trkSpoilerBtn", "trkList", "trkSpoilerOpen");
+    _trkInitImport();
     document.getElementById("palPanelClose")?.addEventListener("click", () => {
       panel.classList.add("hidden");
       panel.setAttribute("aria-hidden", "true");
@@ -4677,6 +4682,300 @@
     } catch (_) {
       if (window.appToast) window.appToast("Помилка операції", "error", 1800);
     }
+  }
+
+  /* ===================================================================
+   *  ТРЕКИ — GPS-маршрути. Модель та сама, що в палітр: чіп зі списку,
+   *  теги полково-бригадного рівня (спільний довідник palette_units),
+   *  дії через «⋯». Відмінність — «око» вмикає/вимикає лінію на карті.
+   * =================================================================== */
+  let _trkList   = [];               // кеш переліку треків
+  let _trkLayers = new Map();        // trackId → L.Polyline (видимі треки)
+
+  function _trkSpoilerInit(btnId, listId, key) {
+    const btn = document.getElementById(btnId);
+    const list = document.getElementById(listId);
+    if (!btn || !list) return;
+    const apply = (open) => {
+      list.style.display = open ? "" : "none";
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.classList.toggle("is-collapsed", !open);
+    };
+    let open = true;
+    try { open = localStorage.getItem(key) !== "0"; } catch (_) {}
+    apply(open);
+    btn.addEventListener("click", () => {
+      open = !open;
+      apply(open);
+      try { localStorage.setItem(key, open ? "1" : "0"); } catch (_) {}
+    });
+  }
+
+  async function _trkLoadList() {
+    const host = document.getElementById("trkList");
+    if (!host) return;
+    try {
+      const r = await fetch("/api/tracks");
+      const j = await r.json();
+      _trkList = (j && j.rows) || [];
+    } catch (_) {
+      _trkList = [];
+      host.innerHTML = '<div class="pal-empty">Не вдалося завантажити треки.</div>';
+      return;
+    }
+    _trkRenderList();
+  }
+
+  function _trkRenderList() {
+    const host = document.getElementById("trkList");
+    if (!host) return;
+    if (!_trkList.length) {
+      host.innerHTML = '<div class="pal-empty">Треків немає. Імпортуйте LDK/GPX/KML.</div>';
+      return;
+    }
+    host.innerHTML = "";
+    _trkList.forEach(t => {
+      const item = document.createElement("div");
+      item.className = "pal-item pal-item--compact";
+      const shown = _trkLayers.has(t.id);
+      item.innerHTML =
+        `<span class="trk-swatch" style="background:${_esc(t.color || "#ff8000")}"></span>` +
+        `<span class="pal-item-name" title="${_esc(t.name)}">${_palSeqPrefix(t.seq_no)}${_esc(t.name)}</span>` +
+        `<button class="trk-eye-btn${shown ? " is-on" : ""}" type="button" title="Показати/сховати на карті" aria-label="Показати на карті">` +
+          `<svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5">` +
+            `<path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z"/>` +
+            `<circle cx="10" cy="10" r="2.6"/>` +
+          `</svg>` +
+        `</button>` +
+        `<button class="pal-menu-btn" type="button" title="Дії з треком" aria-label="Дії з треком">` +
+          `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4">` +
+            `<circle cx="10" cy="10" r="8"/>` +
+            `<circle cx="6.2" cy="10" r="1.1" fill="currentColor" stroke="none"/>` +
+            `<circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/>` +
+            `<circle cx="13.8" cy="10" r="1.1" fill="currentColor" stroke="none"/>` +
+          `</svg>` +
+        `</button>`;
+      item.querySelector(".trk-eye-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        _trkToggleOnMap(t);
+      });
+      item.querySelector(".pal-menu-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        _trkOpenCtxMenu(t, e.currentTarget);
+      });
+      host.appendChild(item);
+    });
+  }
+
+  /* «Око»: намалювати/прибрати лінію треку на карті висновків. */
+  async function _trkToggleOnMap(t) {
+    if (!_conclMap) { if (window.appToast) window.appToast("Карта ще не готова", "warn", 1600); return; }
+    const cur = _trkLayers.get(t.id);
+    if (cur) {                                   // вже показаний → прибрати
+      try { _conclMap.removeLayer(cur); } catch (_) {}
+      _trkLayers.delete(t.id);
+      _trkRenderList();
+      return;
+    }
+    try {
+      const r = await fetch(`/api/tracks/${t.id}/points`);
+      const j = await r.json();
+      if (!r.ok || !j.ok || !(j.points || []).length) {
+        if (window.appToast) window.appToast(j.error || "Точок треку немає", "error", 2000);
+        return;
+      }
+      const line = L.polyline(j.points, {
+        color: j.color || t.color || "#ff8000",
+        weight: 3, opacity: 0.9,
+      }).addTo(_conclMap);
+      line.bindTooltip(t.name, { sticky: true });
+      _trkLayers.set(t.id, line);
+      try { _conclMap.fitBounds(line.getBounds(), { padding: [30, 30] }); } catch (_) {}
+      _trkRenderList();
+    } catch (_) {
+      if (window.appToast) window.appToast("Помилка завантаження треку", "error", 2000);
+    }
+  }
+
+  /* ---- Контекстне меню треку ---- */
+  let _trkCtxMenuEl = null, _trkCtxId = null;
+
+  function _trkCtxMenu() {
+    if (_trkCtxMenuEl) return _trkCtxMenuEl;
+    const m = document.createElement("div");
+    m.className = "pal-ctx-menu hidden";
+    m.innerHTML =
+      `<div class="pal-ctx-info"></div>` +
+      `<button type="button" class="pal-ctx-item" data-act="edit">✏️ Редагувати</button>` +
+      `<button type="button" class="pal-ctx-item" data-act="export">📦 Експорт (kmz)</button>` +
+      `<button type="button" class="pal-ctx-item" data-act="info">ℹ️ Інфо</button>` +
+      `<button type="button" class="pal-ctx-item pal-ctx-item--danger" data-act="del">🗑 Видалити</button>`;
+    document.body.appendChild(m);
+    m.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn) return;
+      const act = btn.getAttribute("data-act");
+      const t = _trkList.find(x => x.id === _trkCtxId);
+      _trkCloseCtxMenu();
+      if (!t) return;
+      if (act === "export") {
+        const a = document.createElement("a");
+        a.href = `/api/tracks/${t.id}/export`;
+        document.body.appendChild(a); a.click(); a.remove();
+      } else if (act === "edit") {
+        _trkOpenEditDialog(t);
+      } else if (act === "info") {
+        _trkShowInfo(t);
+      } else if (act === "del") {
+        if (confirm(`Видалити трек «${t.name}» назавжди?`)) _trkDelete(t.id);
+      }
+    });
+    _trkCtxMenuEl = m;
+    return m;
+  }
+  function _trkCtxOutside(e) {
+    if (_trkCtxMenuEl && !_trkCtxMenuEl.contains(e.target)
+        && !(e.target.closest && e.target.closest(".pal-menu-btn"))) _trkCloseCtxMenu();
+  }
+  function _trkCloseCtxMenu() {
+    if (_trkCtxMenuEl) _trkCtxMenuEl.classList.add("hidden");
+    _trkCtxId = null;
+    document.removeEventListener("click", _trkCtxOutside, true);
+  }
+  function _trkOpenCtxMenu(t, btn) {
+    const m = _trkCtxMenu();
+    _trkCtxId = t.id;
+    const units = (t.units || []).map(u => `<span class="pal-unit-chip">${_esc(u.name)}</span>`).join("");
+    m.querySelector(".pal-ctx-info").innerHTML =
+      `<div class="pal-ctx-name">${_palSeqPrefix(t.seq_no)}${_esc(t.name || "")}</div>` +
+      `<div class="pal-ctx-meta">${t.point_count} тчк · ${Number(t.length_km || 0).toFixed(1)} км</div>` +
+      (units ? `<div class="pal-ctx-units">${units}</div>` : "");
+    m.classList.remove("hidden");
+    const r = btn.getBoundingClientRect();
+    const mw = m.offsetWidth || 210, mh = m.offsetHeight || 160;
+    let left = r.right - mw, top = r.bottom + 4;
+    if (left < 6) left = 6;
+    if (top + mh > window.innerHeight - 6) top = Math.max(6, r.top - mh - 4);
+    m.style.left = left + "px";
+    m.style.top = top + "px";
+    setTimeout(() => document.addEventListener("click", _trkCtxOutside, true), 0);
+  }
+
+  function _trkShowInfo(t) {
+    const dt = (s) => String(s || "—").replace("T", " ").slice(0, 19);
+    const units = (t.units || []).map(u => u.name).join(", ") || "—";
+    alert(
+      `Трек ${_palSeqPrefix(t.seq_no)}${t.name}\n\n` +
+      `Дата імпорту: ${dt(t.imported_at)}\n` +
+      `Дата запису: ${dt(t.recorded_at)}\n` +
+      `Точок: ${t.point_count}\n` +
+      (t.removed_count ? `Прибрано викидів при імпорті: ${t.removed_count}\n` : "") +
+      `Довжина: ${Number(t.length_km || 0).toFixed(2)} км\n` +
+      `Підрозділи: ${units}\n` +
+      `Файл: ${t.source_filename || "—"} (${t.source_format || "—"})`
+    );
+  }
+
+  async function _trkDelete(id) {
+    try {
+      const r = await fetch(`/api/tracks/${id}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) { if (window.appToast) window.appToast(j.error || j.detail || "Помилка видалення", "error", 2200); return; }
+      const lay = _trkLayers.get(id);
+      if (lay) { try { _conclMap.removeLayer(lay); } catch (_) {} _trkLayers.delete(id); }
+      _trkLoadList();
+    } catch (_) {
+      if (window.appToast) window.appToast("Помилка видалення", "error", 2000);
+    }
+  }
+
+  /* ---- Редагування треку: назва + колір + теги підрозділів ---- */
+  function _trkOpenEditDialog(t) {
+    const wrap = document.createElement("div");
+    wrap.className = "pal-dialog";
+    const opts = _palUnitOptions();
+    const sel = new Set((t.units || []).map(u => u.id));
+    wrap.innerHTML =
+      `<div class="pal-dialog-card">` +
+        `<div class="pal-dialog-head"><strong>Редагувати трек</strong>` +
+          `<button class="pal-x" data-act="cancel" type="button">✕</button></div>` +
+        `<div class="pal-dialog-body">` +
+          `<label class="trk-field"><span>Назва</span>` +
+            `<input id="trkEdName" type="text" value="${_esc(t.name || "")}"></label>` +
+          `<label class="trk-field"><span>Колір</span>` +
+            `<input id="trkEdColor" type="color" value="${_esc(t.color || "#ff8000")}"></label>` +
+          `<div class="trk-field"><span>Підрозділи</span><div class="trk-units">` +
+            opts.map(u => `<label class="pal-check"><input type="checkbox" class="trk-u" value="${u.id}"` +
+                          `${sel.has(u.id) ? " checked" : ""}> ${_esc(u.name)}</label>`).join("") +
+          `</div></div>` +
+        `</div>` +
+        `<div class="pal-dialog-foot">` +
+          `<button class="pal-btn pal-btn--add" data-act="save" type="button">Зберегти</button>` +
+          `<button class="pal-btn" data-act="cancel" type="button">Скасувати</button>` +
+        `</div>` +
+      `</div>`;
+    document.body.appendChild(wrap);
+    const close = () => wrap.remove();
+    wrap.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-act]");
+      if (!b) return;
+      if (b.getAttribute("data-act") === "cancel") { close(); return; }
+      const name = (wrap.querySelector("#trkEdName").value || "").trim();
+      const color = wrap.querySelector("#trkEdColor").value;
+      if (!name) { if (window.appToast) window.appToast("Назва не може бути порожньою", "warn", 1800); return; }
+      const unit_ids = [...wrap.querySelectorAll(".trk-u:checked")].map(x => Number(x.value));
+      try {
+        const r = await fetch(`/api/tracks/${t.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, color }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) { if (window.appToast) window.appToast(j.error || j.detail || "Помилка збереження", "error", 2400); return; }
+        await fetch(`/api/tracks/${t.id}/units`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ unit_ids }),
+        });
+        // Якщо трек показаний — оновити колір лінії без перезавантаження.
+        const lay = _trkLayers.get(t.id);
+        if (lay) { try { lay.setStyle({ color }); } catch (_) {} }
+        close();
+        _trkLoadList();
+      } catch (_) {
+        if (window.appToast) window.appToast("Помилка збереження", "error", 2000);
+      }
+    });
+  }
+
+  /* ---- Імпорт треку ---- */
+  function _trkInitImport() {
+    const btn = document.getElementById("trkImportBtn");
+    const inp = document.getElementById("trkFileInput");
+    if (!btn || !inp) return;
+    btn.addEventListener("click", () => inp.click());
+    inp.addEventListener("change", async () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      btn.disabled = true; btn.textContent = "…";
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const r = await fetch("/api/tracks/import", { method: "POST", body: fd });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) {
+          if (window.appToast) window.appToast(j.error || j.detail || "Помилка імпорту", "error", 3200);
+        } else {
+          const c = (j.created || [])[0] || {};
+          const extra = c.removed ? ` (прибрано викидів: ${c.removed})` : "";
+          if (window.appToast) window.appToast(`Трек імпортовано: ${c.points || 0} тчк${extra}`, "success", 2600);
+          _trkLoadList();
+        }
+      } catch (_) {
+        if (window.appToast) window.appToast("Помилка імпорту", "error", 2200);
+      } finally {
+        btn.disabled = false; btn.textContent = "+ Імпорт";
+        inp.value = "";
+      }
+    });
   }
 
   /* ---- Редагування кольорів палітри ---- */

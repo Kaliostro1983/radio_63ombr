@@ -521,16 +521,42 @@
                   <label class="pal-check"><input type="checkbox" id="palIncludeArchived"> Розширений пошук (+архів)</label>
                 </div>
 
-                <!-- Адміністрування -->
+                <!-- Палітри (згортається стрілкою біля заголовка) -->
                 <div class="pal-section pal-section--grow">
                   <div class="pal-section-title">
-                    <span>Палітри</span>
+                    <button id="palSpoilerBtn" class="pal-spoiler" type="button"
+                            aria-expanded="true" title="Згорнути/розгорнути">
+                      <svg class="pal-spoiler-arrow" viewBox="0 0 16 16" width="12" height="12"
+                           fill="none" stroke="currentColor" stroke-width="2"
+                           stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="4 6 8 10 12 6"/>
+                      </svg>
+                      <span>Палітри</span>
+                    </button>
                     <button id="palImportBtn" class="pal-btn pal-btn--add" type="button">+ Імпорт</button>
                   </div>
                   <div id="palList" class="pal-list"><div class="pal-empty">Завантаження…</div></div>
                 </div>
 
+                <!-- Треки (та сама модель: спойлер + імпорт + чіпи) -->
+                <div class="pal-section pal-section--grow">
+                  <div class="pal-section-title">
+                    <button id="trkSpoilerBtn" class="pal-spoiler" type="button"
+                            aria-expanded="true" title="Згорнути/розгорнути">
+                      <svg class="pal-spoiler-arrow" viewBox="0 0 16 16" width="12" height="12"
+                           fill="none" stroke="currentColor" stroke-width="2"
+                           stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="4 6 8 10 12 6"/>
+                      </svg>
+                      <span>Треки</span>
+                    </button>
+                    <button id="trkImportBtn" class="pal-btn pal-btn--add" type="button">+ Імпорт</button>
+                  </div>
+                  <div id="trkList" class="pal-list"><div class="pal-empty">Завантаження…</div></div>
+                </div>
+
                 <input id="palFileInput" type="file" accept=".kml,.kmz,.geojson,.json,.ldk,.csv" hidden>
+                <input id="trkFileInput" type="file" accept=".ldk,.trk,.gpx,.kml,.kmz" hidden>
               </aside>
 
               <!-- Список збігів пошуку точки (над картою) -->
@@ -1063,7 +1089,7 @@
 <script src="/static/intercepts_freq_chips.js?v=3"></script>
 <script src="/static/intercepts_explorer.js?v=40"></script>
 <script src="/static/intercepts_search_modal.js?v=4"></script>
-<script src="/static/monitor.js?v=140"></script>
+<script src="/static/monitor.js?v=141"></script>
 <script src="/static/monitor_playlist_filter.js?v=3"></script>
 <script src="/static/landmarks.js?v=18" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>
