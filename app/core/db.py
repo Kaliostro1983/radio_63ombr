@@ -1914,6 +1914,71 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         """,
         stage="create_table:palette_points",
     )
+    # ====================================================================
+    # ТРЕКИ (GPS-маршрути з трофейних/власних пристроїв).
+    # Модель дзеркальна до палітр: сам трек + його точки + теги підрозділів.
+    # Довідник тегів СПІЛЬНИЙ із палітрами (`palette_units`) — полково-
+    # бригадний рівень, щоб не дублювати сутність.
+    # ====================================================================
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS tracks (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            seq_no          INTEGER,
+            name            TEXT NOT NULL,
+            color           TEXT NOT NULL DEFAULT '#ff8000',
+            source_format   TEXT NOT NULL DEFAULT '',
+            source_filename TEXT NOT NULL DEFAULT '',
+            comment         TEXT NOT NULL DEFAULT '',
+            is_archived     INTEGER NOT NULL DEFAULT 0,
+            imported_at     TEXT NOT NULL,
+            point_count     INTEGER NOT NULL DEFAULT 0,
+            removed_count   INTEGER NOT NULL DEFAULT 0,
+            length_km       REAL NOT NULL DEFAULT 0,
+            recorded_at     TEXT,
+            min_lat REAL, min_lon REAL, max_lat REAL, max_lon REAL
+        )
+        """,
+        stage="create_table:tracks",
+    )
+    _try_ddl(
+        conn,
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_seq_no ON tracks(seq_no)",
+        stage="index:tracks.seq_no",
+    )
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS track_points (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            seq      INTEGER NOT NULL,
+            lat      REAL NOT NULL,
+            lon      REAL NOT NULL,
+            alt      REAL,
+            ts       TEXT
+        )
+        """,
+        stage="create_table:track_points",
+    )
+    _try_ddl(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_track_points_track ON track_points(track_id, seq)",
+        stage="index:track_points.track",
+    )
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS track_unit_links (
+            track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            unit_id  INTEGER NOT NULL REFERENCES palette_units(id) ON DELETE CASCADE,
+            PRIMARY KEY (track_id, unit_id)
+        )
+        """,
+        stage="create_table:track_unit_links",
+    )
+
     _try_ddl(
         conn,
         """
