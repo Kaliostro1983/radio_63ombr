@@ -284,6 +284,7 @@ def api_landmarks_search(
                 l.id_group,
                 g.name AS group_name,
                 l.id_geom,
+                l.location_wkt,
                 lg.name AS geom_type_name
             FROM landmarks l
             JOIN landmark_types lt ON lt.id = l.id_type
@@ -295,6 +296,22 @@ def api_landmarks_search(
             """,
             [*params, int(limit), int(offset)],
         ).fetchall()
+
+    # Частина орієнтирів заводиться без координат (їх додають пізніше). Позначаємо
+    # це прапорцем, щоб автокомпліт міг показати різні булавки. Перевірка — та
+    # сама, що в /api/landmarks/points: перша пара чисел із WKT + валідний діапазон.
+    import re as _re
+    _rx_pt = _re.compile(r"(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)")
+
+    def _has_coords(wkt: Any) -> bool:
+        m = _rx_pt.search(str(wkt or ""))
+        if not m:
+            return False
+        try:
+            lon, lat = float(m.group(1)), float(m.group(2))
+        except ValueError:
+            return False
+        return -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0
 
     items = []
     for r in rows:
@@ -312,6 +329,7 @@ def api_landmarks_search(
                 "type_id": int(r["id_type"]),
                 "id_geom": int(r["id_geom"]) if r["id_geom"] is not None else None,
                 "geom_type_name": str(r["geom_type_name"] or "") if r["geom_type_name"] else None,
+                "has_coords": _has_coords(r["location_wkt"]),
             }
         )
 

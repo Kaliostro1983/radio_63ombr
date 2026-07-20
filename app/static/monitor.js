@@ -1812,7 +1812,16 @@
           const tagHtml = tag
             ? ` <span class="concl-lm-ac__unit" style="opacity:.6; font-size:.85em; margin-left:4px">${_esc(tag)}</span>`
             : "";
-          return `<button type="button" class="callsign-autocomplete__item" data-idx="${i}">📍 ${_esc(it.name)}${tagHtml}</button>`;
+          // Булавка: зелена — орієнтир має координати, червона — ще без них
+          // (такі заводять наперед, координати додають пізніше).
+          const has = it.has_coords !== false;
+          const pin =
+            `<svg class="concl-lm-ac__pin ${has ? "is-ok" : "is-no"}" viewBox="0 0 24 24" ` +
+            `width="13" height="13" aria-hidden="true"><path fill="currentColor" ` +
+            `d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>`;
+          const title = has ? "" : ' title="Орієнтир без координат"';
+          return `<button type="button" class="callsign-autocomplete__item" data-idx="${i}"${title}>` +
+                 `${pin} ${_esc(it.name)}${tagHtml}</button>`;
         }).join("");
         _coordWrap.appendChild(_lmAc);
       }

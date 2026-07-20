@@ -6309,3 +6309,12 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 /* Згорнута секція не має розтягуватись на всю висоту панелі */
 .pal-section--grow.is-collapsed{ flex:0 0 auto; }
 .pal-section--grow.is-collapsed .pal-section-title{ margin-bottom:0; }
+
+/* ── Автокомпліт орієнтирів (%назва) над картою ── */
+/* Leaflet тримає контейнер кнопок масштабування на z-index:1000, а базовий
+   .callsign-autocomplete має 40 — через це підказка ховалась під «+/−». */
+.concl-lm-ac{ z-index:1200; }
+/* Булавка: зелена — координати є, червона — орієнтир заведено без координат */
+.concl-lm-ac__pin{ flex:0 0 auto; vertical-align:-2px; }
+.concl-lm-ac__pin.is-ok{ color:#22c55e; }
+.concl-lm-ac__pin.is-no{ color:#ef4444; }
