@@ -653,3 +653,79 @@
   display: block;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.55));
 }
+
+/* ── Кнопка-іконка «Прив'язки» + панель (поверх мапи, правий верхній кут) ── */
+.pel-bind-btn {
+  position: absolute;
+  top: 10px; right: 54px;      /* ліворуч від кнопки копіювання */
+  z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px;
+  background: rgba(20,24,30,.82);
+  color: #fff; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  transition: background .12s, border-color .12s;
+}
+.pel-bind-btn:hover { background: rgba(20,24,30,.95); border-color: var(--accent,#f59e0b); }
+.pel-bind-btn.is-on { border-color:#4ade80; color:#4ade80; }
+
+.pel-bind-panel {
+  position: absolute;
+  top: 54px; right: 10px;
+  z-index: 600;
+  width: 290px; max-height: 62%;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: rgba(20,24,30,.96);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.55);
+  color: #fff;
+}
+.pel-bind-panel.hidden { display: none; }
+.pel-bind-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 11px; border-bottom: 1px solid rgba(255,255,255,.14); flex: 0 0 auto;
+}
+.pel-bind-head-actions { display: flex; align-items: center; gap: 6px; }
+.pel-bind-list {
+  overflow-y: auto; padding: 8px; min-height: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.pel-bind-row { display: flex; align-items: center; gap: 7px; }
+.pel-bind-color {
+  flex: 0 0 auto; width: 30px; height: 26px; padding: 1px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 6px; background: transparent;
+}
+.pel-bind-unit { flex: 0 0 34px; font-weight: 700; font-size: 13px; }
+.pel-bind-label {
+  flex: 1 1 auto; min-width: 0; padding: 4px 7px; font-size: 12px;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 6px;
+  background: rgba(0,0,0,.35); color: #fff;
+}
+.pel-bind-onmap { flex: 0 0 10px; color: #4ade80; font-size: 11px; }
+.pel-bind-onmap.is-off { visibility: hidden; }
+.pel-bind-del {
+  flex: 0 0 auto; width: 24px; height: 24px; padding: 0; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: #fff; opacity: .55;
+}
+.pel-bind-del:hover { background: rgba(239,68,68,.22); color: #fecaca; opacity: 1; }
+.pel-bind-empty { font-size: 12px; opacity: .65; padding: 6px 2px; }
+
+/* Чекбокси «Частоти» / «Підрозділ» — поверх мапи, лівий нижній кут */
+.pel-mapblock-opts {
+  position: absolute;
+  left: 10px; bottom: 22px;
+  z-index: 500;
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+}
+.pel-mapblock-opts .pel-mapblock-freq-chk {
+  background: rgba(20,24,30,.82);
+  border-color: rgba(255,255,255,.18);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  padding: 5px 9px;
+  font-size: 12.5px;
+}
