@@ -868,17 +868,30 @@ def peleng_report_preview(
         batch_ids = [int(b["id"]) for b in batches]
         placeholders = ",".join(["?"] * len(batch_ids))
 
+        # У звіт ідуть ЛИШЕ пеленги, зняті власними постами (is_imported = 0).
+        # Завантажені з CSV — чужі дані, вони не мають потрапляти у власний звіт.
         row = db.execute(
             f"""
             SELECT COUNT(*) AS cnt
             FROM peleng_points
             WHERE batch_id IN ({placeholders})
+              AND COALESCE(is_imported, 0) = 0
             """,
             tuple(batch_ids),
         ).fetchone()
 
         point_count = int(row["cnt"] or 0)
-        return {"batch_count": batch_count, "point_count": point_count}
+        # Батчі, у яких після відсіювання не лишилось точок, у звіт не підуть.
+        b_row = db.execute(
+            f"""
+            SELECT COUNT(DISTINCT batch_id) AS cnt
+            FROM peleng_points
+            WHERE batch_id IN ({placeholders})
+              AND COALESCE(is_imported, 0) = 0
+            """,
+            tuple(batch_ids),
+        ).fetchone()
+        return {"batch_count": int(b_row["cnt"] or 0), "point_count": point_count}
     finally:
         db.close()
         
@@ -946,15 +959,23 @@ def peleng_report_by_period(
         batch_ids = [int(b["id"]) for b in batches]
         placeholders = ",".join(["?"] * len(batch_ids))
 
+        # ЛИШЕ власні пеленги: імпортовані з CSV — чужі дані, у власний звіт
+        # вони не входять (див. той самий фільтр у /peleng/report/preview).
         points = db.execute(
             f"""
             SELECT id, batch_id, mgrs
             FROM peleng_points
             WHERE batch_id IN ({placeholders})
+              AND COALESCE(is_imported, 0) = 0
             ORDER BY batch_id ASC, id ASC
             """,
             tuple(batch_ids),
         ).fetchall()
+
+        # Батчі, що лишились без точок після фільтра, у звіт не передаємо —
+        # інакше в документі з'явилися б порожні записи.
+        used = {int(p["batch_id"]) for p in points}
+        batches = [b for b in batches if int(b["id"]) in used]
 
         freqs = sorted({str(b["frequency"]) for b in batches})
         net_by_freq = fetch_latest_networks_by_frequencies(db, freqs)
@@ -963,7 +984,8 @@ def peleng_report_by_period(
         if not records:
             return JSONResponse(
                 status_code=400,
-                content={"detail": "Для вибраного періоду немає точок пеленгації"},
+                content={"detail": "Для вибраного періоду немає власних точок пеленгації "
+                                   "(імпортовані з файлу у звіт не входять)"},
             )
 
         content, filename = render_docx_bytes(records)
