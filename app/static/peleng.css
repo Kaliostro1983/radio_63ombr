@@ -729,3 +729,17 @@
   padding: 5px 9px;
   font-size: 12.5px;
 }
+
+/* «Око» в рядку прив'язки — сховати/показати позначки підрозділу */
+.pel-bind-eye {
+  flex: 0 0 auto; width: 24px; height: 24px; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: #fff; opacity: .45;
+}
+.pel-bind-eye:hover { background: rgba(255,255,255,.10); opacity: 1; }
+.pel-bind-eye.is-on { opacity: 1; color: #4ade80; }
+/* Прихований підрозділ — приглушуємо весь рядок */
+.pel-bind-row.is-hidden .pel-bind-unit,
+.pel-bind-row.is-hidden .pel-bind-label,
+.pel-bind-row.is-hidden .pel-bind-color { opacity: .4; }
