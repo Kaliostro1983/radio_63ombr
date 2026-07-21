@@ -863,7 +863,8 @@
     const color = _pelColorForUnit(unitNum);
     return L.divIcon({
       className: "pel-unit-icon",
-      html: `<div class="pel-unit-circle" style="background:${color}" title="${String(unitNum || "?")}"></div>`,
+      html: `<div class="pel-unit-circle${unitNum ? "" : " is-unknown"}" style="background:${color}" ` +
+            `title="${unitNum ? String(unitNum) : "Радіомережа не ідентифікована"}"></div>`,
       iconSize:    [23, 23],
       iconAnchor:  [11, 11],
       popupAnchor: [0, -11],
@@ -1318,8 +1319,11 @@
         // SIDC-іконку (антена), щоб точку все одно було видно.
         let icon = defaultIcon;
         if (_pelShowUnit) {
-          const unitNum = _pelExtractUnitNumber(r.unit);
-          if (unitNum) icon = _pelBuildUnitIcon(unitNum);
+          // Номер підрозділу не розпізнано (р/м немає в реєстрі або опис на
+          // кшталт «НВ підрозділу») → сіре коло, а не стандартна SIDC-іконка:
+          // такі пеленги мають бути видимі, але явно відрізнятись від
+          // ідентифікованих. Колір дає _pelColorForUnit(null) → #6b7280.
+          icon = _pelBuildUnitIcon(_pelExtractUnitNumber(r.unit));
         }
         const m = icon ? L.marker([lat, lon], { icon }) : L.circleMarker([lat, lon], { radius:6, color:"#ef4444" });
         m.bindPopup(popup);
