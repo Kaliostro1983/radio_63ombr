@@ -60,6 +60,16 @@
             <button type="button" id="pelSendBtn" class="qc-send-btn" title="Надіслати карту в месенджер" disabled>&#10148;</button>
           </div>
 
+          <!-- Імпорт пеленгів із CSV -->
+          <button type="button" id="pelCsvBtn" class="pel-csv-btn" title="Імпорт пеленгів із CSV">
+            <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor"
+                 stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 13v2.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V13"/>
+              <path d="M10 3v9"/><polyline points="6.5 8.5 10 12 13.5 8.5"/>
+            </svg>
+          </button>
+          <input id="pelCsvInput" type="file" accept=".csv" hidden>
+
         </div>
 
         <div class="pel-mapblock-mapwrap">
@@ -329,7 +339,7 @@
    кнопка отримувала два слухачі, і клік по «Прив'язки» перемикав клас двічі
    (панель миттєво закривалась). #}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/peleng.css?v=12">
+<link rel="stylesheet" href="/static/peleng.css?v=13">
 <style>
 /* Header у стилі Home */
 .pel-page-header {
@@ -369,5 +379,5 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/peleng.js?v=32"></script>
+<script src="/static/peleng.js?v=33"></script>
 {% endblock %}

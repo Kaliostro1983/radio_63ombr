@@ -619,6 +619,88 @@ def peleng_save_posts(payload: PostsSaveIn):
         return JSONResponse(status_code=400, content={"detail": str(e)})
 
 # =========================================================
+# API: імпорт пеленгів із CSV
+# =========================================================
+
+@router.post("/api/peleng/import-csv")
+async def peleng_import_csv(request: Request):
+    """Записати пеленги, розібрані з CSV на клієнті.
+
+    Координати конвертує БРАУЗЕР (`window.mgrs.forward`) — серверного
+    конвертера lat/lon→MGRS у проєкті немає. Сюди приходить уже нормалізоване:
+    `{rows: [{event_dt, freq, mgrs}, …]}`.
+
+    Дедуплікація на двох рівнях:
+      * батч — UNIQUE(event_dt, network_id): наявний перевикористовуємо;
+      * точка — той самий MGRS у тому ж батчі не додається вдруге.
+    """
+    from app.core.access import require_capability as _require_cap
+    from app.core.db import get_conn as _get_conn
+    _require_cap(request, "conclusion.write")
+
+    payload = await request.json()
+    rows = payload.get("rows") or []
+    if not isinstance(rows, list) or not rows:
+        return JSONResponse({"ok": False, "error": "Немає рядків для імпорту"}, status_code=400)
+
+    added = dup = bad = 0
+    unknown_freq: dict[str, int] = {}
+
+    with _get_conn() as conn:
+        for r in rows:
+            try:
+                event_dt = str(r.get("event_dt") or "").strip()
+                freq     = str(r.get("freq") or "").strip()
+                mgrs_v   = str(r.get("mgrs") or "").strip()
+                if not (event_dt and freq and mgrs_v):
+                    bad += 1
+                    continue
+                mgrs_v = sanitize_mgrs_line(mgrs_v)
+
+                net = conn.execute(
+                    "SELECT id FROM networks WHERE frequency = ? OR mask = ? LIMIT 1",
+                    (freq, freq),
+                ).fetchone()
+                network_id = int(net["id"]) if net else None
+                if network_id is None:
+                    unknown_freq[freq] = unknown_freq.get(freq, 0) + 1
+
+                b = conn.execute(
+                    "SELECT id FROM peleng_batches WHERE event_dt = ? AND "
+                    "network_id IS ?", (event_dt, network_id),
+                ).fetchone()
+                if b:
+                    batch_id = int(b["id"])
+                else:
+                    cur = conn.execute(
+                        "INSERT INTO peleng_batches (event_dt, network_id) VALUES (?, ?)",
+                        (event_dt, network_id),
+                    )
+                    batch_id = int(cur.lastrowid)
+
+                exists = conn.execute(
+                    "SELECT 1 FROM peleng_points WHERE batch_id = ? AND mgrs = ? LIMIT 1",
+                    (batch_id, mgrs_v),
+                ).fetchone()
+                if exists:
+                    dup += 1
+                    continue
+                conn.execute(
+                    "INSERT INTO peleng_points (batch_id, mgrs) VALUES (?, ?)",
+                    (batch_id, mgrs_v),
+                )
+                added += 1
+            except Exception:
+                bad += 1
+        conn.commit()
+
+    return {
+        "ok": True, "added": added, "duplicates": dup, "invalid": bad,
+        "unknown_frequencies": sorted(unknown_freq.items(), key=lambda x: -x[1])[:20],
+    }
+
+
+# =========================================================
 # API: прив'язки «підрозділ → колір» для карти пеленгації
 # =========================================================
 

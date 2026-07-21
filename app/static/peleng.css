@@ -744,3 +744,14 @@
 .pel-bind-row.is-hidden .pel-bind-unit,
 .pel-bind-row.is-hidden .pel-bind-label,
 .pel-bind-row.is-hidden .pel-bind-color { opacity: .4; }
+
+/* Кнопка-іконка «Імпорт CSV» — праворуч від send-bar у рядку фільтрів */
+.pel-csv-btn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; padding: 0; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--fg);
+  transition: background .12s, border-color .12s;
+}
+.pel-csv-btn:hover { background: rgba(255,255,255,.08); border-color: var(--accent,#f59e0b); }
+.pel-csv-btn:disabled { cursor: default; }

@@ -932,6 +932,141 @@
     });
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+   *  ІМПОРТ ПЕЛЕНГІВ ІЗ CSV
+   *  Формат (експорт ГОІ): колонки name / observation_datetime / coordinates,
+   *  напр. "145.65 DMR", "2026-07-20T08:57:53", "POINT (37.87 48.92)".
+   *  Координати в MGRS переводить БРАУЗЕР (window.mgrs.forward) — серверного
+   *  конвертера в проєкті немає. Дедуплікацію робить сервер.
+   * ═══════════════════════════════════════════════════════════════════ */
+
+  /** Розбір CSV з урахуванням лапок і ком усередині полів. */
+  function _pelParseCsv(text) {
+    const rows = [];
+    let row = [], val = "", inQ = false;
+    text = String(text || "").replace(/^﻿/, "");   // BOM
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQ) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { val += '"'; i++; }   // подвоєні лапки
+          else inQ = false;
+        } else val += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ",") { row.push(val); val = ""; }
+      else if (ch === "\n") { row.push(val); rows.push(row); row = []; val = ""; }
+      else if (ch !== "\r") val += ch;
+    }
+    if (val !== "" || row.length) { row.push(val); rows.push(row); }
+    return rows.filter(r => r.some(c => String(c).trim() !== ""));
+  }
+
+  /** "145.65 DMR" → "145.6500" (стандарт зберігання — 4 знаки). */
+  function _pelNormFreq(name) {
+    const m = String(name || "").match(/(\d+(?:[.,]\d+)?)/);
+    if (!m) return "";
+    const v = parseFloat(m[1].replace(",", "."));
+    return isFinite(v) ? v.toFixed(4) : "";
+  }
+
+  /** "2026-07-20T08:57:53" → "2026-07-20 08:57:53" (формат event_dt у БД). */
+  function _pelNormDt(s) {
+    const t = String(s || "").trim().replace("T", " ");
+    const m = t.match(/^(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2})(?::(\d{2}))?/);
+    return m ? `${m[1]} ${m[2]}:${m[3] || "00"}` : "";
+  }
+
+  /** "POINT (37.87 48.92)" → "37U DQ 22115 32263" (через window.mgrs). */
+  function _pelPointToMgrs(wkt) {
+    const m = String(wkt || "").match(/POINT\s*\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s*\)/i);
+    if (!m || typeof window.mgrs === "undefined" || !window.mgrs.forward) return "";
+    const lon = parseFloat(m[1]), lat = parseFloat(m[2]);
+    if (!isFinite(lon) || !isFinite(lat)) return "";
+    let s;
+    try { s = window.mgrs.forward([lon, lat], 5); } catch (_) { return ""; }
+    const p = String(s || "").toUpperCase().match(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/);
+    return p ? `${p[1]} ${p[2]} ${p[3]} ${p[4]}` : "";
+  }
+
+  async function _pelImportCsvFile(file) {
+    const btn = document.getElementById("pelCsvBtn");
+    if (btn) { btn.disabled = true; btn.style.opacity = ".5"; }
+    try {
+      const rows = _pelParseCsv(await file.text());
+      if (rows.length < 2) { if (window.appToast) window.appToast("Файл порожній", "warn", 2200); return; }
+
+      const head = rows[0].map(h => String(h).trim().toLowerCase());
+      const iName = head.indexOf("name");
+      const iDt   = head.indexOf("observation_datetime");
+      const iCo   = head.indexOf("coordinates");
+      if (iName < 0 || iDt < 0 || iCo < 0) {
+        if (window.appToast) window.appToast("Очікуються колонки name, observation_datetime, coordinates", "error", 4000);
+        return;
+      }
+
+      const out = []; let skipped = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        const freq = _pelNormFreq(r[iName]);
+        const dt   = _pelNormDt(r[iDt]);
+        const mg   = _pelPointToMgrs(r[iCo]);
+        if (!freq || !dt || !mg) { skipped++; continue; }
+        out.push({ event_dt: dt, freq, mgrs: mg });
+      }
+      if (!out.length) { if (window.appToast) window.appToast("Не вдалося розібрати жодного рядка", "error", 3000); return; }
+
+      // Шлемо порціями — файл може містити тисячі рядків.
+      let added = 0, dup = 0, bad = 0; const unknown = {};
+      for (let i = 0; i < out.length; i += 1000) {
+        const chunk = out.slice(i, i + 1000);
+        const res = await fetch("/api/peleng/import-csv", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rows: chunk }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.ok) {
+          if (window.appToast) window.appToast(j.error || j.detail || "Помилка імпорту", "error", 3500);
+          return;
+        }
+        added += j.added || 0; dup += j.duplicates || 0; bad += j.invalid || 0;
+        for (const [f, n] of (j.unknown_frequencies || [])) unknown[f] = (unknown[f] || 0) + n;
+        if (btn) btn.title = `Імпорт… ${Math.min(i + 1000, out.length)}/${out.length}`;
+      }
+
+      const uk = Object.keys(unknown);
+      let msg = `Додано: ${added}, дублікатів: ${dup}`;
+      if (bad || skipped) msg += `, пропущено: ${bad + skipped}`;
+      if (window.appToast) window.appToast(msg, added ? "success" : "info", 4000);
+      if (uk.length) {
+        console.warn("Частоти, яких немає в реєстрі:", unknown);
+        if (window.appToast) {
+          setTimeout(() => window.appToast(
+            `Немає в реєстрі р/м: ${uk.slice(0, 5).join(", ")}${uk.length > 5 ? " …" : ""} — пеленги збережено без прив'язки`,
+            "warn", 6000), 600);
+        }
+      }
+      // Перезавантажити карту за поточним періодом, щоб побачити нові пеленги.
+      const f = document.getElementById("pelMapFromDt"), t = document.getElementById("pelMapToDt");
+      if (f && t) _pelApplyPeriod(f.value, t.value);
+    } catch (e) {
+      if (window.appToast) window.appToast("Помилка читання файлу", "error", 3000);
+    } finally {
+      if (btn) { btn.disabled = false; btn.style.opacity = ""; btn.title = "Імпорт пеленгів із CSV"; }
+    }
+  }
+
+  function _pelInitCsvImport() {
+    const btn = document.getElementById("pelCsvBtn");
+    const inp = document.getElementById("pelCsvInput");
+    if (!btn || !inp) return;
+    btn.addEventListener("click", () => inp.click());
+    inp.addEventListener("change", () => {
+      const f = inp.files && inp.files[0];
+      if (f) _pelImportCsvFile(f);
+      inp.value = "";
+    });
+  }
+
   /** «Око»: сховати/показати позначки конкретного підрозділу на карті. */
   function _pelToggleUnitVisible(unitKey) {
     const k = String(unitKey);
@@ -1425,6 +1560,7 @@
     // маркерів уже врахував збережені кольори (інакше вони застосувались би
     // лише після відкриття панелі).
     _pelInitBindings();
+    _pelInitCsvImport();
     _pelLoadUnitColors().then(() => {
       if (_pelLastRows && _pelLastRows.length) {
         try { _pelRenderPoints(_pelLastRows, { skipFit: true }); } catch (_) {}
