@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from xml.etree import ElementTree as ET
 
+from app.core.apq_parser import DEFAULT_COLOR as APQ_DEFAULT_COLOR
 from app.core.palette_fold import fold_code, display_code
 
 # --------------------------------------------------------------------------- #
@@ -182,7 +183,10 @@ def parse_kml_bytes(data: bytes, *, source_format: str, source_filename: str) ->
             lat = float(parts[1])
         except ValueError:
             continue
-        color = inline_color or style_colors.get(style_url, "")
+        # Точки без кольору (у AlpineQuest-експортах їх багато) отримують той
+        # самий дефолт, що й LDK-шлях через apq_parser — інакше та сама палітра
+        # з .ldk була б фіолетовою, а з .kml — безколірною (запасний оранжевий).
+        color = inline_color or style_colors.get(style_url, "") or APQ_DEFAULT_COLOR
         points.append(ParsedPoint(code=name, color=color.lower(), lat=lat, lon=lon))
 
     # Дефолтна назва — зі імені файлу (без розширення), бо внутрішнє
@@ -293,6 +297,8 @@ def parse_geojson_bytes(data: bytes, *, source_filename: str) -> ParsedPalette:
             color = _normalize_color(props.get(key))
             if color:
                 break
+        if not color:
+            color = APQ_DEFAULT_COLOR     # єдиний дефолт з apq_parser (див. KML вище)
 
         gtype = geom.get("type")
         coords = geom.get("coordinates")
