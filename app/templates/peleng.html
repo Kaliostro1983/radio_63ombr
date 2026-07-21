@@ -79,6 +79,21 @@
               <rect x="5" y="5" width="9" height="9" rx="2"/><path d="M2 11V3a2 2 0 012-2h8"/>
             </svg>
           </button>
+
+          <!-- Прив'язки «колір + підрозділ» (легенда й редактор) -->
+          <button type="button" id="pelBindBtn" class="pel-bind-btn" title="Прив'язки кольорів підрозділів">
+            Прив'язки
+          </button>
+          <div id="pelBindPanel" class="pel-bind-panel hidden">
+            <div class="pel-bind-head">
+              <strong>Прив'язки</strong>
+              <div class="pel-bind-head-actions">
+                <button type="button" id="pelBindAdd" class="pal-btn pal-btn--add">+ Додати</button>
+                <button type="button" id="pelBindClose" class="pal-x" title="Закрити">✕</button>
+              </div>
+            </div>
+            <div id="pelBindList" class="pel-bind-list"></div>
+          </div>
         </div>
       </div>
 
@@ -339,6 +354,6 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/peleng.js?v=28"></script>
+<script src="/static/peleng.js?v=29"></script>
 {% endblock %}
 {% endblock %}

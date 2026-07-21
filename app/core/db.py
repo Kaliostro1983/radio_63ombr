@@ -1914,6 +1914,24 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         """,
         stage="create_table:palette_points",
     )
+    # Прив'язки «номер підрозділу → колір» для карти пеленгації. Доти колір
+    # рахувався алгоритмічно (золотий кут) і його не можна було виправити;
+    # тепер збережена прив'язка має пріоритет, а алгоритм лишається запасним
+    # для номерів, яких ще немає в таблиці.
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS peleng_unit_colors (
+            unit_key   TEXT PRIMARY KEY,
+            color      TEXT NOT NULL,
+            label      TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT
+        )
+        """,
+        stage="create_table:peleng_unit_colors",
+    )
+
     # ====================================================================
     # ТРЕКИ (GPS-маршрути з трофейних/власних пристроїв).
     # Модель дзеркальна до палітр: сам трек + його точки + теги підрозділів.

@@ -822,26 +822,154 @@
     return fallback ? fallback[1] : null;
   }
 
+  /* Збережені прив'язки «номер підрозділу → колір» (таблиця peleng_unit_colors).
+     Мають пріоритет над алгоритмічним кольором; редагуються кнопкою «Прив'язки». */
+  let _pelUnitColors = new Map();   // unit_key → {color, label}
+
   /** Сталий колір для номера підрозділу. Один номер → один колір.
-   *  Використовуємо HSL з "золотим кутом" 137.5°, щоб номери, які поряд за
-   *  значенням, отримували контрастні відтінки. */
+   *  Спершу — збережена прив'язка; якщо її немає, рахуємо HSL із "золотим
+   *  кутом" 137.5°, щоб близькі номери отримували контрастні відтінки. */
   function _pelColorForUnit(num) {
+    const key = String(num || "").trim();
+    const saved = _pelUnitColors.get(key);
+    if (saved && saved.color) return saved.color;
     const n = Number(num);
     if (!isFinite(n) || n <= 0) return "#6b7280";
     const hue = (n * 137.508) % 360;
     return `hsl(${hue.toFixed(1)}, 70%, 45%)`;
   }
 
-  /** Leaflet-divIcon кольорового кола з номером підрозділу. */
+  /** Leaflet-divIcon кольорового кола підрозділу.
+   *  Радіус зменшено на 33% (34→23 px) і без тексту — номер читається за
+   *  кольором (легенда — у панелі «Прив'язки»), а мітки менше перекривають одна
+   *  одну на щільній карті. Номер лишається у tooltip. */
   function _pelBuildUnitIcon(unitNum) {
     const color = _pelColorForUnit(unitNum);
-    const txt = String(unitNum || "?");
     return L.divIcon({
       className: "pel-unit-icon",
-      html: `<div class="pel-unit-circle" style="background:${color}">${txt}</div>`,
-      iconSize:    [34, 34],
-      iconAnchor:  [17, 17],
-      popupAnchor: [0, -17],
+      html: `<div class="pel-unit-circle" style="background:${color}" title="${String(unitNum || "?")}"></div>`,
+      iconSize:    [23, 23],
+      iconAnchor:  [11, 11],
+      popupAnchor: [0, -11],
+    });
+  }
+
+  /* ── Панель прив'язок «колір + підрозділ» ─────────────────────────────── */
+
+  async function _pelLoadUnitColors() {
+    try {
+      const r = await fetch("/api/peleng/unit-colors");
+      const j = await r.json();
+      _pelUnitColors = new Map((j.rows || []).map(x => [x.unit_key, { color: x.color, label: x.label }]));
+    } catch (_) { _pelUnitColors = new Map(); }
+  }
+
+  /** Номери підрозділів, наявні на поточній карті (щоб показати їх у панелі). */
+  function _pelUnitsOnMap() {
+    const set = new Set();
+    for (const row of (_pelLastRows || [])) {
+      const n = _pelExtractUnitNumber(row && row.unit);
+      if (n) set.add(String(n));
+    }
+    return [...set].sort((a, b) => Number(a) - Number(b));
+  }
+
+  function _pelRenderBindings() {
+    const host = document.getElementById("pelBindList");
+    if (!host) return;
+    const onMap = _pelUnitsOnMap();
+    const keys = [...new Set([..._pelUnitColors.keys(), ...onMap])]
+      .sort((a, b) => (Number(a) || 0) - (Number(b) || 0));
+    if (!keys.length) {
+      host.innerHTML = '<div class="pal-empty">Підрозділів ще немає — покажіть пеленги на карті.</div>';
+      return;
+    }
+    host.innerHTML = "";
+    keys.forEach(k => {
+      const saved = _pelUnitColors.get(k);
+      const color = saved ? saved.color : _pelColorForUnit(k);
+      const row = document.createElement("div");
+      row.className = "pel-bind-row";
+      row.innerHTML =
+        `<input type="color" class="pel-bind-color" value="${color.startsWith("#") ? color : "#6b7280"}" title="Колір">` +
+        `<span class="pel-bind-unit">${k}</span>` +
+        `<input type="text" class="pel-bind-label" placeholder="підпис (необов'язково)" value="${(saved && saved.label) || ""}">` +
+        (onMap.includes(k) ? `<span class="pel-bind-onmap" title="Є на карті">●</span>` : `<span class="pel-bind-onmap is-off"></span>`) +
+        `<button type="button" class="pel-bind-del" title="Скинути до авто-кольору">✕</button>`;
+      const colorIn = row.querySelector(".pel-bind-color");
+      const labelIn = row.querySelector(".pel-bind-label");
+      const save = () => _pelSaveBinding(k, colorIn.value, labelIn.value);
+      colorIn.addEventListener("change", save);
+      labelIn.addEventListener("change", save);
+      row.querySelector(".pel-bind-del").addEventListener("click", () => _pelDeleteBinding(k));
+      host.appendChild(row);
+    });
+  }
+
+  async function _pelSaveBinding(unitKey, color, label) {
+    try {
+      const r = await fetch("/api/peleng/unit-colors", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unit_key: String(unitKey), color, label: label || "" }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        if (window.appToast) window.appToast(j.error || j.detail || "Не вдалося зберегти", "error", 2400);
+        return;
+      }
+      _pelUnitColors.set(String(unitKey), { color: j.color, label: j.label });
+      _pelRedrawAfterColorChange();
+    } catch (_) {
+      if (window.appToast) window.appToast("Помилка збереження", "error", 2000);
+    }
+  }
+
+  async function _pelDeleteBinding(unitKey) {
+    try {
+      const r = await fetch(`/api/peleng/unit-colors/${encodeURIComponent(unitKey)}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        if (window.appToast) window.appToast(j.error || j.detail || "Не вдалося скинути", "error", 2400);
+        return;
+      }
+      _pelUnitColors.delete(String(unitKey));
+      _pelRedrawAfterColorChange();
+    } catch (_) {
+      if (window.appToast) window.appToast("Помилка", "error", 2000);
+    }
+  }
+
+  /** Після зміни кольору — перемалювати маркери (без зсуву карти) й оновити список. */
+  function _pelRedrawAfterColorChange() {
+    _pelRenderBindings();
+    if (_pelLastRows && _pelLastRows.length) {
+      try { _pelRenderPoints(_pelLastRows, { skipFit: true }); } catch (_) {}
+    }
+  }
+
+  function _pelInitBindings() {
+    const btn = document.getElementById("pelBindBtn");
+    const box = document.getElementById("pelBindPanel");
+    if (!btn || !box) return;
+    btn.addEventListener("click", async () => {
+      const willOpen = box.classList.contains("hidden");
+      box.classList.toggle("hidden");
+      btn.classList.toggle("is-on", willOpen);
+      if (willOpen) { await _pelLoadUnitColors(); _pelRenderBindings(); }
+    });
+    document.getElementById("pelBindClose")?.addEventListener("click", () => {
+      box.classList.add("hidden");
+      btn.classList.remove("is-on");
+    });
+    // Додати прив'язку для номера, якого ще немає на карті.
+    document.getElementById("pelBindAdd")?.addEventListener("click", () => {
+      const v = (prompt("Номер підрозділу (напр. 31, 164):") || "").trim();
+      if (!v) return;
+      if (!/^\d{1,3}$/.test(v)) {
+        if (window.appToast) window.appToast("Очікується число 1–3 цифри", "warn", 2000);
+        return;
+      }
+      _pelSaveBinding(v, _pelColorForUnit(v).startsWith("#") ? _pelColorForUnit(v) : "#3b82f6", "");
     });
   }
 
@@ -1254,6 +1382,16 @@
       } catch (_) {}
     }
     setTimeout(_pelInitMapWhenReady, 60);
+
+    // Прив'язки «підрозділ → колір»: підвантажуємо ОДРАЗУ, щоб перший рендер
+    // маркерів уже врахував збережені кольори (інакше вони застосувались би
+    // лише після відкриття панелі).
+    _pelInitBindings();
+    _pelLoadUnitColors().then(() => {
+      if (_pelLastRows && _pelLastRows.length) {
+        try { _pelRenderPoints(_pelLastRows, { skipFit: true }); } catch (_) {}
+      }
+    });
 
     // Send-bar
     _pelLoadSendChat();

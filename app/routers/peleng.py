@@ -619,6 +619,69 @@ def peleng_save_posts(payload: PostsSaveIn):
         return JSONResponse(status_code=400, content={"detail": str(e)})
 
 # =========================================================
+# API: прив'язки «підрозділ → колір» для карти пеленгації
+# =========================================================
+
+@router.get("/api/peleng/unit-colors")
+def peleng_unit_colors_list():
+    """Збережені прив'язки кольорів підрозділів (номер → колір)."""
+    from app.core.db import get_conn as _get_conn
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT unit_key, color, label, sort_order FROM peleng_unit_colors "
+            "ORDER BY sort_order, CAST(unit_key AS INTEGER), unit_key"
+        ).fetchall()
+    return {
+        "ok": True,
+        "rows": [
+            {"unit_key": r["unit_key"], "color": r["color"],
+             "label": r["label"] or "", "sort_order": r["sort_order"]}
+            for r in rows
+        ],
+    }
+
+
+@router.post("/api/peleng/unit-colors")
+async def peleng_unit_colors_save(request: Request):
+    """Створити/оновити прив'язку. Body: `{unit_key, color, label?}`."""
+    from app.core.access import require_capability as _require_cap
+    from app.core.db import get_conn as _get_conn
+    _require_cap(request, "conclusion.write")
+
+    payload = await request.json()
+    unit_key = str(payload.get("unit_key") or "").strip()
+    color = str(payload.get("color") or "").strip()
+    label = str(payload.get("label") or "").strip()
+    if not unit_key:
+        return JSONResponse({"ok": False, "error": "Вкажіть номер підрозділу"}, status_code=400)
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        return JSONResponse({"ok": False, "error": "Колір має бути у форматі #rrggbb"}, status_code=400)
+
+    now = datetime.now().isoformat(timespec="seconds")
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO peleng_unit_colors(unit_key, color, label, updated_at) VALUES(?,?,?,?) "
+            "ON CONFLICT(unit_key) DO UPDATE SET color=excluded.color, "
+            "label=excluded.label, updated_at=excluded.updated_at",
+            (unit_key, color.lower(), label, now),
+        )
+        conn.commit()
+    return {"ok": True, "unit_key": unit_key, "color": color.lower(), "label": label}
+
+
+@router.delete("/api/peleng/unit-colors/{unit_key}")
+def peleng_unit_colors_delete(unit_key: str, request: Request):
+    """Прибрати прив'язку — колір знову рахуватиметься алгоритмічно."""
+    from app.core.access import require_capability as _require_cap
+    from app.core.db import get_conn as _get_conn
+    _require_cap(request, "conclusion.write")
+    with _get_conn() as conn:
+        conn.execute("DELETE FROM peleng_unit_colors WHERE unit_key = ?", (unit_key,))
+        conn.commit()
+    return {"ok": True, "unit_key": unit_key}
+
+
+# =========================================================
 # API: peleng status summary (Актуальне tab)
 # =========================================================
 
