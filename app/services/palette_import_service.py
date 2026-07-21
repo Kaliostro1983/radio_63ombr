@@ -289,6 +289,9 @@ def parse_geojson_bytes(data: bytes, *, source_filename: str) -> ParsedPalette:
         # від найточніших до найзагальніших; первинний знайдений виграє.
         color = ""
         for key in (
+            # GOI пише саме "outline-color" (apq_parser у JSON — "outlineColor").
+            # Без цих двох ключів усі точки GOI-експорту вважались безколірними.
+            "outline-color", "outlineColor",
             "icon-color", "iconColor",          # GOI / mil-symbol exports
             "marker-color",                       # simplestyle-spec (Mapbox/GitHub)
             "color", "stroke", "fill",
@@ -609,14 +612,16 @@ def persist_palette(
     now = datetime.utcnow().isoformat()
 
     for old_id in (replace_palette_ids or []):
-        conn.execute("DELETE FROM palettes WHERE id = ?", (int(old_id),))
-        # Children cascade via FK; rtree rows cleaned below by id sweep is not
-        # automatic, so remove them explicitly.
+        # ПОРЯДОК ВАЖЛИВИЙ: rtree — НЕ звичайна таблиця, FK-каскад її не чистить,
+        # тож прибираємо її рядки ДО видалення палітри. Якщо спершу видалити
+        # палітру, каскад знищить palette_points, підзапит нижче поверне
+        # порожньо — і в індексі лишаться сироти (вони спотворюють пошук точок).
         conn.execute(
             "DELETE FROM palette_points_rtree WHERE id IN "
             "(SELECT id FROM palette_points WHERE palette_id = ?)",
             (int(old_id),),
         )
+        conn.execute("DELETE FROM palettes WHERE id = ?", (int(old_id),))
 
     pts = parsed.points
     if pts:
