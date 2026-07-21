@@ -988,19 +988,49 @@
     return p ? `${p[1]} ${p[2]} ${p[3]} ${p[4]}` : "";
   }
 
+  /** Показати звіт про імпорт в окремій модалці. `rows` — масив [мітка, значення]. */
+  function _pelCsvReport(title, rows, note) {
+    const modal = document.getElementById("pelCsvModal");
+    const body  = document.getElementById("pelCsvBody");
+    const ttl   = document.getElementById("pelCsvTitle");
+    if (!modal || !body) return;
+    if (ttl) ttl.textContent = title || "Імпорт пеленгів";
+    body.innerHTML =
+      `<table class="pel-csv-table">` +
+      rows.map(([k, v, cls]) =>
+        `<tr><td class="pel-csv-k">${escapeHtml(k)}</td>` +
+        `<td class="pel-csv-v${cls ? " " + cls : ""}">${escapeHtml(String(v))}</td></tr>`).join("") +
+      `</table>` +
+      (note ? `<div class="pel-csv-note">${note}</div>` : "");
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
+  function _pelCsvReportClose() {
+    const m = document.getElementById("pelCsvModal");
+    if (!m) return;
+    m.classList.add("hidden");
+    m.setAttribute("aria-hidden", "true");
+  }
+
   async function _pelImportCsvFile(file) {
     const btn = document.getElementById("pelCsvBtn");
     if (btn) { btn.disabled = true; btn.style.opacity = ".5"; }
     try {
       const rows = _pelParseCsv(await file.text());
-      if (rows.length < 2) { if (window.appToast) window.appToast("Файл порожній", "warn", 2200); return; }
+      if (rows.length < 2) {
+        _pelCsvReport("Імпорт пеленгів", [["Файл", file.name], ["Результат", "файл порожній", "is-bad"]]);
+        return;
+      }
 
       const head = rows[0].map(h => String(h).trim().toLowerCase());
       const iName = head.indexOf("name");
       const iDt   = head.indexOf("observation_datetime");
       const iCo   = head.indexOf("coordinates");
       if (iName < 0 || iDt < 0 || iCo < 0) {
-        if (window.appToast) window.appToast("Очікуються колонки name, observation_datetime, coordinates", "error", 4000);
+        _pelCsvReport("Імпорт пеленгів", [
+          ["Файл", file.name],
+          ["Результат", "не ті колонки", "is-bad"],
+        ], "Очікуються колонки: <b>name</b>, <b>observation_datetime</b>, <b>coordinates</b>.");
         return;
       }
 
@@ -1013,7 +1043,14 @@
         if (!freq || !dt || !mg) { skipped++; continue; }
         out.push({ event_dt: dt, freq, mgrs: mg });
       }
-      if (!out.length) { if (window.appToast) window.appToast("Не вдалося розібрати жодного рядка", "error", 3000); return; }
+      if (!out.length) {
+        _pelCsvReport("Імпорт пеленгів", [
+          ["Файл", file.name],
+          ["Рядків у файлі", rows.length - 1],
+          ["Розібрано", 0, "is-bad"],
+        ], "Жоден рядок не вдалося розібрати — перевірте формат дати, частоти й координат.");
+        return;
+      }
 
       // Шлемо порціями — файл може містити тисячі рядків.
       let added = 0, dup = 0, bad = 0; const unknown = {};
@@ -1025,7 +1062,11 @@
         });
         const j = await res.json().catch(() => ({}));
         if (!res.ok || !j.ok) {
-          if (window.appToast) window.appToast(j.error || j.detail || "Помилка імпорту", "error", 3500);
+          _pelCsvReport("Імпорт пеленгів", [
+            ["Файл", file.name],
+            ["Помилка", j.error || j.detail || `HTTP ${res.status}`, "is-bad"],
+            ["Додано до збою", added],
+          ]);
           return;
         }
         added += j.added || 0; dup += j.duplicates || 0; bad += j.invalid || 0;
@@ -1034,22 +1075,30 @@
       }
 
       const uk = Object.keys(unknown);
-      let msg = `Додано: ${added}, дублікатів: ${dup}`;
-      if (bad || skipped) msg += `, пропущено: ${bad + skipped}`;
-      if (window.appToast) window.appToast(msg, added ? "success" : "info", 4000);
+      const lines = [
+        ["Файл", file.name],
+        ["Рядків у файлі", rows.length - 1],
+        ["Додано нових", added, added ? "is-ok" : ""],
+        ["Дублікатів (пропущено)", dup],
+      ];
+      if (bad + skipped) lines.push(["Не розібрано", bad + skipped, "is-bad"]);
+      let note = "";
       if (uk.length) {
-        console.warn("Частоти, яких немає в реєстрі:", unknown);
-        if (window.appToast) {
-          setTimeout(() => window.appToast(
-            `Немає в реєстрі р/м: ${uk.slice(0, 5).join(", ")}${uk.length > 5 ? " …" : ""} — пеленги збережено без прив'язки`,
-            "warn", 6000), 600);
-        }
+        const total = Object.values(unknown).reduce((a, b) => a + b, 0);
+        note = `<b>Немає в реєстрі р/м:</b> ${uk.map(escapeHtml).join(", ")} ` +
+               `(${total} пеленг(ів)). Їх збережено, але без прив'язки до радіомережі — ` +
+               `на карті вони не отримають кольору підрозділу.`;
       }
+      _pelCsvReport("Імпорт пеленгів — готово", lines, note);
+
       // Перезавантажити карту за поточним періодом, щоб побачити нові пеленги.
       const f = document.getElementById("pelMapFromDt"), t = document.getElementById("pelMapToDt");
       if (f && t) _pelApplyPeriod(f.value, t.value);
     } catch (e) {
-      if (window.appToast) window.appToast("Помилка читання файлу", "error", 3000);
+      _pelCsvReport("Імпорт пеленгів", [
+        ["Файл", file.name],
+        ["Помилка", String((e && e.message) || e).slice(0, 120), "is-bad"],
+      ]);
     } finally {
       if (btn) { btn.disabled = false; btn.style.opacity = ""; btn.title = "Імпорт пеленгів із CSV"; }
     }
@@ -1064,6 +1113,14 @@
       const f = inp.files && inp.files[0];
       if (f) _pelImportCsvFile(f);
       inp.value = "";
+    });
+    // Закриття звіту: ОК / ✕ / клік по підкладці / Esc
+    document.getElementById("pelCsvModal")?.addEventListener("click", (e) => {
+      if (e.target.closest && e.target.closest("[data-pel-csv-close]")) _pelCsvReportClose();
+    });
+    document.addEventListener("keydown", (e) => {
+      const m = document.getElementById("pelCsvModal");
+      if (e.key === "Escape" && m && !m.classList.contains("hidden")) _pelCsvReportClose();
     });
   }
 

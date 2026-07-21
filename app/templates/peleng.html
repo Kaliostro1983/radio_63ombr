@@ -70,6 +70,23 @@
           </button>
           <input id="pelCsvInput" type="file" accept=".csv" hidden>
 
+          <!-- Звіт про імпорт CSV -->
+          <div id="pelCsvModal" class="modal hidden pel-modal" aria-hidden="true">
+            <div class="modal-backdrop" data-pel-csv-close="1"></div>
+            <div class="modal-card pel-csv-card" role="dialog" aria-modal="true" aria-labelledby="pelCsvTitle">
+              <div class="modal-head">
+                <div id="pelCsvTitle" class="modal-title">Імпорт пеленгів</div>
+                <button type="button" class="secondary" data-pel-csv-close="1" style="padding:4px 10px">✕</button>
+              </div>
+              <div class="modal-body">
+                <div id="pelCsvBody" class="pel-csv-body"></div>
+              </div>
+              <div class="pel-csv-foot">
+                <button type="button" class="btn" data-pel-csv-close="1">ОК</button>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <div class="pel-mapblock-mapwrap">
@@ -339,7 +356,7 @@
    кнопка отримувала два слухачі, і клік по «Прив'язки» перемикав клас двічі
    (панель миттєво закривалась). #}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/peleng.css?v=13">
+<link rel="stylesheet" href="/static/peleng.css?v=14">
 <style>
 /* Header у стилі Home */
 .pel-page-header {
@@ -379,5 +396,5 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/peleng.js?v=33"></script>
+<script src="/static/peleng.js?v=34"></script>
 {% endblock %}

@@ -755,3 +755,24 @@
 }
 .pel-csv-btn:hover { background: rgba(255,255,255,.08); border-color: var(--accent,#f59e0b); }
 .pel-csv-btn:disabled { cursor: default; }
+
+/* ── Модалка звіту про імпорт CSV ── */
+.pel-csv-card { max-width: 460px; width: 92%; }
+.pel-csv-body { padding: 4px 0; }
+.pel-csv-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pel-csv-table td { padding: 7px 4px; border-bottom: 1px solid var(--border); }
+.pel-csv-table tr:last-child td { border-bottom: 0; }
+.pel-csv-k { opacity: .75; }
+.pel-csv-v { text-align: right; font-weight: 600; word-break: break-all; }
+.pel-csv-v.is-ok  { color: #22c55e; }
+.pel-csv-v.is-bad { color: var(--danger, #ef4444); }
+.pel-csv-note {
+  margin-top: 12px; padding: 9px 11px; font-size: 12.5px; line-height: 1.5;
+  border-radius: 8px; border: 1px solid #d08c40;
+  background: rgba(208,140,64,.12); color: var(--fg);
+}
+.pel-csv-foot {
+  display: flex; justify-content: flex-end;
+  padding: 12px 20px 16px; border-top: 1px solid var(--border);
+}
+.pel-csv-foot .btn { min-width: 92px; }
