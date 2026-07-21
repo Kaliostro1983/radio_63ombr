@@ -754,7 +754,8 @@
   transition: background .12s, border-color .12s;
 }
 .pel-csv-btn:hover { background: rgba(255,255,255,.08); border-color: var(--accent,#f59e0b); }
-.pel-csv-btn:disabled { cursor: default; }
+.pel-csv-btn:disabled { cursor: default; opacity: .5; }
+.pel-csv-label { font-size: 11px; font-weight: 800; letter-spacing: .04em; }
 
 /* ── Модалка звіту про імпорт CSV ── */
 .pel-csv-card { max-width: 460px; width: 92%; }
@@ -791,3 +792,5 @@
 .pel-pop-table td { padding: 3px 0; vertical-align: top; }
 .pel-pop-k { opacity: .65; white-space: nowrap; padding-right: 10px !important; }
 .pel-pop-v { font-weight: 600; word-break: break-word; }
+/* Джерело «імпорт» у картці пеленга */
+.pel-pop-v.is-imported { color: #2563eb; }

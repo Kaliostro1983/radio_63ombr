@@ -686,7 +686,7 @@ async def peleng_import_csv(request: Request):
                     dup += 1
                     continue
                 conn.execute(
-                    "INSERT INTO peleng_points (batch_id, mgrs) VALUES (?, ?)",
+                    "INSERT INTO peleng_points (batch_id, mgrs, is_imported) VALUES (?, ?, 1)",
                     (batch_id, mgrs_v),
                 )
                 added += 1
@@ -1004,6 +1004,7 @@ def api_peleng_points(
                 pp.id         AS point_id,
                 pp.batch_id   AS batch_id,
                 pp.mgrs       AS mgrs,
+                COALESCE(pp.is_imported, 0) AS is_imported,
                 pb.event_dt   AS event_dt,
                 pb.network_id AS network_id,
                 COALESCE(n.frequency, '') AS frequency,
@@ -1039,6 +1040,7 @@ def api_peleng_points(
                 "frequency": str(r["frequency"] or ""),
                 "unit":      str(r["unit"] or ""),
                 "mgrs":      str(r["mgrs"] or ""),
+                "is_imported": bool(r["is_imported"]),
                 # Розширені дані радіомережі — для картки за кліком на маркері.
                 "network_id":   int(r["network_id"]) if r["network_id"] is not None else None,
                 "mask":         str(r["mask"] or ""),

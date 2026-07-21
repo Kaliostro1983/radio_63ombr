@@ -804,6 +804,7 @@
   let _pelLastRows = [];        // останні завантажені рядки (для перерендеру)
   let _pelShowFreq = false;     // стан чекбоксу «Частоти»
   let _pelShowUnit = false;     // стан чекбоксу «Підрозділ» (кола з номером)
+  let _pelShowImported = true;  // чекбокс «Імпортовані» — показувати пеленги з CSV
   let _pelSending  = false;     // in-flight flag — захист від подвійного fetch
 
   /** Витягнути НОМЕР бригади/полка з опису р/м.
@@ -878,6 +879,8 @@
           row("Статус", r.status) +
           row("Теги", r.tags) +
           row("Чат-джерело", r.chat) +
+          row("Джерело", r.is_imported ? "імпорт з CSV-файлу" : "ручне введення",
+              r.is_imported ? "is-imported" : "") +
           row("Час пеленга", dt) +
           row("MGRS", r.mgrs) +
           row("Координати", `${lat.toFixed(5)}, ${lon.toFixed(5)}`) +
@@ -1337,6 +1340,8 @@
       // Діє незалежно від режиму «Підрозділ», бо це фільтр по суті даних.
       const _uk = _pelExtractUnitNumber(r.unit);
       if (_uk && _pelHiddenUnits.has(String(_uk))) continue;
+      // Чекбокс «Імпортовані» — сховати пеленги, завантажені з CSV.
+      if (!_pelShowImported && r.is_imported) continue;
       try {
         const pt  = window.mgrs.toPoint(raw);
         const lat = Number(pt[1]), lon = Number(pt[0]);
@@ -1616,6 +1621,15 @@
       _pelShowUnit = false;
       unitChk.addEventListener("change", () => {
         _pelShowUnit = unitChk.checked;
+        if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true });
+      });
+    }
+    const impChk = document.getElementById("pelShowImportedChk");
+    if (impChk) {
+      impChk.checked = true;          // за замовчуванням імпортовані видимі
+      _pelShowImported = true;
+      impChk.addEventListener("change", () => {
+        _pelShowImported = impChk.checked;
         if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true });
       });
     }

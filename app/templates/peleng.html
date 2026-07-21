@@ -62,11 +62,7 @@
 
           <!-- Імпорт пеленгів із CSV -->
           <button type="button" id="pelCsvBtn" class="pel-csv-btn" title="Імпорт пеленгів із CSV">
-            <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor"
-                 stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 13v2.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V13"/>
-              <path d="M10 3v9"/><polyline points="6.5 8.5 10 12 13.5 8.5"/>
-            </svg>
+            <span class="pel-csv-label">CSV</span>
           </button>
           <input id="pelCsvInput" type="file" accept=".csv" hidden>
 
@@ -107,6 +103,10 @@
             <label class="pel-mapblock-freq-chk" title="Замість стандартних іконок — кольорові кола підрозділів (номер — у підказці)">
               <input type="checkbox" id="pelShowUnitChk">
               <span>Підрозділ</span>
+            </label>
+            <label class="pel-mapblock-freq-chk" title="Показувати пеленги, завантажені з CSV-файлу">
+              <input type="checkbox" id="pelShowImportedChk" checked>
+              <span>Імпортовані</span>
             </label>
           </div>
 
@@ -356,7 +356,7 @@
    кнопка отримувала два слухачі, і клік по «Прив'язки» перемикав клас двічі
    (панель миттєво закривалась). #}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/peleng.css?v=16">
+<link rel="stylesheet" href="/static/peleng.css?v=17">
 <style>
 /* Header у стилі Home */
 .pel-page-header {
@@ -396,5 +396,5 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/peleng.js?v=36"></script>
+<script src="/static/peleng.js?v=37"></script>
 {% endblock %}
