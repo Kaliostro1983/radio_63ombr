@@ -779,3 +779,15 @@
 
 /* Пеленг неідентифікованої р/м — сіре коло з тьмянішою обвідкою */
 .pel-unit-circle.is-unknown { border-color: rgba(255,255,255,.55); opacity: .9; }
+
+/* ── Картка пеленга у попапі на карті ── */
+.pel-pop { min-width: 240px; max-width: 330px; }
+.pel-pop-title {
+  font-weight: 700; font-size: 14px; margin-bottom: 7px;
+  padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,.15);
+}
+.pel-pop-unknown { color: #6b7280; font-weight: 600; }
+.pel-pop-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pel-pop-table td { padding: 3px 0; vertical-align: top; }
+.pel-pop-k { opacity: .65; white-space: nowrap; padding-right: 10px !important; }
+.pel-pop-v { font-weight: 600; word-break: break-word; }

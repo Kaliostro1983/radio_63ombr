@@ -1005,11 +1005,26 @@ def api_peleng_points(
                 pp.batch_id   AS batch_id,
                 pp.mgrs       AS mgrs,
                 pb.event_dt   AS event_dt,
+                pb.network_id AS network_id,
                 COALESCE(n.frequency, '') AS frequency,
-                COALESCE(n.unit, '')      AS unit
+                COALESCE(n.unit, '')      AS unit,
+                COALESCE(n.mask, '')      AS mask,
+                COALESCE(n.zone, '')      AS zone,
+                COALESCE(n.comment, '')   AS net_comment,
+                COALESCE(s.name, '')      AS status,
+                COALESCE(c.name, '')      AS chat,
+                COALESCE(g.name, '')      AS grp,
+                (SELECT GROUP_CONCAT(t.name, ', ')
+                   FROM network_tag_links l JOIN network_tags t ON t.id = l.tag_id
+                  WHERE l.network_id = n.id)            AS tags,
+                (SELECT COUNT(*) FROM peleng_points x
+                  WHERE x.batch_id = pp.batch_id)       AS batch_points
             FROM peleng_points pp
             JOIN peleng_batches pb ON pb.id = pp.batch_id
             LEFT JOIN networks   n  ON n.id  = pb.network_id
+            LEFT JOIN statuses   s  ON s.id  = n.status_id
+            LEFT JOIN chats      c  ON c.id  = n.chat_id
+            LEFT JOIN groups     g  ON g.id  = n.group_id
             WHERE REPLACE(pb.event_dt, 'T', ' ') >= ?
               AND REPLACE(pb.event_dt, 'T', ' ') <= ?
             ORDER BY REPLACE(pb.event_dt, 'T', ' ') ASC, pp.id ASC
@@ -1024,6 +1039,16 @@ def api_peleng_points(
                 "frequency": str(r["frequency"] or ""),
                 "unit":      str(r["unit"] or ""),
                 "mgrs":      str(r["mgrs"] or ""),
+                # Розширені дані радіомережі — для картки за кліком на маркері.
+                "network_id":   int(r["network_id"]) if r["network_id"] is not None else None,
+                "mask":         str(r["mask"] or ""),
+                "zone":         str(r["zone"] or ""),
+                "net_comment":  str(r["net_comment"] or ""),
+                "status":       str(r["status"] or ""),
+                "chat":         str(r["chat"] or ""),
+                "group":        str(r["grp"] or ""),
+                "tags":         str(r["tags"] or ""),
+                "batch_points": int(r["batch_points"] or 1),
             }
             for r in rows
         ]

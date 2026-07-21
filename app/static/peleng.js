@@ -855,6 +855,40 @@
     return _pelHslToHex(hue, 70, 45);
   }
 
+  /** Картка пеленга у попапі: усе, що відомо про точку та її радіомережу. */
+  function _pelBuildPopup(r, lat, lon) {
+    const row = (k, v, cls) => v
+      ? `<tr><td class="pel-pop-k">${escapeHtml(k)}</td>` +
+        `<td class="pel-pop-v${cls ? " " + cls : ""}">${escapeHtml(String(v))}</td></tr>`
+      : "";
+    const ident = !!(r.network_id);
+    const title = ident
+      ? escapeHtml(r.frequency || "—")
+      : `<span class="pel-pop-unknown">Радіомережа не ідентифікована</span>`;
+    // Для неідентифікованої показуємо частоту з батча, якщо вона там була.
+    const dt = String(r.event_dt || "").replace("T", " ");
+    return (
+      `<div class="pel-pop">` +
+        `<div class="pel-pop-title">${title}</div>` +
+        `<table class="pel-pop-table">` +
+          row("Маска", r.mask) +
+          row("Підрозділ", r.unit) +
+          row("Зона", r.zone) +
+          row("Група", r.group) +
+          row("Статус", r.status) +
+          row("Теги", r.tags) +
+          row("Чат-джерело", r.chat) +
+          row("Час пеленга", dt) +
+          row("MGRS", r.mgrs) +
+          row("Координати", `${lat.toFixed(5)}, ${lon.toFixed(5)}`) +
+          row("Точок у пеленгу", r.batch_points > 1 ? `${r.batch_points} (тріангуляція)` : "1") +
+          row("Коментар р/м", r.net_comment) +
+          row("ID точки / пеленга", `${r.point_id} / ${r.batch_id}`) +
+        `</table>` +
+      `</div>`
+    );
+  }
+
   /** Leaflet-divIcon кольорового кола підрозділу.
    *  Радіус зменшено на 33% (34→23 px) і без тексту — номер читається за
    *  кольором (легенда — у панелі «Прив'язки»), а мітки менше перекривають одна
@@ -1307,13 +1341,7 @@
         const pt  = window.mgrs.toPoint(raw);
         const lat = Number(pt[1]), lon = Number(pt[0]);
         if (!isFinite(lat) || !isFinite(lon)) continue;
-        const popup =
-          `<div style="min-width:180px">` +
-          `<div><b>${escapeHtml(r.frequency || "—")}</b></div>` +
-          (r.unit ? `<div>${escapeHtml(r.unit)}</div>` : "") +
-          `<div class="small" style="opacity:.7">${escapeHtml(r.event_dt || "")}</div>` +
-          `<div class="small" style="opacity:.7">${escapeHtml(r.mgrs || "")}</div>` +
-          `</div>`;
+        const popup = _pelBuildPopup(r, lat, lon);
         // У режимі «Підрозділ» — кольорове коло з номером бригади/полка
         // з опису р/м. Якщо номер не вдалося розпізнати, falback на дефолтну
         // SIDC-іконку (антена), щоб точку все одно було видно.
