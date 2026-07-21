@@ -826,9 +826,22 @@
      Мають пріоритет над алгоритмічним кольором; редагуються кнопкою «Прив'язки». */
   let _pelUnitColors = new Map();   // unit_key → {color, label}
 
+  /** HSL → #rrggbb. Потрібно, бо <input type="color"> приймає ЛИШЕ hex:
+   *  зі значенням "hsl(…)" він мовчки показує чорний/сірий, і в панелі
+   *  прив'язок не було видно фактичних кольорів маркерів. */
+  function _pelHslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const to = x => Math.round(255 * x).toString(16).padStart(2, "0");
+    return `#${to(f(0))}${to(f(8))}${to(f(4))}`;
+  }
+
   /** Сталий колір для номера підрозділу. Один номер → один колір.
    *  Спершу — збережена прив'язка; якщо її немає, рахуємо HSL із "золотим
-   *  кутом" 137.5°, щоб близькі номери отримували контрастні відтінки. */
+   *  кутом" 137.5° (близькі номери → контрастні відтінки) і повертаємо hex,
+   *  щоб те саме значення годилось і для маркера, і для колірного пікера. */
   function _pelColorForUnit(num) {
     const key = String(num || "").trim();
     const saved = _pelUnitColors.get(key);
@@ -836,7 +849,7 @@
     const n = Number(num);
     if (!isFinite(n) || n <= 0) return "#6b7280";
     const hue = (n * 137.508) % 360;
-    return `hsl(${hue.toFixed(1)}, 70%, 45%)`;
+    return _pelHslToHex(hue, 70, 45);
   }
 
   /** Leaflet-divIcon кольорового кола підрозділу.
@@ -891,7 +904,7 @@
       const row = document.createElement("div");
       row.className = "pel-bind-row";
       row.innerHTML =
-        `<input type="color" class="pel-bind-color" value="${color.startsWith("#") ? color : "#6b7280"}" title="Колір">` +
+        `<input type="color" class="pel-bind-color" value="${color}" title="Колір">` +
         `<span class="pel-bind-unit">${k}</span>` +
         `<input type="text" class="pel-bind-label" placeholder="підпис (необов'язково)" value="${(saved && saved.label) || ""}">` +
         (onMap.includes(k) ? `<span class="pel-bind-onmap" title="Є на карті">●</span>` : `<span class="pel-bind-onmap is-off"></span>`) +
@@ -969,7 +982,7 @@
         if (window.appToast) window.appToast("Очікується число 1–3 цифри", "warn", 2000);
         return;
       }
-      _pelSaveBinding(v, _pelColorForUnit(v).startsWith("#") ? _pelColorForUnit(v) : "#3b82f6", "");
+      _pelSaveBinding(v, _pelColorForUnit(v), "");   // стартуємо з авто-кольору
     });
   }
 
