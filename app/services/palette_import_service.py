@@ -479,6 +479,130 @@ class RegionAgg:
     center_lon: float
 
 
+def _grid_step(vals: list[float]) -> float:
+    """Крок сітки = медіана відстаней між сусідніми УНІКАЛЬНИМИ координатами.
+
+    Точки палітри лежать регулярною сіткою, тож медіана стійко дає її крок
+    навіть за пропусків і поодиноких викидів.
+    """
+    u = sorted(set(round(v, 7) for v in vals))
+    if len(u) < 2:
+        return 0.0
+    d = sorted(b - a for a, b in zip(u, u[1:]) if b > a)
+    return d[len(d) // 2] if d else 0.0
+
+
+def _drop_collinear(ring: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Прибрати проміжні точки на прямих ділянках ЗАМКНЕНОГО кільця.
+
+    Обрис по сітці складається лише з горизонтальних і вертикальних відрізків,
+    тож злиття колінеарних сегментів дає ТОЧНО ту саму фігуру, але з мінімумом
+    вершин (для Г-подібної області — 6 замість 80). Навмисно не використовуємо
+    Дугласа–Пекера: на замкненому кільці його базова лінія вироджена (перша й
+    остання точки збігаються), через що зрізаються прямі кути.
+    """
+    n = len(ring)
+    if n < 3:
+        return ring
+    out = []
+    for i in range(n):
+        ax, ay = ring[i - 1]
+        bx, by = ring[i]
+        cx, cy = ring[(i + 1) % n]
+        # b лежить на відрізку a→c (векторний добуток ≈ 0) → пропускаємо
+        if abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) > 1e-12:
+            out.append((bx, by))
+    return out if len(out) >= 3 else ring
+
+
+def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, float]]]:
+    """Увігнуті межі набору точок (lon, lat) — обводять ФАКТИЧНЕ покриття.
+
+    Опукла оболонка «роздувається» назовні: вона накриває порожні ділянки й
+    неминуче перетинає сусідні області, коли їхні точки чергуються. ГОІ малює
+    саме увігнуті межі, тож повторюємо це.
+
+    Алгоритм (точки палітр лежать сіткою, тож він і швидкий, і точний):
+      1. визначаємо крок сітки та «займані» комірки;
+      2. збираємо межові ребра — сторони комірок, за якими немає сусіда;
+      3. зшиваємо ребра в кільця, беремо найбільше за площею;
+      4. спрощуємо Дугласом–Пекером, щоб прибрати сходинки.
+
+    Повертає СПИСОК кілець (кожне — без дублювання першої точки): група може
+    складатися з кількох окремих скупчень. Якщо сітку розпізнати не вдалося —
+    повертає одне кільце опуклої оболонки.
+    """
+    uniq = sorted(set(pts))
+    if len(uniq) < 4:
+        return [convex_hull(uniq)]
+
+    sx = _grid_step([p[0] for p in uniq])
+    sy = _grid_step([p[1] for p in uniq])
+    step = max(sx, sy)
+    if step <= 0:
+        return [convex_hull(uniq)]
+
+    minx = min(p[0] for p in uniq)
+    miny = min(p[1] for p in uniq)
+    cells = {(round((x - minx) / step), round((y - miny) / step)) for x, y in uniq}
+    # Захист від виродженої сітки (усе в одну комірку / надто дрібний крок).
+    if len(cells) < 4 or len(cells) > 400_000:
+        return [convex_hull(uniq)]
+
+    # Межові ребра, орієнтовані проти годинникової — так кільця зшиваються.
+    edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
+    for ix, iy in cells:
+        if (ix, iy - 1) not in cells:
+            edges.setdefault((ix - .5, iy - .5), []).append((ix + .5, iy - .5))
+        if (ix + 1, iy) not in cells:
+            edges.setdefault((ix + .5, iy - .5), []).append((ix + .5, iy + .5))
+        if (ix, iy + 1) not in cells:
+            edges.setdefault((ix + .5, iy + .5), []).append((ix - .5, iy + .5))
+        if (ix - 1, iy) not in cells:
+            edges.setdefault((ix - .5, iy + .5), []).append((ix - .5, iy - .5))
+
+    def ring_area(r):
+        s = 0.0
+        for (x1, y1), (x2, y2) in zip(r, r[1:] + r[:1]):
+            s += x1 * y2 - x2 * y1
+        return abs(s) / 2
+
+    rings: list[list[tuple[float, float]]] = []
+    while edges:
+        start = next(iter(edges))
+        ring, cur = [], start
+        while True:
+            nxts = edges.get(cur)
+            if not nxts:
+                break
+            nxt = nxts.pop()
+            if not nxts:
+                edges.pop(cur, None)
+            ring.append(cur)
+            cur = nxt
+            if cur == start:
+                break
+        if len(ring) >= 4:
+            rings.append(ring)
+    if not rings:
+        return [convex_hull(uniq)]
+
+    # Кілька кілець = група розпадається на окремі скупчення (або має дірки).
+    # Дрібні (<2% від найбільшого) відкидаємо як шум, решту зберігаємо ВСІ —
+    # інакше частина точок лишилася б поза будь-якою межею.
+    rings.sort(key=ring_area, reverse=True)
+    biggest = ring_area(rings[0])
+    keep = [r for r in rings if ring_area(r) >= biggest * 0.02][:12]
+
+    out: list[list[tuple[float, float]]] = []
+    for r in keep:
+        latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
+        simple = _drop_collinear(latlon)
+        if len(simple) >= 3:
+            out.append(simple)
+    return out or [convex_hull(uniq)]
+
+
 def build_regions(points: list[ParsedPoint]) -> list[RegionAgg]:
     """Group points by colour and build a convex-hull region for each group."""
     by_color: dict[str, list[ParsedPoint]] = {}
@@ -504,16 +628,25 @@ def build_regions(points: list[ParsedPoint]) -> list[RegionAgg]:
         else:
             label = prefix
 
-        hull = convex_hull([(p.lon, p.lat) for p in grp])
-        if len(hull) >= 3:
-            ring = hull + [hull[0]]
+        outlines = [h for h in concave_outline([(p.lon, p.lat) for p in grp]) if len(h) >= 3]
+        if len(outlines) == 1:
+            ring = outlines[0] + [outlines[0][0]]
             hull_wkt = "POLYGON((" + ", ".join(f"{lon} {lat}" for lon, lat in ring) + "))"
-        elif len(hull) == 2:
-            hull_wkt = "LINESTRING(" + ", ".join(f"{lon} {lat}" for lon, lat in hull) + ")"
-        elif len(hull) == 1:
-            hull_wkt = f"POINT({hull[0][0]} {hull[0][1]})"
+        elif len(outlines) > 1:
+            # Кілька роз'єднаних скупчень однакового кольору.
+            parts = []
+            for h in outlines:
+                ring = h + [h[0]]
+                parts.append("((" + ", ".join(f"{lon} {lat}" for lon, lat in ring) + "))")
+            hull_wkt = "MULTIPOLYGON(" + ", ".join(parts) + ")"
         else:
-            hull_wkt = ""
+            flat = concave_outline([(p.lon, p.lat) for p in grp])[0]
+            if len(flat) == 2:
+                hull_wkt = "LINESTRING(" + ", ".join(f"{lon} {lat}" for lon, lat in flat) + ")"
+            elif len(flat) == 1:
+                hull_wkt = f"POINT({flat[0][0]} {flat[0][1]})"
+            else:
+                hull_wkt = ""
 
         center_lat = sum(p.lat for p in grp) / len(grp)
         center_lon = sum(p.lon for p in grp) / len(grp)

@@ -4588,9 +4588,17 @@
       const inScope = _palScope.has(p.id);
       // Компактний рядок: чекбокс (область пошуку) + назва + кружечок «⋯».
       // Усі дії з палітрою — у контекстному меню за кліком на кружечок.
+      const shown = _palRegionLayers.has(p.id);
       item.innerHTML =
         `<input type="checkbox" class="pal-item-check" ${inScope ? "checked" : ""} title="Шукати в цій палітрі">` +
         `<span class="pal-item-name" title="${_esc(p.name)}">${_palSeqPrefix(p.seq_no)}${_esc(p.name)}</span>` +
+        `<button class="pal-eye-btn${shown ? " is-on" : ""}" type="button" ` +
+          `title="Показати/сховати області на карті" aria-label="Показати області на карті">` +
+          `<svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5">` +
+            `<path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z"/>` +
+            `<circle cx="10" cy="10" r="2.6"/>` +
+          `</svg>` +
+        `</button>` +
         `<button class="pal-menu-btn" type="button" title="Дії з палітрою" aria-label="Дії з палітрою">` +
           `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.4">` +
             `<circle cx="10" cy="10" r="8"/>` +
@@ -4603,6 +4611,11 @@
         if (e.target.checked) _palScope.add(p.id); else _palScope.delete(p.id);
         _palSaveScope();
         _palRefreshSearchChips();   // перепошук по кодах із чіпів під новий scope
+      });
+      item.querySelector(".pal-eye-btn").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await _palToggleRegions(p.id);
+        _palRenderList();          // оновити стан «ока» після показу/приховування
       });
       item.querySelector(".pal-menu-btn").addEventListener("click", (e) => {
         e.stopPropagation();
@@ -4622,7 +4635,7 @@
     m.className = "pal-ctx-menu hidden";
     m.innerHTML =
       `<div class="pal-ctx-info"></div>` +
-      `<button type="button" class="pal-ctx-item" data-act="show">🗺 Показати на карті</button>` +
+      // «Показати на карті» переїхало на кнопку-око в самому чіпі (як у треків).
       `<button type="button" class="pal-ctx-item" data-act="export">📦 Експорт (kmz)</button>` +
       `<button type="button" class="pal-ctx-item" data-act="edit">✏️ Редагувати</button>` +
       `<button type="button" class="pal-ctx-item" data-act="arch"></button>` +
@@ -4635,8 +4648,7 @@
       const p = _palList.find(x => x.id === _palCtxPid);
       _palCloseCtxMenu();
       if (!p) return;
-      if (act === "show") _palToggleRegions(p.id);
-      else if (act === "export") {
+      if (act === "export") {
         const a = document.createElement("a");
         a.href = `/api/palettes/${p.id}/export`;
         document.body.appendChild(a); a.click(); a.remove();
@@ -5252,14 +5264,14 @@
       const j = await r.json();
       const layers = [];
       (j.regions || []).forEach(reg => {
-        const latlngs = _wktPolyToLatLngs(reg.hull_wkt);
-        if (latlngs && latlngs.length >= 3) {
+        // Кілець може бути кілька (MULTIPOLYGON) — малюємо контур на кожне.
+        _wktPolyToRings(reg.hull_wkt).forEach(latlngs => {
           const poly = L.polygon(latlngs, {
             color: reg.color || "#888", weight: 1.5, fillColor: reg.color || "#888",
             fillOpacity: 0.18, renderer: _conclBelowRenderer, interactive: false,
           }).addTo(_conclMap);
           layers.push(poly);
-        }
+        });
         if (reg.center && reg.label) {
           const lbl = L.marker([reg.center[0], reg.center[1]], {
             icon: L.divIcon({ className: "pal-region-label-wrap", html: `<div class="pal-region-label">${_esc(reg.label)}</div>`, iconSize: [0, 0] }),
@@ -5290,14 +5302,26 @@
     }
   }
 
-  function _wktPolyToLatLngs(wkt) {
-    // "POLYGON((lon lat, lon lat, ...))" → [[lat,lon],...]
-    const m = /POLYGON\s*\(\(([^)]+)\)\)/i.exec(wkt || "");
-    if (!m) return null;
-    return m[1].split(",").map(pair => {
-      const [lon, lat] = pair.trim().split(/\s+/).map(Number);
-      return [lat, lon];
-    });
+  /* "POLYGON((…))" або "MULTIPOLYGON(((…)),((…)))" → масив кілець [[lat,lon],…].
+     MULTIPOLYGON з'являється, коли точки одного кольору лежать кількома
+     окремими скупченнями — тоді малюємо по контуру на кожне. */
+  function _wktPolyToRings(wkt) {
+    const s = String(wkt || "");
+    const rings = [];
+    const re = /\(\s*([-\d.eE]+\s+[-\d.eE]+(?:\s*,\s*[-\d.eE]+\s+[-\d.eE]+)*)\s*\)/g;
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      const ring = m[1].split(",").map(pair => {
+        const [lon, lat] = pair.trim().split(/\s+/).map(Number);
+        return (isFinite(lat) && isFinite(lon)) ? [lat, lon] : null;
+      }).filter(Boolean);
+      if (ring.length >= 3) rings.push(ring);
+    }
+    return rings;
+  }
+  function _wktPolyToLatLngs(wkt) {          // сумісність: перше кільце
+    const r = _wktPolyToRings(wkt);
+    return r.length ? r[0] : null;
   }
 
   /* ---- Пошук точки по коду / масці (з інпута над картою) ---- */

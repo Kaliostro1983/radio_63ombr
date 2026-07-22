@@ -6314,3 +6314,12 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .concl-lm-ac__pin{ flex:0 0 auto; vertical-align:-2px; }
 .concl-lm-ac__pin.is-ok{ color:#22c55e; }
 .concl-lm-ac__pin.is-no{ color:#ef4444; }
+
+/* «Око» в чіпі палітри — показати/сховати області на карті */
+.pal-eye-btn{
+  flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; padding:0; border-radius:8px; cursor:pointer;
+  background:transparent; border:1px solid transparent; color:var(--fg); opacity:.55;
+}
+.pal-eye-btn:hover{ background:rgba(255,255,255,.10); opacity:1; }
+.pal-eye-btn.is-on{ opacity:1; color:#4ade80; border-color:color-mix(in srgb,#4ade80 45%,transparent); }
