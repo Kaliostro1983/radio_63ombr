@@ -607,7 +607,7 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
         latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
         # Межа має читатися як обрис району, а не як контур кожної комірки:
         # прибираємо дрібні зубці, тоді згладжуємо кути.
-        simple = _simplify_ring(_drop_collinear(latlon), step * 2.0)
+        simple = _simplify_ring(_drop_collinear(latlon), step * 1.5)
         smooth = _decimate(_chaikin(simple, 1), step * 0.5)
         if len(smooth) >= 3:
             out.append(smooth)
@@ -677,7 +677,11 @@ def _despike(cells: set[tuple[int, int]]) -> set[tuple[int, int]]:
         # Витягнута чи тонка область — відкриття зʼїло б її, лишаємо як є.
         opened = cells
     closed = erode(dilate(opened))
-    return closed if len(closed) >= 4 else opened
+    if len(closed) < 4:
+        closed = opened
+    # Ще один шар назовні — спрощення й згладжування підтягують межу всередину,
+    # і без запасу крайні точки опинилися б поза власною областю.
+    return dilate(closed)
 
 
 def _components(cells: set[tuple[int, int]]) -> list[set[tuple[int, int]]]:
