@@ -570,7 +570,9 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
     повертає одне кільце опуклої оболонки.
     """
     uniq = sorted(set(pts))
-    if len(uniq) < 4:
+    # Для кількох точок сітка не має сенсу — комірки не стикаються, і межа
+    # вироджується в цятки. Опукла оболонка тут і точніша, і чесніша.
+    if len(uniq) < 8:
         return [convex_hull(uniq)]
 
     # Комірка трохи більша за характерну відстань — щоб сусідні точки
