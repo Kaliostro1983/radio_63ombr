@@ -607,7 +607,7 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
         latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
         # Межа має читатися як обрис району, а не як контур кожної комірки:
         # прибираємо дрібні зубці, тоді згладжуємо кути.
-        simple = _simplify_ring(_drop_collinear(latlon), step * 2.0)
+        simple = _simplify_ring(_drop_collinear(latlon), step * 2.5)
         smooth = _decimate(_chaikin(simple, 1), step * 0.5)
         if len(smooth) >= 3:
             out.append(smooth)
