@@ -2,7 +2,7 @@
 
 Pipeline:
     bytes (KML/KMZ/GeoJSON) → parse placemarks → ParsedPoint[]
-                            → group by colour   → convex-hull regions
+                            → group by colour   → alpha-shape regions
                             → dedup analysis vs existing palettes
                             → persist (palettes / palette_regions / palette_points
                                / palette_points_rtree)
