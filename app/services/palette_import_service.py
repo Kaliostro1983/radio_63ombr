@@ -605,11 +605,79 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
     out: list[list[tuple[float, float]]] = []
     for r in keep:
         latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
-        # Сходинки сітки згладжуємо, інакше межа виглядає як піксельна драбина.
-        smooth = _decimate(_chaikin(_drop_collinear(latlon)), step * 0.35)
+        # Межа має читатися як обрис району, а не як контур кожної комірки:
+        # прибираємо дрібні зубці, тоді згладжуємо кути.
+        simple = _simplify_ring(_drop_collinear(latlon), step * 2.0)
+        smooth = _decimate(_chaikin(simple, 1), step * 0.5)
         if len(smooth) >= 3:
             out.append(smooth)
     return out or [convex_hull(uniq)]
+
+
+def _simplify_ring(
+    ring: list[tuple[float, float]], tol: float
+) -> list[tuple[float, float]]:
+    """Спрощення замкненого кільця (Дуглас–Пекер).
+
+    Кільце ріжемо на два ланцюги по найвіддаленішій парі вершин: на замкненому
+    контурі базова лінія вироджена, і алгоритм зрізав би прямі кути.
+    """
+    if len(ring) < 8:
+        return ring
+    x0, y0 = ring[0]
+    far = max(range(len(ring)), key=lambda i: (ring[i][0] - x0) ** 2 + (ring[i][1] - y0) ** 2)
+    xf, yf = ring[far]
+    far2 = max(range(len(ring)), key=lambda i: (ring[i][0] - xf) ** 2 + (ring[i][1] - yf) ** 2)
+    a, b = sorted((far, far2))
+    if b - a < 2 or len(ring) - (b - a) < 2:
+        return ring
+    out = _rdp(ring[a:b + 1], tol) + _rdp(ring[b:] + ring[:a + 1], tol)[1:-1]
+    return out if len(out) >= 3 else ring
+
+
+def _rdp(chain: list[tuple[float, float]], tol: float) -> list[tuple[float, float]]:
+    """Дуглас–Пекер для НЕзамкненого ланцюга."""
+    if len(chain) < 3:
+        return chain
+    (x1, y1), (x2, y2) = chain[0], chain[-1]
+    dx, dy = x2 - x1, y2 - y1
+    norm = (dx * dx + dy * dy) ** 0.5
+    best, bi = -1.0, 0
+    for i in range(1, len(chain) - 1):
+        px, py = chain[i]
+        d = (abs(dy * px - dx * py + x2 * y1 - y2 * x1) / norm) if norm else (
+            ((px - x1) ** 2 + (py - y1) ** 2) ** 0.5)
+        if d > best:
+            best, bi = d, i
+    if best <= tol:
+        return [chain[0], chain[-1]]
+    return _rdp(chain[:bi + 1], tol) + _rdp(chain[bi:], tol)[1:]
+
+
+def _despike(cells: set[tuple[int, int]]) -> set[tuple[int, int]]:
+    """Прибрати з набору комірок голки та засипати дрібні виїмки.
+
+    Поодинокі точки збоку тягнуть за собою «вусики» завширшки в одну комірку —
+    на карті це схоже на шипи. Морфологічне відкриття (ерозія→дилатація) їх
+    зрізає, закриття (дилатація→ерозія) згладжує зубчастий край.
+    """
+    def dilate(s):
+        out = set(s)
+        for ix, iy in s:
+            out.update(((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)))
+        return out
+
+    def erode(s):
+        return {(ix, iy) for ix, iy in s
+                if (ix + 1, iy) in s and (ix - 1, iy) in s
+                and (ix, iy + 1) in s and (ix, iy - 1) in s}
+
+    opened = dilate(erode(cells))
+    if len(opened) < len(cells) * 0.5:
+        # Витягнута чи тонка область — відкриття зʼїло б її, лишаємо як є.
+        opened = cells
+    closed = erode(dilate(opened))
+    return closed if len(closed) >= 4 else opened
 
 
 def _components(cells: set[tuple[int, int]]) -> list[set[tuple[int, int]]]:
@@ -687,7 +755,7 @@ def _trace_kept_rings(
     if not kept:
         kept = parts[:1]
     covered = sum(counts[c] for p in kept for c in p)
-    cells = {c for p in kept for c in p}
+    cells = _despike({c for p in kept for c in p})
 
     # Межові ребра, орієнтовані проти годинникової — так кільця зшиваються.
     edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
