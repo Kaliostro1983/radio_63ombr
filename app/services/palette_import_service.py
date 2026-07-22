@@ -243,8 +243,12 @@ def _normalize_color(value) -> str:
     if len(s) == 6 and all(c in "0123456789abcdef" for c in s):
         return "#" + s
     if len(s) == 8 and all(c in "0123456789abcdef" for c in s):
-        # rrggbbaa: drop alpha
-        return "#" + s[:6]
+        # AlpineQuest/GOI пишуть колір як #AARRGGBB — альфа ПОПЕРЕДУ.
+        # Раніше тут бралися перші 6 символів (як для rrggbbaa), через що
+        # #ff8b4513 (коричневий) ставав #ff8b45 (рожевий), #ffffa500
+        # (помаранчевий) → #ffffa5 (блідо-жовтий) тощо: усі кольори з LDK
+        # зсувались на байт і не збігалися з тим, що показує ГОІ.
+        return "#" + s[2:]
     return ""
 
 
