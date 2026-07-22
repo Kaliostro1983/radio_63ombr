@@ -583,41 +583,74 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
     minx = min(p[0] for p in uniq)
     miny = min(p[1] for p in uniq)
 
-    # Крок підбираємо: щільна сітка обводиться дрібним кроком, а розріджені
-    # скупчення при такому кроці розсипались би на десятки цяток — тоді крок
-    # збільшуємо, доки окремих контурів не стане небагато.
+    # Крок підбираємо за ПОКРИТТЯМ ТОЧОК: якщо група має щільніші згустки,
+    # характерна відстань занижена, решта сітки розсипається на одиничні
+    # комірки, і відкидання «шуму» лишило б купу точок поза межею. Тож
+    # збільшуємо крок, доки збережені скупчення не накриють майже всі точки.
     step = base * 1.25
-    outer: list[list[tuple[float, float]]] = []
-    holes: list[list[tuple[float, float]]] = []
-    for _ in range(8):
-        rings = _trace_cell_rings(uniq, minx, miny, step)
-        if rings is None:
+    keep: list[list[tuple[float, float]]] = []
+    for _ in range(10):
+        traced = _trace_kept_rings(uniq, minx, miny, step)
+        if traced is None:
             return [convex_hull(uniq)]
-        outer = [r for r in rings if _ring_signed_area(r) > 0]
-        holes = [r for r in rings if _ring_signed_area(r) < 0]
-        big = max((_ring_signed_area(r) for r in outer), default=0.0)
-        # Рахуємо лише вагомі контури — поодинокі точки збоку не привід
-        # укрупнювати сітку для всієї області.
-        if sum(1 for r in outer if _ring_signed_area(r) >= big * 0.02) <= 6:
+        keep, coverage, n_parts = traced
+        if coverage >= 0.97 and n_parts <= 8:
             break
-        step *= 1.6
-    if not outer:
+        step *= 1.5
+    if not keep:
         return [convex_hull(uniq)]
-
-    # Дрібні контури (<1% від найбільшого) відкидаємо як шум, решту зберігаємо
-    # ВСІ — інакше частина точок лишилася б поза будь-якою межею.
-    outer.sort(key=_ring_signed_area, reverse=True)
-    biggest = _ring_signed_area(outer[0])
-    keep = [r for r in outer if _ring_signed_area(r) >= biggest * 0.01][:24]
-    keep += [r for r in holes if -_ring_signed_area(r) >= biggest * 0.05][:8]
 
     out: list[list[tuple[float, float]]] = []
     for r in keep:
         latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
-        simple = _drop_collinear(latlon)
-        if len(simple) >= 3:
-            out.append(simple)
+        # Сходинки сітки згладжуємо, інакше межа виглядає як піксельна драбина.
+        smooth = _decimate(_chaikin(_drop_collinear(latlon)), step * 0.35)
+        if len(smooth) >= 3:
+            out.append(smooth)
     return out or [convex_hull(uniq)]
+
+
+def _components(cells: set[tuple[int, int]]) -> list[set[tuple[int, int]]]:
+    """Звʼязні (по 4 сусідах) скупчення комірок."""
+    seen: set[tuple[int, int]] = set()
+    parts: list[set[tuple[int, int]]] = []
+    for c in cells:
+        if c in seen:
+            continue
+        stack, comp = [c], set()
+        seen.add(c)
+        while stack:
+            ix, iy = stack.pop()
+            comp.add((ix, iy))
+            for n in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
+                if n in cells and n not in seen:
+                    seen.add(n)
+                    stack.append(n)
+        parts.append(comp)
+    return parts
+
+
+def _chaikin(ring: list[tuple[float, float]], passes: int = 2) -> list[tuple[float, float]]:
+    """Згладжування Чайкіна (зрізання кутів) для замкненого кільця."""
+    for _ in range(passes):
+        nxt: list[tuple[float, float]] = []
+        for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
+            nxt.append((x1 * 0.75 + x2 * 0.25, y1 * 0.75 + y2 * 0.25))
+            nxt.append((x1 * 0.25 + x2 * 0.75, y1 * 0.25 + y2 * 0.75))
+        ring = nxt
+    return ring
+
+
+def _decimate(ring: list[tuple[float, float]], min_dist: float) -> list[tuple[float, float]]:
+    """Прорідити кільце: викинути вершини, ближчі за min_dist до попередньої."""
+    if len(ring) < 4:
+        return ring
+    out = [ring[0]]
+    for x, y in ring[1:]:
+        px, py = out[-1]
+        if (x - px) ** 2 + (y - py) ** 2 >= min_dist * min_dist:
+            out.append((x, y))
+    return out if len(out) >= 3 else ring
 
 
 def _ring_signed_area(ring: list[tuple[float, float]]) -> float:
@@ -628,16 +661,31 @@ def _ring_signed_area(ring: list[tuple[float, float]]) -> float:
     return s / 2
 
 
-def _trace_cell_rings(
+def _trace_kept_rings(
     pts: list[tuple[float, float]], minx: float, miny: float, step: float
-) -> list[list[tuple[float, float]]] | None:
-    """Займані комірки сітки → замкнені кільця межових ребер (у координатах сітки).
+) -> tuple[list[list[tuple[float, float]]], float, int] | None:
+    """Комірки сітки → кільця межових ребер вагомих скупчень (у координатах сітки).
 
-    Повертає None, якщо сітка вироджена (усе в одну комірку або занадто дрібна).
+    Повертає (кільця, частка накритих точок, кількість скупчень) або None,
+    якщо сітка вироджена (усе в одну комірку або занадто дрібна).
     """
-    cells = {(round((x - minx) / step), round((y - miny) / step)) for x, y in pts}
-    if len(cells) < 4 or len(cells) > 400_000:
+    counts: dict[tuple[int, int], int] = {}
+    for x, y in pts:
+        c = (round((x - minx) / step), round((y - miny) / step))
+        counts[c] = counts.get(c, 0) + 1
+    if len(counts) < 4 or len(counts) > 400_000:
         return None
+
+    # Скупчення, що містять менше 0.5% точок, відкидаємо як шум; решту
+    # зберігаємо ВСІ — інакше частина точок лишилася б поза будь-якою межею.
+    parts = _components(set(counts))
+    parts.sort(key=lambda p: sum(counts[c] for c in p), reverse=True)
+    total = len(pts)
+    kept = [p for p in parts if sum(counts[c] for c in p) >= total * 0.005][:24]
+    if not kept:
+        kept = parts[:1]
+    covered = sum(counts[c] for p in kept for c in p)
+    cells = {c for p in kept for c in p}
 
     # Межові ребра, орієнтовані проти годинникової — так кільця зшиваються.
     edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
@@ -668,7 +716,13 @@ def _trace_cell_rings(
                 break
         if len(ring) >= 4:
             rings.append(ring)
-    return rings
+    # Дірки (відʼємна площа) лишаємо лише помітні — дрібні лише засмічують межу.
+    outer = [r for r in rings if _ring_signed_area(r) > 0]
+    if not outer:
+        return None
+    biggest = max(_ring_signed_area(r) for r in outer)
+    out = outer + [r for r in rings if -_ring_signed_area(r) >= biggest * 0.05][:8]
+    return out, covered / total, len(kept)
 
 
 def build_regions(points: list[ParsedPoint]) -> list[RegionAgg]:
