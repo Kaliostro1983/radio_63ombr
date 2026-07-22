@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import re
 import zipfile
 from dataclasses import dataclass, field
@@ -479,324 +480,103 @@ class RegionAgg:
     center_lon: float
 
 
-def _typical_spacing(pts: list[tuple[float, float]]) -> float:
-    """Характерна відстань між сусідніми точками (медіана по найближчих).
-
-    Крок НЕ можна брати з різниць унікальних довгот/широт: сітки палітр
-    побудовані в MGRS і відносно градусної сітки ПОВЕРНУТІ, тож унікальних
-    координат тисячі, а медіана їхніх різниць виходить мікроскопічною — обриси
-    тоді збираються навколо кожної точки окремо.
-
-    Тому рахуємо відстань до найближчого сусіда для вибірки точок, шукаючи
-    сусідів через хеш-сітку (без цього було б O(n²)).
-    """
-    n = len(pts)
-    if n < 2:
-        return 0.0
-    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
-    w = max(xs) - min(xs); h = max(ys) - min(ys)
-    if w <= 0 and h <= 0:
-        return 0.0
-    # Початкова оцінка: середня щільність по bbox.
-    guess = ((w * h) / n) ** 0.5 if (w > 0 and h > 0) else (max(w, h) / n)
-    if guess <= 0:
-        return 0.0
-
-    minx, miny = min(xs), min(ys)
-    buckets: dict[tuple[int, int], list[tuple[float, float]]] = {}
-    for p in pts:
-        buckets.setdefault((int((p[0] - minx) / guess), int((p[1] - miny) / guess)), []).append(p)
-
-    step_sample = max(1, n // 2000)          # вибірка до ~2000 точок
-    dists: list[float] = []
-    for idx in range(0, n, step_sample):
-        px, py = pts[idx]
-        bx, by = int((px - minx) / guess), int((py - miny) / guess)
-        best = None
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for qx, qy in buckets.get((bx + dx, by + dy), ()):
-                    if qx == px and qy == py:
-                        continue
-                    d2 = (qx - px) ** 2 + (qy - py) ** 2
-                    if best is None or d2 < best:
-                        best = d2
-        if best:
-            dists.append(best ** 0.5)
-    if not dists:
-        return guess
-    dists.sort()
-    return dists[len(dists) // 2]
-
-
-def _drop_collinear(ring: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Прибрати проміжні точки на прямих ділянках ЗАМКНЕНОГО кільця.
-
-    Обрис по сітці складається лише з горизонтальних і вертикальних відрізків,
-    тож злиття колінеарних сегментів дає ТОЧНО ту саму фігуру, але з мінімумом
-    вершин (для Г-подібної області — 6 замість 80). Навмисно не використовуємо
-    Дугласа–Пекера: на замкненому кільці його базова лінія вироджена (перша й
-    остання точки збігаються), через що зрізаються прямі кути.
-    """
-    n = len(ring)
-    if n < 3:
-        return ring
-    out = []
-    for i in range(n):
-        ax, ay = ring[i - 1]
-        bx, by = ring[i]
-        cx, cy = ring[(i + 1) % n]
-        # b лежить на відрізку a→c (векторний добуток ≈ 0) → пропускаємо
-        if abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) > 1e-12:
-            out.append((bx, by))
-    return out if len(out) >= 3 else ring
-
-
 def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, float]]]:
-    """Увігнуті межі набору точок (lon, lat) — обводять ФАКТИЧНЕ покриття.
+    """Увігнуті межі набору точок (lon, lat) — альфа-форма, як у ГОІ.
 
     Опукла оболонка «роздувається» назовні: вона накриває порожні ділянки й
-    неминуче перетинає сусідні області, коли їхні точки чергуються. ГОІ малює
-    саме увігнуті межі, тож повторюємо це.
+    неминуче перетинає сусідні області, коли їхні точки чергуються.
 
-    Алгоритм (точки палітр лежать сіткою, тож він і швидкий, і точний):
-      1. визначаємо крок сітки та «займані» комірки;
-      2. збираємо межові ребра — сторони комірок, за якими немає сусіда;
-      3. зшиваємо ребра в кільця, беремо найбільше за площею;
-      4. спрощуємо Дугласом–Пекером, щоб прибрати сходинки.
+    Алгоритм повторює ГОІ (`turf.concave({maxEdge: 2.5})` з відкатом на
+    `turf.convex`):
+      1. тріангуляція Делоне по точках групи;
+      2. викидаємо трикутники, у яких хоч одна сторона довша за MAX_EDGE_KM;
+      3. зливаємо решту — межа союзу і є контуром зони.
+
+    Вершинами контуру стають САМІ точки, тож лінії виходять рівні без
+    згладжування, а віддалені викиди відпадають разом зі своїми трикутниками.
 
     Повертає СПИСОК кілець (кожне — без дублювання першої точки): група може
-    складатися з кількох окремих скупчень. Якщо сітку розпізнати не вдалося —
-    повертає одне кільце опуклої оболонки.
+    складатися з кількох роз'єднаних скупчень. Якщо тріангуляція неможлива
+    (менше 3 точок, усі на одній прямій) — повертає опуклу оболонку.
     """
     uniq = sorted(set(pts))
-    # Для кількох точок сітка не має сенсу — комірки не стикаються, і межа
-    # вироджується в цятки. Опукла оболонка тут і точніша, і чесніша.
-    if len(uniq) < 8:
+    if len(uniq) < 3:
         return [convex_hull(uniq)]
 
-    # Комірка трохи більша за характерну відстань — щоб сусідні точки
-    # (зокрема на повернутій сітці) потрапляли в суміжні комірки й область
-    # не розсипалася на окремі цятки.
-    base = _typical_spacing(uniq)
-    if base <= 0:
-        return [convex_hull(uniq)]
-
-    minx = min(p[0] for p in uniq)
-    miny = min(p[1] for p in uniq)
-
-    # Крок підбираємо за ПОКРИТТЯМ ТОЧОК: якщо група має щільніші згустки,
-    # характерна відстань занижена, решта сітки розсипається на одиничні
-    # комірки, і відкидання «шуму» лишило б купу точок поза межею. Тож
-    # збільшуємо крок, доки збережені скупчення не накриють майже всі точки.
-    step = base * 1.25
-    keep: list[list[tuple[float, float]]] = []
-    for _ in range(10):
-        traced = _trace_kept_rings(uniq, minx, miny, step)
-        if traced is None:
-            return [convex_hull(uniq)]
-        keep, coverage, n_parts = traced
-        if coverage >= 0.97 and n_parts <= 8:
-            break
-        step *= 1.5
-    if not keep:
-        return [convex_hull(uniq)]
-
-    out: list[list[tuple[float, float]]] = []
-    for r in keep:
-        latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
-        # Межа має читатися як обрис району, а не як контур кожної комірки:
-        # прибираємо дрібні зубці, тоді згладжуємо кути.
-        simple = _simplify_ring(_drop_collinear(latlon), step * 2.5)
-        smooth = _decimate(_chaikin(simple, 1), step * 0.5)
-        if len(smooth) >= 3:
-            out.append(smooth)
-    return out or [convex_hull(uniq)]
+    rings = _alpha_shape_rings(uniq, MAX_EDGE_KM)
+    return rings or [convex_hull(uniq)]
 
 
-def _simplify_ring(
-    ring: list[tuple[float, float]], tol: float
-) -> list[tuple[float, float]]:
-    """Спрощення замкненого кільця (Дуглас–Пекер).
-
-    Кільце ріжемо на два ланцюги по найвіддаленішій парі вершин: на замкненому
-    контурі базова лінія вироджена, і алгоритм зрізав би прямі кути.
-    """
-    if len(ring) < 8:
-        return ring
-    x0, y0 = ring[0]
-    far = max(range(len(ring)), key=lambda i: (ring[i][0] - x0) ** 2 + (ring[i][1] - y0) ** 2)
-    xf, yf = ring[far]
-    far2 = max(range(len(ring)), key=lambda i: (ring[i][0] - xf) ** 2 + (ring[i][1] - yf) ** 2)
-    a, b = sorted((far, far2))
-    if b - a < 2 or len(ring) - (b - a) < 2:
-        return ring
-    out = _rdp(ring[a:b + 1], tol) + _rdp(ring[b:] + ring[:a + 1], tol)[1:-1]
-    return out if len(out) >= 3 else ring
+# Трикутник із стороною довшою за це (км) не належить зоні. Значення взяте з
+# ГОІ: `concave(featureCollection, {maxEdge: 2.5})`.
+MAX_EDGE_KM = 2.5
 
 
-def _rdp(chain: list[tuple[float, float]], tol: float) -> list[tuple[float, float]]:
-    """Дуглас–Пекер для НЕзамкненого ланцюга."""
-    if len(chain) < 3:
-        return chain
-    (x1, y1), (x2, y2) = chain[0], chain[-1]
-    dx, dy = x2 - x1, y2 - y1
-    norm = (dx * dx + dy * dy) ** 0.5
-    best, bi = -1.0, 0
-    for i in range(1, len(chain) - 1):
-        px, py = chain[i]
-        d = (abs(dy * px - dx * py + x2 * y1 - y2 * x1) / norm) if norm else (
-            ((px - x1) ** 2 + (py - y1) ** 2) ** 0.5)
-        if d > best:
-            best, bi = d, i
-    if best <= tol:
-        return [chain[0], chain[-1]]
-    return _rdp(chain[:bi + 1], tol) + _rdp(chain[bi:], tol)[1:]
+def _alpha_shape_rings(
+    uniq: list[tuple[float, float]], max_edge_km: float
+) -> list[list[tuple[float, float]]]:
+    """Альфа-форма набору точок → кільця межі (проти годинникової)."""
+    try:
+        import numpy as np
+        from scipy.spatial import Delaunay, QhullError
+    except ImportError:
+        return []
 
+    # Градуси → кілометри, щоб MAX_EDGE_KM був у реальних одиницях: довгота
+    # стискається косинусом широти, інакше поріг «поїде» з широтою.
+    lat0 = sum(p[1] for p in uniq) / len(uniq)
+    kx = 111.320 * math.cos(math.radians(lat0))
+    ky = 110.574
+    xy = np.array([(x * kx, y * ky) for x, y in uniq])
+    try:
+        tri = Delaunay(xy)
+    except (QhullError, ValueError):
+        return []
 
-def _despike(cells: set[tuple[int, int]]) -> set[tuple[int, int]]:
-    """Прибрати з набору комірок голки та засипати дрібні виїмки.
-
-    Поодинокі точки збоку тягнуть за собою «вусики» завширшки в одну комірку —
-    на карті це схоже на шипи. Морфологічне відкриття (ерозія→дилатація) їх
-    зрізає, закриття (дилатація→ерозія) згладжує зубчастий край.
-    """
-    def dilate(s):
-        out = set(s)
-        for ix, iy in s:
-            out.update(((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)))
-        return out
-
-    def erode(s):
-        return {(ix, iy) for ix, iy in s
-                if (ix + 1, iy) in s and (ix - 1, iy) in s
-                and (ix, iy + 1) in s and (ix, iy - 1) in s}
-
-    opened = dilate(erode(cells))
-    if len(opened) < len(cells) * 0.5:
-        # Витягнута чи тонка область — відкриття зʼїло б її, лишаємо як є.
-        opened = cells
-    closed = erode(dilate(opened))
-    if len(closed) < 4:
-        closed = opened
-    # Ще один шар назовні — спрощення й згладжування підтягують межу всередину,
-    # і без запасу крайні точки опинилися б поза власною областю.
-    return dilate(closed)
-
-
-def _components(cells: set[tuple[int, int]]) -> list[set[tuple[int, int]]]:
-    """Звʼязні (по 4 сусідах) скупчення комірок."""
-    seen: set[tuple[int, int]] = set()
-    parts: list[set[tuple[int, int]]] = []
-    for c in cells:
-        if c in seen:
+    # Внутрішні ребра трапляються двічі у протилежних напрямках і скорочуються;
+    # те, що лишиться, — орієнтована межа союзу трикутників.
+    edges: dict[tuple[int, int], int] = {}
+    limit = max_edge_km * max_edge_km
+    for a, b, c in tri.simplices:
+        pa, pb, pc = xy[a], xy[b], xy[c]
+        if (max(_d2(pa, pb), _d2(pb, pc), _d2(pc, pa))) > limit:
             continue
-        stack, comp = [c], set()
-        seen.add(c)
-        while stack:
-            ix, iy = stack.pop()
-            comp.add((ix, iy))
-            for n in ((ix + 1, iy), (ix - 1, iy), (ix, iy + 1), (ix, iy - 1)):
-                if n in cells and n not in seen:
-                    seen.add(n)
-                    stack.append(n)
-        parts.append(comp)
-    return parts
+        # Орієнтуємо трикутник проти годинникової.
+        if (pb[0] - pa[0]) * (pc[1] - pa[1]) - (pb[1] - pa[1]) * (pc[0] - pa[0]) < 0:
+            a, b, c = a, c, b
+        for e in ((a, b), (b, c), (c, a)):
+            rev = (e[1], e[0])
+            if edges.get(rev):
+                edges[rev] -= 1
+                if not edges[rev]:
+                    del edges[rev]
+            else:
+                edges[e] = edges.get(e, 0) + 1
 
-
-def _chaikin(ring: list[tuple[float, float]], passes: int = 2) -> list[tuple[float, float]]:
-    """Згладжування Чайкіна (зрізання кутів) для замкненого кільця."""
-    for _ in range(passes):
-        nxt: list[tuple[float, float]] = []
-        for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
-            nxt.append((x1 * 0.75 + x2 * 0.25, y1 * 0.75 + y2 * 0.25))
-            nxt.append((x1 * 0.25 + x2 * 0.75, y1 * 0.25 + y2 * 0.75))
-        ring = nxt
-    return ring
-
-
-def _decimate(ring: list[tuple[float, float]], min_dist: float) -> list[tuple[float, float]]:
-    """Прорідити кільце: викинути вершини, ближчі за min_dist до попередньої."""
-    if len(ring) < 4:
-        return ring
-    out = [ring[0]]
-    for x, y in ring[1:]:
-        px, py = out[-1]
-        if (x - px) ** 2 + (y - py) ** 2 >= min_dist * min_dist:
-            out.append((x, y))
-    return out if len(out) >= 3 else ring
-
-
-def _ring_signed_area(ring: list[tuple[float, float]]) -> float:
-    """Знакова площа кільця: >0 — зовнішній контур, <0 — дірка."""
-    s = 0.0
-    for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
-        s += x1 * y2 - x2 * y1
-    return s / 2
-
-
-def _trace_kept_rings(
-    pts: list[tuple[float, float]], minx: float, miny: float, step: float
-) -> tuple[list[list[tuple[float, float]]], float, int] | None:
-    """Комірки сітки → кільця межових ребер вагомих скупчень (у координатах сітки).
-
-    Повертає (кільця, частка накритих точок, кількість скупчень) або None,
-    якщо сітка вироджена (усе в одну комірку або занадто дрібна).
-    """
-    counts: dict[tuple[int, int], int] = {}
-    for x, y in pts:
-        c = (round((x - minx) / step), round((y - miny) / step))
-        counts[c] = counts.get(c, 0) + 1
-    if len(counts) < 4 or len(counts) > 400_000:
-        return None
-
-    # Скупчення, що містять менше 0.5% точок, відкидаємо як шум; решту
-    # зберігаємо ВСІ — інакше частина точок лишилася б поза будь-якою межею.
-    parts = _components(set(counts))
-    parts.sort(key=lambda p: sum(counts[c] for c in p), reverse=True)
-    total = len(pts)
-    kept = [p for p in parts if sum(counts[c] for c in p) >= total * 0.005][:24]
-    if not kept:
-        kept = parts[:1]
-    covered = sum(counts[c] for p in kept for c in p)
-    cells = _despike({c for p in kept for c in p})
-
-    # Межові ребра, орієнтовані проти годинникової — так кільця зшиваються.
-    edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
-    for ix, iy in cells:
-        if (ix, iy - 1) not in cells:
-            edges.setdefault((ix - .5, iy - .5), []).append((ix + .5, iy - .5))
-        if (ix + 1, iy) not in cells:
-            edges.setdefault((ix + .5, iy - .5), []).append((ix + .5, iy + .5))
-        if (ix, iy + 1) not in cells:
-            edges.setdefault((ix + .5, iy + .5), []).append((ix - .5, iy + .5))
-        if (ix - 1, iy) not in cells:
-            edges.setdefault((ix - .5, iy + .5), []).append((ix - .5, iy - .5))
-
-    rings: list[list[tuple[float, float]]] = []
-    while edges:
-        start = next(iter(edges))
+    # Зшиваємо орієнтовані ребра в замкнені кільця.
+    nxt: dict[int, list[int]] = {}
+    for (i, j), n in edges.items():
+        nxt.setdefault(i, []).extend([j] * n)
+    out: list[list[tuple[float, float]]] = []
+    while nxt:
+        start = next(iter(nxt))
         ring, cur = [], start
-        while True:
-            nxts = edges.get(cur)
-            if not nxts:
-                break
-            nxt = nxts.pop()
-            if not nxts:
-                edges.pop(cur, None)
+        while cur in nxt:
             ring.append(cur)
-            cur = nxt
+            j = nxt[cur].pop()
+            if not nxt[cur]:
+                del nxt[cur]
+            cur = j
             if cur == start:
                 break
-        if len(ring) >= 4:
-            rings.append(ring)
-    # Дірки (відʼємна площа) лишаємо лише помітні — дрібні лише засмічують межу.
-    outer = [r for r in rings if _ring_signed_area(r) > 0]
-    if not outer:
-        return None
-    biggest = max(_ring_signed_area(r) for r in outer)
-    out = outer + [r for r in rings if -_ring_signed_area(r) >= biggest * 0.05][:8]
-    return out, covered / total, len(kept)
+        if len(ring) >= 3:
+            out.append([uniq[i] for i in ring])
+    return out
+
+
+def _d2(p, q) -> float:
+    """Квадрат відстані між двома точками (км²)."""
+    return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2
 
 
 def build_regions(points: list[ParsedPoint]) -> list[RegionAgg]:
