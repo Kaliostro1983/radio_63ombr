@@ -576,16 +576,68 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
     # Комірка трохи більша за характерну відстань — щоб сусідні точки
     # (зокрема на повернутій сітці) потрапляли в суміжні комірки й область
     # не розсипалася на окремі цятки.
-    step = _typical_spacing(uniq) * 1.25
-    if step <= 0:
+    base = _typical_spacing(uniq)
+    if base <= 0:
         return [convex_hull(uniq)]
 
     minx = min(p[0] for p in uniq)
     miny = min(p[1] for p in uniq)
-    cells = {(round((x - minx) / step), round((y - miny) / step)) for x, y in uniq}
-    # Захист від виродженої сітки (усе в одну комірку / надто дрібний крок).
-    if len(cells) < 4 or len(cells) > 400_000:
+
+    # Крок підбираємо: щільна сітка обводиться дрібним кроком, а розріджені
+    # скупчення при такому кроці розсипались би на десятки цяток — тоді крок
+    # збільшуємо, доки окремих контурів не стане небагато.
+    step = base * 1.25
+    outer: list[list[tuple[float, float]]] = []
+    holes: list[list[tuple[float, float]]] = []
+    for _ in range(8):
+        rings = _trace_cell_rings(uniq, minx, miny, step)
+        if rings is None:
+            return [convex_hull(uniq)]
+        outer = [r for r in rings if _ring_signed_area(r) > 0]
+        holes = [r for r in rings if _ring_signed_area(r) < 0]
+        big = max((_ring_signed_area(r) for r in outer), default=0.0)
+        # Рахуємо лише вагомі контури — поодинокі точки збоку не привід
+        # укрупнювати сітку для всієї області.
+        if sum(1 for r in outer if _ring_signed_area(r) >= big * 0.02) <= 6:
+            break
+        step *= 1.6
+    if not outer:
         return [convex_hull(uniq)]
+
+    # Дрібні контури (<1% від найбільшого) відкидаємо як шум, решту зберігаємо
+    # ВСІ — інакше частина точок лишилася б поза будь-якою межею.
+    outer.sort(key=_ring_signed_area, reverse=True)
+    biggest = _ring_signed_area(outer[0])
+    keep = [r for r in outer if _ring_signed_area(r) >= biggest * 0.01][:24]
+    keep += [r for r in holes if -_ring_signed_area(r) >= biggest * 0.05][:8]
+
+    out: list[list[tuple[float, float]]] = []
+    for r in keep:
+        latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
+        simple = _drop_collinear(latlon)
+        if len(simple) >= 3:
+            out.append(simple)
+    return out or [convex_hull(uniq)]
+
+
+def _ring_signed_area(ring: list[tuple[float, float]]) -> float:
+    """Знакова площа кільця: >0 — зовнішній контур, <0 — дірка."""
+    s = 0.0
+    for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]):
+        s += x1 * y2 - x2 * y1
+    return s / 2
+
+
+def _trace_cell_rings(
+    pts: list[tuple[float, float]], minx: float, miny: float, step: float
+) -> list[list[tuple[float, float]]] | None:
+    """Займані комірки сітки → замкнені кільця межових ребер (у координатах сітки).
+
+    Повертає None, якщо сітка вироджена (усе в одну комірку або занадто дрібна).
+    """
+    cells = {(round((x - minx) / step), round((y - miny) / step)) for x, y in pts}
+    if len(cells) < 4 or len(cells) > 400_000:
+        return None
 
     # Межові ребра, орієнтовані проти годинникової — так кільця зшиваються.
     edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
@@ -598,12 +650,6 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
             edges.setdefault((ix + .5, iy + .5), []).append((ix - .5, iy + .5))
         if (ix - 1, iy) not in cells:
             edges.setdefault((ix - .5, iy + .5), []).append((ix - .5, iy - .5))
-
-    def ring_area(r):
-        s = 0.0
-        for (x1, y1), (x2, y2) in zip(r, r[1:] + r[:1]):
-            s += x1 * y2 - x2 * y1
-        return abs(s) / 2
 
     rings: list[list[tuple[float, float]]] = []
     while edges:
@@ -622,23 +668,7 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
                 break
         if len(ring) >= 4:
             rings.append(ring)
-    if not rings:
-        return [convex_hull(uniq)]
-
-    # Кілька кілець = група розпадається на окремі скупчення (або має дірки).
-    # Дрібні (<2% від найбільшого) відкидаємо як шум, решту зберігаємо ВСІ —
-    # інакше частина точок лишилася б поза будь-якою межею.
-    rings.sort(key=ring_area, reverse=True)
-    biggest = ring_area(rings[0])
-    keep = [r for r in rings if ring_area(r) >= biggest * 0.02][:12]
-
-    out: list[list[tuple[float, float]]] = []
-    for r in keep:
-        latlon = [(minx + gx * step, miny + gy * step) for gx, gy in r]
-        simple = _drop_collinear(latlon)
-        if len(simple) >= 3:
-            out.append(simple)
-    return out or [convex_hull(uniq)]
+    return rings
 
 
 def build_regions(points: list[ParsedPoint]) -> list[RegionAgg]:
