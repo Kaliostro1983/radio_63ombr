@@ -11,6 +11,23 @@
   const mapStyleSelect = $("netPelengMapStyle");
   if (!networkId || !daysInput || !btn || !out) return;
 
+  // Вигляд позначки пеленга: колір сталий, вік передається прозорістю.
+  const PELENG_COLOR    = "#ef4444";
+  const FADE_AFTER_DAYS = 5;      // до цього віку — повна яскравість
+  const FADE_PER_DAY    = 0.03;   // −3% за кожен повний день понад поріг
+  const FADE_MIN        = 0.30;   // нижче не опускаємось, інакше зникне з карти
+
+  /* Прозорість позначки за давністю пеленга. */
+  function pelengOpacity(eventDt) {
+    // event_dt приходить як "YYYY-MM-DD HH:MM:SS" — Safari такий рядок не
+    // розбирає без "T".
+    const t = Date.parse(String(eventDt || "").trim().replace(" ", "T"));
+    if (!Number.isFinite(t)) return 1;
+    const days = Math.floor((Date.now() - t) / 86400000);
+    if (days <= FADE_AFTER_DAYS) return 1;
+    return Math.max(FADE_MIN, 1 - FADE_PER_DAY * (days - FADE_AFTER_DAYS));
+  }
+
   function escapeHtml(value) {
     return String(value || "")
       .replaceAll("&", "&amp;")
@@ -133,8 +150,6 @@
     const scaleX = (viewW - pad * 2) / spanX;
     const scaleY = (viewH - pad * 2) / spanY;
 
-    const palette = ["#ef4444", "#f97316", "#22c55e", "#60a5fa", "#a78bfa", "#f472b6"];
-    const getColor = (batchId) => palette[Math.abs(Number(batchId) || 0) % palette.length];
 
     const wrapper = document.createElement("div");
     wrapper.className = "peleng-map-wrap";
@@ -192,8 +207,8 @@
       circle.setAttribute("cx", String(sx));
       circle.setAttribute("cy", String(sy));
       circle.setAttribute("r", "6.6");
-      circle.setAttribute("fill", getColor(p.batchId));
-      circle.setAttribute("fill-opacity", "0.95");
+      circle.setAttribute("fill", PELENG_COLOR);
+      circle.setAttribute("fill-opacity", String(pelengOpacity(p.eventDt)));
       circle.setAttribute("stroke", "rgba(255,255,255,0.38)");
       circle.setAttribute("stroke-width", "2.0");
 
@@ -297,8 +312,6 @@
 
     // Build geo points from MGRS.
     const geoPoints = [];
-    const palette = ["#ef4444", "#f97316", "#22c55e", "#60a5fa", "#a78bfa", "#f472b6"];
-    const getColor = (batchId) => palette[Math.abs(Number(batchId) || 0) % palette.length];
 
     for (const b of batches) {
       const pts = Array.isArray(b.points) ? b.points : [];
@@ -311,7 +324,6 @@
           mgrs: mgrsStr,
           batchId: b.id,
           eventDt: b.event_dt || "",
-          color: getColor(b.id),
         });
       }
     }
@@ -362,12 +374,16 @@
       const ll = window.L.latLng(p.lat, p.lon);
       bounds.extend(ll);
 
+      // Пеленг завжди червоний; вік показуємо прозорістю — свіжі яскраві,
+      // старі бліднуть, але лишаються помітними (див. pelengOpacity).
+      const op = pelengOpacity(p.eventDt);
       const cm = window.L.circleMarker(ll, {
         radius: 5,
-        color: "rgba(255,255,255,0.75)",
+        color: "#ffffff",
+        opacity: op * 0.75,
         weight: 1.5,
-        fillColor: p.color,
-        fillOpacity: 0.85,
+        fillColor: PELENG_COLOR,
+        fillOpacity: op,
       });
       cm.addTo(map);
       cm.bindTooltip(`${escapeHtml(p.mgrs)}${p.eventDt ? `<br/>${escapeHtml(p.eventDt)}` : ""}`, {
