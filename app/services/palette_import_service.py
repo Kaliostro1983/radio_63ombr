@@ -479,17 +479,54 @@ class RegionAgg:
     center_lon: float
 
 
-def _grid_step(vals: list[float]) -> float:
-    """Крок сітки = медіана відстаней між сусідніми УНІКАЛЬНИМИ координатами.
+def _typical_spacing(pts: list[tuple[float, float]]) -> float:
+    """Характерна відстань між сусідніми точками (медіана по найближчих).
 
-    Точки палітри лежать регулярною сіткою, тож медіана стійко дає її крок
-    навіть за пропусків і поодиноких викидів.
+    Крок НЕ можна брати з різниць унікальних довгот/широт: сітки палітр
+    побудовані в MGRS і відносно градусної сітки ПОВЕРНУТІ, тож унікальних
+    координат тисячі, а медіана їхніх різниць виходить мікроскопічною — обриси
+    тоді збираються навколо кожної точки окремо.
+
+    Тому рахуємо відстань до найближчого сусіда для вибірки точок, шукаючи
+    сусідів через хеш-сітку (без цього було б O(n²)).
     """
-    u = sorted(set(round(v, 7) for v in vals))
-    if len(u) < 2:
+    n = len(pts)
+    if n < 2:
         return 0.0
-    d = sorted(b - a for a, b in zip(u, u[1:]) if b > a)
-    return d[len(d) // 2] if d else 0.0
+    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+    w = max(xs) - min(xs); h = max(ys) - min(ys)
+    if w <= 0 and h <= 0:
+        return 0.0
+    # Початкова оцінка: середня щільність по bbox.
+    guess = ((w * h) / n) ** 0.5 if (w > 0 and h > 0) else (max(w, h) / n)
+    if guess <= 0:
+        return 0.0
+
+    minx, miny = min(xs), min(ys)
+    buckets: dict[tuple[int, int], list[tuple[float, float]]] = {}
+    for p in pts:
+        buckets.setdefault((int((p[0] - minx) / guess), int((p[1] - miny) / guess)), []).append(p)
+
+    step_sample = max(1, n // 2000)          # вибірка до ~2000 точок
+    dists: list[float] = []
+    for idx in range(0, n, step_sample):
+        px, py = pts[idx]
+        bx, by = int((px - minx) / guess), int((py - miny) / guess)
+        best = None
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for qx, qy in buckets.get((bx + dx, by + dy), ()):
+                    if qx == px and qy == py:
+                        continue
+                    d2 = (qx - px) ** 2 + (qy - py) ** 2
+                    if best is None or d2 < best:
+                        best = d2
+        if best:
+            dists.append(best ** 0.5)
+    if not dists:
+        return guess
+    dists.sort()
+    return dists[len(dists) // 2]
 
 
 def _drop_collinear(ring: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -536,9 +573,10 @@ def concave_outline(pts: list[tuple[float, float]]) -> list[list[tuple[float, fl
     if len(uniq) < 4:
         return [convex_hull(uniq)]
 
-    sx = _grid_step([p[0] for p in uniq])
-    sy = _grid_step([p[1] for p in uniq])
-    step = max(sx, sy)
+    # Комірка трохи більша за характерну відстань — щоб сусідні точки
+    # (зокрема на повернутій сітці) потрапляли в суміжні комірки й область
+    # не розсипалася на окремі цятки.
+    step = _typical_spacing(uniq) * 1.25
     if step <= 0:
         return [convex_hull(uniq)]
 
