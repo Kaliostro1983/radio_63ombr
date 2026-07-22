@@ -5865,6 +5865,10 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
   padding:6px 8px; font-size:.82rem; box-shadow:0 4px 14px rgba(0,0,0,.35);
 }
 .concl-pal-list .cpl-title{ font-weight:700; opacity:.7; margin:2px 2px 6px; font-size:.74rem; text-transform:uppercase; }
+.concl-pal-list .cpl-title:hover{ opacity:1; }
+/* Згорнутий перелік — лише заголовок, щоб не закривав карту. */
+.concl-pal-list.is-collapsed{ max-height:none; overflow:visible; }
+.concl-pal-list.is-collapsed .cpl-title{ margin-bottom:2px; }
 .concl-pal-list .cpl-sec{ font-weight:700; opacity:.5; margin:8px 2px 3px; font-size:.66rem; text-transform:uppercase; letter-spacing:.02em; }
 .concl-pal-list .cpl-sec:first-of-type{ margin-top:2px; }
 .concl-pal-list .cpl-row{ display:flex; align-items:center; gap:7px; padding:3px 2px; cursor:pointer; }

@@ -1230,8 +1230,18 @@
         `</label>`;
     });
 
-    host.innerHTML = `<div class="cpl-title">Палітри для частоти</div>${html}`;
+    // Заголовок — спойлер: перелік займає правий нижній кут карти, і оператору
+    // потрібна можливість прибрати його, щоб бачити карту цілком.
+    host.innerHTML =
+      `<button class="pal-spoiler cpl-title" type="button" aria-expanded="true"` +
+      ` title="Згорнути/розгорнути">` +
+      `<svg class="pal-spoiler-arrow" viewBox="0 0 16 16" width="12" height="12"` +
+      ` fill="none" stroke="currentColor" stroke-width="2"` +
+      ` stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>` +
+      `<span>Палітри для частоти</span></button>` +
+      `<div class="cpl-body">${html}</div>`;
     host.classList.remove("hidden");
+    _cplSpoilerInit(host);
     host.querySelectorAll('input[type="checkbox"][data-pid]').forEach(cb => {
       cb.addEventListener("change", () => {
         const pid = parseInt(cb.getAttribute("data-pid"), 10);
@@ -1239,6 +1249,28 @@
         _palSaveScope();
         _palRefreshSearchChips();   // перепошук по кодах із чіпів під новий scope
       });
+    });
+  }
+
+  /* Спойлер переліку палітр. Панель перемальовується на кожне перехоплення,
+   * тож стан тримаємо в localStorage і застосовуємо після кожного рендера. */
+  function _cplSpoilerInit(host) {
+    const btn  = host.querySelector(".cpl-title");
+    const body = host.querySelector(".cpl-body");
+    if (!btn || !body) return;
+    const apply = (open) => {
+      body.style.display = open ? "" : "none";
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.classList.toggle("is-collapsed", !open);
+      host.classList.toggle("is-collapsed", !open);
+    };
+    let open = true;
+    try { open = localStorage.getItem("concl.palList.open") !== "0"; } catch (_) {}
+    apply(open);
+    btn.addEventListener("click", () => {
+      open = !open;
+      apply(open);
+      try { localStorage.setItem("concl.palList.open", open ? "1" : "0"); } catch (_) {}
     });
   }
 
