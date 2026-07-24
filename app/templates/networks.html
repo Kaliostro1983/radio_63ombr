@@ -582,17 +582,19 @@
     <!-- ── Modal: Очерет (читабельний список частот + копія) ─────── -->
     <div id="netModalOcheret" class="modal hidden net-modal" aria-hidden="true">
     <div class="modal-backdrop" data-net-modal-close="ocheret"></div>
-    <div class="modal-card net-modal-card net-modal-card--ocheret" role="dialog" aria-modal="true" aria-labelledby="netModalOcheretTitle" style="max-width:1120px">
+    <div class="modal-card net-modal-card net-modal-card--ocheret" role="dialog" aria-modal="true" aria-labelledby="netModalOcheretTitle" style="max-width:1320px">
       <div class="modal-head">
         <div id="netModalOcheretTitle" class="modal-title">Очерет — частоти і маски</div>
         <button type="button" class="secondary" data-net-modal-close="ocheret" style="padding:4px 10px">✕</button>
       </div>
       <div class="modal-body net-modal-body">
         <div class="small" style="opacity:.75; margin-bottom:10px">
-          Список р/м зі статусом <strong>Спостерігається</strong> і чатом-джерелом <strong>Очерет</strong>.
-          Три колонки — усі, лише з тегом <strong>ШД</strong>, і без <strong>ШД</strong>. Кожну можна скопіювати окремо.
+          Список р/м зі статусом <strong>Спостерігається</strong>. Перші чотири колонки — чат-джерело
+          <strong>Очерет</strong> (усі / <strong>ШД</strong> / без ШД) та <strong>Вавилон</strong>.
+          Колонка <strong>63 ОМБР</strong> — уся вибірка підсумкової таблиці (всі чати, окрім
+          <strong>169 омсбр</strong>). Кожну можна скопіювати окремо.
         </div>
-        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px">
+        <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px">
           <div class="net-ocheret-col">
             <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px">
               <span class="small"><strong>Очерет (усі)</strong> · <span id="netOcheretCountAll" style="opacity:.6">0</span></span>
@@ -623,6 +625,14 @@
               <button type="button" class="secondary net-ocheret-copy" data-col="vavilon" title="Скопіювати" style="padding:2px 8px">📋</button>
             </div>
             <textarea id="netOcheretTextVavilon" readonly rows="20"
+              style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
+          </div>
+          <div class="net-ocheret-col">
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px">
+              <span class="small"><strong>63 ОМБР</strong> · <span id="netOcheretCount63" style="opacity:.6">0</span></span>
+              <button type="button" class="secondary net-ocheret-copy" data-col="ombr63" title="Скопіювати" style="padding:2px 8px">📋</button>
+            </div>
+            <textarea id="netOcheretText63" readonly rows="20"
               style="width:100%; font-family:monospace; font-size:14px; line-height:1.45; padding:10px 12px; border:1px solid var(--border); border-radius:6px; background:var(--input-bg); color:var(--text); resize:vertical"></textarea>
           </div>
         </div>
@@ -984,18 +994,21 @@
       const taShd   = document.getElementById("netOcheretTextShd");
       const taNoShd = document.getElementById("netOcheretTextNoShd");
       const taVav   = document.getElementById("netOcheretTextVavilon");
+      const ta63    = document.getElementById("netOcheretText63");
       const empty   = document.getElementById("netOcheretEmpty");
       const err     = document.getElementById("netOcheretError");
       if (!taAll) return;
       const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = String(n); };
       const valOf = (r) => (r.mask ? r.mask : r.frequency);  // маска канонічна, інакше частота
-      taAll.value = "Завантаження…"; taShd.value = ""; taNoShd.value = ""; taVav.value = "Завантаження…";
+      taAll.value = "Завантаження…"; taShd.value = ""; taNoShd.value = "";
+      taVav.value = "Завантаження…"; if (ta63) ta63.value = "Завантаження…";
       empty.style.display = "none";
       err.style.display = "none";
       try {
-        const [oResp, vResp] = await Promise.all([
+        const [oResp, vResp, sResp] = await Promise.all([
           fetch("/api/networks/ocheret-frequencies?format=json", { headers: { Accept: "application/json" } }),
           fetch("/api/networks/ocheret-frequencies?format=json&chat=" + encodeURIComponent("Вавилон"), { headers: { Accept: "application/json" } }),
+          fetch("/api/networks/ocheret-frequencies?format=json&scope=summary", { headers: { Accept: "application/json" } }),
         ]);
         if (!oResp.ok) throw new Error("HTTP " + oResp.status);
 
@@ -1022,9 +1035,24 @@
         taVav.value = vav.join("\n");
         setCount("netOcheretCountVavilon", vav.length);
 
-        if (!all.length && !vav.length) empty.style.display = "";
+        // 63 ОМБР: уся вибірка підсумкової таблиці (всі чати, окрім 169 омсбр).
+        // Дедуплікуємо за значенням, бо та сама частота може бути в кількох
+        // чатах — оператору потрібен чистий перелік для копіювання.
+        const ombr63 = [];
+        if (sResp.ok) {
+          const sRows = ((await sResp.json()) || {}).frequencies || [];
+          const seen = new Set();
+          for (const r of sRows) {
+            const v = valOf(r);
+            if (v && !seen.has(v)) { seen.add(v); ombr63.push(v); }
+          }
+        }
+        if (ta63) ta63.value = ombr63.join("\n");
+        setCount("netOcheretCount63", ombr63.length);
+
+        if (!all.length && !vav.length && !ombr63.length) empty.style.display = "";
       } catch (e) {
-        taAll.value = ""; taVav.value = "";
+        taAll.value = ""; taVav.value = ""; if (ta63) ta63.value = "";
         err.textContent = "Помилка завантаження: " + (e.message || e);
         err.style.display = "";
       }
@@ -1054,6 +1082,7 @@
         const id = col === "shd" ? "netOcheretTextShd"
                  : col === "noshd" ? "netOcheretTextNoShd"
                  : col === "vavilon" ? "netOcheretTextVavilon"
+                 : col === "ombr63" ? "netOcheretText63"
                  : "netOcheretTextAll";
         copyTextarea(document.getElementById(id));
       });

@@ -1067,10 +1067,12 @@ def api_networks_verify(body: NetworkVerifyIn):
 
 
 @router.get("/api/networks/ocheret-frequencies")
-def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0, chat: str = "Очерет"):
-    """Return current active watched network frequencies for a source chat.
+def api_networks_ocheret_frequencies(
+    format: str = "json", with_mask: int = 0, chat: str = "Очерет", scope: str = ""
+):
+    """Return current active watched network frequencies.
 
-    Filter: `chats.name = <chat>` (default 'Очерет') AND
+    Filter (default): `chats.name = <chat>` (default 'Очерет') AND
     `statuses.name = 'Спостерігається'`.
     Used by operator scripts on multiple PCs that need an always-up-to-date
     list without manually syncing a local text file.
@@ -1079,6 +1081,11 @@ def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0, c
         format:   'json' (default) → {ok, count, frequencies:[{frequency,mask}]};
                   'text'           → plain text, one entry per line.
         with_mask: 1 → for text format, append mask after a tab (if present).
+        chat:     source chat name (ignored when scope='summary').
+        scope:    'summary' → усі р/м зі статусом «Спостерігається» по ВСІХ
+                  чатах (набір, що живить підсумкову таблицю головної), окрім
+                  групи «169 омсбр» (зона відповідальності сусіда). Колонка
+                  «63 ОМБР» у модалці «Очерет — частоти і маски».
 
     Returns:
         JSONResponse or PlainTextResponse, depending on `format`.
@@ -1086,22 +1093,40 @@ def api_networks_ocheret_frequencies(format: str = "json", with_mask: int = 0, c
     from fastapi.responses import PlainTextResponse
 
     with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT n.frequency, COALESCE(n.mask, '') AS mask,
-                   EXISTS(
-                     SELECT 1 FROM network_tag_links ntl
-                     JOIN network_tags nt ON nt.id = ntl.tag_id
-                     WHERE ntl.network_id = n.id AND nt.name = 'ШД'
-                   ) AS has_shd
-            FROM networks n
-            JOIN chats    c ON c.id = n.chat_id
-            JOIN statuses s ON s.id = n.status_id
-            WHERE c.name = ? AND s.name = 'Спостерігається'
-            ORDER BY n.frequency
-            """,
-            (chat or "Очерет",),
-        ).fetchall()
+        if (scope or "").lower() == "summary":
+            rows = conn.execute(
+                """
+                SELECT n.frequency, COALESCE(n.mask, '') AS mask,
+                       EXISTS(
+                         SELECT 1 FROM network_tag_links ntl
+                         JOIN network_tags nt ON nt.id = ntl.tag_id
+                         WHERE ntl.network_id = n.id AND nt.name = 'ШД'
+                       ) AS has_shd
+                FROM networks n
+                JOIN statuses s ON s.id = n.status_id
+                LEFT JOIN groups g ON g.id = n.group_id
+                WHERE s.name = 'Спостерігається'
+                  AND COALESCE(g.name, '') NOT LIKE '%169 омсбр%'
+                ORDER BY n.frequency
+                """,
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT n.frequency, COALESCE(n.mask, '') AS mask,
+                       EXISTS(
+                         SELECT 1 FROM network_tag_links ntl
+                         JOIN network_tags nt ON nt.id = ntl.tag_id
+                         WHERE ntl.network_id = n.id AND nt.name = 'ШД'
+                       ) AS has_shd
+                FROM networks n
+                JOIN chats    c ON c.id = n.chat_id
+                JOIN statuses s ON s.id = n.status_id
+                WHERE c.name = ? AND s.name = 'Спостерігається'
+                ORDER BY n.frequency
+                """,
+                (chat or "Очерет",),
+            ).fetchall()
 
     items = [
         {
