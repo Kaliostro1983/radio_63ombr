@@ -688,6 +688,14 @@ def api_palette_search(
 
     where_sql = " AND ".join(where) if where else "1=1"
 
+    # «*» означає «будь-який набір символів, у т.ч. порожній», тож маска на кшталт
+    # «*320» має покривати й точний код «320». GLOB це вже забезпечує, але при
+    # LIMIT точні збіги витісняються частковими. Тому ТОЧНИЙ збіг (code_fold ==
+    # літеральна частина запиту без підстановок) ставимо першим у сортуванні —
+    # так «320» ніколи не відсікається лімітом.
+    literal = fold_code((query or "").replace("*", "").replace("%", ""))
+    order_sql = "CASE WHEN pp.code_fold = ? THEN 0 ELSE 1 END, pal.seq_no, pp.code_fold"
+
     with get_conn() as conn:
         rows = conn.execute(
             f"""
@@ -698,10 +706,10 @@ def api_palette_search(
             JOIN palettes pal ON pal.id = pp.palette_id
             LEFT JOIN palette_regions reg ON reg.id = pp.region_id
             WHERE {where_sql}
-            ORDER BY pal.seq_no, pp.code_fold
+            ORDER BY {order_sql}
             LIMIT ?
             """,
-            [*params, int(limit)],
+            [*params, literal, int(limit)],
         ).fetchall()
 
     # Case-sensitive post-filter against the raw code.

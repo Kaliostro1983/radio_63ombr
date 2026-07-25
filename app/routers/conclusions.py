@@ -555,6 +555,44 @@ def api_conclusions_by_point(
     return {"ok": True, "rows": out, "total": len(rows)}
 
 
+@router.get("/api/conclusions/palette-points")
+def api_conclusion_palette_points(network_id: int = 0, days: int = 0):
+    """Палітрові точки, що використовувались у висновках по цій радіомережі.
+
+    На відміну від zone-points (які беруть координати об'єктів висновку з
+    ac.mgrs_json), тут — саме точки палітр, зафіксовані при збереженні у
+    conclusion_palette_points. Кожна унікальна точка зберігає дату
+    найсвіжішого висновку (клієнт бляклить старіші). Живить «око-плюс» —
+    клік по точці показує висновок через /api/conclusions/by-point.
+    """
+    if not network_id:
+        return {"ok": False, "error": "network_id обовʼязковий"}
+    wheres = ["ac.network_id = ?", "cpp.mgrs <> ''"]
+    params: List[Any] = [int(network_id)]
+    if days and days > 0:
+        wheres.append("REPLACE(ac.created_at,'T',' ') >= ?")
+        params.append((datetime.now() - timedelta(days=int(days))).strftime("%Y-%m-%d %H:%M:%S"))
+    where_sql = " AND ".join(wheres)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT cpp.mgrs AS mgrs,
+                   MAX(cpp.point_code) AS code,
+                   MAX(REPLACE(ac.created_at,'T',' ')) AS last_at
+            FROM conclusion_palette_points cpp
+            JOIN analytical_conclusions ac ON ac.id = cpp.conclusion_id
+            WHERE {where_sql}
+            GROUP BY cpp.mgrs
+            """,
+            params,
+        ).fetchall()
+    points = [
+        {"mgrs": r["mgrs"], "code": r["code"] or "", "last_at": r["last_at"] or ""}
+        for r in rows
+    ]
+    return {"ok": True, "points": points, "count": len(points)}
+
+
 # ---------------------------------------------------------------------------
 # Manual conclusion save (from the Висновок editor modal)
 # ---------------------------------------------------------------------------

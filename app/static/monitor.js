@@ -1020,7 +1020,7 @@
     return Math.max(MIN, FULL - STEP * (ageDays - FRESH_DAYS));
   }
 
-  function _drawZone(kind, codes, color, qctx) {
+  function _drawZone(kind, codes, color, qctx, drawHull = true) {
     _clearZone(kind);
     if (!_conclMap) return;
     const latlngs = [];
@@ -1042,7 +1042,7 @@
       layers.push(cm);
     });
     if (!latlngs.length) return;
-    if (latlngs.length >= 3) {
+    if (drawHull && latlngs.length >= 3) {
       const hull = _convexHull(latlngs).map(p => [p.lat, p.lon]);
       layers.unshift(L.polygon(hull, {
         color: color, weight: 2, fillColor: color, fillOpacity: 0.12,
@@ -1057,34 +1057,35 @@
     if (!_conclMap || !_currentItem) return;
     if (_zoneLayers[kind]) { _clearZone(kind); _setEyeActive(kind, false); return; }
 
-    let url;
-    const color = kind === "freq" ? "#2563eb" : "#d97706";
-    if (kind === "freq") {
-      if (!_currentItem.network_id) return;
-      url = `/api/conclusions/zone-points?network_id=${_currentItem.network_id}`;
-    } else {
-      const unit = (_currentItem.network && _currentItem.network.unit || "").trim();
-      if (!unit) { if (window.appToast) window.appToast("У перехоплення немає підрозділу", "warn", 2400); return; }
-      url = `/api/conclusions/zone-points?unit=${encodeURIComponent(unit)}`;
+    // «freq» (просте око) — зона (оболонка) координат об'єктів висновків по цій
+    // частоті. «unit» (око-плюс) — саме точки ПАЛІТР, використані у висновках по
+    // цій же частоті: окремі маркери без оболонки, клік → висновок по точці.
+    if (!_currentItem.network_id) {
+      if (window.appToast) window.appToast("У перехоплення немає радіомережі", "warn", 2400);
+      return;
     }
+    const color = kind === "freq" ? "#2563eb" : "#d97706";
+    const url = kind === "freq"
+      ? `/api/conclusions/zone-points?network_id=${_currentItem.network_id}`
+      : `/api/conclusions/palette-points?network_id=${_currentItem.network_id}`;
     fetch(url)
       .then(r => r.json())
       .then(d => {
         if (!d || !d.ok) {
-          if (window.appToast) window.appToast(d && d.error ? d.error : "Помилка завантаження зони", "error", 2800);
+          if (window.appToast) window.appToast(d && d.error ? d.error : "Помилка завантаження точок", "error", 2800);
           return;
         }
         if (!d.points.length) {
-          if (window.appToast) window.appToast("Немає точок у висновках", "warn", 2200);
+          if (window.appToast) window.appToast(
+            kind === "freq" ? "Немає точок у висновках" : "Палітрових точок у висновках немає", "warn", 2200);
           return;
         }
-        const qctx = kind === "freq"
-          ? { kind: "freq", network_id: _currentItem.network_id }
-          : { kind: "unit", unit: (_currentItem.network && _currentItem.network.unit || "").trim() };
-        _drawZone(kind, d.points, color, qctx);
+        // Клік по точці в обох режимах шукає висновок за network_id (by-point).
+        const qctx = { kind: "freq", network_id: _currentItem.network_id };
+        _drawZone(kind, d.points, color, qctx, kind === "freq");
         _setEyeActive(kind, true);
       })
-      .catch(() => { if (window.appToast) window.appToast("Помилка завантаження зони", "error", 2800); });
+      .catch(() => { if (window.appToast) window.appToast("Помилка завантаження точок", "error", 2800); });
   }
 
   /* Клік по точці зони → попап зі списком висновків, що поставили цю точку */
