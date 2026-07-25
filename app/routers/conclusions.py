@@ -17,6 +17,7 @@ from app.core.access import require_capability
 from app.core.config import settings
 from app.core.conclusion_classify import conclusion_match_text
 from app.core.db import get_conn
+from app.core.palette_fold import fold_code
 
 router = APIRouter(tags=["conclusions"])
 
@@ -582,6 +583,7 @@ def api_conclusion_palette_points(network_id: int = 0, days: int = 0):
             f"""
             SELECT REPLACE(cpp.mgrs, ' ', '') AS mgrs,
                    MAX(cpp.point_code) AS code,
+                   MAX(cpp.palette_id) AS palette_id,
                    MAX(REPLACE(ac.created_at,'T',' ')) AS last_at
             FROM conclusion_palette_points cpp
             JOIN analytical_conclusions ac ON ac.id = cpp.conclusion_id
@@ -590,10 +592,26 @@ def api_conclusion_palette_points(network_id: int = 0, days: int = 0):
             """,
             params,
         ).fetchall()
-    points = [
-        {"mgrs": r["mgrs"], "code": r["code"] or "", "last_at": r["last_at"] or ""}
-        for r in rows
-    ]
+
+        # Колір точки доточуємо з palette_points за (palette_id, code_fold) —
+        # cpp зберігає лише код/mgrs. Зіставлення саме по code_fold, бо raw-код
+        # може відрізнятись регістром і кирилицею/латиницею (д↔Д, А↔A).
+        points = []
+        color_cache: Dict[tuple, str] = {}
+        for r in rows:
+            pid = r["palette_id"]
+            key = (pid, fold_code(r["code"] or ""))
+            if key not in color_cache:
+                cr = conn.execute(
+                    "SELECT color FROM palette_points "
+                    "WHERE palette_id = ? AND code_fold = ? AND color <> '' LIMIT 1",
+                    (pid, key[1]),
+                ).fetchone()
+                color_cache[key] = (cr["color"] if cr and cr["color"] else "")
+            points.append({
+                "mgrs": r["mgrs"], "code": r["code"] or "",
+                "color": color_cache[key], "last_at": r["last_at"] or "",
+            })
     return {"ok": True, "points": points, "count": len(points)}
 
 

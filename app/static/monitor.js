@@ -1036,8 +1036,11 @@
         // Підписаний маркер палітрової точки: крапка + постійний підпис коду
         // (як варіанти пошуку палітр). Повна непрозорість — назва має читатись.
         const label = (isObj && pt.code) ? String(pt.code) : "";
+        // Крапка — кольору точки в палітрі (як на самій палітрі); якщо колір
+        // невідомий, лишаємо колір режиму (амбер).
+        const dotColor = (isObj && pt.color) ? pt.color : color;
         mk = L.marker([ll.lat, ll.lon], {
-          icon: _palVariantIcon(color, label),
+          icon: _palVariantIcon(dotColor, label),
           bubblingMouseEvents: false,
         });
         if (label) mk.bindTooltip(label, {
