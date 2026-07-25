@@ -1020,7 +1020,7 @@
     return Math.max(MIN, FULL - STEP * (ageDays - FRESH_DAYS));
   }
 
-  function _drawZone(kind, codes, color, qctx, drawHull = true) {
+  function _drawZone(kind, codes, color, qctx, drawHull = true, labeled = false) {
     _clearZone(kind);
     if (!_conclMap) return;
     const latlngs = [];
@@ -1031,15 +1031,30 @@
       const ll = _mgrsToLatLon(code);
       if (!ll) return;
       latlngs.push(ll);
-      const op = _pointFreshnessOpacity(isObj ? pt.last_at : null);
-      // Білі точки з кольоровим обведенням — помітніші за суцільні кольорові.
-      const cm = L.circleMarker([ll.lat, ll.lon], {
-        radius: 5, color: color, weight: 3,
-        fillColor: "#ffffff", fillOpacity: op, opacity: op,
-        bubblingMouseEvents: false,   // клік по точці не створює новий маркер на карті
-      });
-      cm.on("click", () => _showPointConclusions(cm, code, qctx));
-      layers.push(cm);
+      let mk;
+      if (labeled) {
+        // Підписаний маркер палітрової точки: крапка + постійний підпис коду
+        // (як варіанти пошуку палітр). Повна непрозорість — назва має читатись.
+        const label = (isObj && pt.code) ? String(pt.code) : "";
+        mk = L.marker([ll.lat, ll.lon], {
+          icon: _palVariantIcon(color, label),
+          bubblingMouseEvents: false,
+        });
+        if (label) mk.bindTooltip(label, {
+          permanent: true, direction: "top", offset: [0, -8],
+          className: "pal-variant-tip",
+        });
+      } else {
+        const op = _pointFreshnessOpacity(isObj ? pt.last_at : null);
+        // Білі точки з кольоровим обведенням — помітніші за суцільні кольорові.
+        mk = L.circleMarker([ll.lat, ll.lon], {
+          radius: 5, color: color, weight: 3,
+          fillColor: "#ffffff", fillOpacity: op, opacity: op,
+          bubblingMouseEvents: false,   // клік по точці не створює новий маркер на карті
+        });
+      }
+      mk.on("click", () => _showPointConclusions(mk, code, qctx));
+      layers.push(mk);
     });
     if (!latlngs.length) return;
     if (drawHull && latlngs.length >= 3) {
@@ -1082,7 +1097,9 @@
         }
         // Клік по точці в обох режимах шукає висновок за network_id (by-point).
         const qctx = { kind: "freq", network_id: _currentItem.network_id };
-        _drawZone(kind, d.points, color, qctx, kind === "freq");
+        // freq — зона з оболонкою (безіменні круги); unit (око-плюс) — підписані
+        // палітрові точки без оболонки.
+        _drawZone(kind, d.points, color, qctx, kind === "freq", kind !== "freq");
         _setEyeActive(kind, true);
       })
       .catch(() => { if (window.appToast) window.appToast("Помилка завантаження точок", "error", 2800); });
