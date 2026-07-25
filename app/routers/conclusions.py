@@ -574,15 +574,19 @@ def api_conclusion_palette_points(network_id: int = 0, days: int = 0):
         params.append((datetime.now() - timedelta(days=int(days))).strftime("%Y-%m-%d %H:%M:%S"))
     where_sql = " AND ".join(wheres)
     with get_conn() as conn:
+        # cpp.mgrs зберігається з пробілами («37U DQ 19330 25470»), а ac.mgrs_json —
+        # без («37UDQ1933025470»). Повертаємо БЕЗПРОБІЛЬНУ форму, щоб клік по точці
+        # (by-point шукає LIKE по mgrs_json) знаходив висновок, і щоб _mgrsToLatLon
+        # на клієнті парсив однаково.
         rows = conn.execute(
             f"""
-            SELECT cpp.mgrs AS mgrs,
+            SELECT REPLACE(cpp.mgrs, ' ', '') AS mgrs,
                    MAX(cpp.point_code) AS code,
                    MAX(REPLACE(ac.created_at,'T',' ')) AS last_at
             FROM conclusion_palette_points cpp
             JOIN analytical_conclusions ac ON ac.id = cpp.conclusion_id
             WHERE {where_sql}
-            GROUP BY cpp.mgrs
+            GROUP BY REPLACE(cpp.mgrs, ' ', '')
             """,
             params,
         ).fetchall()
