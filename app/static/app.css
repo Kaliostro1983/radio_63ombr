@@ -4448,7 +4448,10 @@ button.secondary{
 }
 /* Випадаючий список орієнтирів («@…») — над картою Leaflet (її пейни до ~620). */
 #conclCoordWrap .concl-lm-ac{
-  z-index:1000;
+  /* Вище за контейнер масштабування Leaflet (z-index:1000), інакше «+/−»
+     накривають підказку. Правило специфічніше за .concl-lm-ac{z-index:1200},
+     тож значення тримаємо саме тут. */
+  z-index:1200;
   max-height:260px;
   overflow-y:auto;
 }
