@@ -397,6 +397,49 @@ html, body {
 }
 .cm-opt-chk input { margin: 0; }
 
+/* Проміжок вибірки — праворуч від блоку «Частоти/Підрозділ» */
+#cmRangeBox {
+  position: fixed;
+  bottom: 24px;
+  left: 160px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.cm-range-fld {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.cm-range-fld input {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+}
+#cmRefreshBtn {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+}
+#cmRefreshBtn:hover { background: #1d4ed8; }
+
 /* Кольорові кружечки з номером підрозділу (режим «Підрозділ») */
 .cm-unit-icon { background: transparent !important; border: 0 !important; }
 .cm-unit-circle {

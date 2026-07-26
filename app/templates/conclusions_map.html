@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
 
   <!-- Map page styles -->
-  <link rel="stylesheet" href="/static/conclusions_map.css?v=9">
+  <link rel="stylesheet" href="/static/conclusions_map.css?v=10">
 </head>
 <body>
 
@@ -105,6 +105,13 @@
   </label>
 </div>
 
+<!-- Проміжок вибірки: дата+час початку/кінця + «Оновити» -->
+<div id="cmRangeBox">
+  <label class="cm-range-fld">З <input type="datetime-local" id="cmDateFrom"></label>
+  <label class="cm-range-fld">До <input type="datetime-local" id="cmDateTo"></label>
+  <button id="cmRefreshBtn" type="button">Оновити</button>
+</div>
+
 <!-- ── Cluster picker (модалка для накладених маркерів) ─── -->
 <div id="cmClusterPicker" class="cm-cluster-picker hidden" role="dialog" aria-modal="true" aria-labelledby="cmClusterTitle">
   <div class="cm-cluster-picker__backdrop" data-cm-cluster-close="1"></div>
@@ -141,7 +148,7 @@
 </script>
 
 <!-- Map logic -->
-<script src="/static/conclusions_map.js?v=18"></script>
+<script src="/static/conclusions_map.js?v=19"></script>
 
 </body>
 </html>

@@ -781,6 +781,26 @@ function initTopPanel() {
   panel.classList.add("open");
 }
 
+// ── Проміжок вибірки (дата+час) ───────────────────────────────
+function initRangeBox() {
+  const fromEl = document.getElementById("cmDateFrom");
+  const toEl   = document.getElementById("cmDateTo");
+  const btn    = document.getElementById("cmRefreshBtn");
+  if (!fromEl || !toEl || !btn) return;
+  // datetime-local очікує «YYYY-MM-DDTHH:MM» — саме такий формат у date_from/to
+  // (обрізаємо секунди, якщо є).
+  if (_dateFrom) fromEl.value = _dateFrom.slice(0, 16);
+  if (_dateTo)   toEl.value   = _dateTo.slice(0, 16);
+  btn.addEventListener("click", () => {
+    // Перезавантаження з новим діапазоном — сторінка все читає з URL, тож
+    // фільтри/лічильники/чіпи побудуються під нову вибірку без дублювання логіки.
+    const qs = new URLSearchParams(location.search);
+    if (fromEl.value) qs.set("date_from", fromEl.value); else qs.delete("date_from");
+    if (toEl.value)   qs.set("date_to",   toEl.value);   else qs.delete("date_to");
+    location.search = qs.toString();
+  });
+}
+
 // ── Main ──────────────────────────────────────────────────────
 async function main() {
   const overlay = document.getElementById("mapOverlay");
@@ -788,6 +808,7 @@ async function main() {
 
   initMap();
   initTopPanel();
+  initRangeBox();
 
   try {
     await Promise.all([loadTypes(), loadConclusions()]);
