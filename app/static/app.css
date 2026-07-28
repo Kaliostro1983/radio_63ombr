@@ -4545,8 +4545,46 @@ button.secondary{
   box-shadow:0 1px 4px rgba(0,0,0,.5);
 }
 .cm-freq-label{ background:rgba(15,23,42,.85); color:#e2e8f0; border:0; font-size:11px; padding:1px 5px; border-radius:4px; }
-.cwref-pop{ font-size:13px; max-width:320px; }
-.cwref-pop .cwref-meta{ opacity:.7; font-size:11px; margin-bottom:4px; }
+/* Фікс іконок маркерів Leaflet (прозорий фон замість білого квадрата) */
+.leaflet-div-icon.cm-icon, .leaflet-div-icon.cm-unit-icon{
+  background:transparent !important; border:none !important; padding:0 !important;
+}
+
+/* ── Бічна панель деталей висновку (порт із /conclusions/map) ── */
+.it-modal--fullwin #rightPanel{
+  position:absolute; top:0; right:0; bottom:0; width:380px; z-index:1320;
+  display:flex; align-items:center; pointer-events:none;
+}
+.it-modal--fullwin #rightHandle{
+  position:absolute; right:0; top:50%; transform:translateY(-50%);
+  writing-mode:vertical-lr; padding:16px 7px;
+  background:rgba(15,23,42,.88); backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.12); border-right:none; border-radius:12px 0 0 12px;
+  cursor:pointer; pointer-events:all; color:#e2e8f0; font-size:12px; font-weight:600; user-select:none;
+  display:none;
+}
+.it-modal--fullwin #rightContent{
+  position:absolute; top:0; right:0; bottom:0; width:100%;
+  transform:translateX(100%); transition:transform .3s ease; pointer-events:none;
+  display:flex; flex-direction:column;
+  background:rgba(15,23,42,.95); backdrop-filter:blur(12px); border-left:1px solid rgba(255,255,255,.12);
+}
+.it-modal--fullwin #rightPanel.open #rightContent{ transform:translateX(0); pointer-events:all; }
+.rp-header{ display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px; border-bottom:1px solid rgba(255,255,255,.1); flex-shrink:0; }
+.rp-type-badge{ display:inline-flex; align-items:center; gap:6px; padding:3px 10px 3px 6px; border-radius:12px; font-size:11px; font-weight:700; color:#fff; }
+.rp-type-badge img{ width:20px; height:20px; }
+.rp-close{ background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:2px 6px; border-radius:6px; line-height:1; }
+.rp-close:hover{ color:#e2e8f0; background:rgba(255,255,255,.08); }
+.rp-meta{ padding:8px 16px 6px; border-bottom:1px solid rgba(255,255,255,.07); flex-shrink:0; }
+.rp-meta-row{ display:flex; gap:8px; font-size:11px; color:#94a3b8; flex-wrap:wrap; }
+.rp-meta-row strong{ color:#cbd5e1; }
+.rp-body{ flex:1; overflow-y:auto; padding:12px 16px 16px; display:flex; flex-direction:column; gap:12px; }
+.rp-section-label{ font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
+.rp-text{ font-size:13px; line-height:1.65; color:#e2e8f0; white-space:pre-wrap; word-break:break-word; }
+.rp-coords{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.rp-coord-tag{ font-size:11px; font-family:monospace; background:rgba(59,130,246,.18); border:1px solid rgba(59,130,246,.35); color:#93c5fd; border-radius:6px; padding:2px 7px; cursor:pointer; user-select:none; }
+.rp-coord-tag:hover{ background:rgba(59,130,246,.34); }
+.rp-coord-tag.active{ background:rgba(59,130,246,.5); color:#fff; }
 .it-modal--fullwin .cw-tool-col .concl-map-tool-btn{
   position:static; top:auto; right:auto; margin:0;
 }

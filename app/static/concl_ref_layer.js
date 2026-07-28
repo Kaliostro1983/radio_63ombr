@@ -156,9 +156,9 @@
           if (S.showFreq && row.frequency) {
             mk.bindTooltip(String(row.frequency), { permanent: true, direction: "right", offset: [12, 0], className: "cm-freq-label" });
           }
-          mk.on("click", function (e) { L.DomEvent.stopPropagation(e); openPopup(row, mk); });
+          mk.on("click", function (e) { L.DomEvent.stopPropagation(e); openDetailPanel(row, ms); });
           mk.addTo(_layer);
-          S.markers.push({ marker: mk, typeId: row.type_id });
+          S.markers.push({ marker: mk, typeId: row.type_id, row: row, mgrs: ms });
         });
       });
       renderChips();
@@ -166,13 +166,186 @@
     });
   }
 
-  function openPopup(row, mk) {
-    var t = S.types.find(function (x) { return x.id === row.type_id; });
-    var meta = [row.created_at || "", row.frequency || "", (t && t.type) || ""]
-      .filter(Boolean).map(esc).join(" · ");
-    var html = '<div class="cwref-pop"><div class="cwref-meta">' + meta + "</div>" +
-      esc(row.conclusion_text || row.body_text || "") + "</div>";
-    mk.bindPopup(html, { maxWidth: 340 }).openPopup();
+  // ── Бічна панель деталей (порт із /conclusions/map) ──
+  var _panelRow = null;
+  function toast(m) { if (window.appToast) window.appToast(m, "info", 1800); }
+  function iconUrlPlain(fn) { return fn ? "/static/icons/" + fn : "/static/icons/default.svg"; }
+
+  function setBadge(typeInfo) {
+    var badge = $("rpTypeBadge"); if (!badge) return;
+    badge.style.background = (typeInfo.color || "#6b7280") + "33";
+    badge.style.border = "1px solid " + (typeInfo.color || "#6b7280") + "88";
+    var img = badge.querySelector(".rp-badge-icon");
+    if (img) {
+      if (typeInfo.icon_sidc) { var i = getSidcIcon(typeInfo.icon_sidc); img.src = i ? i.url : iconUrlPlain(typeInfo.icon_filename); }
+      else img.src = iconUrlPlain(typeInfo.icon_filename);
+    }
+    var lab = badge.querySelector(".rp-badge-label"); if (lab) lab.textContent = typeInfo.type || "невідомо";
+  }
+
+  function openDetailPanel(row, clickedMgrs) {
+    var panel = $("rightPanel"); if (!panel) return;
+    panel.classList.add("open");
+    var ti = S.types.find(function (t) { return t.id === row.type_id; }) ||
+      { type: "невідомо", color: "#6b7280", icon_filename: "", icon_sidc: "" };
+    setBadge(ti);
+
+    var dt = String(row.created_at || "").replace("T", " ").slice(0, 16);
+    var net = [row.frequency, row.mask, row.unit].filter(Boolean).join(" / ");
+    if ($("rpMetaDate")) $("rpMetaDate").textContent = dt;
+    if ($("rpMetaNet")) $("rpMetaNet").textContent = net || "—";
+    if ($("rpConclusionText")) $("rpConclusionText").textContent = String(row.conclusion_text || "").trim();
+
+    var bodySec = $("rpBodySection"), body = String(row.body_text || "").trim();
+    if (bodySec) { bodySec.style.display = body ? "" : "none"; if (body && $("rpBodyText")) $("rpBodyText").textContent = body; }
+
+    var cd = $("rpCoords");
+    if (cd) {
+      cd.innerHTML = "";
+      (row.mgrs || []).forEach(function (m) {
+        var tag = document.createElement("span");
+        tag.className = "rp-coord-tag" + (m === clickedMgrs ? " active" : "");
+        tag.textContent = m; tag.title = "Натисніть, щоб скопіювати";
+        tag.addEventListener("click", function () {
+          try { navigator.clipboard.writeText(m); } catch (_) {}
+          toast("✓ Скопійовано: " + m);
+        });
+        cd.appendChild(tag);
+      });
+    }
+
+    _panelRow = row;
+    var sel = $("rpTypeSelect");
+    if (sel) {
+      var items = [{ id: 0, type: "невідомо" }].concat(S.types.filter(function (t) { return t.id !== 0; }));
+      sel.innerHTML = items.map(function (t) {
+        return '<option value="' + t.id + '"' + (t.id === (row.type_id || 0) ? " selected" : "") + ">" + esc(t.type || "невідомо") + "</option>";
+      }).join("");
+      sel.onchange = function () { changeConclusionType(row.id, parseInt(sel.value, 10) || 0); };
+    }
+    if ($("rpDeleteBtn")) $("rpDeleteBtn").onclick = function () { deleteConclusion(row.id); };
+    if ($("rpEditBtn")) $("rpEditBtn").onclick = function () { startEditPanel(); };
+    if ($("rpDeltaBtn")) $("rpDeltaBtn").onclick = function () { quickSendDelta(row.id); };
+    if ($("rpEditSaveBtn")) $("rpEditSaveBtn").onclick = function () { saveEditPanel(); };
+    if ($("rpEditCancelBtn")) $("rpEditCancelBtn").onclick = function () { setEditMode(false); };
+    setEditMode(false);
+    if ($("rightHandle")) $("rightHandle").style.display = "none";
+  }
+
+  function setEditMode(on) {
+    var sh = function (id, v) { var el = $(id); if (el) el.style.display = v; };
+    sh("rpConclusionText", on ? "none" : "");
+    sh("rpEditText", on ? "" : "none");
+    sh("rpEditCoordsWrap", on ? "" : "none");
+    var cd = $("rpCoords");
+    if (cd && cd.parentElement) cd.parentElement.style.display = on ? "none" : "";
+    if ($("rpEditBtn")) $("rpEditBtn").style.display = on ? "none" : "";
+  }
+  function startEditPanel() {
+    if (!_panelRow) return;
+    if ($("rpEditText")) $("rpEditText").value = String(_panelRow.conclusion_text || "").trim();
+    if ($("rpEditCoords")) $("rpEditCoords").value = (_panelRow.mgrs || []).join(", ");
+    setEditMode(true);
+    if ($("rpEditText")) $("rpEditText").focus();
+  }
+  function saveEditPanel() {
+    if (!_panelRow) return;
+    var text = ($("rpEditText").value || "").trim();
+    if (!text) { toast("Висновок не може бути порожнім"); return; }
+    var raw = ($("rpEditCoords").value || "").trim();
+    var mgrsIn = raw ? raw.split(",").map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    var btn = $("rpEditSaveBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "…"; }
+    fetch("/api/conclusions/" + _panelRow.id, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conclusion_text: text, mgrs: mgrsIn }),
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.d.ok) { toast(res.d.error || res.d.detail || "Помилка збереження"); return; }
+        var old = (_panelRow.mgrs || []).join("|");
+        _panelRow.conclusion_text = res.d.conclusion_text != null ? res.d.conclusion_text : text;
+        if (Array.isArray(res.d.mgrs)) _panelRow.mgrs = res.d.mgrs;
+        if ($("rpConclusionText")) $("rpConclusionText").textContent = String(_panelRow.conclusion_text || "").trim();
+        setEditMode(false);
+        if ((_panelRow.mgrs || []).join("|") !== old) {
+          placeMarkers().then(function () { applyFilter(); openDetailPanel(_panelRow, (_panelRow.mgrs || [])[0] || ""); });
+        }
+        toast("Висновок збережено");
+      }).catch(function (e) { toast("Помилка: " + (e && e.message || e)); })
+      .then(function () { if (btn) { btn.disabled = false; btn.textContent = "Зберегти"; } });
+  }
+  function refreshBadge(row) {
+    var ti = S.types.find(function (t) { return t.id === row.type_id; }) ||
+      { type: "невідомо", color: "#6b7280", icon_filename: "", icon_sidc: "" };
+    setBadge(ti);
+  }
+  function changeConclusionType(acId, typeId) {
+    fetch("/api/conclusions/" + acId + "/type", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type_id: typeId }),
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.d.ok) { toast(res.d.error || "Помилка зміни типу"); return; }
+        var nt = res.d.type_id;
+        var typeMap = {}; S.types.forEach(function (t) { typeMap[t.id] = t; });
+        resolveTypeIcon(typeMap[nt] || null).then(function (icd) {
+          S.markers.forEach(function (m) {
+            if (m.row.id !== acId) return;
+            m.row.type_id = nt; m.typeId = nt;
+            var icon = makeIcon(icd.url, icd.w, icd.h);
+            if (S.showUnit) { var n = extractUnitNumber(m.row.unit); if (n) icon = makeUnitIcon(n); }
+            m.marker.setIcon(icon);
+          });
+          if (_panelRow && _panelRow.id === acId) { _panelRow.type_id = nt; refreshBadge(_panelRow); }
+          renderChips();
+          toast("Тип оновлено: " + (res.d.type_label || "невідомо"));
+        });
+      }).catch(function (e) { toast("Помилка: " + (e && e.message || e)); });
+  }
+  function deleteConclusion(acId) {
+    if (!confirm("Видалити цей аналітичний висновок?")) return;
+    fetch("/api/conclusions/" + acId, { method: "DELETE" })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok || (res.d && res.d.ok === false)) { toast((res.d && res.d.error) || "Помилка видалення"); return; }
+        for (var i = S.markers.length - 1; i >= 0; i--) {
+          if (S.markers[i].row.id === acId) { try { S.markers[i].marker.remove(); } catch (_) {} S.markers.splice(i, 1); }
+        }
+        closeRightPanel(); renderChips();
+        toast("Висновок видалено");
+      }).catch(function (e) { toast("Помилка: " + (e && e.message || e)); });
+  }
+  function quickSendDelta(acId) {
+    var btn = $("rpDeltaBtn");
+    if (btn) { btn.disabled = true; btn.style.opacity = ".5"; }
+    var done = function () { if (btn) { btn.disabled = false; btn.style.opacity = ""; } };
+    fetch("/api/conclusions/" + acId + "/delta-text")
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.d.ok) { toast(res.d.error || res.d.detail || "Не вдалося сформувати звіт"); done(); return; }
+        var t = res.d;
+        if (!confirm("Надіслати звіт у Delta?\nЧат: " + (t.chat_name || t.chat_id))) { done(); return; }
+        fetch("/api/push/send", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform: t.platform, chat_id: t.chat_id, text: t.text }),
+        }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (sr) {
+            if (!sr.ok || !sr.d.ok) { toast(sr.d.error || sr.d.detail || "Помилка надсилання"); done(); return; }
+            fetch("/api/conclusions/" + acId + "/mark-sended", { method: "POST" }).catch(function () {});
+            if (_panelRow && _panelRow.id === acId) _panelRow.sended = 1;
+            toast("✓ Надіслано в Delta"); done();
+          }).catch(function (e) { toast("Помилка: " + (e && e.message || e)); done(); });
+      }).catch(function (e) { toast("Помилка: " + (e && e.message || e)); done(); });
+  }
+  function closeRightPanel() {
+    var p = $("rightPanel"); if (p) p.classList.remove("open");
+    if ($("rightHandle")) $("rightHandle").style.display = "";
+  }
+  function initDetailPanel() {
+    if ($("rpCloseBtn")) $("rpCloseBtn").addEventListener("click", closeRightPanel);
+    if ($("rightHandle")) $("rightHandle").addEventListener("click", function () {
+      var p = $("rightPanel"); if (p && _panelRow) { p.classList.add("open"); $("rightHandle").style.display = "none"; }
+    });
   }
 
   // ── Чіпи категорій ──
@@ -319,6 +492,7 @@
     if (_map) return;
     _map = map;
     initControls();
+    initDetailPanel();
     if (_pendingMode) { var m = _pendingMode; _pendingMode = null; setVisible(m === "map"); }
   }
 

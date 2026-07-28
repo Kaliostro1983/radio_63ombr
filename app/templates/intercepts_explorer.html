@@ -401,6 +401,55 @@
             </div>
           </div>
 
+          <!-- Бічна панель деталей висновку (клік по маркеру шару-референсу) -->
+          <div id="rightPanel">
+            <div id="rightHandle" title="Деталі висновку">&#8249;</div>
+            <div id="rightContent">
+              <div class="rp-header">
+                <div id="rpTypeBadge" class="rp-type-badge">
+                  <img class="rp-badge-icon" src="/static/icons/default.svg" alt="" width="20" height="20">
+                  <span class="rp-badge-label">—</span>
+                </div>
+                <button class="rp-close" id="rpCloseBtn" title="Закрити">✕</button>
+              </div>
+              <div class="rp-actions" id="rpActions" style="display:flex; gap:8px; align-items:center; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.1); flex-wrap:wrap">
+                <select id="rpTypeSelect" title="Тип об'єкта" style="flex:1 1 120px; min-width:100px; padding:6px 8px; border:1px solid rgba(255,255,255,.18); border-radius:6px; background:#1e293b; color:#e2e8f0"></select>
+                <button id="rpEditBtn" class="rp-act-btn" title="Редагувати висновок" style="padding:6px 10px; border:1px solid rgba(255,255,255,.28); color:#e2e8f0; border-radius:6px; background:transparent; cursor:pointer; white-space:nowrap">✏ Правка</button>
+                <button id="rpDeltaBtn" class="rp-act-btn" title="Надіслати звіт у Delta" style="padding:6px 10px; border:1px solid #16a34a; color:#4ade80; border-radius:6px; background:transparent; cursor:pointer; white-space:nowrap">📤 Delta</button>
+                <button id="rpDeleteBtn" class="rp-act-btn rp-act-del" title="Видалити висновок" style="padding:6px 10px; border:1px solid #e24b4a; color:#e24b4a; border-radius:6px; background:transparent; cursor:pointer; white-space:nowrap">🗑</button>
+              </div>
+              <div class="rp-meta">
+                <div class="rp-meta-row">
+                  <span>🕐 <strong id="rpMetaDate">—</strong></span>
+                  <span>📡 <strong id="rpMetaNet">—</strong></span>
+                </div>
+              </div>
+              <div class="rp-body">
+                <div>
+                  <div class="rp-section-label">Аналітичний висновок</div>
+                  <div id="rpConclusionText" class="rp-text"></div>
+                  <textarea id="rpEditText" style="display:none; width:100%; min-height:120px; box-sizing:border-box; padding:8px; border:1px solid rgba(255,255,255,.18); border-radius:6px; background:#0f172a; color:#e2e8f0; resize:vertical; font:inherit"></textarea>
+                </div>
+                <div id="rpEditCoordsWrap" style="display:none">
+                  <div class="rp-section-label">Координати MGRS (через кому)</div>
+                  <input id="rpEditCoords" type="text" placeholder="37U DQ 12345 67890, …" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid rgba(255,255,255,.18); border-radius:6px; background:#0f172a; color:#e2e8f0; font:inherit">
+                  <div style="display:flex; gap:8px; margin-top:10px">
+                    <button id="rpEditSaveBtn" style="flex:1; padding:8px; border:0; border-radius:6px; background:#2563eb; color:#fff; cursor:pointer; font-weight:600">Зберегти</button>
+                    <button id="rpEditCancelBtn" style="padding:8px 14px; border:1px solid rgba(255,255,255,.22); border-radius:6px; background:transparent; color:#e2e8f0; cursor:pointer">Скасувати</button>
+                  </div>
+                </div>
+                <div id="rpBodySection">
+                  <div class="rp-section-label">Повідомлення</div>
+                  <div id="rpBodyText" class="rp-text"></div>
+                </div>
+                <div>
+                  <div class="rp-section-label">Координати MGRS</div>
+                  <div id="rpCoords" class="rp-coords"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Left 40%: conclusion + separator + intercept + send -->
           <div class="conclusion-left">
 
@@ -1143,7 +1192,7 @@
 <script src="/static/intercepts_search_modal.js?v=4"></script>
 <script src="/static/vendor/milsymbol.js?v=1"></script>
 <script src="/static/monitor.js?v=151"></script>
-<script src="/static/concl_ref_layer.js?v=3"></script>
+<script src="/static/concl_ref_layer.js?v=4"></script>
 <script src="/static/monitor_playlist_filter.js?v=3"></script>
 <script src="/static/landmarks.js?v=19" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>
