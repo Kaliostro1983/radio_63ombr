@@ -78,6 +78,17 @@ def create_app() -> FastAPI:
     """
     app = FastAPI(title=settings.app_name)
 
+    # HTML-сторінки не кешуємо у браузері: інакше при оновленні застосунку
+    # браузер бере стару сторінку зі старим посиланням на app.css?v=N і зміни
+    # не видно без «Disable cache». Статика (/static/*.css?v=N) кешується сама —
+    # версія в URL гарантує підтягування нової. no-cache = завжди перевалідувати.
+    @app.middleware("http")
+    async def _no_cache_html(request, call_next):
+        resp = await call_next(request)
+        if resp.headers.get("content-type", "").startswith("text/html"):
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
+
     # Масштабування, Фаза 2B.4: гейт примусу. Додається ПЕРШИМ, щоб бути
     # «всередині» SessionMiddleware і бачити сесію на етапі запиту. Рівень —
     # off/mutations/full з app_settings (default off, тож наразі no-op).

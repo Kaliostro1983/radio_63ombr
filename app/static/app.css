@@ -4423,7 +4423,6 @@ button.secondary{
 .it-modal--fullwin .conclusion-layout{
   position:relative; display:block;
   height:100vh; min-height:0; border:0; border-radius:0; overflow:hidden;
-  --cw-left-w:420px;   /* ширина контейнера висновку; лівий край рамки = +30px */
 }
 
 /* Карта — тло на весь екран */
@@ -4454,7 +4453,7 @@ button.secondary{
 /* Лівий контейнер висновку — плаваюча панель */
 .it-modal--fullwin .conclusion-left{
   position:absolute; top:58px; left:10px; bottom:10px; z-index:1200;
-  width:var(--cw-left-w); min-width:320px;
+  width:380px; min-width:320px;
   border:1px solid var(--border); border-radius:12px; overflow:hidden;
   background:var(--card); box-shadow:0 14px 44px rgba(0,0,0,.45);
 }
@@ -4463,7 +4462,7 @@ button.secondary{
 /* Координатний бар — плаваючий зверху правої частини */
 .it-modal--fullwin .mon-anal-coord-bar{
   position:absolute; top:12px; z-index:1200;
-  left:calc(var(--cw-left-w) + 30px); right:74px;
+  left:410px; right:74px;
   background:rgba(20,24,30,.92); backdrop-filter:blur(4px);
   border:1px solid rgba(255,255,255,.18); border-radius:10px;
 }
@@ -4471,7 +4470,7 @@ button.secondary{
 /* Рамка області копіювання (95%) — під координатним баром */
 .it-modal--fullwin .cw-copy-frame{
   position:absolute; top:64px; bottom:14px; z-index:1050;
-  left:calc(var(--cw-left-w) + 30px); right:74px;
+  left:410px; right:74px;
   border:2px dashed rgba(255,255,255,.85);
   border-radius:8px; pointer-events:none;
 }
