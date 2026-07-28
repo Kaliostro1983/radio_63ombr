@@ -4452,10 +4452,9 @@ button.secondary{
 
 /* Лівий контейнер висновку — плаваюча панель */
 .it-modal--fullwin .conclusion-left{
-  position:absolute; top:58px; left:10px; z-index:1200;
+  position:absolute; top:58px; left:10px; bottom:10px; z-index:1200;
   width:40%; min-width:340px; max-width:560px;
-  height:auto; max-height:calc(100vh - 68px); overflow-y:auto;
-  border:1px solid var(--border); border-radius:12px;
+  border:1px solid var(--border); border-radius:12px; overflow:hidden;
   background:var(--card); box-shadow:0 14px 44px rgba(0,0,0,.45);
 }
 .it-modal--fullwin.cw-left-hidden .conclusion-left{ display:none; }
