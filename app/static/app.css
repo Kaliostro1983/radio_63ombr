@@ -5433,6 +5433,26 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
   gap:4px;
   background:var(--card);
 }
+.mon-toolbar-btn--interest.is-busy{ opacity:.5; pointer-events:none; }
+
+/* Пікер цільового чату «Цікаво» — плаваючий бар під тулбаром */
+.monitor-middle--full{ position:relative; }
+.mon-interest-picker{
+  position:absolute; top:46px; right:10px; z-index:60;
+  display:flex; align-items:center; gap:6px;
+  padding:6px; border-radius:12px;
+  background:rgba(20,24,30,.96); border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 8px 26px rgba(0,0,0,.5);
+  width:min(420px, calc(100% - 20px));
+}
+.mon-interest-picker.hidden{ display:none; }
+.mon-int-middle{ position:relative; flex:1; min-width:0; }
+.mon-int-ok-btn{
+  flex:0 0 auto; padding:8px 16px; border:0; border-radius:8px;
+  background:#2563eb; color:#fff; font-weight:700; cursor:pointer;
+}
+.mon-int-ok-btn:hover{ background:#1d4ed8; }
+.mon-int-ok-btn:disabled{ background:#334155; color:#94a3b8; cursor:not-allowed; }
 .mon-toolbar-nav{
   display:flex;
   align-items:center;

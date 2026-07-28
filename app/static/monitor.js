@@ -3103,6 +3103,9 @@
     // Share button
     document.getElementById("monShareBtn")?.addEventListener("click", _openShareModal);
 
+    // «Цікаво» — швидке пересилання поточного перехоплення у власний чат
+    _initInterest();
+
     // Швидкий висновок: відкрити вкладку «Швидко», очистити інпут+карту,
     // вставити поточне перехоплення у багатолінійне поле.
     document.getElementById("monOpenQuick")?.addEventListener("click", () => {
@@ -3691,6 +3694,114 @@
     } finally {
       if (btn) { btn.disabled = !_sendChatId; btn.textContent = "▶"; }
     }
+  }
+
+  /* ═════════════════════════════════════════
+     «Цікаво» — надіслати поточне перехоплення у ВЛАСНИЙ цільовий чат.
+     Клік — надіслати; Ctrl+клік — задати/змінити чат (окремий пікер + «ОК»).
+     Ціль зберігається окремо від send-бару висновку (LS_INTEREST).
+  ═════════════════════════════════════════ */
+  const LS_INTEREST = "monInterestChat_v1";
+  let _interest = (function () { try { const s = localStorage.getItem(LS_INTEREST); return s ? JSON.parse(s) : null; } catch (_) { return null; } })();
+  let _intPlatform = (_interest && _interest.platform) || "signal";
+  let _intPending  = null;   // {id, name} обраний у пікері до «ОК»
+
+  async function _sendInterest() {
+    if (!_interest || !_interest.id) {
+      _openInterestPicker();
+      if (window.appToast) window.appToast("Спершу вкажіть чат (Ctrl+клік по лупі)", "warn", 2800);
+      return;
+    }
+    if (!_currentItem) { if (window.appToast) window.appToast("Немає активного перехоплення", "warn"); return; }
+    const text = _buildPasteText(_currentItem);
+    if (!text.trim()) { if (window.appToast) window.appToast("Порожнє перехоплення", "warn"); return; }
+    const btn = document.getElementById("monInterestBtn");
+    if (btn) btn.classList.add("is-busy");
+    try {
+      const r = await fetch("/api/push/send", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: _interest.platform, chat_id: _interest.id, text }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) { if (window.appToast) window.appToast(`Надіслано → ${_interest.name}`, "success"); }
+      else { if (window.appToast) window.appToast(d.error || d.detail || "Помилка надсилання", "error", 2800); }
+    } catch (e) { if (window.appToast) window.appToast("Помилка: " + e.message, "error"); }
+    finally { if (btn) btn.classList.remove("is-busy"); }
+  }
+
+  function _updateIntPlatformBtn() {
+    const b = document.getElementById("monIntPlatformBtn"); if (!b) return;
+    const info = _platformInfo(_intPlatform);
+    b.textContent = info.label; b.style.background = info.color;
+  }
+  async function _intRenderDrop(query) {
+    const drop = document.getElementById("monIntChatDrop"); if (!drop) return;
+    drop.innerHTML = `<div class="mon-chat-drop-item" style="opacity:.45">Завантаження…</div>`;
+    drop.classList.remove("hidden");
+    const chats = await _loadChatsForPlatform(_intPlatform);
+    const q = (query || "").trim().toLowerCase();
+    const filtered = chats.filter(c => c && c.name)
+      .filter(c => !q || String(c.name).toLowerCase().includes(q)).slice(0, 40);
+    if (!filtered.length) { drop.innerHTML = `<div class="mon-chat-drop-item" style="opacity:.45">Чатів не знайдено</div>`; return; }
+    drop.innerHTML = "";
+    filtered.forEach(chat => {
+      const item = document.createElement("div");
+      item.className = "mon-chat-drop-item";
+      item.innerHTML = `<span>${_esc(chat.name)}</span><span class="mon-chat-drop-type">чат</span>`;
+      item.addEventListener("mousedown", e => {
+        e.preventDefault();
+        _intPending = { id: chat.id, name: chat.name };
+        const inp = document.getElementById("monIntChatInput"); if (inp) inp.value = chat.name;
+        const ok = document.getElementById("monIntOkBtn"); if (ok) ok.disabled = false;
+        drop.classList.add("hidden");
+      });
+      drop.appendChild(item);
+    });
+  }
+  function _openInterestPicker() {
+    const box = document.getElementById("monInterestPicker"); if (!box) return;
+    if (_interest) { _intPlatform = _interest.platform || "signal"; _intPending = { id: _interest.id, name: _interest.name }; }
+    else { _intPending = null; }
+    _updateIntPlatformBtn();
+    const inp = document.getElementById("monIntChatInput"); if (inp) inp.value = _interest ? _interest.name : "";
+    const ok = document.getElementById("monIntOkBtn"); if (ok) ok.disabled = !_intPending;
+    box.classList.remove("hidden");
+    if (inp) inp.focus();
+  }
+  function _closeInterestPicker() { const box = document.getElementById("monInterestPicker"); if (box) box.classList.add("hidden"); }
+
+  function _initInterest() {
+    const btn = document.getElementById("monInterestBtn");
+    if (btn) btn.addEventListener("click", (e) => {
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); _openInterestPicker(); }
+      else _sendInterest();
+    });
+    document.getElementById("monIntPlatformBtn")?.addEventListener("click", () => {
+      const idx = _PLATFORMS.findIndex(p => p.id === _intPlatform);
+      _intPlatform = _PLATFORMS[(idx + 1) % _PLATFORMS.length].id;
+      _intPending = null; _updateIntPlatformBtn();
+      const inp = document.getElementById("monIntChatInput"); if (inp) inp.value = "";
+      const ok = document.getElementById("monIntOkBtn"); if (ok) ok.disabled = true;
+    });
+    const inp = document.getElementById("monIntChatInput");
+    if (inp) {
+      inp.addEventListener("focus", () => _intRenderDrop(inp.value));
+      inp.addEventListener("input", () => _intRenderDrop(inp.value));
+    }
+    document.getElementById("monIntOkBtn")?.addEventListener("click", () => {
+      if (!_intPending) return;
+      _interest = { platform: _intPlatform, id: _intPending.id, name: _intPending.name };
+      try { localStorage.setItem(LS_INTEREST, JSON.stringify(_interest)); } catch (_) {}
+      _closeInterestPicker();
+      if (window.appToast) window.appToast(`Чат «Цікаво»: ${_interest.name}`, "success");
+    });
+    // Закриття пікера при кліку поза ним.
+    document.addEventListener("click", (e) => {
+      const box = document.getElementById("monInterestPicker");
+      if (!box || box.classList.contains("hidden")) return;
+      if (box.contains(e.target) || (btn && btn.contains(e.target))) return;
+      _closeInterestPicker();
+    });
   }
 
   /* ═════════════════════════════════════════

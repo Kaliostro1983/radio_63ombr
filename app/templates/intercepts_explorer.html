@@ -325,6 +325,12 @@
                 <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenSearchIcon" title="Пошук" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('search')">🔍</button>
                 <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenViewIcon" title="Перегляд" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('view')">📋</button>
                 <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenLmIcon" title="Орієнтири" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('landmarks')">📍</button>
+                <!-- Цікаво: надіслати поточне перехоплення в цільовий чат (Ctrl+клік — задати чат) -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--interest" id="monInterestBtn" title="Цікаво — надіслати перехоплення в чат (Ctrl+клік — задати/змінити чат)">
+                  <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8.5" cy="8.5" r="5"/><line x1="12.3" y1="12.3" x2="17" y2="17"/>
+                  </svg>
+                </button>
                 <!-- Share: send intercept to multiple recipients -->
                 <button class="mon-toolbar-btn mon-toolbar-btn--share" id="monShareBtn" title="Поширити" style="font-size:14px">⤴</button>
                 <!-- Open Висновок tab with this intercept pre-filled -->
@@ -333,6 +339,15 @@
                 <button class="mon-toolbar-btn mon-toolbar-btn--quick" id="monOpenQuick" title="Швидкий висновок" style="font-size:13px">⚡</button>
                 <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenDictionary" title="Словник" style="font-size:14px">📖</button>
               </div>
+            </div>
+            <!-- Пікер цільового чату для «Цікаво» (Ctrl+клік по лупі) -->
+            <div id="monInterestPicker" class="mon-interest-picker hidden">
+              <button id="monIntPlatformBtn" type="button" class="mon-send-platform-btn" title="Платформа" style="background:#3a76f0">S</button>
+              <div class="mon-int-middle">
+                <input id="monIntChatInput" type="text" class="mon-send-chat-input" placeholder="Назва чату або групи…" autocomplete="off" spellcheck="false">
+                <div id="monIntChatDrop" class="mon-send-chat-drop hidden"></div>
+              </div>
+              <button id="monIntOkBtn" type="button" class="mon-int-ok-btn" disabled>ОК</button>
             </div>
             <!-- Detail -->
             <div id="monDetail" class="mon-detail-area">
@@ -1191,7 +1206,7 @@
 <script src="/static/intercepts_explorer.js?v=40"></script>
 <script src="/static/intercepts_search_modal.js?v=4"></script>
 <script src="/static/vendor/milsymbol.js?v=1"></script>
-<script src="/static/monitor.js?v=151"></script>
+<script src="/static/monitor.js?v=152"></script>
 <script src="/static/concl_ref_layer.js?v=4"></script>
 <script src="/static/monitor_playlist_filter.js?v=3"></script>
 <script src="/static/landmarks.js?v=19" defer></script>
