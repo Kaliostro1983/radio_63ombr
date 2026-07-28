@@ -4437,20 +4437,25 @@ button.secondary{
 .it-modal--fullwin .leaflet-top.leaflet-left{ top:56px; }
 
 /* Верхній лівий кластер керування */
-.cw-topbar{ position:absolute; top:10px; left:10px; z-index:1300; display:flex; gap:6px; }
+.cw-topbar{ position:absolute; top:10px; left:10px; z-index:1300; display:flex; gap:8px; }
+/* Той самий вигляд, що й тулбар праворуч (.concl-map-tool-btn) */
 .cw-ctrl-btn{
-  width:38px; height:38px; display:inline-flex; align-items:center; justify-content:center;
-  background:rgba(20,24,30,.92); color:#e8eaed; border:1px solid rgba(255,255,255,.18);
-  border-radius:9px; cursor:pointer; backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center;
+  width:36px; height:36px; padding:0;
+  border:1px solid rgba(255,255,255,.18); border-radius:8px;
+  background:rgba(20,24,30,.82); color:#fff; cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+  transition:background .12s, border-color .12s;
 }
-.cw-ctrl-btn:hover{ background:rgba(44,50,58,.95); }
+.cw-ctrl-btn:hover{ background:rgba(20,24,30,.95); border-color:var(--accent,#f59e0b); }
 .cw-ctrl-btn.is-active{ background:#2563eb; border-color:#2563eb; color:#fff; }
 
 /* Лівий контейнер висновку — плаваюча панель */
 .it-modal--fullwin .conclusion-left{
-  position:absolute; top:58px; left:10px; bottom:10px; z-index:1200;
+  position:absolute; top:58px; left:10px; z-index:1200;
   width:40%; min-width:340px; max-width:560px;
-  border:1px solid var(--border); border-radius:12px; overflow:hidden;
+  height:auto; max-height:calc(100vh - 68px); overflow-y:auto;
+  border:1px solid var(--border); border-radius:12px;
   background:var(--card); box-shadow:0 14px 44px rgba(0,0,0,.45);
 }
 .it-modal--fullwin.cw-left-hidden .conclusion-left{ display:none; }
@@ -4462,7 +4467,6 @@ button.secondary{
   background:rgba(20,24,30,.92); backdrop-filter:blur(4px);
   border:1px solid rgba(255,255,255,.18); border-radius:10px;
 }
-.it-modal--fullwin.cw-left-hidden .mon-anal-coord-bar{ left:64px; }
 
 /* Рамка області копіювання (95%) — під координатним баром */
 .it-modal--fullwin .cw-copy-frame{
@@ -4471,7 +4475,6 @@ button.secondary{
   border:2px dashed rgba(255,255,255,.85);
   border-radius:8px; pointer-events:none;
 }
-.it-modal--fullwin.cw-left-hidden .cw-copy-frame{ left:64px; }
 
 /* Тулбар — вертикальна колонка праворуч (5%) */
 .it-modal--fullwin .cw-tool-col{
