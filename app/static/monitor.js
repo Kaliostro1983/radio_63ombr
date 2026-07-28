@@ -2067,6 +2067,9 @@
       // preferCanvas — щоб квадрати (полігони) рендерилися на <canvas>
       // і потрапляли у скріншот html2canvas (SVG він не захоплює)
       _conclMap = L.map(el, { center: [48.5, 37.5], zoom: 10, preferCanvas: true });
+      // Даємо шару-референсу висновків (concl_ref_layer.js) доступ до цієї карти.
+      window.__conclMap = _conclMap;
+      try { window.dispatchEvent(new CustomEvent("conclMapReady", { detail: _conclMap })); } catch (_) {}
       // Шари z-index: Зона/Орієнтир (350) < квадрати (overlayPane 400) < точки (markerPane 600) < Стрілка (620)
       _conclMap.createPane("conclBelow");   _conclMap.getPane("conclBelow").style.zIndex   = 350;
       _conclMap.createPane("conclAbove");   _conclMap.getPane("conclAbove").style.zIndex   = 620;

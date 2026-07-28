@@ -4490,6 +4490,63 @@ button.secondary{
 /* Перелік палітр і висувна панель — теж над картою */
 .it-modal--fullwin #conclPalList{ z-index:1150; }
 .it-modal--fullwin #palPanel{ z-index:1250; }
+
+/* ── Шар-референс висновків: категорії (вгорі) + контроли (внизу зліва) ── */
+.it-modal--fullwin .cw-cat-bar{
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  z-index:1240; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  max-width:70vw; padding:6px 10px; border-radius:12px;
+  background:rgba(15,23,42,.86); backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.14);
+}
+.it-modal--fullwin .cw-cat-bar:empty{ display:none; }
+.cw-cat-bar .type-chip-all{
+  padding:5px 12px; border-radius:16px; border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.12); color:#e2e8f0; font-size:12px; cursor:pointer; white-space:nowrap;
+}
+.cw-cat-bar .chip-divider{ width:1px; height:20px; background:rgba(255,255,255,.18); }
+.cw-cat-bar .type-chip{
+  display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:16px;
+  border:1px solid var(--chip-color,#6b7280); color:#e2e8f0; font-size:12px; cursor:pointer;
+  white-space:nowrap; opacity:.5; transition:opacity .12s;
+}
+.cw-cat-bar .type-chip.active{ opacity:1; }
+.cw-cat-bar .type-chip img{ width:20px; height:20px; }
+
+.it-modal--fullwin .cw-ctrl-box{
+  position:absolute; bottom:14px; left:14px; z-index:1240;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:8px 12px; border-radius:12px;
+  background:rgba(15,23,42,.86); backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.14); color:#cbd5e1; font-size:12px;
+}
+.cw-ctrl-chk{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+.cw-ctrl-chk input{ margin:0; }
+.cw-ctrl-range{ display:inline-flex; align-items:center; gap:8px; }
+.cw-ctrl-fld{ display:inline-flex; align-items:center; gap:4px; }
+.cw-ctrl-fld input{
+  background:#1e293b; color:#e2e8f0; border:1px solid rgba(255,255,255,.18);
+  border-radius:6px; padding:4px 6px; font:inherit; font-size:12px;
+}
+.cw-ctrl-refresh{
+  padding:6px 12px; border:0; border-radius:6px; background:#2563eb; color:#fff;
+  cursor:pointer; font-weight:600; font-size:12px;
+}
+.cw-ctrl-refresh:hover{ background:#1d4ed8; }
+
+/* «Показати/сховати позначення» ховає обидва контейнери */
+.it-modal--fullwin.cw-marks-hidden .cw-cat-bar,
+.it-modal--fullwin.cw-marks-hidden .cw-ctrl-box{ display:none; }
+
+/* Маркери шару-референсу */
+.cm-unit-icon .cm-unit-circle{
+  width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:700; font-size:13px; border:2px solid rgba(255,255,255,.85);
+  box-shadow:0 1px 4px rgba(0,0,0,.5);
+}
+.cm-freq-label{ background:rgba(15,23,42,.85); color:#e2e8f0; border:0; font-size:11px; padding:1px 5px; border-radius:4px; }
+.cwref-pop{ font-size:13px; max-width:320px; }
+.cwref-pop .cwref-meta{ opacity:.7; font-size:11px; margin-bottom:4px; }
 .it-modal--fullwin .cw-tool-col .concl-map-tool-btn{
   position:static; top:auto; right:auto; margin:0;
 }
