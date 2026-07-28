@@ -4514,7 +4514,7 @@ button.secondary{
 .cw-cat-bar .type-chip img{ width:20px; height:20px; }
 
 .it-modal--fullwin .cw-ctrl-box{
-  position:absolute; bottom:14px; left:14px; z-index:1240;
+  position:absolute; bottom:40px; left:14px; z-index:1240;
   display:flex; align-items:center; gap:12px; flex-wrap:wrap;
   padding:8px 12px; border-radius:12px;
   background:rgba(15,23,42,.86); backdrop-filter:blur(6px);
