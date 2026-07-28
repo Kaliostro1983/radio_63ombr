@@ -76,12 +76,38 @@
       _iconCache[key] = u; return u;
     }).catch(function () { _iconCache[key] = url; return url; });
   }
-  function makeIcon(url) {
+  function makeIcon(url, w, h) {
+    var sw = w || 24, sh = h || 24;
     return L.divIcon({
       className: "cm-icon",
-      html: '<img src="' + url + '" alt="" width="24" height="24">',
-      iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12],
+      html: '<img src="' + url + '" alt="" width="' + sw + '" height="' + sh + '">',
+      iconSize: [sw, sh], iconAnchor: [Math.round(sw / 2), Math.round(sh / 2)],
+      popupAnchor: [0, -Math.round(sh / 2)],
     });
+  }
+
+  // ── milsymbol (APP-6 / MIL-STD-2525) для типів з icon_sidc ──
+  var _sidcCache = {};
+  var SIDC_SCALE = 0.75;
+  function getSidcIcon(sidc) {
+    if (!sidc || !window.ms) return null;
+    if (_sidcCache[sidc]) return _sidcCache[sidc];
+    try {
+      var sym = new ms.Symbol(sidc, { size: 32 });
+      var sz = sym.getSize();
+      var u = URL.createObjectURL(new Blob([sym.asSVG()], { type: "image/svg+xml" }));
+      var r = { url: u, w: Math.max(8, Math.round(sz.width * SIDC_SCALE)), h: Math.max(8, Math.round(sz.height * SIDC_SCALE)) };
+      _sidcCache[sidc] = r; return r;
+    } catch (_) { return null; }
+  }
+  // Іконка типу: SIDC (milsymbol) → SVG-файл (кольоровий) → дефолт.
+  function resolveTypeIcon(t) {
+    if (t && t.icon_sidc) {
+      var info = getSidcIcon(t.icon_sidc);
+      if (info) return Promise.resolve(info);
+    }
+    return getIconUrl(t && t.icon_filename, (t && t.color) || "#6b7280")
+      .then(function (u) { return { url: u, w: 24, h: 24 }; });
   }
 
   // ── Дані ──
@@ -106,24 +132,22 @@
     S.markers = [];
     var typeMap = {}; S.types.forEach(function (t) { typeMap[t.id] = t; });
 
-    // Прередер іконок за типами
+    // Прередер іконок за типами (SIDC → SVG-файл → дефолт)
     var uniq = {};
     S.rows.forEach(function (r) { uniq[r.type_id] = typeMap[r.type_id] || null; });
     var jobs = Object.keys(uniq).map(function (tid) {
-      var t = uniq[tid];
-      return getIconUrl(t && t.icon_filename, (t && t.color) || "#6b7280")
-        .then(function (u) { uniq[tid] = { url: u, color: (t && t.color) || "#6b7280" }; });
+      return resolveTypeIcon(uniq[tid]).then(function (info) { uniq[tid] = info; });
     });
 
     return Promise.all(jobs).then(function () {
       S.rows.forEach(function (row) {
-        var idata = uniq[row.type_id] || { url: "/static/icons/default.svg" };
+        var idata = uniq[row.type_id] || { url: "/static/icons/default.svg", w: 24, h: 24 };
         var icon;
         if (S.showUnit) {
           var un = extractUnitNumber(row.unit);
-          icon = un ? makeUnitIcon(un) : makeIcon(idata.url);
+          icon = un ? makeUnitIcon(un) : makeIcon(idata.url, idata.w, idata.h);
         } else {
-          icon = makeIcon(idata.url);
+          icon = makeIcon(idata.url, idata.w, idata.h);
         }
         row.mgrs.forEach(function (ms) {
           var ll = mgrsToLatLng(ms);
@@ -174,7 +198,9 @@
       chip.className = "type-chip"; chip.dataset.typeId = t.id;
       chip.style.setProperty("--chip-color", t.color || "#6b7280");
       var img = document.createElement("img");
-      getIconUrl(t.icon_filename, t.color || "#6b7280").then(function (u) { img.src = u; });
+      var sidc = t.icon_sidc ? getSidcIcon(t.icon_sidc) : null;
+      if (sidc) { img.src = sidc.url; }
+      else { getIconUrl(t.icon_filename, t.color || "#6b7280").then(function (u) { img.src = u; }); }
       chip.appendChild(img);
       var lab = document.createElement("span");
       lab.textContent = t.type + " (" + cnt[t.id] + ")";
