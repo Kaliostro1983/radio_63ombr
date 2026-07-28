@@ -721,7 +721,38 @@
     } catch (e) { canvas = null; }
     if (anchorsPane) anchorsPane.style.display = "";
     chrome.forEach(el => { el.style.display = el.dataset._prevDisp || ""; });
-    return canvas;
+    return _cropCanvasToFrame(canvas, mapDiv);
+  }
+
+  /* Обрізати знімок карти до прямокутної рамки #conclCopyFrame (те, що всередині
+     неї). Рамка — оверлей ПОВЕРХ карти (не в map-div), тож її пунктир у знімок
+     не входить; ми лише беремо ділянку карти під нею. Якщо рамки немає/схована —
+     повертаємо повний знімок. */
+  function _cropCanvasToFrame(canvas, mapDiv) {
+    if (!canvas || !mapDiv) return canvas;
+    const frame = document.getElementById("conclCopyFrame");
+    if (!frame) return canvas;
+    const fr = frame.getBoundingClientRect();
+    const mr = mapDiv.getBoundingClientRect();
+    if (fr.width < 4 || fr.height < 4 || mr.width < 4 || mr.height < 4) return canvas;
+    // Перетин рамки з картою (рамка може трохи виходити за край карти).
+    const left   = Math.max(fr.left, mr.left);
+    const top    = Math.max(fr.top, mr.top);
+    const right  = Math.min(fr.right, mr.right);
+    const bottom = Math.min(fr.bottom, mr.bottom);
+    const cssW = right - left, cssH = bottom - top;
+    if (cssW <= 0 || cssH <= 0) return canvas;
+    // html2canvas рендерить у пікселях пристрою: масштаб canvas/CSS.
+    const sx = canvas.width / mr.width, sy = canvas.height / mr.height;
+    const out = document.createElement("canvas");
+    out.width  = Math.max(1, Math.round(cssW * sx));
+    out.height = Math.max(1, Math.round(cssH * sy));
+    out.getContext("2d").drawImage(
+      canvas,
+      (left - mr.left) * sx, (top - mr.top) * sy, cssW * sx, cssH * sy,
+      0, 0, out.width, out.height,
+    );
+    return out;
   }
 
   /* JPEG base64 (без префіксу) карти, масштаб ≤1200px — для надсилання */
