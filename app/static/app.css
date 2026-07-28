@@ -4452,8 +4452,11 @@ button.secondary{
 
 /* Лівий контейнер висновку — плаваюча панель */
 .it-modal--fullwin .conclusion-left{
-  position:absolute; top:58px; left:10px; bottom:10px; z-index:1200;
-  width:380px; min-width:320px;
+  /* Висота фіксована (коротша за вікно) — щоб поле перехоплення не
+     розтягувалось на весь екран; ширину лишаємо як була. */
+  position:absolute; top:58px; left:10px; z-index:1200;
+  width:440px; min-width:340px;
+  height:640px; max-height:calc(100vh - 78px);
   border:1px solid var(--border); border-radius:12px; overflow:hidden;
   background:var(--card); box-shadow:0 14px 44px rgba(0,0,0,.45);
 }
@@ -4462,15 +4465,16 @@ button.secondary{
 /* Координатний бар — плаваючий зверху правої частини */
 .it-modal--fullwin .mon-anal-coord-bar{
   position:absolute; top:12px; z-index:1200;
-  left:410px; right:74px;
+  left:470px; right:74px;
   background:rgba(20,24,30,.92); backdrop-filter:blur(4px);
   border:1px solid rgba(255,255,255,.18); border-radius:10px;
 }
 
-/* Рамка області копіювання (95%) — під координатним баром */
+/* Рамка області копіювання — коротша за карту (висота ≈ контейнеру) */
 .it-modal--fullwin .cw-copy-frame{
-  position:absolute; top:64px; bottom:14px; z-index:1050;
-  left:410px; right:74px;
+  position:absolute; top:64px; z-index:1050;
+  height:634px; max-height:calc(100vh - 84px);
+  left:470px; right:74px;
   border:2px dashed rgba(255,255,255,.85);
   border-radius:8px; pointer-events:none;
 }
