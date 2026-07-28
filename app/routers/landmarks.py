@@ -805,3 +805,80 @@ def api_landmark_type_usage():
             "WHERE is_active = 1 GROUP BY id_type"
         ).fetchall()
     return {"ok": True, "usage": {int(r["id_type"]): int(r["cnt"]) for r in rows}}
+
+
+# --------------------------------------------------------------------------- #
+#  Підрозділи (groups) — керування списком із модалки орієнтира.
+#  УВАГА: таблиця `groups` СПІЛЬНА з радіомережами. Тому видалення дозволене
+#  лише для груп, які НІДЕ не використовуються (ні в мережах, ні в орієнтирах).
+# --------------------------------------------------------------------------- #
+
+
+@router.post("/api/landmark-groups")
+async def api_landmark_group_create(request: Request):
+    """Створити новий підрозділ (рядок у спільній таблиці groups)."""
+    payload = await request.json()
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Назва не може бути порожньою")
+    if len(name) > 120:
+        raise HTTPException(status_code=400, detail="Занадто довга назва")
+
+    # SQLite lower() не нормалізує кирилицю — порівнюємо в Python.
+    name_norm = name.lower()
+    with get_conn() as conn:
+        for r in conn.execute("SELECT name FROM groups").fetchall():
+            if str(r["name"] or "").strip().lower() == name_norm:
+                raise HTTPException(status_code=409, detail="Підрозділ з такою назвою вже існує")
+        cur = conn.execute("INSERT INTO groups (name) VALUES (?)", (name,))
+        new_id = int(cur.lastrowid)
+        conn.commit()
+    return JSONResponse({"ok": True, "id": new_id, "name": name})
+
+
+@router.post("/api/landmark-groups/{group_id}/delete")
+def api_landmark_group_delete(group_id: int):
+    """Видалити підрозділ. Заборонено, якщо на нього посилаються мережі або
+    орієнтири (група спільна з радіомережами)."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, name FROM groups WHERE id = ?", (group_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Підрозділ не знайдено")
+
+        n_net = conn.execute(
+            "SELECT COUNT(*) FROM networks WHERE group_id = ?", (group_id,)
+        ).fetchone()[0]
+        n_lm = conn.execute(
+            "SELECT COUNT(*) FROM landmarks WHERE id_group = ? AND is_active = 1", (group_id,)
+        ).fetchone()[0]
+        used = int(n_net or 0) + int(n_lm or 0)
+        if used > 0:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Підрозділ використовується ({n_net} р/м, {n_lm} орієнтирів) — видалення заборонено",
+            )
+
+        conn.execute("DELETE FROM groups WHERE id = ?", (group_id,))
+        conn.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/landmark-group-usage")
+def api_landmark_group_usage():
+    """Сумарне використання кожного підрозділу: мережі + активні орієнтири.
+    Дозволяє UI показати, які групи можна видалити (used == 0)."""
+    with get_conn() as conn:
+        net = conn.execute(
+            "SELECT group_id AS gid, COUNT(*) AS cnt FROM networks "
+            "WHERE group_id IS NOT NULL GROUP BY group_id"
+        ).fetchall()
+        lm = conn.execute(
+            "SELECT id_group AS gid, COUNT(*) AS cnt FROM landmarks "
+            "WHERE is_active = 1 AND id_group IS NOT NULL GROUP BY id_group"
+        ).fetchall()
+    usage: dict[int, int] = {}
+    for r in net:
+        usage[int(r["gid"])] = usage.get(int(r["gid"]), 0) + int(r["cnt"])
+    for r in lm:
+        usage[int(r["gid"])] = usage.get(int(r["gid"]), 0) + int(r["cnt"])
+    return {"ok": True, "usage": usage}

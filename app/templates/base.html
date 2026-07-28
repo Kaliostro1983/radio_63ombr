@@ -516,9 +516,24 @@
           </div>
 
           <div class="lm-modal-row">
-            <div class="field lm-modal-field--full">
-              <label for="lmEditGroupId">Підрозділ</label>
+            <div class="field lm-modal-field--full lm-type-field" style="position:relative">
+              <label for="lmEditGroupId" style="display:flex; align-items:center; justify-content:space-between">
+                <span>Підрозділ</span>
+                <button type="button" id="lmGroupManageBtn" class="lm-type-manage-btn" title="Керувати підрозділами">
+                  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+                  </svg>
+                </button>
+              </label>
               <select id="lmEditGroupId"></select>
+              <div id="lmGroupManagePanel" class="lm-type-manage-panel hidden">
+                <div class="lm-type-manage-add">
+                  <input id="lmGroupManageName" type="text" placeholder="Назва нового підрозділу…" autocomplete="off" maxlength="120">
+                  <button type="button" id="lmGroupManageAddBtn" class="lm-type-manage-add-btn" title="Додати">+</button>
+                </div>
+                <div id="lmGroupManageList" class="lm-type-manage-list"></div>
+                <div id="lmGroupManageErr" class="small lm-type-manage-err" style="display:none"></div>
+              </div>
             </div>
           </div>
 

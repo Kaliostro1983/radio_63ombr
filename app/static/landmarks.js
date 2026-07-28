@@ -72,6 +72,8 @@
     groups: [],
     types: [],
     geomTypes: [],
+    typeUsage: {},
+    groupUsage: {},
     unknownTypeId: null,
     lastAutocompleteTimer: null,
     lastAutocompleteQuery: "",
@@ -720,12 +722,18 @@
       state.typeUsage = usage && usage.usage ? usage.usage : {};
     } catch { state.typeUsage = {}; }
 
+    try {
+      const gu = await apiGet("/api/landmark-group-usage");
+      state.groupUsage = gu && gu.usage ? gu.usage : {};
+    } catch { state.groupUsage = {}; }
+
     populateSelect(groupSelect, state.groups, true, "Усі");
     populateSelect(typeSelect, state.types, true, "Усі");
     populateSelect(editGroupSelect, state.groups, true, "Без підрозділу");
     populateSelect(editTypeSelect, state.types, true, "Оберіть тип");
     populateGeomSelect(editGeomSelect, state.geomTypes);
     renderTypeManageList();
+    renderGroupManageList();
   }
 
   /* ---- Type manager (inline panel) ---- */
@@ -807,6 +815,83 @@
     if (addBtn) addBtn.addEventListener("click", onAddType);
     if (nameInp) nameInp.addEventListener("keydown", e => {
       if (e.key === "Enter") { e.preventDefault(); onAddType(); }
+    });
+  }
+
+  /* ---- Group (підрозділ) manager — дзеркало менеджера типів.
+     УВАГА: таблиця груп СПІЛЬНА з радіомережами, тож видалити можна лише
+     групу, що ніде не використовується (used === 0). ---- */
+  function renderGroupManageList() {
+    const host = $("lmGroupManageList");
+    if (!host) return;
+    host.innerHTML = "";
+    state.groups.forEach(g => {
+      const row = document.createElement("div");
+      row.className = "lm-type-manage-row";
+      const used = (state.groupUsage && state.groupUsage[g.id]) || 0;
+      const meta = `<span class="lm-type-manage-row-meta">${used > 0 ? "× " + used : ""}</span>`;
+      const canDel = used === 0;
+      row.innerHTML =
+        `<span>${escapeHtml(g.name)}</span>` +
+        `<span style="display:flex;align-items:center">${meta}` +
+        `<button type="button" class="lm-type-manage-del-btn" data-id="${g.id}" ${canDel ? "" : "disabled"} title="${used > 0 ? "Використовується (р/м та/або орієнтири) — видалення заборонено" : "Видалити"}">✕</button>` +
+        `</span>`;
+      host.appendChild(row);
+    });
+    host.querySelectorAll(".lm-type-manage-del-btn").forEach(b => {
+      b.addEventListener("click", () => onDeleteGroup(Number(b.dataset.id)));
+    });
+  }
+
+  async function onAddGroup() {
+    const inp = $("lmGroupManageName");
+    const err = $("lmGroupManageErr");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    const name = (inp && inp.value || "").trim();
+    if (!name) return;
+    try {
+      await apiPost("/api/landmark-groups", { name });
+      if (inp) inp.value = "";
+      await loadReference();
+      if (window.appToast) window.appToast(`Підрозділ додано: ${name}`, "success", 1400);
+    } catch (e) {
+      if (err) { err.textContent = e.message || "Помилка"; err.style.display = "block"; }
+    }
+  }
+
+  async function onDeleteGroup(id) {
+    const g = state.groups.find(x => x.id === id);
+    if (!g) return;
+    if (!confirm(`Видалити підрозділ «${g.name}»?`)) return;
+    const err = $("lmGroupManageErr");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    try {
+      await apiPost(`/api/landmark-groups/${id}/delete`, {});
+      await loadReference();
+      if (window.appToast) window.appToast(`Підрозділ видалено: ${g.name}`, "success", 1400);
+    } catch (e) {
+      if (err) { err.textContent = e.message || "Помилка видалення"; err.style.display = "block"; }
+    }
+  }
+
+  function initGroupManageUi() {
+    const btn = $("lmGroupManageBtn");
+    const panel = $("lmGroupManagePanel");
+    const addBtn = $("lmGroupManageAddBtn");
+    const nameInp = $("lmGroupManageName");
+    if (!btn || !panel) return;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      panel.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (panel.classList.contains("hidden")) return;
+      if (panel.contains(e.target) || btn.contains(e.target)) return;
+      panel.classList.add("hidden");
+    });
+    if (addBtn) addBtn.addEventListener("click", onAddGroup);
+    if (nameInp) nameInp.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); onAddGroup(); }
     });
   }
 
@@ -1053,6 +1138,7 @@
       syncGeomFields();
     });
     initTypeManageUi();
+    initGroupManageUi();
     if (editLocationMgrsInput) {
       editLocationMgrsInput.addEventListener("input", scheduleMapRefresh);
     }
