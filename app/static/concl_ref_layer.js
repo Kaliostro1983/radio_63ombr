@@ -274,32 +274,52 @@
       S.loaded = false; reload();
     });
 
-    // «Показати/сховати позначення» — ховає обидва контейнери.
+    // «Показати/сховати позначення» (кнопка №4) — показує/ховає ВЕСЬ шар:
+    // маркери + категорії + контроли.
     var marks = $("cwToggleMarksBtn");
     if (marks) marks.addEventListener("click", function () {
-      var modal = $("itModalConclusion"); if (!modal) return;
-      var on = !modal.classList.toggle("cw-marks-hidden");
-      marks.classList.toggle("is-active", on);
+      setVisible(!_visible);
     });
   }
 
-  // ── Старт: чекаємо карту модалки, вантажимо при відкритті модалки ──
+  // ── Показ/приховання всього шару-референсу ──
+  var _visible = false;
+  var _pendingMode = null;   // режим, заданий до готовності карти
+  function setVisible(on) {
+    _visible = !!on;
+    // Клас/кнопку — одразу (без миготіння порожніх контейнерів).
+    var modal = $("itModalConclusion");
+    if (modal) modal.classList.toggle("cw-marks-hidden", !on);
+    var btn = $("cwToggleMarksBtn");
+    if (btn) btn.classList.toggle("is-active", !!on);
+    // Роботу з шаром — лише коли карта готова.
+    if (!_map) { _pendingMode = on ? "map" : "conclusion"; return; }
+    if (on) {
+      if (S.loaded && _layer) { if (!_map.hasLayer(_layer)) _layer.addTo(_map); }
+      else reload();
+    } else {
+      if (_layer && _map.hasLayer(_layer)) _map.removeLayer(_layer);
+    }
+  }
+
+  // ── Режим за точкою входу: яка група активна на старті ──
+  //   conclusion (кнопка №3) — контейнер висновку; map (кнопка №4) — позначення;
+  //   peleng (кнопка №5) — далі. Керує стартовою видимістю обох груп.
+  window.setConclModalMode = function (mode) {
+    var modal = $("itModalConclusion"); if (!modal) return;
+    modal.dataset.conclMode = mode || "conclusion";
+    var showLeft = (mode !== "map" && mode !== "peleng");
+    modal.classList.toggle("cw-left-hidden", !showLeft);
+    var lb = $("cwToggleLeftBtn"); if (lb) lb.classList.toggle("is-active", showLeft);
+    setVisible(mode === "map");
+  };
+
+  // ── Старт: чекаємо карту модалки ──
   function boot(map) {
     if (_map) return;
     _map = map;
     initControls();
-    var modal = $("itModalConclusion");
-    var isOpen = function () { return modal && !modal.classList.contains("hidden"); };
-    if (isOpen()) reload();
-    if (modal && !modal.__refObs) {
-      modal.__refObs = true;
-      var wasHidden = modal.classList.contains("hidden");
-      new MutationObserver(function () {
-        var h = modal.classList.contains("hidden");
-        if (wasHidden && !h) reload();   // щойно відкрилась → свіжі дані
-        wasHidden = h;
-      }).observe(modal, { attributes: true, attributeFilter: ["class"] });
-    }
+    if (_pendingMode) { var m = _pendingMode; _pendingMode = null; setVisible(m === "map"); }
   }
 
   if (window.__conclMap) boot(window.__conclMap);

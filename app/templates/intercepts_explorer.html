@@ -926,7 +926,7 @@
       return Object.values(modalMap).some(m => m && !m.classList.contains("hidden"));
     }
 
-    function openItModal(which) {
+    function openItModal(which, opts) {
       const m = modalMap[which];
       if (!m) return;
       m.classList.remove("hidden");
@@ -936,8 +936,14 @@
       if (which === "conclusion") {
         if (!_conclusionInited) { _conclusionInited = true; if (window.initConclusionPanel) window.initConclusionPanel(); }
         else { if (window.resumeConclusionPanel) window.resumeConclusionPanel(); }
+        // Стартова видимість груп залежить від точки входу (mode):
+        //   conclusion (моніторинг) — кнопка №3; map (карта висновків) — №4.
+        const mode = (opts && opts.mode) || "conclusion";
+        if (window.setConclModalMode) window.setConclModalMode(mode);
       }
     }
+    // Хук для інших точок входу (карта висновків / пеленги — далі).
+    window.openConclusionModal = function (mode) { openItModal("conclusion", { mode: mode }); };
 
     function closeItModal(which) {
       const m = modalMap[which];
@@ -1137,7 +1143,7 @@
 <script src="/static/intercepts_search_modal.js?v=4"></script>
 <script src="/static/vendor/milsymbol.js?v=1"></script>
 <script src="/static/monitor.js?v=151"></script>
-<script src="/static/concl_ref_layer.js?v=2"></script>
+<script src="/static/concl_ref_layer.js?v=3"></script>
 <script src="/static/monitor_playlist_filter.js?v=3"></script>
 <script src="/static/landmarks.js?v=19" defer></script>
 <script src="/static/intercepts_import.js?v=5"></script>
