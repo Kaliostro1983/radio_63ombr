@@ -4407,6 +4407,88 @@ button.secondary{
   overflow:hidden;
 }
 
+/* ═════════════════════════════════════════════════════════════
+   Повновіконний висновок (it-modal--fullwin)
+   Карта — тло на все вікно; решта — плаваючі шари поверх неї.
+   Уся логіка/ID лишаються; це лише перекомпонування каркаса.
+═════════════════════════════════════════════════════════════ */
+.it-modal--fullwin .modal-backdrop{ display:none; }
+.it-modal--fullwin .modal-card{
+  margin:0; max-width:none; width:100vw; height:100vh;
+  border:0; border-radius:0; box-shadow:none;
+}
+.it-modal--fullwin .modal-head{ display:none; }
+.it-modal--fullwin .modal-body{ padding:0; height:100vh; }
+.it-modal--fullwin #itPaneConclusion{ height:100%; }
+.it-modal--fullwin .conclusion-layout{
+  position:relative; display:block;
+  height:100vh; min-height:0; border:0; border-radius:0; overflow:hidden;
+}
+
+/* Карта — тло на весь екран */
+.it-modal--fullwin .conclusion-right{ position:absolute; inset:0; display:block; }
+.it-modal--fullwin .concl-map-wrap{ position:absolute; inset:0; }
+.it-modal--fullwin .mon-anal-map{ width:100%; height:100%; }
+
+/* Верхній лівий кластер керування */
+.cw-topbar{ position:absolute; top:10px; left:10px; z-index:45; display:flex; gap:6px; }
+.cw-ctrl-btn{
+  width:38px; height:38px; display:inline-flex; align-items:center; justify-content:center;
+  background:rgba(20,24,30,.92); color:#e8eaed; border:1px solid rgba(255,255,255,.18);
+  border-radius:9px; cursor:pointer; backdrop-filter:blur(4px);
+}
+.cw-ctrl-btn:hover{ background:rgba(44,50,58,.95); }
+.cw-ctrl-btn.is-active{ background:#2563eb; border-color:#2563eb; color:#fff; }
+
+/* Лівий контейнер висновку — плаваюча панель */
+.it-modal--fullwin .conclusion-left{
+  position:absolute; top:58px; left:10px; bottom:10px; z-index:35;
+  width:40%; min-width:340px; max-width:560px;
+  border:1px solid var(--border); border-radius:12px; overflow:hidden;
+  background:var(--card); box-shadow:0 14px 44px rgba(0,0,0,.45);
+}
+.it-modal--fullwin.cw-left-hidden .conclusion-left{ display:none; }
+
+/* Координатний бар — плаваючий зверху правої частини */
+.it-modal--fullwin .mon-anal-coord-bar{
+  position:absolute; top:12px; z-index:34;
+  left:calc(40% + 28px); right:74px;
+  background:rgba(20,24,30,.92); backdrop-filter:blur(4px);
+  border:1px solid rgba(255,255,255,.18); border-radius:10px;
+}
+.it-modal--fullwin.cw-left-hidden .mon-anal-coord-bar{ left:64px; }
+
+/* Рамка області копіювання (95%) — під координатним баром */
+.it-modal--fullwin .cw-copy-frame{
+  position:absolute; top:64px; bottom:14px; z-index:20;
+  left:calc(40% + 28px); right:74px;
+  border:2px dashed rgba(255,255,255,.75);
+  border-radius:8px; pointer-events:none;
+  box-shadow:0 0 0 2000px rgba(0,0,0,.12);
+}
+.it-modal--fullwin.cw-left-hidden .cw-copy-frame{ left:64px; }
+
+/* Тулбар — вертикальна колонка праворуч (5%) */
+.it-modal--fullwin .cw-tool-col{
+  position:absolute; top:64px; right:10px; z-index:36;
+  display:flex; flex-direction:column; gap:8px; align-items:center;
+}
+.it-modal--fullwin .cw-tool-col .concl-map-tool-btn{
+  position:static; top:auto; right:auto; margin:0;
+}
+/* Меню «+» відкривається ліворуч від колонки */
+.it-modal--fullwin .cw-tool-col .concl-map-add-menu{
+  position:absolute; right:52px; top:0; z-index:40;
+}
+
+/* Режим «сховати інтерфейс» — лишаємо тільки карту + верхній кластер */
+.it-modal--fullwin.cw-ui-hidden .conclusion-left,
+.it-modal--fullwin.cw-ui-hidden .mon-anal-coord-bar,
+.it-modal--fullwin.cw-ui-hidden .cw-tool-col,
+.it-modal--fullwin.cw-ui-hidden .cw-copy-frame,
+.it-modal--fullwin.cw-ui-hidden #conclPalList,
+.it-modal--fullwin.cw-ui-hidden #palPanel{ display:none !important; }
+
 /* ── Right column: coordinate + map (55%) ── */
 .monitor-analytics{
   flex:1;

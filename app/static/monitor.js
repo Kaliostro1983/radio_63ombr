@@ -1949,6 +1949,24 @@
     // Кнопка копіювання карти (поверх зображення)
     document.getElementById("conclMapCopyBtn")?.addEventListener("click", _copyConclMap);
 
+    // ── Повновіконний режим: перемикачі верхнього кластера ──
+    // «Сховати інтерфейс» — лишає тільки карту + позначки (клас cw-ui-hidden).
+    document.getElementById("cwHideUiBtn")?.addEventListener("click", (e) => {
+      const modal = document.getElementById("itModalConclusion");
+      if (!modal) return;
+      const on = modal.classList.toggle("cw-ui-hidden");
+      e.currentTarget.classList.toggle("is-active", on);
+      setTimeout(() => { try { _conclMap && _conclMap.invalidateSize(); } catch (_) {} }, 60);
+    });
+    // «Показати/сховати контейнер висновку» — згортає лівий контейнер.
+    document.getElementById("cwToggleLeftBtn")?.addEventListener("click", (e) => {
+      const modal = document.getElementById("itModalConclusion");
+      if (!modal) return;
+      const hidden = modal.classList.toggle("cw-left-hidden");
+      e.currentTarget.classList.toggle("is-active", !hidden);
+      setTimeout(() => { try { _conclMap && _conclMap.invalidateSize(); } catch (_) {} }, 60);
+    });
+
     // Перемикач «Орієнтири в області видимості»
     document.getElementById("conclLmViewBtn")?.addEventListener("click", _toggleLmView);
     // При КОЖНОМУ відкритті модалки висновку орієнтири мають бути сховані.
