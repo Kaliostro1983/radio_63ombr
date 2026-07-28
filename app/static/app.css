@@ -4430,8 +4430,14 @@ button.secondary{
 .it-modal--fullwin .concl-map-wrap{ position:absolute; inset:0; }
 .it-modal--fullwin .mon-anal-map{ width:100%; height:100%; }
 
+/* Усі накладки над картою мають z-index ВИЩЕ за внутрішні шари Leaflet
+   (тайли ~200-400, маркери 600, контроли 1000), інакше карта їх перекриває. */
+
+/* Зум-контрол Leaflet зсуваємо вниз, щоб не збігався з верхнім кластером */
+.it-modal--fullwin .leaflet-top.leaflet-left{ top:56px; }
+
 /* Верхній лівий кластер керування */
-.cw-topbar{ position:absolute; top:10px; left:10px; z-index:45; display:flex; gap:6px; }
+.cw-topbar{ position:absolute; top:10px; left:10px; z-index:1300; display:flex; gap:6px; }
 .cw-ctrl-btn{
   width:38px; height:38px; display:inline-flex; align-items:center; justify-content:center;
   background:rgba(20,24,30,.92); color:#e8eaed; border:1px solid rgba(255,255,255,.18);
@@ -4442,7 +4448,7 @@ button.secondary{
 
 /* Лівий контейнер висновку — плаваюча панель */
 .it-modal--fullwin .conclusion-left{
-  position:absolute; top:58px; left:10px; bottom:10px; z-index:35;
+  position:absolute; top:58px; left:10px; bottom:10px; z-index:1200;
   width:40%; min-width:340px; max-width:560px;
   border:1px solid var(--border); border-radius:12px; overflow:hidden;
   background:var(--card); box-shadow:0 14px 44px rgba(0,0,0,.45);
@@ -4451,7 +4457,7 @@ button.secondary{
 
 /* Координатний бар — плаваючий зверху правої частини */
 .it-modal--fullwin .mon-anal-coord-bar{
-  position:absolute; top:12px; z-index:34;
+  position:absolute; top:12px; z-index:1200;
   left:calc(40% + 28px); right:74px;
   background:rgba(20,24,30,.92); backdrop-filter:blur(4px);
   border:1px solid rgba(255,255,255,.18); border-radius:10px;
@@ -4460,19 +4466,21 @@ button.secondary{
 
 /* Рамка області копіювання (95%) — під координатним баром */
 .it-modal--fullwin .cw-copy-frame{
-  position:absolute; top:64px; bottom:14px; z-index:20;
+  position:absolute; top:64px; bottom:14px; z-index:1050;
   left:calc(40% + 28px); right:74px;
-  border:2px dashed rgba(255,255,255,.75);
+  border:2px dashed rgba(255,255,255,.85);
   border-radius:8px; pointer-events:none;
-  box-shadow:0 0 0 2000px rgba(0,0,0,.12);
 }
 .it-modal--fullwin.cw-left-hidden .cw-copy-frame{ left:64px; }
 
 /* Тулбар — вертикальна колонка праворуч (5%) */
 .it-modal--fullwin .cw-tool-col{
-  position:absolute; top:64px; right:10px; z-index:36;
+  position:absolute; top:64px; right:10px; z-index:1250;
   display:flex; flex-direction:column; gap:8px; align-items:center;
 }
+/* Перелік палітр і висувна панель — теж над картою */
+.it-modal--fullwin #conclPalList{ z-index:1150; }
+.it-modal--fullwin #palPanel{ z-index:1250; }
 .it-modal--fullwin .cw-tool-col .concl-map-tool-btn{
   position:static; top:auto; right:auto; margin:0;
 }
