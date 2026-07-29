@@ -4498,21 +4498,6 @@ button.secondary{
 .it-modal--fullwin #conclPalList{ z-index:1150; bottom:70px; max-height:calc(100vh - 190px); }
 .it-modal--fullwin #palPanel{ z-index:1250; }
 
-/* Чекбокс «Дата та час» у лівому контейнері висновку */
-.it-modal--fullwin .conclusion-left .concl-dt-chk{
-  display:flex; align-items:center; gap:6px; padding:6px 12px 2px;
-  font-size:12px; color:#cbd5e1; cursor:pointer; user-select:none;
-}
-.it-modal--fullwin .conclusion-left .concl-dt-chk input{ margin:0; }
-
-/* Мітка дати/часу у лівому верхньому куті рамки (потрапляє у скріншот) */
-.concl-datetime-badge{
-  position:absolute; z-index:640; pointer-events:none;
-  font-family:monospace; font-size:14px; font-weight:700;
-  color:#fff; -webkit-text-stroke:0.6px #000;
-  text-shadow:0 0 2px #000, 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
-}
-
 /* ── Шар-референс: фільтри (кнопки-іконки ◆/f біля кластера) + контроли (низ) ── */
 .it-modal--fullwin .cw-filters{
   position:absolute; top:10px; left:206px; z-index:1240; display:flex; gap:8px;
