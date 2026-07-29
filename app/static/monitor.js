@@ -4921,7 +4921,11 @@
     try {
       const r = await fetch(`/api/palettes/${id}/${action}`, { method: "POST" });
       if (!r.ok) throw new Error();
-      if (action === "delete") { _palScope.delete(id); _palSaveScope(); _palClearRegions(id); }
+      // Видалення й архівування прибирають палітру з області пошуку: архівну
+      // все одно не шукає бекенд, тож у scope вона лише мовчки обмежувала б
+      // видачу (і плутала: «пошук перестав знаходити інші палітри»).
+      if (action === "delete" || action === "archive") { _palScope.delete(id); _palSaveScope(); }
+      if (action === "delete") { _palClearRegions(id); }
       _palLoadList();
     } catch (_) {
       if (window.appToast) window.appToast("Помилка операції", "error", 1800);
