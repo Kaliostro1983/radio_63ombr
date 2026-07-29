@@ -336,6 +336,39 @@
     _panToFrame(map);
   }
 
+  /* ── Мітка дати/часу перехоплення у лівому верхньому куті рамки ──
+     Div усередині #conclMap (тож потрапляє у скріншот), позиціонований у
+     кут рамки. Білий шрифт із чорним контуром. */
+  let _dtBadge = null;
+  function _fmtDtBadge(s){
+    const t = String(s || "").replace("T", " ");
+    const m = t.match(/^(\d{4})-(\d{2})-(\d{2})[ ](\d{2}):(\d{2})/);
+    return m ? `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}` : t.slice(0, 16);
+  }
+  function _positionDtBadge(){
+    if (!_dtBadge) return;
+    const frame = document.getElementById("conclCopyFrame");
+    const mapEl = document.getElementById("conclMap");
+    if (!frame || !mapEl) return;
+    const fr = frame.getBoundingClientRect(), mr = mapEl.getBoundingClientRect();
+    _dtBadge.style.left = (fr.left - mr.left + 10) + "px";
+    _dtBadge.style.top  = (fr.top  - mr.top  + 8)  + "px";
+  }
+  function _updateDtBadge(){
+    const mapEl = document.getElementById("conclMap");
+    const chk = document.getElementById("conclShowDatetime");
+    if (!mapEl) return;
+    if (chk && chk.checked){
+      if (!_dtBadge){ _dtBadge = document.createElement("div"); _dtBadge.className = "concl-datetime-badge"; mapEl.appendChild(_dtBadge); }
+      const dt = (_currentItem && _currentItem.created_at) ? _fmtDtBadge(_currentItem.created_at) : "";
+      _dtBadge.textContent = dt;
+      _dtBadge.style.display = dt ? "" : "none";
+      _positionDtBadge();
+    } else if (_dtBadge){
+      _dtBadge.style.display = "none";
+    }
+  }
+
   /* Малює квадрат за двома двозначними числами (+ опц. равлик).
      "28 17"   → X 5428000–5429000, Y 7417000–7418000 (1×1 км)
      "28 17 4" → менший квадрат (1/3 км) у комірці равлика 4 */
@@ -2095,6 +2128,9 @@
     // Кнопка копіювання карти (поверх зображення)
     document.getElementById("conclMapCopyBtn")?.addEventListener("click", _copyConclMap);
 
+    // Чекбокс «Дата та час» — мітка дати/часу перехоплення у куті рамки.
+    document.getElementById("conclShowDatetime")?.addEventListener("change", _updateDtBadge);
+
     // ── Повновіконний режим: перемикачі верхнього кластера ──
     // «Сховати інтерфейс» — лишає тільки карту + позначки (клас cw-ui-hidden).
     document.getElementById("cwHideUiBtn")?.addEventListener("click", (e) => {
@@ -2223,6 +2259,7 @@
     const ta = document.getElementById("conclInterceptTa");
     if (!ta) return;
     ta.value = item ? _buildPasteText(item) : "";
+    _updateDtBadge();   // оновити мітку дати/часу під нове перехоплення
     // Прив'язка до перехоплення — у приховане поле + localStorage, щоб
     // збереження працювало навіть коли _currentItem загубився (перезавантаження).
     const hid = document.getElementById("conclMsgId");

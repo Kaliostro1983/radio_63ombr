@@ -4493,19 +4493,47 @@ button.secondary{
   position:absolute; top:108px; right:10px; z-index:1250;
   display:flex; flex-direction:column; gap:8px; align-items:center;
 }
-/* Перелік палітр і висувна панель — теж над картою */
-.it-modal--fullwin #conclPalList{ z-index:1150; }
+/* Перелік палітр і висувна панель — теж над картою.
+   bottom:70px — на одній висоті з нижнім лівим контейнером контролів. */
+.it-modal--fullwin #conclPalList{ z-index:1150; bottom:70px; max-height:calc(100vh - 190px); }
 .it-modal--fullwin #palPanel{ z-index:1250; }
 
-/* ── Шар-референс висновків: категорії (вгорі) + контроли (внизу зліва) ── */
-.it-modal--fullwin .cw-cat-bar{
+/* Чекбокс «Дата та час» у лівому контейнері висновку */
+.it-modal--fullwin .conclusion-left .concl-dt-chk{
+  display:flex; align-items:center; gap:6px; padding:6px 12px 2px;
+  font-size:12px; color:#cbd5e1; cursor:pointer; user-select:none;
+}
+.it-modal--fullwin .conclusion-left .concl-dt-chk input{ margin:0; }
+
+/* Мітка дати/часу у лівому верхньому куті рамки (потрапляє у скріншот) */
+.concl-datetime-badge{
+  position:absolute; z-index:640; pointer-events:none;
+  font-family:monospace; font-size:14px; font-weight:700;
+  color:#fff; -webkit-text-stroke:0.6px #000;
+  text-shadow:0 0 2px #000, 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
+}
+
+/* ── Шар-референс висновків: фільтри (вгорі) + контроли (внизу зліва) ── */
+/* Обгортки фільтрів — по центру вгорі; частоти нижче за типи. */
+.it-modal--fullwin .cw-filter-wrap{
   position:absolute; top:12px; left:50%; transform:translateX(-50%);
-  z-index:1240; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-  max-width:70vw; padding:6px 10px; border-radius:12px;
+  z-index:1240; display:flex; align-items:flex-start; gap:8px; max-width:80vw;
+}
+.it-modal--fullwin .cw-filter-wrap--freq{ top:58px; }
+.cw-filter-toggle{
+  flex:0 0 auto; padding:6px 10px; border-radius:12px; cursor:pointer; white-space:nowrap;
+  background:rgba(15,23,42,.9); color:#e2e8f0; border:1px solid rgba(255,255,255,.18);
+  font-size:12px; font-weight:600;
+}
+.cw-filter-toggle:hover{ background:rgba(30,41,59,.95); }
+.it-modal--fullwin .cw-cat-bar{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  max-width:66vw; padding:6px 10px; border-radius:12px;
   background:rgba(15,23,42,.86); backdrop-filter:blur(6px);
   border:1px solid rgba(255,255,255,.14);
 }
 .it-modal--fullwin .cw-cat-bar:empty{ display:none; }
+.it-modal--fullwin .cw-filter-wrap.is-collapsed .cw-cat-bar{ display:none; }
 .cw-cat-bar .type-chip-all{
   padding:5px 12px; border-radius:16px; border:1px solid rgba(255,255,255,.18);
   background:rgba(255,255,255,.12); color:#e2e8f0; font-size:12px; cursor:pointer; white-space:nowrap;
@@ -4540,8 +4568,8 @@ button.secondary{
 }
 .cw-ctrl-refresh:hover{ background:#1d4ed8; }
 
-/* «Показати/сховати позначення» ховає обидва контейнери */
-.it-modal--fullwin.cw-marks-hidden .cw-cat-bar,
+/* «Показати/сховати позначення» ховає фільтри й контроли */
+.it-modal--fullwin.cw-marks-hidden .cw-filter-wrap,
 .it-modal--fullwin.cw-marks-hidden .cw-ctrl-box{ display:none; }
 
 /* Маркери шару-референсу */
@@ -4847,10 +4875,13 @@ button.secondary{
 .concl-text-icon{ background:none !important; border:none !important; }
 .concl-text-box{
   position:relative; display:inline-block; white-space:pre;
-  background:#0f1218; color:#fff; font-family:monospace; font-size:13px; font-weight:700;
-  padding:2px 8px; border:1px solid rgba(255,255,255,.7); border-radius:6px;
-  box-shadow:0 2px 6px rgba(0,0,0,.5);
-  cursor:move; line-height:1.3;
+  background:transparent; font-family:monospace; font-size:14px; font-weight:700;
+  padding:2px 8px; border:0; cursor:move; line-height:1.3;
+}
+/* Білий шрифт із чорним контуром (як мітка дати) */
+.concl-text-label{
+  color:#fff; -webkit-text-stroke:0.6px #000;
+  text-shadow:0 0 2px #000, 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
 }
 .concl-text-del{
   position:absolute; top:-9px; right:-9px;

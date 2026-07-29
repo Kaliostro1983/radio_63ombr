@@ -14,6 +14,7 @@
   var S = {
     types: [], rows: [], markers: [],
     hidden: new Set(), allHidden: false,
+    freqHidden: new Set(), freqAllHidden: false,   // фільтр за частотами
     showFreq: false, showUnit: false,
     from: "", to: "", loaded: false, loading: false,
   };
@@ -158,10 +159,11 @@
           }
           mk.on("click", function (e) { L.DomEvent.stopPropagation(e); openDetailPanel(row, ms); });
           mk.addTo(_layer);
-          S.markers.push({ marker: mk, typeId: row.type_id, row: row, mgrs: ms });
+          S.markers.push({ marker: mk, typeId: row.type_id, freq: row.frequency || "", row: row, mgrs: ms });
         });
       });
       renderChips();
+      renderFreqChips();
       applyFilter();
     });
   }
@@ -401,10 +403,58 @@
   }
   function applyFilter() {
     S.markers.forEach(function (m) {
-      var show = !S.allHidden && !S.hidden.has(m.typeId);
+      var byType = !S.allHidden && !S.hidden.has(m.typeId);
+      var byFreq = !S.freqAllHidden && !S.freqHidden.has(m.freq || "");
+      var show = byType && byFreq;
       if (show) { if (!_layer.hasLayer(m.marker)) m.marker.addTo(_layer); }
       else { if (_layer.hasLayer(m.marker)) _layer.removeLayer(m.marker); }
     });
+  }
+
+  // ── Чіпи фільтра за частотами ──
+  function renderFreqChips() {
+    var box = $("cwFreqBar"); if (!box) return;
+    box.innerHTML = "";
+    var cnt = {};
+    S.markers.forEach(function (m) { var f = m.freq || "—"; cnt[f] = (cnt[f] || 0) + 1; });
+    var freqs = Object.keys(cnt).sort();
+    if (!freqs.length) return;
+    var all = document.createElement("button");
+    all.className = "type-chip-all";
+    all.addEventListener("click", function () {
+      S.freqAllHidden = !S.freqAllHidden;
+      if (!S.freqAllHidden) S.freqHidden.clear();
+      updateFreqChips(); applyFilter();
+    });
+    box.appendChild(all);
+    var div = document.createElement("span"); div.className = "chip-divider"; box.appendChild(div);
+    freqs.forEach(function (f) {
+      var chip = document.createElement("div");
+      chip.className = "type-chip"; chip.dataset.freq = f;
+      chip.style.setProperty("--chip-color", "#60a5fa");
+      var lab = document.createElement("span");
+      lab.textContent = f + " (" + cnt[f] + ")";
+      chip.appendChild(lab);
+      chip.addEventListener("click", function () { toggleFreq(f); });
+      box.appendChild(chip);
+    });
+    updateFreqChips();
+  }
+  function toggleFreq(f) {
+    if (S.freqAllHidden) {
+      S.freqAllHidden = false;
+      var present = new Set(S.markers.map(function (m) { return m.freq || "—"; }));
+      S.freqHidden = new Set(Array.from(present).filter(function (x) { return x !== f; }));
+    } else if (S.freqHidden.has(f)) { S.freqHidden.delete(f); } else { S.freqHidden.add(f); }
+    updateFreqChips(); applyFilter();
+  }
+  function updateFreqChips() {
+    document.querySelectorAll("#cwFreqBar .type-chip").forEach(function (c) {
+      var f = c.dataset.freq;
+      c.classList.toggle("active", !S.freqAllHidden && !S.freqHidden.has(f));
+    });
+    var all = document.querySelector("#cwFreqBar .type-chip-all");
+    if (all) all.textContent = S.freqAllHidden ? "Показати всі" : "Сховати всі";
   }
 
   // ── Завантаження/перезавантаження ──
@@ -453,6 +503,12 @@
     if (marks) marks.addEventListener("click", function () {
       setVisible(!_visible);
     });
+
+    // Згортання фільтрів (типи / частоти).
+    var catT = $("cwCatToggle"), catW = $("cwCatWrap");
+    if (catT && catW) catT.addEventListener("click", function () { catW.classList.toggle("is-collapsed"); });
+    var frqT = $("cwFreqToggle"), frqW = $("cwFreqWrap");
+    if (frqT && frqW) frqT.addEventListener("click", function () { frqW.classList.toggle("is-collapsed"); });
   }
 
   // ── Показ/приховання всього шару-референсу ──
