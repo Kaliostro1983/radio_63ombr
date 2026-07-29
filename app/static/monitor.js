@@ -2221,7 +2221,13 @@
       if (!el || _conclMap || typeof L === "undefined") return;
       // preferCanvas — щоб квадрати (полігони) рендерилися на <canvas>
       // і потрапляли у скріншот html2canvas (SVG він не захоплює)
-      _conclMap = L.map(el, { center: [48.5, 37.5], zoom: 10, preferCanvas: true });
+      // Дефолтний вигляд: точка 37U DQ 23347 24373 у центрі рамки, зум 12
+      // (на 2 одиниці крупніше за попередній дефолт 10).
+      const _dc0 = _mgrsToLatLon("37U DQ 23347 24373");
+      _conclMap = L.map(el, {
+        center: _dc0 ? [_dc0.lat, _dc0.lon] : [48.5, 37.5],
+        zoom: 12, preferCanvas: true,
+      });
       // Даємо шару-референсу висновків (concl_ref_layer.js) доступ до цієї карти.
       window.__conclMap = _conclMap;
       try { window.dispatchEvent(new CustomEvent("conclMapReady", { detail: _conclMap })); } catch (_) {}
@@ -2246,7 +2252,14 @@
         if (_pathDrawState) return;
         _placeConclClickMarker(_conclMap, e.latlng.lat, e.latlng.lng);
       });
-      setTimeout(() => { try { _conclMap.invalidateSize(); } catch (_) {} }, 60);
+      setTimeout(() => {
+        try {
+          _conclMap.invalidateSize();
+          // Після фіналізації розмірів — зсунути так, щоб дефолтна точка
+          // опинилась саме у центрі рамки копіювання (а не контейнера).
+          if (_dc0) _setViewFrame(_conclMap, _dc0.lat, _dc0.lon, 12);
+        } catch (_) {}
+      }, 60);
     }
     (function _waitLeaflet(n) {
       if (_conclMap) return;

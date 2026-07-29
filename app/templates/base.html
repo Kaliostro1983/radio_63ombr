@@ -379,6 +379,7 @@
       var frame = document.getElementById("globalConclFrame");
       if (frame) frame.src = "about:blank";
     }
+    window.__closeGlobalConcl = close;
     modal.querySelectorAll("[data-global-concl-close]").forEach(function (el) {
       el.addEventListener("click", function (e) { e.stopPropagation(); close(); });
     });
@@ -386,6 +387,17 @@
       if (e.key === "Escape" && !modal.classList.contains("hidden")) close();
     });
   })();
+
+  // Хук для кнопки 🗺 у вбудованій сторінці /conclusions (embed): відкрити нашу
+  // повноекранну модалку висновків із позначками (режим «map») замість карти у
+  // новій вкладці. Працює лише там, де є ця модалка (сторінка моніторингу).
+  // Повертає true при успіху, false — якщо модалки на сторінці немає.
+  window.openConclMapFromEmbed = function () {
+    if (typeof window.openConclusionModal !== "function") return false;
+    if (window.__closeGlobalConcl) { try { window.__closeGlobalConcl(); } catch (_) {} }
+    window.openConclusionModal("map");
+    return true;
+  };
 </script>
 
 <!-- Shared callsign links-graph modal (iframe → /callsigns?tab=links&...&embed=1).

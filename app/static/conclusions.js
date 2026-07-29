@@ -922,6 +922,16 @@
   const cnFullMapBtn = $("cnFullMapBtn");
   if (cnFullMapBtn) {
     cnFullMapBtn.addEventListener("click", () => {
+      // У вбудованому режимі (модалка «Висновки» з картки позивного) — відкриваємо
+      // нашу повноекранну модалку висновків із позначками. Якщо цього хука немає
+      // (сторінка без модалки) — фолбек: карта висновків у новій вкладці.
+      try {
+        if (window.parent && window.parent !== window &&
+            typeof window.parent.openConclMapFromEmbed === "function" &&
+            window.parent.openConclMapFromEmbed()) {
+          return;
+        }
+      } catch (_) {}
       const qs = new URLSearchParams();
       if (dateFrom.value)   qs.set("date_from",  dateFrom.value);
       if (dateTo.value)     qs.set("date_to",    dateTo.value);
