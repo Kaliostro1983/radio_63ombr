@@ -4513,18 +4513,22 @@ button.secondary{
   text-shadow:0 0 2px #000, 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
 }
 
-/* ── Шар-референс: фільтри (дві кнопки вгорі по центру) + контроли (низ) ── */
+/* ── Шар-референс: фільтри (кнопки-іконки ◆/f біля кластера) + контроли (низ) ── */
 .it-modal--fullwin .cw-filters{
-  position:absolute; top:12px; left:50%; transform:translateX(-50%);
-  z-index:1240; display:flex; gap:8px;
+  position:absolute; top:10px; left:206px; z-index:1240; display:flex; gap:8px;
 }
 .it-modal--fullwin .cw-filter-wrap{ position:relative; }
+/* Кнопка-іконка у стилі верхнього кластера */
 .cw-filter-toggle{
-  padding:7px 12px; border-radius:12px; cursor:pointer; white-space:nowrap;
-  background:rgba(15,23,42,.9); color:#e2e8f0; border:1px solid rgba(255,255,255,.18);
-  font-size:12px; font-weight:600;
+  display:flex; align-items:center; justify-content:center;
+  width:36px; height:36px; padding:0; cursor:pointer;
+  border:1px solid rgba(255,255,255,.18); border-radius:8px;
+  background:rgba(20,24,30,.82); color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.4);
 }
-.cw-filter-toggle:hover{ background:rgba(30,41,59,.95); }
+.cw-filter-toggle:hover{ background:rgba(20,24,30,.95); border-color:var(--accent,#f59e0b); }
+.it-modal--fullwin .cw-filter-wrap:not(.is-collapsed) .cw-filter-toggle{
+  background:#2563eb; border-color:#2563eb;
+}
 /* Чіпи — випадайка під кнопкою: обмежена ширина/висота, прокрутка */
 .it-modal--fullwin .cw-cat-bar{
   display:flex; align-items:flex-start; gap:6px; flex-wrap:wrap;
