@@ -685,6 +685,8 @@
 
   /* Очистити всі об'єкти карти + поле координат */
   function _clearMapObjects() {
+    // Скасувати незавершене малювання шляху (інакше застряг би на карті).
+    if (_pathDrawState && _pathDrawState.cancel) _pathDrawState.cancel();
     _conclFixedMarkers.forEach(e => {
       if (e.marker)    e.marker.remove();
       if (e.layer)     e.layer.remove();
@@ -1532,16 +1534,28 @@
     try { map.getContainer().style.cursor = "crosshair"; } catch(_){}
 
     function onClick(e){
+      // Повторний клік по/біля крайньої точки — завершити (надійніше за
+      // точний клік по маленькому маркеру).
+      if (verts.length >= 2){
+        const last = map.latLngToContainerPoint(verts[verts.length - 1]);
+        const cur  = map.latLngToContainerPoint(e.latlng);
+        if (last.distanceTo(cur) < 16) { finish(); return; }
+      }
       verts.push(e.latlng);
       poly.setLatLngs(verts);
       const m = L.marker(e.latlng, { icon:_anchorIcon("vertex"), bubblingMouseEvents:false, pane:"conclAnchors" }).addTo(map);
-      m.__idx = verts.length - 1;
       m.on("click", (ev) => {
         if (ev.originalEvent) L.DomEvent.stop(ev.originalEvent);
-        // Завершення — повторний клік саме по КРАЙНІЙ поставленій точці.
-        if (m.__idx === verts.length - 1 && verts.length >= 2) finish();
+        if (verts.length >= 2) finish();   // клік по будь-якій вершині теж завершує
       });
       tmp.push(m);
+    }
+    function cancel(){
+      map.off("click", onClick);
+      try { map.getContainer().style.cursor = ""; } catch(_){}
+      tmp.forEach(mk => mk.remove());
+      poly.remove();
+      _pathDrawState = null;
     }
     function finish(){
       map.off("click", onClick);
@@ -1557,7 +1571,7 @@
       _buildPathAnchors(map, entry);
       _conclDrawn.push(entry);
     }
-    _pathDrawState = { finish };
+    _pathDrawState = { finish, cancel };
     map.on("click", onClick);
     if (window.appToast) window.appToast("Малювання шляху: клікайте вершини; повторний клік по останній — завершити", "info", 3200);
   }
@@ -2109,7 +2123,10 @@
       let wasHidden = m.classList.contains("hidden");
       new MutationObserver(() => {
         const isHidden = m.classList.contains("hidden");
-        if (wasHidden && !isHidden) { _resetLmView(); _palResetForModalOpen(); }   // щойно відкрилась
+        if (wasHidden && !isHidden) {   // щойно відкрилась
+          if (_pathDrawState && _pathDrawState.cancel) _pathDrawState.cancel();
+          _resetLmView(); _palResetForModalOpen();
+        }
         wasHidden = isHidden;
       }).observe(m, { attributes: true, attributeFilter: ["class"] });
     })();
