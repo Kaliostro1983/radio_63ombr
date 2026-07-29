@@ -304,6 +304,37 @@
     return map[n] || null;
   }
 
+  /* ── Центрування по центру РАМКИ копіювання (а не контейнера карти) ──
+     Об'єкт (квадрат/координата/орієнтир) має опинятись у центрі області, яка
+     піде у висновок. Працює лише для карти висновку (де є рамка); для інших
+     карт — звичайне центрування. */
+  function _frameOffset(map) {
+    try {
+      if (typeof _conclMap === "undefined" || map !== _conclMap) return null;
+      const frame = document.getElementById("conclCopyFrame");
+      const mapEl = document.getElementById("conclMap");
+      if (!frame || !mapEl) return null;
+      const fr = frame.getBoundingClientRect();
+      if (fr.width < 4 || fr.height < 4) return null;   // рамка схована
+      const mr = mapEl.getBoundingClientRect();
+      const fx = (fr.left + fr.right) / 2 - mr.left;    // центр рамки, px у контейнері
+      const fy = (fr.top + fr.bottom) / 2 - mr.top;
+      // panBy, щоб точка з центру контейнера перемістилась у центр рамки
+      return [mr.width / 2 - fx, mr.height / 2 - fy];
+    } catch (_) { return null; }
+  }
+  function _panToFrame(map) {
+    const o = _frameOffset(map);
+    if (o && map) { try { map.panBy(o, { animate: false }); } catch (_) {} }
+  }
+  /* setView + зсув так, щоб (lat,lon) стала у центрі рамки. */
+  function _setViewFrame(map, lat, lon, zoom) {
+    const z = (zoom != null) ? zoom : map.getZoom();
+    try { map.setView([lat, lon], z, { animate: false }); }
+    catch (_) { try { map.setView([lat, lon], z); } catch (__) {} return; }
+    _panToFrame(map);
+  }
+
   /* Малює квадрат за двома двозначними числами (+ опц. равлик).
      "28 17"   → X 5428000–5429000, Y 7417000–7418000 (1×1 км)
      "28 17 4" → менший квадрат (1/3 км) у комірці равлика 4 */
@@ -366,7 +397,8 @@
     const chipsContainer = document.getElementById("conclCoordChips");
     if (chipsContainer) chipsContainer.appendChild(chipEl);
 
-    map.fitBounds(layer.getBounds(), { maxZoom: 15, padding: [40, 40] });
+    map.fitBounds(layer.getBounds(), { maxZoom: 15, padding: [40, 40], animate: false });
+    _panToFrame(map);
     _refreshConclCoords();
   }
 
@@ -1644,7 +1676,7 @@
     if (lmChips) lmChips.appendChild(lmChip);
     _refreshConclCoords();
 
-    try { map.fitBounds(layer.getBounds ? layer.getBounds() : L.latLngBounds([layer.getLatLng(), layer.getLatLng()]), { maxZoom:14, padding:[40,40] }); } catch(_){}
+    try { map.fitBounds(layer.getBounds ? layer.getBounds() : L.latLngBounds([layer.getLatLng(), layer.getLatLng()]), { maxZoom:14, padding:[40,40], animate:false }); _panToFrame(map); } catch(_){}
   }
 
   /* ── Модал вибору орієнтира ── */
@@ -1808,7 +1840,7 @@
           const c = _usk2000ToLatLon(uskX, uskY);
           if (c && isFinite(c.lat) && isFinite(c.lon)) {
             _addFixedMarker(_conclMap, c.lat, c.lon, `${uskX} ${uskY}`);
-            _conclMap.setView([c.lat, c.lon], Math.max(_conclMap.getZoom(), 13));
+            _setViewFrame(_conclMap, c.lat, c.lon, Math.max(_conclMap.getZoom(), 13));
             return true;
           }
           if (window.appToast) window.appToast("Не вдалося розпізнати координату УСК-2000", "error", 1600);
@@ -1824,7 +1856,7 @@
               const lat = Number(pt[1]), lon = Number(pt[0]);
               if (isFinite(lat) && isFinite(lon)) {
                 _addFixedMarker(_conclMap, lat, lon);
-                _conclMap.setView([lat, lon], Math.max(_conclMap.getZoom(), 13));
+                _setViewFrame(_conclMap, lat, lon, Math.max(_conclMap.getZoom(), 13));
                 return true;
               }
             } catch(_) {}
@@ -2501,7 +2533,7 @@
       if (prev) { prev.remove(); setMarker(null); }
       const m = L.circleMarker([lat, lon], { radius:8, color:"#f59e0b", fillColor:"#f59e0b", fillOpacity:.8, weight:2 }).addTo(map);
       setMarker(m);
-      if (jumpNow) map.setView([lat, lon], Math.max(map.getZoom(), 13));
+      if (jumpNow) _setViewFrame(map, lat, lon, Math.max(map.getZoom(), 13));
     } catch(_) {}
   }
 
@@ -4530,7 +4562,7 @@
     const c  = _usk2000ToLatLon(parseInt(fx, 10), parseInt(fy, 10));
     if (c && isFinite(c.lat) && isFinite(c.lon)) {
       _addFixedMarker(_conclMap, c.lat, c.lon, `${fx} ${fy}`);
-      _conclMap.setView([c.lat, c.lon], Math.max(_conclMap.getZoom(), 13));
+      _setViewFrame(_conclMap, c.lat, c.lon, Math.max(_conclMap.getZoom(), 13));
       return true;
     }
     return false;
@@ -4544,7 +4576,7 @@
     const c = _usk2000ToLatLon(parseInt(fx, 10), parseInt(fy, 10));
     if (c && isFinite(c.lat) && isFinite(c.lon)) {
       _addFixedMarker(_conclMap, c.lat, c.lon, `${fx} ${fy}`);
-      _conclMap.setView([c.lat, c.lon], Math.max(_conclMap.getZoom(), 13));
+      _setViewFrame(_conclMap, c.lat, c.lon, Math.max(_conclMap.getZoom(), 13));
       return true;
     }
     return false;
@@ -5746,8 +5778,8 @@
     const grp = L.featureGroup();
     pts.forEach(p => grp.addLayer(_palPlaceVariant(_conclMap, p, entry)));
     try {
-      if (pts.length === 1) _conclMap.setView([pts[0].lat, pts[0].lon], Math.max(_conclMap.getZoom(), 14));
-      else _conclMap.fitBounds(grp.getBounds(), { maxZoom: 15, padding: [40, 40] });
+      if (pts.length === 1) _setViewFrame(_conclMap, pts[0].lat, pts[0].lon, Math.max(_conclMap.getZoom(), 14));
+      else { _conclMap.fitBounds(grp.getBounds(), { maxZoom: 15, padding: [40, 40], animate: false }); _panToFrame(_conclMap); }
     } catch (_) {}
 
     if (window.appToast) window.appToast(`«${code}»: знайдено точок — ${pts.length}`, "success", 1800);
