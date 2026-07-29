@@ -3111,7 +3111,7 @@
     window.monInterestAction = function (ev) {
       if (ev && (ev.ctrlKey || ev.metaKey)) _openInterestPicker(); else _sendInterest();
     };
-    window.monShareAction = function () { _openShareModal(); };
+    window.monShareAction = function (anchorEl) { _openShareModal({ anchorEl: anchorEl }); };
 
     // Швидкий висновок: відкрити вкладку «Швидко», очистити інпут+карту,
     // вставити поточне перехоплення у багатолінійне поле.
@@ -3863,10 +3863,11 @@
     });
     panel.style.setProperty("z-index", String(maxZ + 10), "important");
 
-    // Position below the originating button, aligned to its right edge
-    const btn = document.getElementById(btnId);
-    if (btn) {
-      const r = btn.getBoundingClientRect();
+    // Position below the originating button, aligned to its right edge.
+    // Якір — переданий елемент (кнопка в картці) або кнопка за id (легасі).
+    const anchor = opts.anchorEl || document.getElementById(btnId);
+    if (anchor) {
+      const r = anchor.getBoundingClientRect();
       panel.style.top   = (r.bottom + 6) + "px";
       panel.style.right = (window.innerWidth - r.right) + "px";
     }
@@ -3876,12 +3877,11 @@
     if (_shareOutsideHandler) document.removeEventListener("click", _shareOutsideHandler);
     _shareOutsideHandler = function(e) {
       const p = document.getElementById("monSharePanel");
-      const b = document.getElementById(btnId);
       if (!p || p.classList.contains("hidden")) {
         document.removeEventListener("click", _shareOutsideHandler);
         return;
       }
-      if (!p.contains(e.target) && !b?.contains(e.target)) {
+      if (!p.contains(e.target) && !anchor?.contains(e.target)) {
         _closeShareModal(p);
         document.removeEventListener("click", _shareOutsideHandler);
       }

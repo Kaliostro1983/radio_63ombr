@@ -1793,7 +1793,7 @@
         event.stopPropagation();
         const act = shareBtn.getAttribute("data-share-action");
         if (act === "interest" && window.monInterestAction) window.monInterestAction(event);
-        else if (act === "share" && window.monShareAction) window.monShareAction();
+        else if (act === "share" && window.monShareAction) window.monShareAction(shareBtn);
         return;
       }
 
