@@ -325,10 +325,8 @@
                 <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenSearchIcon" title="Пошук" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('search')">🔍</button>
                 <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenViewIcon" title="Перегляд" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('view')">📋</button>
                 <button class="mon-toolbar-btn mon-toolbar-btn--nav" id="monOpenLmIcon" title="Орієнтири" style="font-size:14px" onclick="window.itSetTab && window.itSetTab('landmarks')">📍</button>
-                <!-- Цікаво: надіслати поточне перехоплення в цільовий чат (Ctrl+клік — задати чат) -->
-                <button class="mon-toolbar-btn mon-toolbar-btn--interest" id="monInterestBtn" title="Цікаво — надіслати перехоплення в чат (Ctrl+клік — задати/змінити чат)" style="font-size:14px">❗</button>
-                <!-- Share: send intercept to multiple recipients -->
-                <button class="mon-toolbar-btn mon-toolbar-btn--share" id="monShareBtn" title="Поширити" style="font-size:14px">⤴</button>
+                <!-- «Цікаво» та «Поширити» переїхали в картку перехоплення (поряд із «Копіювати») -->
+                <button class="mon-toolbar-btn mon-toolbar-btn--interest hidden" id="monInterestBtn" title="Цікаво" style="font-size:14px; display:none">❗</button>
                 <!-- Open Висновок tab with this intercept pre-filled -->
                 <button class="mon-toolbar-btn mon-toolbar-btn--conclusion" id="monOpenConclusion" title="Оформити аналітичний висновок" style="font-size:13px">✍</button>
                 <!-- Open Швидко tab with this intercept pre-filled -->
@@ -1199,10 +1197,10 @@
 #conclLmPicker { z-index: 10500 !important; }
 </style>
 <script src="/static/intercepts_freq_chips.js?v=3"></script>
-<script src="/static/intercepts_explorer.js?v=40"></script>
+<script src="/static/intercepts_explorer.js?v=41"></script>
 <script src="/static/intercepts_search_modal.js?v=4"></script>
 <script src="/static/vendor/milsymbol.js?v=1"></script>
-<script src="/static/monitor.js?v=152"></script>
+<script src="/static/monitor.js?v=153"></script>
 <script src="/static/concl_ref_layer.js?v=4"></script>
 <script src="/static/monitor_playlist_filter.js?v=3"></script>
 <script src="/static/landmarks.js?v=19" defer></script>

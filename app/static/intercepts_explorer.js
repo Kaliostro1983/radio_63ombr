@@ -492,6 +492,20 @@
                   title="Скопіювати перехоплення у стандартному форматі"
                   aria-label="Копіювати"
                 ><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3a1 1 0 0 1 1-1h7"/></svg></button>
+                <button
+                  type="button"
+                  class="intercepts-copy-icon-btn intercept-card__share-btn"
+                  title="Цікаво — надіслати перехоплення в чат (Ctrl+клік — задати/змінити чат)"
+                  aria-label="Цікаво"
+                  onclick="event.stopPropagation(); window.monInterestAction && window.monInterestAction(event)"
+                >❗</button>
+                <button
+                  type="button"
+                  class="intercepts-copy-icon-btn intercept-card__share-btn"
+                  title="Поширити перехоплення кільком отримувачам"
+                  aria-label="Поширити"
+                  onclick="event.stopPropagation(); window.monShareAction && window.monShareAction()"
+                >⤴</button>
                 <div class="intercept-card__line intercept-card__line--dt">
                   ${escapeHtml(header.dt)}
                 </div>

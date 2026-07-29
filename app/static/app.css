@@ -2383,6 +2383,10 @@ button.secondary{
   color:var(--fg);
   border-color:var(--accent,#2563eb);
 }
+/* «Цікаво» (❗) і «Поширити» (⤴) — ліворуч від «Копіювати» у тому ж рядку */
+.intercept-card__share-btn{ font-size:14px; }
+.intercept-card__share-btn:nth-of-type(2){ right:38px; }
+.intercept-card__share-btn:nth-of-type(3){ right:76px; }
 /* Іконки-теги радіомережі в контейнері перехоплення */
 .intercept-card__nettags{
   display:flex;

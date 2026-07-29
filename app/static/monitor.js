@@ -3106,6 +3106,13 @@
     // «Цікаво» — швидке пересилання поточного перехоплення у власний чат
     _initInterest();
 
+    // Кнопки поширення (Цікаво / Поширити) переїхали в картку перехоплення —
+    // картку рендерить intercepts_explorer.js, тож даємо їй глобальні хендлери.
+    window.monInterestAction = function (ev) {
+      if (ev && (ev.ctrlKey || ev.metaKey)) _openInterestPicker(); else _sendInterest();
+    };
+    window.monShareAction = function () { _openShareModal(); };
+
     // Швидкий висновок: відкрити вкладку «Швидко», очистити інпут+карту,
     // вставити поточне перехоплення у багатолінійне поле.
     document.getElementById("monOpenQuick")?.addEventListener("click", () => {
