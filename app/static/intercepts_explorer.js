@@ -495,16 +495,16 @@
                 <button
                   type="button"
                   class="intercepts-copy-icon-btn intercept-card__share-btn"
+                  data-share-action="interest"
                   title="Цікаво — надіслати перехоплення в чат (Ctrl+клік — задати/змінити чат)"
                   aria-label="Цікаво"
-                  onclick="event.stopPropagation(); window.monInterestAction && window.monInterestAction(event)"
                 >❗</button>
                 <button
                   type="button"
                   class="intercepts-copy-icon-btn intercept-card__share-btn"
+                  data-share-action="share"
                   title="Поширити перехоплення кільком отримувачам"
                   aria-label="Поширити"
-                  onclick="event.stopPropagation(); window.monShareAction && window.monShareAction()"
                 >⤴</button>
                 <div class="intercept-card__line intercept-card__line--dt">
                   ${escapeHtml(header.dt)}
@@ -1784,6 +1784,16 @@
         if (!text) return;
         const ok = await copyTextToClipboard(text);
         if (window.appToast) window.appToast(ok ? "Скопійовано в буфер." : "Не вдалося скопіювати.", ok ? "success" : "error", 1600);
+        return;
+      }
+
+      // «Цікаво» / «Поширити» — хендлери живуть у monitor.js (window.*)
+      const shareBtn = event.target.closest("[data-share-action]");
+      if (shareBtn) {
+        event.stopPropagation();
+        const act = shareBtn.getAttribute("data-share-action");
+        if (act === "interest" && window.monInterestAction) window.monInterestAction(event);
+        else if (act === "share" && window.monShareAction) window.monShareAction();
         return;
       }
 
