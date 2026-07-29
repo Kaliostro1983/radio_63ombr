@@ -4586,6 +4586,14 @@ button.secondary{
   box-shadow:0 1px 4px rgba(0,0,0,.5);
 }
 .cm-freq-label{ background:rgba(15,23,42,.85); color:#e2e8f0; border:0; font-size:11px; padding:1px 5px; border-radius:4px; }
+/* Підписи біля позначок у шарі-референсі модалки: білий шрифт з чорним контуром, без фону */
+.cm-mark-label{ background:transparent !important; border:0 !important; box-shadow:none !important; padding:0 !important; }
+.cm-mark-label::before{ display:none !important; }
+.cm-mark-label .cm-lab-line{
+  display:block; font-family:monospace; font-size:13px; font-weight:700; line-height:1.25;
+  color:#fff; -webkit-text-stroke:0.6px #000;
+  text-shadow:0 0 2px #000, 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
+}
 /* Фікс іконок маркерів Leaflet (прозорий фон замість білого квадрата) */
 .leaflet-div-icon.cm-icon, .leaflet-div-icon.cm-unit-icon{
   background:transparent !important; border:none !important; padding:0 !important;

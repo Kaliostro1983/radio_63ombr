@@ -160,10 +160,10 @@
           if (!ll) return;
           var mk = L.marker(ll, { icon: icon });
           var labels = [];
-          if (S.showFreq && row.frequency) labels.push(esc(String(row.frequency)));
-          if (S.showDatetime) { var dt = fmtDt(row.created_at); if (dt) labels.push(esc(dt)); }
+          if (S.showFreq && row.frequency) labels.push('<span class="cm-lab-line">' + esc(String(row.frequency)) + "</span>");
+          if (S.showDatetime) { var dt = fmtDt(row.created_at); if (dt) labels.push('<span class="cm-lab-line">' + esc(dt) + "</span>"); }
           if (labels.length) {
-            mk.bindTooltip(labels.join("<br>"), { permanent: true, direction: "right", offset: [12, 0], className: "cm-freq-label" });
+            mk.bindTooltip(labels.join(""), { permanent: true, direction: "right", offset: [12, 0], className: "cm-mark-label" });
           }
           mk.on("click", function (e) { L.DomEvent.stopPropagation(e); openDetailPanel(row, ms); });
           mk.addTo(_layer);
