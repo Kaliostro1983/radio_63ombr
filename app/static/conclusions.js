@@ -940,8 +940,11 @@
           return;
         }
       } catch (_) {}
+      // Окрема сторінка /conclusions (не в iframe) — переходимо на сторінку
+      // моніторингу, яка має повноекранну модалку, і відкриваємо її з фільтром.
       const qs = new URLSearchParams(filters);
-      window.open("/conclusions/map?" + qs.toString(), "_blank");
+      qs.set("concl_map", "1");
+      window.location.href = "/intercepts-explorer?" + qs.toString();
     });
   }
 

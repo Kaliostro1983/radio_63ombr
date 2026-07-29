@@ -1094,6 +1094,17 @@
         openItModal(tabFromUrl);
       }
 
+      // Вхід зі сторінки /conclusions (кнопка 🗺): відкрити модалку висновків
+      // у режимі «map» з фільтром вибірки (позивний/мережа/тип/діапазон).
+      if (qs.get("concl_map") === "1") {
+        const f = {};
+        ["date_from", "date_to", "network_id", "type_id", "callsign_id", "callsign"].forEach((k) => {
+          const v = qs.get(k); if (v) f[k] = v;
+        });
+        if (typeof window.setConclRefFilter === "function") { try { window.setConclRefFilter(f); } catch (_) {} }
+        if (typeof window.openConclusionModal === "function") window.openConclusionModal("map");
+      }
+
       // В embed-режимі під tab=view — автозаповнюємо форму з URL-параметрів
       // (period_start, period_end, network, callsign) і одразу сабмітимо.
       if (isEmbedMode && tabFromUrl === "view") {
