@@ -328,6 +328,9 @@
     const o = _frameOffset(map);
     if (o && map) { try { map.panBy(o, { animate: false }); } catch (_) {} }
   }
+  // Доступ для шару-референсу висновків (concl_ref_layer.js): зсунути карту
+  // так, щоб поточний центр опинився у центрі рамки копіювання.
+  window.__panConclToFrame = function () { if (_conclMap) _panToFrame(_conclMap); };
   /* setView + зсув так, щоб (lat,lon) стала у центрі рамки. */
   function _setViewFrame(map, lat, lon, zoom) {
     const z = (zoom != null) ? zoom : map.getZoom();
@@ -2257,7 +2260,10 @@
           _conclMap.invalidateSize();
           // Після фіналізації розмірів — зсунути так, щоб дефолтна точка
           // опинилась саме у центрі рамки копіювання (а не контейнера).
-          if (_dc0) _setViewFrame(_conclMap, _dc0.lat, _dc0.lon, 12);
+          // Пропускаємо, якщо активний фільтр позивного/мережі — тоді вигляд
+          // підганяє шар-референс під знайдені позначки.
+          const _hasRefFilter = window.__conclRefHasFilter && window.__conclRefHasFilter();
+          if (_dc0 && !_hasRefFilter) _setViewFrame(_conclMap, _dc0.lat, _dc0.lon, 12);
         } catch (_) {}
       }, 60);
     }

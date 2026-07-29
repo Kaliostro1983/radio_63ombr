@@ -392,9 +392,14 @@
   // повноекранну модалку висновків із позначками (режим «map») замість карти у
   // новій вкладці. Працює лише там, де є ця модалка (сторінка моніторингу).
   // Повертає true при успіху, false — якщо модалки на сторінці немає.
-  window.openConclMapFromEmbed = function () {
+  window.openConclMapFromEmbed = function (filters) {
     if (typeof window.openConclusionModal !== "function") return false;
     if (window.__closeGlobalConcl) { try { window.__closeGlobalConcl(); } catch (_) {} }
+    // Передати фільтри (позивний/мережа/тип/діапазон) у шар-референс ДО відкриття,
+    // щоб на карті показались лише відповідні висновки.
+    if (typeof window.setConclRefFilter === "function") {
+      try { window.setConclRefFilter(filters || {}); } catch (_) {}
+    }
     window.openConclusionModal("map");
     return true;
   };

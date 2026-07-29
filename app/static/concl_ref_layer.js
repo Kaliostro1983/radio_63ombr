@@ -17,6 +17,9 @@
     freqHidden: new Set(), freqAllHidden: false,   // фільтр за частотами
     showFreq: false, showUnit: false, showDatetime: false,
     from: "", to: "", loaded: false, loading: false,
+    // Серверний фільтр (коли відкрито з картки позивного): показуємо лише
+    // висновки цього позивного/мережі/типу. Скидається при ручному показі №4.
+    callsignId: 0, callsign: "", networkId: 0, typeId: -1,
   };
   var _layer = null;            // L.layerGroup з усіма маркерами референсу
   var _iconCache = {};          // key filename::color → blobUrl
@@ -125,6 +128,10 @@
     var qs = new URLSearchParams();
     if (S.from) qs.set("date_from", S.from);
     if (S.to) qs.set("date_to", S.to);
+    if (S.callsignId) qs.set("callsign_id", S.callsignId);
+    else if (S.callsign) qs.set("callsign", S.callsign);
+    if (S.networkId) qs.set("network_id", S.networkId);
+    if (S.typeId != null && S.typeId >= 0) qs.set("type_id", S.typeId);
     return fetch("/api/conclusions?" + qs.toString()).then(function (r) { return r.json(); })
       .then(function (d) {
         S.rows = ((d && d.rows) || []).filter(function (r) { return r.mgrs && r.mgrs.length; });
@@ -173,6 +180,15 @@
       renderChips();
       renderFreqChips();
       applyFilter();
+      // Активний фільтр (позивний/мережа) — підігнати вигляд під знайдені
+      // позначки і зсунути у центр рамки копіювання.
+      if ((S.callsignId || S.callsign || S.networkId) && S.markers.length && _map) {
+        try {
+          var grp = L.featureGroup(S.markers.map(function (m) { return m.marker; }));
+          _map.fitBounds(grp.getBounds().pad(0.35), { maxZoom: 14, animate: false });
+          if (window.__panConclToFrame) window.__panConclToFrame();
+        } catch (_) {}
+      }
     });
   }
 
@@ -507,9 +523,11 @@
     });
 
     // «Показати/сховати позначення» (кнопка №4) — показує/ховає ВЕСЬ шар:
-    // маркери + категорії + контроли.
+    // маркери + категорії + контроли. Ручний показ — усі висновки (скидаємо
+    // серверний фільтр позивного/мережі, якщо він лишився від входу з картки).
     var marks = $("cwToggleMarksBtn");
     if (marks) marks.addEventListener("click", function () {
+      if (!_visible) clearRefFilter();
       setVisible(!_visible);
     });
 
@@ -543,6 +561,33 @@
   // ── Режим за точкою входу: яка група активна на старті ──
   //   conclusion (кнопка №3) — контейнер висновку; map (кнопка №4) — позначення;
   //   peleng (кнопка №5) — далі. Керує стартовою видимістю обох груп.
+  // Скинути серверний фільтр (показувати всі висновки за діапазоном).
+  function clearRefFilter() {
+    S.callsignId = 0; S.callsign = ""; S.networkId = 0; S.typeId = -1;
+    S.loaded = false;
+  }
+
+  // Задати серверний фільтр перед відкриттям режиму «map» (вхід із картки
+  // позивного → модалка «Висновки» → кнопка 🗺). Діапазон дат переносимо у
+  // контроли, щоб і «Оновити» використовував той самий період.
+  window.setConclRefFilter = function (f) {
+    f = f || {};
+    S.callsignId = parseInt(f.callsign_id, 10) || 0;
+    S.callsign   = f.callsign || "";
+    S.networkId  = parseInt(f.network_id, 10) || 0;
+    S.typeId     = (f.type_id != null && f.type_id !== "") ? (parseInt(f.type_id, 10)) : -1;
+    var fEl = $("cwRefFrom"), tEl = $("cwRefTo");
+    if (f.date_from) { S.from = f.date_from; if (fEl) fEl.value = f.date_from; }
+    if (f.date_to)   { S.to   = f.date_to;   if (tEl) tEl.value = f.date_to; }
+    S.loaded = false;   // форсуємо перезавантаження з новим фільтром
+  };
+
+  // Чи активний серверний фільтр (для monitor.js — не перебивати фіт дефолтним
+  // центруванням карти).
+  window.__conclRefHasFilter = function () {
+    return !!(S.callsignId || S.callsign || S.networkId);
+  };
+
   window.setConclModalMode = function (mode) {
     var modal = $("itModalConclusion"); if (!modal) return;
     modal.dataset.conclMode = mode || "conclusion";

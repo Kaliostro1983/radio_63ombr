@@ -922,22 +922,25 @@
   const cnFullMapBtn = $("cnFullMapBtn");
   if (cnFullMapBtn) {
     cnFullMapBtn.addEventListener("click", () => {
+      // Поточні фільтри вибірки (щоб на карті показались лише відповідні висновки).
+      const filters = {};
+      if (dateFrom.value)   filters.date_from  = dateFrom.value;
+      if (dateTo.value)     filters.date_to    = dateTo.value;
+      if (networkId.value)  filters.network_id = networkId.value;
+      if (typeSel && typeSel.value !== "-1") filters.type_id = typeSel.value;
+      if (callsignId && callsignId.value) filters.callsign_id = callsignId.value;
+      else if (callsignInput && callsignInput.value.trim()) filters.callsign = callsignInput.value.trim();
       // У вбудованому режимі (модалка «Висновки» з картки позивного) — відкриваємо
       // нашу повноекранну модалку висновків із позначками. Якщо цього хука немає
       // (сторінка без модалки) — фолбек: карта висновків у новій вкладці.
       try {
         if (window.parent && window.parent !== window &&
             typeof window.parent.openConclMapFromEmbed === "function" &&
-            window.parent.openConclMapFromEmbed()) {
+            window.parent.openConclMapFromEmbed(filters)) {
           return;
         }
       } catch (_) {}
-      const qs = new URLSearchParams();
-      if (dateFrom.value)   qs.set("date_from",  dateFrom.value);
-      if (dateTo.value)     qs.set("date_to",    dateTo.value);
-      if (networkId.value)  qs.set("network_id", networkId.value);
-      if (callsignId && callsignId.value) qs.set("callsign_id", callsignId.value);
-      else if (callsignInput && callsignInput.value.trim()) qs.set("callsign", callsignInput.value.trim());
+      const qs = new URLSearchParams(filters);
       window.open("/conclusions/map?" + qs.toString(), "_blank");
     });
   }
