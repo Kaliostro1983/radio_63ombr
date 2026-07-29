@@ -15,7 +15,7 @@
     types: [], rows: [], markers: [],
     hidden: new Set(), allHidden: false,
     freqHidden: new Set(), freqAllHidden: false,   // фільтр за частотами
-    showFreq: false, showUnit: false,
+    showFreq: false, showUnit: false, showDatetime: false,
     from: "", to: "", loaded: false, loading: false,
   };
   var _layer = null;            // L.layerGroup з усіма маркерами референсу
@@ -26,6 +26,11 @@
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
+  }
+
+  function fmtDt(s) {
+    var m = String(s == null ? "" : s).match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    return m ? (m[3] + "." + m[2] + "." + m[1] + " " + m[4] + ":" + m[5]) : "";
   }
 
   function mgrsToLatLng(m) {
@@ -154,8 +159,11 @@
           var ll = mgrsToLatLng(ms);
           if (!ll) return;
           var mk = L.marker(ll, { icon: icon });
-          if (S.showFreq && row.frequency) {
-            mk.bindTooltip(String(row.frequency), { permanent: true, direction: "right", offset: [12, 0], className: "cm-freq-label" });
+          var labels = [];
+          if (S.showFreq && row.frequency) labels.push(esc(String(row.frequency)));
+          if (S.showDatetime) { var dt = fmtDt(row.created_at); if (dt) labels.push(esc(dt)); }
+          if (labels.length) {
+            mk.bindTooltip(labels.join("<br>"), { permanent: true, direction: "right", offset: [12, 0], className: "cm-freq-label" });
           }
           mk.on("click", function (e) { L.DomEvent.stopPropagation(e); openDetailPanel(row, ms); });
           mk.addTo(_layer);
@@ -486,9 +494,10 @@
     S.from = fEl ? fEl.value : dr.from;
     S.to = tEl ? tEl.value : dr.to;
 
-    var freq = $("cwRefFreqChk"), unit = $("cwRefUnitChk");
+    var freq = $("cwRefFreqChk"), unit = $("cwRefUnitChk"), dtc = $("cwRefDatetimeChk");
     if (freq) freq.addEventListener("change", function () { S.showFreq = freq.checked; placeMarkers(); });
     if (unit) unit.addEventListener("change", function () { S.showUnit = unit.checked; placeMarkers(); });
+    if (dtc) dtc.addEventListener("change", function () { S.showDatetime = dtc.checked; placeMarkers(); });
 
     var btn = $("cwRefRefresh");
     if (btn) btn.addEventListener("click", function () {
