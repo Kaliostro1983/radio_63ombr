@@ -392,15 +392,17 @@
             </button>
           </div>
 
-          <!-- «Категорії» — чіпи типів висновків (шар-референс, вгорі по центру) -->
-          <div id="cwCatWrap" class="cw-filter-wrap">
-            <button id="cwCatToggle" type="button" class="cw-filter-toggle" title="Згорнути/розгорнути категорії">Типи ▾</button>
-            <div id="cwCatBar" class="cw-cat-bar" aria-label="Категорії висновків"></div>
-          </div>
-          <!-- Фільтр об'єктів за частотами -->
-          <div id="cwFreqWrap" class="cw-filter-wrap cw-filter-wrap--freq">
-            <button id="cwFreqToggle" type="button" class="cw-filter-toggle" title="Згорнути/розгорнути частоти">Частоти ▾</button>
-            <div id="cwFreqBar" class="cw-cat-bar" aria-label="Фільтр за частотами"></div>
+          <!-- Фільтри шару-референсу: дві кнопки вгорі по центру; чіпи —
+               випадайки під ними, згорнуті за замовчуванням. -->
+          <div id="cwFilters" class="cw-filters">
+            <div id="cwCatWrap" class="cw-filter-wrap is-collapsed">
+              <button id="cwCatToggle" type="button" class="cw-filter-toggle" title="Фільтр за типами об'єктів">Типи ▾</button>
+              <div id="cwCatBar" class="cw-cat-bar cw-filter-drop" aria-label="Категорії висновків"></div>
+            </div>
+            <div id="cwFreqWrap" class="cw-filter-wrap is-collapsed">
+              <button id="cwFreqToggle" type="button" class="cw-filter-toggle" title="Фільтр за частотами">Частоти ▾</button>
+              <div id="cwFreqBar" class="cw-cat-bar cw-filter-drop" aria-label="Фільтр за частотами"></div>
+            </div>
           </div>
 
           <!-- «Елементи управління» — Частоти/Підрозділ + діапазон вибірки (внизу зліва) -->
@@ -470,6 +472,11 @@
           <!-- Left 40%: conclusion + separator + intercept + send -->
           <div class="conclusion-left">
 
+            <!-- Показ дати/часу перехоплення у куті рамки (потрапляє у скріншот) -->
+            <label class="concl-dt-chk" title="Показати дату/час перехоплення у лівому верхньому куті рамки">
+              <input type="checkbox" id="conclShowDatetime"><span>Дата та час</span>
+            </label>
+
             <!-- 1. Textarea "Висновок" з overlay-кнопками -->
             <div class="concl-ta-wrap concl-ta-wrap--conclusion">
               <div class="concl-ta-overlay-btns">
@@ -521,11 +528,6 @@
               <textarea id="conclInterceptTa" class="mon-conclusion-ta"
                         placeholder="Оберіть перехоплення у вкладці «Моніторинг» або вставте текст вручну…"></textarea>
             </div>
-
-            <!-- Показ дати/часу перехоплення у лівому верхньому куті рамки -->
-            <label class="concl-dt-chk" title="Показати дату/час перехоплення у лівому верхньому куті рамки (потрапляє у скріншот)">
-              <input type="checkbox" id="conclShowDatetime"><span>Дата та час</span>
-            </label>
 
             <!-- 4. Send bar -->
             <div class="mon-send-bar">
