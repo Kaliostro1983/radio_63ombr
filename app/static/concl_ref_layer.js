@@ -493,13 +493,13 @@
 
   // ── Контроли ──
   function defaultRange() {
-    // Останні 5 днів (без «сьогодні» — до кінця вчора), формат datetime-local.
+    // Від 16:00 учора до 16:00 сьогодні (доба «16→16»), формат datetime-local.
     function fmt(d) {
       var p = function (n) { return (n < 10 ? "0" : "") + n; };
       return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
     }
-    var to = new Date(); to.setHours(23, 59, 0, 0);
-    var from = new Date(); from.setDate(from.getDate() - 4); from.setHours(0, 0, 0, 0);
+    var to = new Date(); to.setHours(16, 0, 0, 0);
+    var from = new Date(); from.setDate(from.getDate() - 1); from.setHours(16, 0, 0, 0);
     return { from: fmt(from), to: fmt(to) };
   }
   function initControls() {
