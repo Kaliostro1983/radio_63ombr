@@ -4457,8 +4457,10 @@ button.secondary{
 /* Лівий контейнер висновку — плаваюча панель */
 .it-modal--fullwin .conclusion-left{
   /* Висота фіксована (коротша за вікно) — щоб поле перехоплення не
-     розтягувалось на весь екран; ширину лишаємо як була. */
-  position:absolute; top:58px; left:10px; z-index:1200;
+     розтягувалось на весь екран; ширину лишаємо як була.
+     top нижчий — щоб координатний інпут (росте вниз при додаванні чіпів)
+     не перекривав рамку/контейнер. */
+  position:absolute; top:108px; left:10px; z-index:1200;
   width:440px; min-width:340px;
   height:640px; max-height:calc(100vh - 78px);
   border:1px solid var(--border); border-radius:12px; overflow:hidden;
@@ -4479,7 +4481,7 @@ button.secondary{
 
 /* Рамка області копіювання — коротша за карту (висота ≈ контейнеру) */
 .it-modal--fullwin .cw-copy-frame{
-  position:absolute; top:64px; z-index:1050;
+  position:absolute; top:108px; z-index:1050;
   height:634px; max-height:calc(100vh - 84px);
   left:470px; right:74px;
   border:2px dashed rgba(255,255,255,.85);
@@ -4488,7 +4490,7 @@ button.secondary{
 
 /* Тулбар — вертикальна колонка праворуч (5%) */
 .it-modal--fullwin .cw-tool-col{
-  position:absolute; top:64px; right:10px; z-index:1250;
+  position:absolute; top:108px; right:10px; z-index:1250;
   display:flex; flex-direction:column; gap:8px; align-items:center;
 }
 /* Перелік палітр і висувна панель — теж над картою */
