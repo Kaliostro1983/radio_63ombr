@@ -206,7 +206,8 @@
   let _zoneLayers = { freq: null, unit: null };  // шари зон-«очей» (по частоті / підрозділу)
   let _unitPalLayers = {};                       // палітра_id -> шар регіонів (перелік палітр підрозділу)
   let _lastPalCtxKey = null;                     // ключ останнього контексту палітр (unit|network) для скидання scope
-  let _conclDrawn        = [];     // [{type, layers:[...]}] — стрілки/зони/орієнтири
+  let _conclDrawn        = [];     // [{type, layers:[...]}] — стрілки/зони/орієнтири/шляхи
+  let _pathDrawState     = null;   // активне малювання ламаної (шляху), інакше null
   let _conclBelowRenderer = null;  // canvas-рендерер нижче квадратів/точок (Зона, Орієнтир)
   let _conclAboveRenderer = null;  // canvas-рендерер вище всього (Стрілка)
 
@@ -1517,6 +1518,74 @@
     _conclDrawn.push(entry);
   }
 
+  /* ── Шлях (жовта штрихова ламана; малюється клік-за-кліком) ──
+     Клік по карті — додати вершину; повторний клік по КРАЙНІЙ (останній)
+     точці — завершити. Малюється у pane conclBelow (нижче нанесених
+     об'єктів/маркерів), як і Зона, тож потрапляє у скріншот. */
+  function _addPath(map){
+    if (_pathDrawState) { _pathDrawState.finish(); return; }
+    const verts = [];
+    const poly = L.polyline([], {
+      color:"#f5c211", weight:3, dashArray:"9 7", renderer:_conclBelowRenderer,
+    }).addTo(map);
+    const tmp = [];   // тимчасові маркери вершин під час малювання
+    try { map.getContainer().style.cursor = "crosshair"; } catch(_){}
+
+    function onClick(e){
+      verts.push(e.latlng);
+      poly.setLatLngs(verts);
+      const m = L.marker(e.latlng, { icon:_anchorIcon("vertex"), bubblingMouseEvents:false, pane:"conclAnchors" }).addTo(map);
+      m.__idx = verts.length - 1;
+      m.on("click", (ev) => {
+        if (ev.originalEvent) L.DomEvent.stop(ev.originalEvent);
+        // Завершення — повторний клік саме по КРАЙНІЙ поставленій точці.
+        if (m.__idx === verts.length - 1 && verts.length >= 2) finish();
+      });
+      tmp.push(m);
+    }
+    function finish(){
+      map.off("click", onClick);
+      try { map.getContainer().style.cursor = ""; } catch(_){}
+      tmp.forEach(mk => mk.remove());
+      _pathDrawState = null;
+      if (verts.length < 2) { poly.remove(); return; }
+      // Готова ламана — редагована: draggable-вершини + Ctrl-клік видаляє.
+      const entry = { type:"path", poly, verts: verts.slice(), vMarkers:[], delHandle:null, layers:[poly] };
+      const del = L.marker(_polyCentroid(entry.verts), { icon:_delHandleIcon(), pane:"conclAnchors", bubblingMouseEvents:false }).addTo(map);
+      del.on("click", (e) => { if (e.originalEvent) L.DomEvent.stop(e.originalEvent); _removeDrawn(entry); });
+      entry.delHandle = del; entry.layers = [poly, del];
+      _buildPathAnchors(map, entry);
+      _conclDrawn.push(entry);
+    }
+    _pathDrawState = { finish };
+    map.on("click", onClick);
+    if (window.appToast) window.appToast("Малювання шляху: клікайте вершини; повторний клік по останній — завершити", "info", 3200);
+  }
+
+  function _buildPathAnchors(map, entry){
+    (entry.vMarkers || []).forEach(m => m.remove());
+    entry.vMarkers = [];
+    entry.verts.forEach((v, i) => {
+      const m = L.marker(v, { draggable:true, icon:_anchorIcon("vertex"), bubblingMouseEvents:false, pane:"conclAnchors" }).addTo(map);
+      m.on("drag", () => {
+        entry.verts[i] = m.getLatLng();
+        entry.poly.setLatLngs(entry.verts);
+        if (entry.delHandle) entry.delHandle.setLatLng(_polyCentroid(entry.verts));
+      });
+      m.on("click", (ev) => {
+        const oe = ev.originalEvent;
+        if ((oe.ctrlKey || oe.metaKey) && entry.verts.length > 2){
+          L.DomEvent.stop(oe);
+          entry.verts.splice(i, 1);
+          entry.poly.setLatLngs(entry.verts);
+          _buildPathAnchors(map, entry);
+          if (entry.delHandle) entry.delHandle.setLatLng(_polyCentroid(entry.verts));
+        }
+      });
+      entry.vMarkers.push(m);
+    });
+  }
+
   /* ── Текст (перетягуваний напис на карті; потрапляє у скріншот) ──
      Маркер у стандартному marker-pane (тож html2canvas його захоплює);
      кнопка «×» ховається під час скріншоту (клас .concl-text-del у списку
@@ -2061,6 +2130,7 @@
         const tool = btn.dataset.tool;
         if (tool === "arrow")    _addArrow(_conclMap);
         else if (tool === "zone")     _addZone(_conclMap);
+        else if (tool === "path")     _addPath(_conclMap);
         else if (tool === "landmark") _openLandmarkPicker(_conclMap);
         else if (tool === "text")     _addText(_conclMap);
       });
@@ -2117,8 +2187,10 @@
         "https://mt1.google.com/vt/lyrs=y&hl=uk&x={x}&y={y}&z={z}",
         { attribution: "Google", maxZoom: 20 }
       ).addTo(_conclMap);
-      // Click → place new interactive marker (завжди дозволено)
+      // Click → place new interactive marker (завжди дозволено).
+      // Під час малювання шляху клік по карті додає вершину, а не маркер.
       _conclMap.on("click", e => {
+        if (_pathDrawState) return;
         _placeConclClickMarker(_conclMap, e.latlng.lat, e.latlng.lng);
       });
       setTimeout(() => { try { _conclMap.invalidateSize(); } catch (_) {} }, 60);
