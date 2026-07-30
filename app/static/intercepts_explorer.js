@@ -1821,7 +1821,15 @@
             ].map((s) => (s || "").trim()).filter(Boolean).join("  ·  ")
           : "";
         const itext = card ? (card.querySelector(".intercept-card__text")?.textContent || "").trim() : "";
-        if (mid && window.openCasualtyModal) window.openCasualtyModal(mid, nid, meta, itext);
+        // Позивні перехоплення (усі ролі) → чіпи в модалці втрат.
+        const csMap = {};
+        if (card) card.querySelectorAll(".callsign-chip").forEach((ch) => {
+          const cid = Number(ch.dataset.id || 0);
+          const cnm = (ch.querySelector(".callsign-chip__name")?.textContent || "").trim();
+          if (cid && cnm && !csMap[cid]) csMap[cid] = { id: cid, name: cnm };
+        });
+        const csList = Object.keys(csMap).map((k) => csMap[k]);
+        if (mid && window.openCasualtyModal) window.openCasualtyModal(mid, nid, meta, itext, csList);
         return;
       }
 

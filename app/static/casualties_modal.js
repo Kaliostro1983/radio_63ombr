@@ -9,6 +9,7 @@
   "use strict";
 
   var _msgId = 0, _netId = null, _interceptText = "";
+  var _interceptCallsigns = [];   // [{id,name}] — позивні перехоплення (для префілу чіпів)
   var _reasons = [];   // [{id,name}]
   var _units = [];     // [{id,name}]
 
@@ -42,8 +43,9 @@
   }
 
   // ── Відкрити / закрити ─────────────────────────────────────────────────────
-  window.openCasualtyModal = function (messageId, networkId, meta, interceptText) {
+  window.openCasualtyModal = function (messageId, networkId, meta, interceptText, callsigns) {
     _msgId = messageId; _netId = networkId || null; _interceptText = interceptText || "";
+    _interceptCallsigns = Array.isArray(callsigns) ? callsigns.slice() : [];
     var modal = $("casualtyModal"); if (!modal) return;
     var metaEl = $("casModalMeta"); if (metaEl) metaEl.textContent = meta || "";
     modal.classList.remove("hidden"); modal.removeAttribute("aria-hidden");
@@ -79,7 +81,8 @@
     var el = document.createElement("div");
     el.className = "cas-rec";
     el.__casId = rec ? rec.id : null;
-    el.__callsigns = rec && rec.callsigns ? rec.callsigns.slice() : [];
+    // Існуючий запис — його позивні; новий — префіл із позивних перехоплення.
+    el.__callsigns = rec && rec.callsigns ? rec.callsigns.slice() : _interceptCallsigns.slice();
     var status = rec ? rec.status : "300";
     var count = rec ? rec.count : 1;
 
@@ -87,6 +90,7 @@
       '<div class="cas-rec__row1">' +
         '<button type="button" class="cas-status" data-status="' + status + '">' + status + "</button>" +
         '<input type="number" class="cas-count" min="1" step="1" value="' + (count || 1) + '">' +
+        '<label class="cas-chk cas-chk--inline"><input type="checkbox" class="cas-accounted"' + (rec && rec.accounted ? " checked" : "") + '><span>Враховано</span></label>' +
         '<span class="cas-rec__saved"></span>' +
         '<button type="button" class="cas-del" title="Видалити запис">✕</button>' +
       "</div>" +
@@ -96,7 +100,6 @@
       '<label class="cas-fld"><span>Підрозділ</span>' +
         '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : "") + "</select>" +
         '<button type="button" class="cas-add-opt" data-kind="unit" title="Додати підрозділ">＋</button></span></label>' +
-      '<label class="cas-chk"><input type="checkbox" class="cas-accounted"' + (rec && rec.accounted ? " checked" : "") + '><span>Враховано</span></label>' +
       '<div class="cas-fld"><span>Позивні</span><div class="cas-cs-wrap"><div class="cas-cs-chips"></div>' +
         '<input type="text" class="cas-cs-input" placeholder="позивний + Enter" autocomplete="off"></div></div>';
 
@@ -266,32 +269,36 @@
       }).catch(function () { _casChatsCache[platform] = []; return []; });
   }
 
-  // Текст звіту: заголовок + мета/перехоплення + перелік записів (з DOM, тож
-  // відображає поточний стан контейнерів).
-  function _casBuildMessage() {
-    var lines = ["☠ ВТРАТИ (за даними противника)"];
+  // Відправка 1 — «Повідомлення»: мета (дата/частота/мережа) + текст перехоплення.
+  function _casBuildInterceptMsg() {
+    var lines = [];
     var meta = ($("casModalMeta").textContent || "").trim();
-    if (meta) lines.push("", meta);
+    if (meta) lines.push(meta);
     if (_interceptText) lines.push("", _interceptText.trim());
+    return lines.join("\n").trim();
+  }
+  // Відправка 2 — записи: «[кількість] - [статус] - ([позивні]) [причина]».
+  function _casBuildRecordsMsg() {
     var recLines = [];
     document.querySelectorAll("#casRecords .cas-rec").forEach(function (el) {
       var status = el.querySelector(".cas-status").dataset.status;
       var count = Math.max(1, parseInt(el.querySelector(".cas-count").value, 10) || 1);
       var rSel = el.querySelector(".cas-reason");
       var reason = rSel.value ? rSel.options[rSel.selectedIndex].text : "";
-      var uSel = el.querySelector(".cas-unit");
-      var unit = uSel.value ? uSel.options[uSel.selectedIndex].text : "";
       var cs = (el.__callsigns || []).map(function (c) { return c.name; });
-      var parts = [status + " × " + count];
-      if (reason) parts.push(reason);
-      if (unit) parts.push(unit);
-      var line = "• " + parts.join(" — ");
-      if (cs.length) line += " · " + cs.join(", ");
-      if (el.querySelector(".cas-accounted").checked) line += " (враховано)";
+      var line = count + " - " + status + " - (" + cs.join(", ") + ")";
+      if (reason) line += " " + reason;
       recLines.push(line);
     });
-    if (recLines.length) lines.push("", recLines.join("\n"));
-    return lines.join("\n").trim();
+    return recLines.join("\n").trim();
+  }
+
+  function _casPost(text) {
+    return fetch("/api/push/send", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform: _casChat.platform, chat_id: _casChat.id, text: text }),
+    }).then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) { return !!(d && d.ok); });
   }
 
   function _casSend() {
@@ -300,19 +307,22 @@
       toast("Спершу вкажіть чат (Ctrl+клік по «Надіслати»)", "warn");
       return;
     }
-    var text = _casBuildMessage();
-    if (!text) { toast("Немає даних для надсилання", "warn"); return; }
+    var payloads = [];
+    var msg1 = _casBuildInterceptMsg(); if (msg1) payloads.push(msg1);
+    var msg2 = _casBuildRecordsMsg();  if (msg2) payloads.push(msg2);
+    if (!payloads.length) { toast("Немає даних для надсилання", "warn"); return; }
     var btn = $("casSendBtn");
     if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
-    fetch("/api/push/send", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ platform: _casChat.platform, chat_id: _casChat.id, text: text }),
-    }).then(function (r) { return r.json().catch(function () { return {}; }); })
-      .then(function (d) {
-        if (d && d.ok) toast("Надіслано → " + _casChat.name, "success");
-        else toast(d.error || d.detail || "Помилка надсилання", "error");
-      }).catch(function (e) { toast("Помилка: " + (e && e.message || e), "error"); })
-      .then(function () { if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); } });
+    // Послідовно (спершу повідомлення, тоді записи) — щоб зберегти порядок у чаті.
+    (function next(i, okAll) {
+      if (i >= payloads.length) {
+        if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
+        toast(okAll ? ("Надіслано → " + _casChat.name) : "Помилка надсилання", okAll ? "success" : "error");
+        return;
+      }
+      _casPost(payloads[i]).then(function (ok) { next(i + 1, okAll && ok); })
+        .catch(function () { next(i + 1, false); });
+    })(0, true);
   }
 
   // ── Пікер цільового чату (динамічна панель у футері) ────────────────────────
