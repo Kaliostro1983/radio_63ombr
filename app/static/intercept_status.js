@@ -34,6 +34,23 @@
     el.title = TITLES[st];
   }
 
+  function _updateByMid(mid, changes) {
+    if (mid == null) return;
+    document.querySelectorAll('.intercept-card__status[data-mid="' + mid + '"]').forEach(function (el) {
+      Object.keys(changes).forEach(function (k) { el.dataset[k] = changes[k]; });
+      apply(el);
+    });
+  }
+
+  // Жива синхронізація: оформлено висновок → зелений; видалено → назад
+  // (помаранчевий, бо value_flag лишається 1).
+  document.addEventListener("conclusionSaved", function (e) {
+    _updateByMid(e.detail && e.detail.message_id, { concl: "1", flag: "1" });
+  });
+  document.addEventListener("conclusionDeleted", function (e) {
+    _updateByMid(e.detail && e.detail.message_id, { concl: "0" });
+  });
+
   // Делегований клік — працює для будь-якого рендерера картки.
   document.addEventListener("click", function (e) {
     var el = e.target.closest && e.target.closest(".intercept-card__status");

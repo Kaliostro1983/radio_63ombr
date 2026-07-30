@@ -830,6 +830,7 @@ async def api_conclusion_save(request: Request):
     return {
         "ok": True,
         "id": ac_id,
+        "message_id": message_id,
         "created": created,
         "type_id": type_id,
         "type_label": (t["type"] if t else "невідомо"),

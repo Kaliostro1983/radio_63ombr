@@ -935,6 +935,11 @@
         return false;
       }
       _conclSaved = true;
+      // Жива синхронізація статус-закладки: перехоплення стало «цінним» (зелений).
+      try {
+        const mid = d.message_id || body.message_id || body.conclMsgId;
+        if (mid) document.dispatchEvent(new CustomEvent("conclusionSaved", { detail: { message_id: mid } }));
+      } catch (_) {}
       if (window.appToast) window.appToast(d.created ? "Висновок збережено" : "Висновок оновлено", "success", 1800);
       return true;
     } catch (_) {
