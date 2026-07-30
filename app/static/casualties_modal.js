@@ -202,27 +202,30 @@
   function scheduleSave(el) {
     _setSaved(el, "dirty");
     clearTimeout(el.__saveTimer);
-    el.__saveTimer = setTimeout(function () { saveContainer(el); }, 600);
+    // Інкрементальне збереження — без застосування статусів позивних.
+    el.__saveTimer = setTimeout(function () { saveContainer(el, false); }, 600);
   }
-  function saveContainer(el) {
+  // applyStatus=true → бекенд виставить life_status привʼязаним позивним
+  // (робимо це лише на «Надіслати»). Повертає Promise<bool ok>.
+  function saveContainer(el, applyStatus) {
     var body = _payload(el);
+    body.apply_status = !!applyStatus;
     _setSaved(el, "saving");
     if (el.__casId) {
-      fetch("/api/casualties/" + el.__casId, {
+      return fetch("/api/casualties/" + el.__casId, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       }).then(function (r) { return r.json(); })
-        .then(function (d) { _setSaved(el, d && d.ok ? "saved" : "error"); })
-        .catch(function () { _setSaved(el, "error"); });
-    } else {
-      body.message_id = _msgId;
-      fetch("/api/casualties", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-      }).then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (d && d.ok && d.record) { el.__casId = d.record.id; _setSaved(el, "saved"); }
-          else _setSaved(el, "error");
-        }).catch(function () { _setSaved(el, "error"); });
+        .then(function (d) { var ok = !!(d && d.ok); _setSaved(el, ok ? "saved" : "error"); return ok; })
+        .catch(function () { _setSaved(el, "error"); return false; });
     }
+    body.message_id = _msgId;
+    return fetch("/api/casualties", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && d.record) { el.__casId = d.record.id; _setSaved(el, "saved"); return true; }
+        _setSaved(el, "error"); return false;
+      }).catch(function () { _setSaved(el, "error"); return false; });
   }
   function deleteContainer(el) {
     if (el.__casId) {
@@ -304,7 +307,7 @@
   function _casSend() {
     if (!_casChat || !_casChat.id) {
       _casOpenPicker();
-      toast("Спершу вкажіть чат (Ctrl+клік по «Надіслати»)", "warn");
+      toast("Спершу вкажіть чат (Ctrl+клік по кнопці)", "warn");
       return;
     }
     var payloads = [];
@@ -313,16 +316,20 @@
     if (!payloads.length) { toast("Немає даних для надсилання", "warn"); return; }
     var btn = $("casSendBtn");
     if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
-    // Послідовно (спершу повідомлення, тоді записи) — щоб зберегти порядок у чаті.
-    (function next(i, okAll) {
-      if (i >= payloads.length) {
-        if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
-        toast(okAll ? ("Надіслано → " + _casChat.name) : "Помилка надсилання", okAll ? "success" : "error");
-        return;
-      }
-      _casPost(payloads[i]).then(function (ok) { next(i + 1, okAll && ok); })
-        .catch(function () { next(i + 1, false); });
-    })(0, true);
+    // Спершу зафіксувати всі записи із застосуванням статусів позивних (200/300),
+    // потім послідовно надіслати два повідомлення (спершу перехоплення, тоді записи).
+    var recs = Array.prototype.slice.call(document.querySelectorAll("#casRecords .cas-rec"));
+    Promise.all(recs.map(function (el) { return saveContainer(el, true); })).then(function () {
+      (function next(i, okAll) {
+        if (i >= payloads.length) {
+          if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
+          toast(okAll ? ("Надіслано → " + _casChat.name) : "Помилка надсилання", okAll ? "success" : "error");
+          return;
+        }
+        _casPost(payloads[i]).then(function (ok) { next(i + 1, okAll && ok); })
+          .catch(function () { next(i + 1, false); });
+      })(0, true);
+    });
   }
 
   // ── Пікер цільового чату (динамічна панель у футері) ────────────────────────
@@ -402,8 +409,10 @@
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); _casOpenPicker(); }
       else _casSend();
     });
-    // Закриття пікера при кліку поза ним.
-    document.addEventListener("click", function (e) {
+    // Закриття пікера при кліку поза ним — на mousedown (інакше вибір пункту
+    // списку ховає його, і подальший click потрапляє поза пікером → закриття
+    // до натискання «ОК»).
+    document.addEventListener("mousedown", function (e) {
       var pk = $("casSendPicker"); if (!pk) return;
       if (pk.contains(e.target) || (send && send.contains(e.target))) return;
       _casClosePicker();

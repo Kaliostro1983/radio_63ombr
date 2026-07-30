@@ -355,6 +355,9 @@ class CasualtyIn(BaseModel):
     accounted: bool = False
     comment: str = ""
     callsign_ids: List[int] = []
+    # Чи виставляти life_status позивним. Інкрементальне збереження — False
+    # (лише фіксуємо звʼязок); застосування статусів — на кнопці «Надіслати».
+    apply_status: bool = True
 
 
 @router.post("/api/casualties")
@@ -383,7 +386,8 @@ def cas_record_create(body: CasualtyIn, request: Request):
                 "INSERT OR IGNORE INTO casualty_callsigns (casualty_id, callsign_id) VALUES (?, ?)",
                 (cas_id, cid),
             )
-            _apply_callsign_casualty(conn, cid, status, body.message_id, editor, ts)
+            if body.apply_status:
+                _apply_callsign_casualty(conn, cid, status, body.message_id, editor, ts)
         r = conn.execute(_SELECT_CASUALTY + "WHERE cas.id = ?", (cas_id,)).fetchone()
         out = _casualty_dict(conn, r)
     return {"ok": True, "record": out}
@@ -398,6 +402,7 @@ class CasualtyUpdate(BaseModel):
     accounted: Optional[bool] = None
     comment: Optional[str] = None
     callsign_ids: Optional[List[int]] = None
+    apply_status: bool = False   # застосовувати life_status лише на «Надіслати»
 
 
 @router.put("/api/casualties/{cas_id}")
@@ -430,12 +435,13 @@ def cas_record_update(cas_id: int, body: CasualtyUpdate, request: Request):
                     "INSERT OR IGNORE INTO casualty_callsigns (casualty_id, callsign_id) VALUES (?, ?)",
                     (cas_id, cid),
                 )
-        # Пере-застосувати статус до наразі привʼязаних позивних (правка 300↔200).
-        linked = conn.execute(
-            "SELECT callsign_id FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,)
-        ).fetchall()
-        for lr in linked:
-            _apply_callsign_casualty(conn, lr["callsign_id"], status, cur["message_id"], editor, ts)
+        # Статус позивним застосовуємо лише коли просять (кнопка «Надіслати»).
+        if body.apply_status:
+            linked = conn.execute(
+                "SELECT callsign_id FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,)
+            ).fetchall()
+            for lr in linked:
+                _apply_callsign_casualty(conn, lr["callsign_id"], status, cur["message_id"], editor, ts)
         r = conn.execute(_SELECT_CASUALTY + "WHERE cas.id = ?", (cas_id,)).fetchone()
         out = _casualty_dict(conn, r)
     return {"ok": True, "record": out}
