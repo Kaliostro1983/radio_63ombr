@@ -205,6 +205,8 @@ def message_detail_page(request: Request, message_id: int):
                 m.comment,
                 m.parse_confidence,
                 m.is_valid,
+                COALESCE(m.value_flag, 0) AS value_flag,
+                EXISTS(SELECT 1 FROM analytical_conclusions ac WHERE ac.message_id = m.id) AS has_conclusion,
                 n.frequency,
                 n.mask,
                 n.unit,
@@ -370,7 +372,9 @@ def intercepts_search(
                 m.created_at,
                 m.body_text,
                 m.net_description,
-                n.frequency
+                n.frequency,
+                COALESCE(m.value_flag, 0) AS value_flag,
+                EXISTS(SELECT 1 FROM analytical_conclusions ac WHERE ac.message_id = m.id) AS has_conclusion
             FROM messages m
             JOIN networks n ON n.id = m.network_id
             WHERE {where_sql}
@@ -387,6 +391,8 @@ def intercepts_search(
                 "frequency": row["frequency"],
                 "net_description": row["net_description"],
                 "text": row["body_text"] or "",
+                "value_flag": int(row["value_flag"] or 0),
+                "has_conclusion": bool(row["has_conclusion"]),
             }
             for row in rows
         ]
@@ -589,7 +595,9 @@ def intercepts_explorer_list(
             n.mask,
             n.unit,
             n.zone,
-            n.group_id AS network_group_id
+            n.group_id AS network_group_id,
+            COALESCE(m.value_flag, 0) AS value_flag,
+            EXISTS(SELECT 1 FROM analytical_conclusions ac WHERE ac.message_id = m.id) AS has_conclusion
         FROM messages m
         LEFT JOIN networks n ON n.id = m.network_id
         WHERE {where_sql}
@@ -619,6 +627,8 @@ def intercepts_explorer_list(
                     if row["network_group_id"] is not None
                     else None,
                 },
+                "value_flag": int(row["value_flag"] or 0),
+                "has_conclusion": bool(row["has_conclusion"]),
             }
             for row in rows
         ]
@@ -801,6 +811,30 @@ def intercepts_explorer_landmark_matches(message_id: int):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/intercepts-explorer/{message_id}/value-flag")
+def intercepts_explorer_toggle_value_flag(message_id: int):
+    """Перемикає value_flag 0↔1 (звичайне↔потенційно цінне). «Цінне» (є висновок)
+    — похідний статус, тут не змінюється."""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(value_flag, 0) AS vf FROM messages WHERE id = ?",
+            (message_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Intercept not found")
+        new_val = 0 if row["vf"] else 1
+        conn.execute("UPDATE messages SET value_flag = ? WHERE id = ?", (new_val, message_id))
+        conn.commit()
+        return JSONResponse({"ok": True, "message_id": message_id, "value_flag": new_val})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
 
 
 @router.put("/api/intercepts-explorer/{message_id}/comment")

@@ -8,6 +8,10 @@
   </div>
 
   <div class="intercept-card" style="margin-top:12px;">
+    <button type="button"
+            class="intercept-card__status intercept-card__status--{{ 'valuable' if m.has_conclusion else ('potential' if m.value_flag else 'normal') }}"
+            data-mid="{{ m.id }}" data-flag="{{ 1 if m.value_flag else 0 }}" data-concl="{{ 1 if m.has_conclusion else 0 }}"
+            title="Статус перехоплення" aria-label="Статус перехоплення"></button>
     <div class="intercept-header">
       {{ m.created_at }} &nbsp;&nbsp; {{ m.frequency }}
     </div>

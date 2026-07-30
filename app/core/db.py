@@ -848,6 +848,20 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "messages", "need_approve", "need_approve INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "messages", "tags_json", "tags_json TEXT DEFAULT '[]'")
     _ensure_column(conn, "messages", "is_read", "is_read INTEGER NOT NULL DEFAULT 0")
+    # Статус цінності перехоплення: 0 = звичайне (сірий), 1 = потенційно цінне
+    # (помаранчевий). «Цінне» (зелений) — похідне: є аналітичний висновок.
+    _value_flag_new = not _has_column(conn, "messages", "value_flag")
+    _ensure_column(conn, "messages", "value_flag", "value_flag INTEGER NOT NULL DEFAULT 0")
+    if _value_flag_new:
+        # Бекфіл: наявні перехоплення з висновком → 1 (щоб після видалення
+        # висновку показувався помаранчевий, а не сірий).
+        safe_execute(
+            conn,
+            "UPDATE messages SET value_flag = 1 "
+            "WHERE id IN (SELECT message_id FROM analytical_conclusions)",
+            module="app.core.db", function="_run_lightweight_migrations",
+            stage="backfill:messages.value_flag",
+        )
     _ensure_column(conn, "callsign_statuses", "icon", "icon TEXT")
     # Чи показувати іконку статусу в блоці «Швидка ідентифікація» картки позивного.
     # DEFAULT 1 — щоб наявна поведінка (показуються всі) не змінилася після оновлення.

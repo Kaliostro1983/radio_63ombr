@@ -789,6 +789,10 @@ async def api_conclusion_save(request: Request):
             ac_id = int(cur.lastrowid)
             created = True
 
+        # Статус цінності: наявність висновку робить перехоплення «зеленим»
+        # (похідне), а value_flag=1 гарантує «помаранчевий» після видалення висновку.
+        conn.execute("UPDATE messages SET value_flag = 1 WHERE id = ?", (message_id,))
+
         # Link this conclusion to every callsign on its intercept, so callsigns
         # with analytical conclusions can be marked/filtered later. Rebuild from
         # the message's current callsigns (snapshot at save time).

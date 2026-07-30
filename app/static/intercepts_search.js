@@ -168,6 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderItem(item, phrase) {
     const card = document.createElement("article");
     card.className = "intercept-card";
+    if (window.interceptStatusRibbon) card.insertAdjacentHTML("afterbegin", window.interceptStatusRibbon(item));
 
     card.appendChild(renderHeader(item));
 

@@ -478,6 +478,7 @@
 
     return `
         <article class="intercept-card" data-id="${item.id}">
+          ${window.interceptStatusRibbon ? window.interceptStatusRibbon(item) : ""}
           <div class="intercept-card__body intercept-card__body--compact">
             <section class="intercept-card__main">
               <div
