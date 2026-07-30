@@ -6629,13 +6629,14 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-chk input{ margin:0; }
 .cas-chk--inline{ margin-left:6px; white-space:nowrap; font-size:12px; }
 
-.cas-cs-wrap{ position:relative; }
-.cas-cs-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-.cas-cs-chips:empty{ display:none; }
+/* Поле позивних: чіпи всередині інпута (як у картці перехоплення) */
+.cas-cs-wrap{ position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:5px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; }
+.cas-cs-wrap:focus-within{ border-color:#3b82f6; }
+.cas-cs-chips{ display:contents; }
 .cas-chip{ display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; background:rgba(96,165,250,.18); border:1px solid rgba(96,165,250,.4); color:#dbeafe; font-size:12px; font-weight:600; }
 .cas-chip-x{ background:transparent; border:0; color:#bfdbfe; cursor:pointer; font-size:14px; line-height:1; padding:0; }
 .cas-chip-x:hover{ color:#fff; }
-.cas-cs-input{ width:100%; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:13px; }
+.cas-cs-input{ flex:1 1 90px; min-width:90px; padding:3px 0; border:0; background:transparent; color:#e2e8f0; font-size:13px; outline:none; }
 .cas-cs-ac{ position:absolute; left:0; right:0; top:calc(100% + 2px); z-index:5; background:#0f172a; border:1px solid rgba(255,255,255,.18); border-radius:8px; overflow:hidden; box-shadow:0 12px 28px rgba(0,0,0,.5); max-height:220px; overflow-y:auto; }
 .cas-cs-ac button{ display:block; width:100%; text-align:left; padding:7px 10px; background:transparent; border:0; color:#e2e8f0; font-size:13px; cursor:pointer; }
 .cas-cs-ac button:hover{ background:#1e293b; }
