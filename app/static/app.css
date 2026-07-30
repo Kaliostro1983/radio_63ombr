@@ -6640,3 +6640,24 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 
 /* Кнопка «☠» у картці перехоплення */
 .intercept-card__cas-btn{ color:#f87171; }
+
+/* «Втрати 2»: футер модалки — надсилання + пікер чату (Фаза 3) */
+.cas-modal__foot{ align-items:center; gap:8px; }
+.cas-foot-spacer{ flex:1 1 auto; }
+.cas-send-btn{ padding:8px 14px; border-radius:10px; border:1px solid rgba(96,165,250,.5); background:rgba(96,165,250,.18); color:#dbeafe; font-weight:700; font-size:13px; cursor:pointer; }
+.cas-send-btn:hover{ background:rgba(96,165,250,.3); }
+.cas-send-btn:disabled{ opacity:.55; cursor:default; }
+.cas-send-btn.is-busy{ opacity:.6; pointer-events:none; }
+
+.cas-send-picker{ position:absolute; right:14px; bottom:56px; z-index:20; display:flex; gap:6px; align-items:flex-start;
+  background:#0f172a; border:1px solid rgba(255,255,255,.18); border-radius:10px; padding:8px; box-shadow:0 16px 40px rgba(0,0,0,.55); width:320px; max-width:calc(100% - 28px); }
+.cas-pick-platform{ width:34px; height:34px; border-radius:8px; border:0; color:#fff; font-weight:800; cursor:pointer; flex:0 0 auto; }
+.cas-pick-inwrap{ position:relative; flex:1 1 auto; }
+.cas-pick-input{ width:100%; padding:7px 9px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:13px; }
+.cas-pick-drop{ position:absolute; left:0; right:0; top:calc(100% + 3px); background:#0f172a; border:1px solid rgba(255,255,255,.18); border-radius:8px; max-height:220px; overflow-y:auto; box-shadow:0 12px 28px rgba(0,0,0,.5); }
+.cas-pick-drop.hidden{ display:none; }
+.cas-pick-item{ padding:7px 10px; font-size:13px; color:#e2e8f0; cursor:pointer; }
+.cas-pick-item:hover{ background:#1e293b; }
+.cas-pick-empty{ padding:7px 10px; font-size:12px; color:#94a3b8; }
+.cas-pick-ok{ padding:7px 14px; border-radius:8px; border:0; background:#2563eb; color:#fff; font-weight:700; cursor:pointer; flex:0 0 auto; }
+.cas-pick-ok:disabled{ opacity:.5; cursor:default; }

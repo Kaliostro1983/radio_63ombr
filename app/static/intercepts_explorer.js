@@ -1817,9 +1817,11 @@
           ? [
               card.querySelector(".intercept-card__line--dt")?.textContent,
               card.querySelector(".intercept-card__line--freq")?.textContent,
+              card.querySelector(".intercept-card__line--net")?.textContent,
             ].map((s) => (s || "").trim()).filter(Boolean).join("  ·  ")
           : "";
-        if (mid && window.openCasualtyModal) window.openCasualtyModal(mid, nid, meta);
+        const itext = card ? (card.querySelector(".intercept-card__text")?.textContent || "").trim() : "";
+        if (mid && window.openCasualtyModal) window.openCasualtyModal(mid, nid, meta, itext);
         return;
       }
 

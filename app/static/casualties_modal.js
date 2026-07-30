@@ -8,7 +8,7 @@
 (function () {
   "use strict";
 
-  var _msgId = 0, _netId = null;
+  var _msgId = 0, _netId = null, _interceptText = "";
   var _reasons = [];   // [{id,name}]
   var _units = [];     // [{id,name}]
 
@@ -42,8 +42,8 @@
   }
 
   // ── Відкрити / закрити ─────────────────────────────────────────────────────
-  window.openCasualtyModal = function (messageId, networkId, meta) {
-    _msgId = messageId; _netId = networkId || null;
+  window.openCasualtyModal = function (messageId, networkId, meta, interceptText) {
+    _msgId = messageId; _netId = networkId || null; _interceptText = interceptText || "";
     var modal = $("casualtyModal"); if (!modal) return;
     var metaEl = $("casModalMeta"); if (metaEl) metaEl.textContent = meta || "";
     modal.classList.remove("hidden"); modal.removeAttribute("aria-hidden");
@@ -243,6 +243,140 @@
       }).catch(function () { toast("Помилка", "error"); });
   }
 
+  // ── Надсилання у чат (окрема ціль від «Цікаво») ────────────────────────────
+  var LS_CAS_CHAT = "casSendChat_v1";
+  var CAS_PLATFORMS = [
+    { id: "signal", label: "S", color: "#3a76f0" },
+    { id: "whatsapp", label: "W", color: "#16a34a" },
+  ];
+  var _casChat = (function () {
+    try { var s = localStorage.getItem(LS_CAS_CHAT); return s ? JSON.parse(s) : null; } catch (_) { return null; }
+  })();
+  var _casChatsCache = {};
+  var _casPickPlatform = (_casChat && _casChat.platform) || "signal";
+  var _casPickPending = null;
+
+  function _casLoadChats(platform) {
+    if (_casChatsCache[platform]) return Promise.resolve(_casChatsCache[platform]);
+    return fetch("/api/push/chats?platform=" + platform + "&only_groups=0")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        _casChatsCache[platform] = (d && d.ok && Array.isArray(d.chats)) ? d.chats : [];
+        return _casChatsCache[platform];
+      }).catch(function () { _casChatsCache[platform] = []; return []; });
+  }
+
+  // Текст звіту: заголовок + мета/перехоплення + перелік записів (з DOM, тож
+  // відображає поточний стан контейнерів).
+  function _casBuildMessage() {
+    var lines = ["☠ ВТРАТИ (за даними противника)"];
+    var meta = ($("casModalMeta").textContent || "").trim();
+    if (meta) lines.push("", meta);
+    if (_interceptText) lines.push("", _interceptText.trim());
+    var recLines = [];
+    document.querySelectorAll("#casRecords .cas-rec").forEach(function (el) {
+      var status = el.querySelector(".cas-status").dataset.status;
+      var count = Math.max(1, parseInt(el.querySelector(".cas-count").value, 10) || 1);
+      var rSel = el.querySelector(".cas-reason");
+      var reason = rSel.value ? rSel.options[rSel.selectedIndex].text : "";
+      var uSel = el.querySelector(".cas-unit");
+      var unit = uSel.value ? uSel.options[uSel.selectedIndex].text : "";
+      var cs = (el.__callsigns || []).map(function (c) { return c.name; });
+      var parts = [status + " × " + count];
+      if (reason) parts.push(reason);
+      if (unit) parts.push(unit);
+      var line = "• " + parts.join(" — ");
+      if (cs.length) line += " · " + cs.join(", ");
+      if (el.querySelector(".cas-accounted").checked) line += " (враховано)";
+      recLines.push(line);
+    });
+    if (recLines.length) lines.push("", recLines.join("\n"));
+    return lines.join("\n").trim();
+  }
+
+  function _casSend() {
+    if (!_casChat || !_casChat.id) {
+      _casOpenPicker();
+      toast("Спершу вкажіть чат (Ctrl+клік по «Надіслати»)", "warn");
+      return;
+    }
+    var text = _casBuildMessage();
+    if (!text) { toast("Немає даних для надсилання", "warn"); return; }
+    var btn = $("casSendBtn");
+    if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
+    fetch("/api/push/send", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform: _casChat.platform, chat_id: _casChat.id, text: text }),
+    }).then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (d && d.ok) toast("Надіслано → " + _casChat.name, "success");
+        else toast(d.error || d.detail || "Помилка надсилання", "error");
+      }).catch(function (e) { toast("Помилка: " + (e && e.message || e), "error"); })
+      .then(function () { if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); } });
+  }
+
+  // ── Пікер цільового чату (динамічна панель у футері) ────────────────────────
+  function _casClosePicker() { var p = $("casSendPicker"); if (p) p.remove(); }
+  function _casRenderDrop(pk, query) {
+    var drop = pk.querySelector(".cas-pick-drop");
+    drop.classList.remove("hidden");
+    drop.innerHTML = '<div class="cas-pick-empty">Завантаження…</div>';
+    _casLoadChats(_casPickPlatform).then(function (chats) {
+      var q = (query || "").trim().toLowerCase();
+      var filtered = chats.filter(function (c) { return c && c.name; })
+        .filter(function (c) { return !q || String(c.name).toLowerCase().indexOf(q) >= 0; }).slice(0, 40);
+      if (!filtered.length) { drop.innerHTML = '<div class="cas-pick-empty">Чатів не знайдено</div>'; return; }
+      drop.innerHTML = "";
+      filtered.forEach(function (chat) {
+        var it = document.createElement("div");
+        it.className = "cas-pick-item"; it.textContent = chat.name;
+        it.addEventListener("mousedown", function (e) {
+          e.preventDefault();
+          _casPickPending = { id: chat.id, name: chat.name };
+          pk.querySelector(".cas-pick-input").value = chat.name;
+          pk.querySelector(".cas-pick-ok").disabled = false;
+          drop.classList.add("hidden");
+        });
+        drop.appendChild(it);
+      });
+    });
+  }
+  function _casOpenPicker() {
+    _casClosePicker();
+    _casPickPlatform = (_casChat && _casChat.platform) || "signal";
+    _casPickPending = _casChat ? { id: _casChat.id, name: _casChat.name } : null;
+    var pinfo = CAS_PLATFORMS.find(function (p) { return p.id === _casPickPlatform; }) || CAS_PLATFORMS[0];
+    var pk = document.createElement("div");
+    pk.id = "casSendPicker"; pk.className = "cas-send-picker";
+    pk.innerHTML =
+      '<button type="button" class="cas-pick-platform" style="background:' + pinfo.color + '">' + pinfo.label + "</button>" +
+      '<div class="cas-pick-inwrap"><input type="text" class="cas-pick-input" placeholder="чат…" autocomplete="off" value="' + esc(_casChat ? _casChat.name : "") + '">' +
+      '<div class="cas-pick-drop hidden"></div></div>' +
+      '<button type="button" class="cas-pick-ok"' + (_casPickPending ? "" : " disabled") + ">ОК</button>";
+    var foot = document.querySelector("#casualtyModal .cas-modal__foot");
+    if (foot) foot.appendChild(pk);
+
+    pk.querySelector(".cas-pick-platform").addEventListener("click", function () {
+      var idx = CAS_PLATFORMS.findIndex(function (p) { return p.id === _casPickPlatform; });
+      var next = CAS_PLATFORMS[(idx + 1) % CAS_PLATFORMS.length];
+      _casPickPlatform = next.id; _casPickPending = null;
+      var b = pk.querySelector(".cas-pick-platform"); b.textContent = next.label; b.style.background = next.color;
+      pk.querySelector(".cas-pick-input").value = "";
+      pk.querySelector(".cas-pick-ok").disabled = true;
+    });
+    var inp = pk.querySelector(".cas-pick-input");
+    inp.addEventListener("focus", function () { _casRenderDrop(pk, inp.value); });
+    inp.addEventListener("input", function () { _casRenderDrop(pk, inp.value); });
+    pk.querySelector(".cas-pick-ok").addEventListener("click", function () {
+      if (!_casPickPending) return;
+      _casChat = { platform: _casPickPlatform, id: _casPickPending.id, name: _casPickPending.name };
+      try { localStorage.setItem(LS_CAS_CHAT, JSON.stringify(_casChat)); } catch (_) {}
+      _casClosePicker();
+      toast("Чат втрат: " + _casChat.name, "success");
+    });
+    setTimeout(function () { inp.focus(); }, 0);
+  }
+
   // ── Init ───────────────────────────────────────────────────────────────────
   function init() {
     var modal = $("casualtyModal"); if (!modal) return;
@@ -253,8 +387,21 @@
     if (add) add.addEventListener("click", function () {
       var box = $("casRecords"); if (box) box.appendChild(buildContainer(null));
     });
+    var send = $("casSendBtn");
+    if (send) send.addEventListener("click", function (e) {
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); _casOpenPicker(); }
+      else _casSend();
+    });
+    // Закриття пікера при кліку поза ним.
+    document.addEventListener("click", function (e) {
+      var pk = $("casSendPicker"); if (!pk) return;
+      if (pk.contains(e.target) || (send && send.contains(e.target))) return;
+      _casClosePicker();
+    });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
+      if (e.key !== "Escape") return;
+      if ($("casSendPicker")) { _casClosePicker(); return; }
+      if (!modal.classList.contains("hidden")) closeModal();
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
