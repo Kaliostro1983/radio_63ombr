@@ -2000,6 +2000,8 @@
           comment:         apiItem.comment      || "",
           net_description: apiItem.net_description || "",
           network:         apiItem.network      || {},
+          value_flag:      apiItem.value_flag,
+          has_conclusion:  apiItem.has_conclusion,
         });
       }
 
@@ -2017,6 +2019,8 @@
 
       /* Render */
       const item = state.items.find((x) => Number(x.id) === Number(apiItem.id));
+      /* Статус цінності — завжди з актуальної відповіді (навіть якщо item уже був). */
+      if (item) { item.value_flag = apiItem.value_flag; item.has_conclusion = apiItem.has_conclusion; }
       container.innerHTML = renderInterceptCardHtml(item);
 
       /* Wire up all events */
