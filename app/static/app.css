@@ -2387,6 +2387,7 @@ button.secondary{
 .intercept-card__share-btn{ font-size:14px; }
 .intercept-card__share-btn:nth-of-type(2){ right:38px; }
 .intercept-card__share-btn:nth-of-type(3){ right:76px; }
+.intercept-card__share-btn:nth-of-type(4){ right:114px; }
 /* Іконки-теги радіомережі в контейнері перехоплення */
 .intercept-card__nettags{
   display:flex;
