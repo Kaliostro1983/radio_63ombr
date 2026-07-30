@@ -506,6 +506,15 @@
                   title="Поширити перехоплення кільком отримувачам"
                   aria-label="Поширити"
                 >⤴</button>
+                <button
+                  type="button"
+                  class="intercepts-copy-icon-btn intercept-card__share-btn intercept-card__cas-btn"
+                  data-cas-open="1"
+                  data-message-id="${item.id}"
+                  data-network-id="${netId}"
+                  title="Втрати (200/300) — оформити"
+                  aria-label="Втрати"
+                >☠</button>
                 <div class="intercept-card__line intercept-card__line--dt">
                   ${escapeHtml(header.dt)}
                 </div>
@@ -1794,6 +1803,23 @@
         const act = shareBtn.getAttribute("data-share-action");
         if (act === "interest" && window.monInterestAction) window.monInterestAction(event);
         else if (act === "share" && window.monShareAction) window.monShareAction(shareBtn);
+        return;
+      }
+
+      // «☠» — оформлення втрат (200/300). Логіка у casualties_modal.js.
+      const casBtn = event.target.closest("[data-cas-open]");
+      if (casBtn) {
+        event.stopPropagation();
+        const mid = Number(casBtn.dataset.messageId || 0);
+        const nid = Number(casBtn.dataset.networkId || 0) || null;
+        const card = casBtn.closest(".intercept-card");
+        const meta = card
+          ? [
+              card.querySelector(".intercept-card__line--dt")?.textContent,
+              card.querySelector(".intercept-card__line--freq")?.textContent,
+            ].map((s) => (s || "").trim()).filter(Boolean).join("  ·  ")
+          : "";
+        if (mid && window.openCasualtyModal) window.openCasualtyModal(mid, nid, meta);
         return;
       }
 

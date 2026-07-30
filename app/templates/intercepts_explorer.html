@@ -1223,8 +1223,26 @@
  * — у флоу "Висновок → Додати → Орієнтир" має бути ПОВЕРХ .it-modal. */
 #conclLmPicker { z-index: 10500 !important; }
 </style>
+
+<!-- Модалка оформлення втрат (200/300) — «Втрати 2», Фаза 2. Логіка: casualties_modal.js -->
+<div id="casualtyModal" class="cas-modal hidden" aria-hidden="true">
+  <div class="cas-modal__backdrop" data-cas-close></div>
+  <div class="cas-modal__card" role="dialog" aria-modal="true" aria-label="Втрати">
+    <div class="cas-modal__head">
+      <div class="cas-modal__title">Втрати&nbsp;<span id="casModalMeta" class="cas-modal__meta"></span></div>
+      <button type="button" class="cas-modal__x" data-cas-close aria-label="Закрити">✕</button>
+    </div>
+    <div class="cas-modal__body">
+      <div id="casRecords" class="cas-records"></div>
+    </div>
+    <div class="cas-modal__foot">
+      <button type="button" id="casAddBtn" class="cas-add-btn" title="Додати ще один запис втрат">＋</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/intercepts_freq_chips.js?v=3"></script>
-<script src="/static/intercepts_explorer.js?v=43"></script>
+<script src="/static/intercepts_explorer.js?v=44"></script>
 <script src="/static/intercepts_search_modal.js?v=4"></script>
 <script src="/static/vendor/milsymbol.js?v=1"></script>
 <script src="/static/monitor.js?v=162"></script>
@@ -1234,5 +1252,6 @@
 <script src="/static/intercepts_import.js?v=5"></script>
 <script src="/static/networks_autocomplete.js?v=9" defer></script>
 <script src="/static/dictionary.js?v=1" defer></script>
+<script src="/static/casualties_modal.js?v=1"></script>
 {% endblock %}
 

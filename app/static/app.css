@@ -6581,3 +6581,62 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 }
 .pal-eye-btn:hover{ background:rgba(255,255,255,.10); opacity:1; }
 .pal-eye-btn.is-on{ opacity:1; color:#4ade80; border-color:color-mix(in srgb,#4ade80 45%,transparent); }
+
+/* ═══ «Втрати 2»: модалка оформлення втрат (200/300) — Фаза 2 ═══════════════ */
+.cas-modal{ position:fixed; inset:0; z-index:12000; display:flex; align-items:center; justify-content:center; }
+.cas-modal.hidden{ display:none; }
+.cas-modal__backdrop{ position:absolute; inset:0; background:rgba(2,6,23,.62); }
+.cas-modal__card{
+  position:relative; width:min(560px, 94vw); max-height:88vh; display:flex; flex-direction:column;
+  background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,.14);
+  border-radius:14px; box-shadow:0 24px 64px rgba(0,0,0,.55); overflow:hidden;
+}
+.cas-modal__head{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.1); }
+.cas-modal__title{ font-weight:700; font-size:15px; }
+.cas-modal__meta{ font-weight:400; font-size:12px; color:#94a3b8; }
+.cas-modal__x{ margin-left:auto; background:transparent; border:0; color:#cbd5e1; font-size:16px; cursor:pointer; padding:4px 8px; border-radius:8px; }
+.cas-modal__x:hover{ background:rgba(255,255,255,.1); }
+.cas-modal__body{ padding:12px 14px; overflow-y:auto; }
+.cas-modal__foot{ padding:10px 14px; border-top:1px solid rgba(255,255,255,.1); display:flex; }
+.cas-loading{ color:#94a3b8; font-size:13px; padding:10px 0; }
+
+.cas-records{ display:flex; flex-direction:column; gap:12px; }
+.cas-rec{ border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:10px 12px; background:rgba(255,255,255,.03); display:flex; flex-direction:column; gap:8px; }
+.cas-rec__row1{ display:flex; align-items:center; gap:10px; }
+.cas-status{ min-width:56px; padding:6px 10px; border-radius:10px; border:1px solid transparent; font-weight:800; font-size:14px; cursor:pointer; color:#fff; }
+.cas-status.is-200{ background:#dc2626; }
+.cas-status.is-300{ background:#f59e0b; }
+.cas-count{ width:64px; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:14px; }
+.cas-rec__saved{ font-size:13px; width:18px; text-align:center; color:#94a3b8; }
+.cas-rec__saved--saved{ color:#4ade80; }
+.cas-rec__saved--saving{ color:#facc15; }
+.cas-rec__saved--error{ color:#f87171; font-weight:800; }
+.cas-rec__saved--dirty{ color:#94a3b8; }
+.cas-del{ margin-left:auto; background:transparent; border:0; color:#94a3b8; font-size:14px; cursor:pointer; padding:4px 8px; border-radius:8px; }
+.cas-del:hover{ background:rgba(248,113,113,.18); color:#fca5a5; }
+
+.cas-fld{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:#cbd5e1; }
+.cas-fld > span{ opacity:.8; }
+.cas-select-wrap{ display:flex; gap:6px; }
+.cas-select-wrap select{ flex:1; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:13px; }
+.cas-add-opt{ width:32px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; cursor:pointer; font-size:15px; line-height:1; }
+.cas-add-opt:hover{ background:#334155; }
+.cas-chk{ display:flex; align-items:center; gap:8px; font-size:13px; color:#cbd5e1; cursor:pointer; }
+.cas-chk input{ margin:0; }
+
+.cas-cs-wrap{ position:relative; }
+.cas-cs-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+.cas-cs-chips:empty{ display:none; }
+.cas-chip{ display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; background:rgba(96,165,250,.18); border:1px solid rgba(96,165,250,.4); color:#dbeafe; font-size:12px; font-weight:600; }
+.cas-chip-x{ background:transparent; border:0; color:#bfdbfe; cursor:pointer; font-size:14px; line-height:1; padding:0; }
+.cas-chip-x:hover{ color:#fff; }
+.cas-cs-input{ width:100%; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:13px; }
+.cas-cs-ac{ position:absolute; left:0; right:0; top:calc(100% + 2px); z-index:5; background:#0f172a; border:1px solid rgba(255,255,255,.18); border-radius:8px; overflow:hidden; box-shadow:0 12px 28px rgba(0,0,0,.5); max-height:220px; overflow-y:auto; }
+.cas-cs-ac button{ display:block; width:100%; text-align:left; padding:7px 10px; background:transparent; border:0; color:#e2e8f0; font-size:13px; cursor:pointer; }
+.cas-cs-ac button:hover{ background:#1e293b; }
+
+.cas-add-btn{ width:36px; height:36px; border-radius:10px; border:1px dashed rgba(255,255,255,.3); background:transparent; color:#e2e8f0; font-size:18px; line-height:1; cursor:pointer; }
+.cas-add-btn:hover{ background:rgba(255,255,255,.08); border-style:solid; }
+
+/* Кнопка «☠» у картці перехоплення */
+.intercept-card__cas-btn{ color:#f87171; }
