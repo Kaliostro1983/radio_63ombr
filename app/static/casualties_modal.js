@@ -31,6 +31,10 @@
     return fetch("/api/cas/units").then(function (r) { return r.json(); })
       .then(function (d) { _units = (d && d.units) || []; });
   }
+  function _defaultReasonId() {
+    var r = (_reasons || []).find(function (x) { return String(x.name).trim().toLowerCase() === "невідомо"; });
+    return r ? r.id : "";
+  }
   function optionsHtml(list, selId) {
     return ['<option value="">—</option>'].concat(list.map(function (o) {
       return '<option value="' + o.id + '"' +
@@ -46,7 +50,10 @@
   // ── Відкрити / закрити ─────────────────────────────────────────────────────
   window.openCasualtyModal = function (messageId, networkId, meta, interceptText, callsigns) {
     _msgId = messageId; _netId = networkId || null; _interceptText = interceptText || "";
-    _interceptCallsigns = Array.isArray(callsigns) ? callsigns.slice() : [];
+    // «НВ» — це не позивний (вказівка, що позивний невідомий) → не префілимо.
+    _interceptCallsigns = (Array.isArray(callsigns) ? callsigns : []).filter(function (c) {
+      return String((c && c.name) || "").trim().toUpperCase() !== "НВ";
+    });
     var modal = $("casualtyModal"); if (!modal) return;
     var metaEl = $("casModalMeta"); if (metaEl) metaEl.textContent = meta || "";
     modal.classList.remove("hidden"); modal.removeAttribute("aria-hidden");
@@ -97,7 +104,7 @@
             '<button type="button" class="cas-del" title="Видалити запис">✕</button>' +
           "</div>" +
           '<label class="cas-fld"><span>Причина</span>' +
-            '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : "") + "</select>" +
+            '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : _defaultReasonId()) + "</select>" +
             '<button type="button" class="cas-add-opt" data-kind="reason" title="Додати причину">＋</button></span></label>' +
           '<label class="cas-fld"><span>Підрозділ</span>' +
             '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : "") + "</select>" +
