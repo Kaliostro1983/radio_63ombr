@@ -293,14 +293,24 @@ def _casualty_dict(conn, r) -> dict:
         "last_edited_by": r["last_edited_by"],
         "last_edited_at": r["last_edited_at"],
         "callsigns": [{"id": x["id"], "name": x["name"]} for x in cs],
+        # Контекст перехоплення (для сторінкового переліку «Втрати 2»).
+        "msg_dt": (r["msg_dt"] if "msg_dt" in keys else None),
+        "msg_freq": (r["msg_freq"] if "msg_freq" in keys else None),
+        "msg_net": (r["msg_net"] if "msg_net" in keys else None),
+        "msg_text": (r["msg_text"] if "msg_text" in keys else None),
+        "msg_network_id": (r["msg_network_id"] if "msg_network_id" in keys else None),
     }
 
 
 _SELECT_CASUALTY = (
-    "SELECT cas.*, r.name AS reason_name, u.name AS unit_name "
+    "SELECT cas.*, r.name AS reason_name, u.name AS unit_name, "
+    "m.created_at AS msg_dt, m.net_description AS msg_net, m.body_text AS msg_text, "
+    "n.frequency AS msg_freq, n.id AS msg_network_id "
     "FROM casualties cas "
     "LEFT JOIN casualty_reasons r ON r.id = cas.reason_id "
     "LEFT JOIN cas_units u        ON u.id = cas.unit_id "
+    "LEFT JOIN messages m         ON m.id = cas.message_id "
+    "LEFT JOIN networks n         ON n.id = m.network_id "
 )
 
 
@@ -333,16 +343,57 @@ def cas_records_list(
     params: list = []
     if message_id:
         wheres.append("cas.message_id = ?"); params.append(message_id)
+    # Період — за часом ПЕРЕХОПЛЕННЯ (messages.created_at), не за часом внесення.
     if date_from:
-        wheres.append("cas.created_at >= ?"); params.append(date_from)
+        wheres.append("m.created_at >= ?"); params.append(date_from)
     if date_to:
-        wheres.append("cas.created_at <= ?"); params.append(date_to)
+        wheres.append("m.created_at <= ?"); params.append(date_to)
     sql = _SELECT_CASUALTY + "WHERE " + " AND ".join(wheres) + \
-        " ORDER BY cas.created_at DESC, cas.id DESC"
+        " ORDER BY m.created_at DESC, cas.id DESC"
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
         out = [_casualty_dict(conn, r) for r in rows]
     return {"ok": True, "records": out}
+
+
+@router.get("/api/casualties/report")
+def cas_report(date_from: str = Query(default=""), date_to: str = Query(default="")):
+    """Агрегація втрат за період: по підрозділах × статус (200/300).
+    Формат — як у таблиці «Втрати»: секції БЕЗПОВОРОТНІ (200) / САНІТАРНІ (300)."""
+    wheres = ["cas.is_valid = 1"]
+    params: list = []
+    if date_from:
+        wheres.append("m.created_at >= ?"); params.append(date_from)
+    if date_to:
+        wheres.append("m.created_at <= ?"); params.append(date_to)
+    sql = (
+        "SELECT COALESCE(NULLIF(u.name, ''), NULLIF(cas.unit_text, ''), 'Невідомо') AS unit, "
+        "u.sort_order AS so, cas.status AS status, SUM(cas.count) AS cnt "
+        "FROM casualties cas LEFT JOIN cas_units u ON u.id = cas.unit_id "
+        "LEFT JOIN messages m ON m.id = cas.message_id "
+        "WHERE " + " AND ".join(wheres) + " GROUP BY unit, cas.status"
+    )
+    agg: dict = {}
+    with get_conn() as conn:
+        for r in conn.execute(sql, params).fetchall():
+            u = r["unit"]
+            row = agg.setdefault(u, {
+                "unit": u, "killed": 0, "wounded": 0,
+                "so": r["so"] if r["so"] is not None else 9999,
+            })
+            if r["status"] == "200":
+                row["killed"] += r["cnt"] or 0
+            else:
+                row["wounded"] += r["cnt"] or 0
+    rows = sorted(agg.values(), key=lambda x: (x["so"], x["unit"]))
+    return {
+        "ok": True,
+        "rows": rows,
+        "totals": {
+            "killed": sum(x["killed"] for x in rows),
+            "wounded": sum(x["wounded"] for x in rows),
+        },
+    }
 
 
 class CasualtyIn(BaseModel):

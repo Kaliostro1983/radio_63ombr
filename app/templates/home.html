@@ -16,6 +16,7 @@
       <button id="homeOpenOverview"   type="button" class="secondary">Огляд</button>
       <button id="homeOpenReports"    type="button" class="secondary">Звіти</button>
       <button id="homeOpenCasualties" type="button" class="secondary">Втрати</button>
+      <button id="homeOpenCasualties2" type="button" class="secondary">Втрати 2</button>
     </div>
   </div>
 
@@ -246,6 +247,29 @@
           </div>
         </section>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Втрати 2 (перехоплення + записи втрат за період) ───── -->
+<div id="homeModalCasualties2" class="modal hidden home-modal" aria-hidden="true">
+  <div class="modal-backdrop" data-cas2-close></div>
+  <div class="modal-card home-modal-card" role="dialog" aria-modal="true" aria-labelledby="cas2Title">
+    <div class="modal-head">
+      <div id="cas2Title" class="modal-title">Втрати 2 <span id="cas2Sub" class="small" style="opacity:.6"></span></div>
+      <button type="button" class="secondary" data-cas2-close style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-body home-modal-body">
+      <div class="cas2-toolbar">
+        <label class="small">З</label><input type="datetime-local" id="cas2From" class="cas-date-input">
+        <label class="small">До</label><input type="datetime-local" id="cas2To" class="cas-date-input">
+        <button type="button" id="cas2Refresh" class="secondary">Оновити</button>
+        <span class="cas-sep"></span>
+        <button type="button" id="cas2ReportBtn" class="secondary">📊 Звіт</button>
+        <button type="button" id="cas2ListBtn" class="secondary" style="display:none">↩ Перелік</button>
+      </div>
+      <div id="cas2List" class="cas2-list"></div>
+      <div id="cas2Report" class="cas2-report hidden"></div>
     </div>
   </div>
 </div>
@@ -506,5 +530,6 @@ thead .cas-col-total { text-align: center; }
 {% block scripts %}
 <script src="/static/home.js?v=25" defer></script>
 <script src="/static/casualties.js?v=14" defer></script>
+<script src="/static/casualties_report.js?v=1" defer></script>
 <script src="/static/overview.js?v=1" defer></script>
 {% endblock %}

@@ -6666,3 +6666,34 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-pick-empty{ padding:7px 10px; font-size:12px; color:#94a3b8; }
 .cas-pick-ok{ padding:7px 14px; border-radius:8px; border:0; background:#2563eb; color:#fff; font-weight:700; cursor:pointer; flex:0 0 auto; }
 .cas-pick-ok:disabled{ opacity:.5; cursor:default; }
+
+/* ═══ «Втрати 2» — сторінкова модалка (home) ═══════════════════════════════ */
+.cas2-toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.cas2-toolbar .cas-date-input{ min-width:0; }
+.cas2-list{ display:flex; flex-direction:column; gap:10px; }
+.cas2-empty{ opacity:.6; font-size:13px; padding:12px 2px; }
+.cas2-item{ border:1px solid rgba(127,127,127,.25); border-radius:12px; padding:10px 12px; background:rgba(127,127,127,.05); }
+.cas2-item-head{ display:flex; align-items:center; gap:10px; }
+.cas2-item-title{ font-weight:700; font-size:13px; flex:1 1 auto; min-width:0; }
+.cas2-edit{ background:transparent; border:1px solid rgba(127,127,127,.35); border-radius:8px; padding:4px 10px; font-size:12px; color:var(--fg,#e2e8f0); cursor:pointer; white-space:nowrap; }
+.cas2-edit:hover{ background:rgba(127,127,127,.15); }
+.cas2-item-text{ font-size:12px; opacity:.72; margin:6px 0; max-height:60px; overflow:hidden; white-space:pre-wrap; }
+.cas2-recs{ display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.cas2-rec{ display:flex; align-items:center; gap:8px; font-size:13px; }
+.cas2-rec-line{ flex:1 1 auto; min-width:0; }
+.cas2-del{ background:transparent; border:0; cursor:pointer; opacity:.6; font-size:13px; }
+.cas2-del:hover{ opacity:1; }
+.cas2-badge{ display:inline-block; padding:1px 8px; border-radius:999px; font-weight:800; font-size:12px; color:#fff; }
+.cas2-badge--200{ background:#dc2626; }
+.cas2-badge--300{ background:#f59e0b; }
+.cas2-cs{ opacity:.85; }
+.cas2-acc{ font-size:11px; opacity:.6; }
+
+.cas2-report-title{ font-weight:700; font-size:14px; margin-bottom:10px; }
+.cas2-report-table{ border-collapse:collapse; width:100%; max-width:560px; font-size:13px; }
+.cas2-report-table th, .cas2-report-table td{ border:1px solid rgba(127,127,127,.3); padding:6px 12px; text-align:left; }
+.cas2-report-table thead th{ background:rgba(127,127,127,.12); font-size:12px; }
+.cas2-report-table tfoot td{ font-weight:800; background:rgba(127,127,127,.08); }
+.cas2-num{ text-align:center; font-weight:700; width:150px; }
+.cas2-num--200{ color:#ef4444; }
+.cas2-num--300{ color:#f59e0b; }

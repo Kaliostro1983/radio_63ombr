@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=181"/>
+  <link rel="stylesheet" href="/static/app.css?v=182"/>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
   <script src="/static/app.js?v=2" defer></script>
   {% block extra_head %}{% endblock %}
@@ -457,6 +457,27 @@
   })();
 </script>
 
+<!-- Модалка оформлення втрат (200/300) — «Втрати 2». Глобальна: кнопка ☠ у
+     картці перехоплення (intercepts-explorer) та редагування з «Втрати 2» (home).
+     Логіка: casualties_modal.js -->
+<div id="casualtyModal" class="cas-modal hidden" aria-hidden="true">
+  <div class="cas-modal__backdrop" data-cas-close></div>
+  <div class="cas-modal__card" role="dialog" aria-modal="true" aria-label="Втрати">
+    <div class="cas-modal__head">
+      <div class="cas-modal__title">Втрати&nbsp;<span id="casModalMeta" class="cas-modal__meta"></span></div>
+      <button type="button" class="cas-modal__x" data-cas-close aria-label="Закрити">✕</button>
+    </div>
+    <div class="cas-modal__body">
+      <div id="casRecords" class="cas-records"></div>
+    </div>
+    <div class="cas-modal__foot">
+      <button type="button" id="casAddBtn" class="cas-add-btn" title="Додати ще один запис втрат">＋</button>
+      <div class="cas-foot-spacer"></div>
+      <button type="button" id="casSendBtn" class="cas-send-btn" title="Зафіксувати статуси 200/300 та надіслати у чат (Ctrl+клік — задати/змінити чат)">🔥&nbsp;Гори у пеклі</button>
+    </div>
+  </div>
+</div>
+
 <!-- Shared landmark edit modal (/landmarks, /intercepts-explorer) -->
 <div id="lmModal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" data-close="1"></div>
@@ -610,6 +631,7 @@
 <script src="/static/vendor/proj4.js" defer></script>
 <script src="/static/callsign_status.js?v=2" defer></script>
 <script src="/static/callsign_modal.js?v=34" defer></script>
+<script src="/static/casualties_modal.js?v=8" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 /* Стекування модалок: будь-яка модалка (.modal), що стає видимою, піднімається

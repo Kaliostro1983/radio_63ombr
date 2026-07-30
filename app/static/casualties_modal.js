@@ -204,6 +204,9 @@
     s.textContent = state === "saving" ? "…" : (state === "saved" ? "✓" : (state === "error" ? "!" : "•"));
     s.title = { saving: "Збереження…", saved: "Збережено", error: "Помилка збереження", dirty: "Незбережено" }[state] || "";
   }
+  function _notifyChanged() {
+    try { document.dispatchEvent(new CustomEvent("casualtiesChanged", { detail: { message_id: _msgId } })); } catch (_) {}
+  }
   function scheduleSave(el) {
     _setSaved(el, "dirty");
     clearTimeout(el.__saveTimer);
@@ -220,7 +223,7 @@
       return fetch("/api/casualties/" + el.__casId, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       }).then(function (r) { return r.json(); })
-        .then(function (d) { var ok = !!(d && d.ok); _setSaved(el, ok ? "saved" : "error"); return ok; })
+        .then(function (d) { var ok = !!(d && d.ok); _setSaved(el, ok ? "saved" : "error"); if (ok) _notifyChanged(); return ok; })
         .catch(function () { _setSaved(el, "error"); return false; });
     }
     body.message_id = _msgId;
@@ -228,7 +231,7 @@
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }).then(function (r) { return r.json(); })
       .then(function (d) {
-        if (d && d.ok && d.record) { el.__casId = d.record.id; _setSaved(el, "saved"); return true; }
+        if (d && d.ok && d.record) { el.__casId = d.record.id; _setSaved(el, "saved"); _notifyChanged(); return true; }
         _setSaved(el, "error"); return false;
       }).catch(function () { _setSaved(el, "error"); return false; });
   }
@@ -236,7 +239,7 @@
     if (el.__casId) {
       if (!confirm("Видалити цей запис втрат?")) return;
       fetch("/api/casualties/" + el.__casId, { method: "DELETE" })
-        .then(function () { el.remove(); }).catch(function () { toast("Помилка видалення", "error"); });
+        .then(function () { el.remove(); _notifyChanged(); }).catch(function () { toast("Помилка видалення", "error"); });
     } else {
       el.remove();
     }
