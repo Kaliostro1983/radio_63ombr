@@ -4839,6 +4839,7 @@
   let _palScope = _palLoadScope();               // обрані палітри для пошуку
   let _palList  = [];                            // кеш списку палітр
   const _palRegionLayers = new Map();            // palette_id → [layers] на карті
+  const _palRegionBusy = new Set();              // palette_id, для яких триває показ (анти-гонка)
   let _palMatchMarkers = [];                     // тимчасові маркери збігів (legacy fallback)
   // Активні пошуки точок палітри. Кожен запис відповідає одному чіпу в
   // конт-інпуті "Координати" і утримує всі рендернуті варіанти на карті:
@@ -5605,7 +5606,13 @@
   /* ---- Рендеринг областей на карті ---- */
   function _palClearRegions(id) {
     const layers = _palRegionLayers.get(id);
-    if (layers) { layers.forEach(l => l.remove()); _palRegionLayers.delete(id); }
+    if (layers) {
+      layers.forEach(l => {
+        try { l.remove(); } catch (_) {}
+        try { if (_conclMap && _conclMap.hasLayer(l)) _conclMap.removeLayer(l); } catch (_) {}
+      });
+      _palRegionLayers.delete(id);
+    }
   }
 
   // Прибрати ВСІ намальовані зони палітр (напр., при відкритті модалки).
@@ -5624,9 +5631,15 @@
   }
 
   async function _palToggleRegions(id) {
+    // Анти-гонка: поки триває показ (fetch), ігноруємо повторні кліки — інакше
+    // другий показ перезаписав би трекінг і лишив «сироту» на карті.
+    if (_palRegionBusy.has(id)) return;
     if (_palRegionLayers.has(id)) { _palClearRegions(id); return; }
     if (!_conclMap) return;
+    _palRegionBusy.add(id);
     try {
+      // Про всяк випадок прибрати будь-який попередній набір цієї палітри.
+      _palClearRegions(id);
       const r = await fetch(`/api/palettes/${id}/regions`);
       const j = await r.json();
       const layers = [];
@@ -5666,6 +5679,8 @@
       if (bb && bb[0] != null) _conclMap.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { maxZoom: 13, padding: [20, 20] });
     } catch (_) {
       if (window.appToast) window.appToast("Не вдалося завантажити області", "error", 1800);
+    } finally {
+      _palRegionBusy.delete(id);
     }
   }
 
