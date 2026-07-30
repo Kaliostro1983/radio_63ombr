@@ -20,7 +20,7 @@
     });
   }
   function toast(m, t) { if (window.appToast) window.appToast(m, t || "info", 1600); }
-  function _casPhotoSrc(status) { return "/static/photos/casualties/" + (status === "200" ? "200" : "300") + ".svg?v=1"; }
+  function _casPhotoSrc(status) { return "/static/photos/casualties/" + (status === "200" ? "200" : "300") + ".webp?v=1"; }
 
   // ── Довідники ────────────────────────────────────────────────────────────
   function loadReasons() {
