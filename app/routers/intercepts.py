@@ -695,7 +695,9 @@ def intercepts_explorer_detail(message_id: int):
                 n.unit,
                 n.zone,
                 n.group_id   AS network_group_id,
-                g.name       AS network_group_name
+                g.name       AS network_group_name,
+                COALESCE(m.value_flag, 0) AS value_flag,
+                EXISTS(SELECT 1 FROM analytical_conclusions ac WHERE ac.message_id = m.id) AS has_conclusion
             FROM messages m
             JOIN networks n ON n.id = m.network_id
             LEFT JOIN groups g ON g.id = n.group_id
@@ -747,6 +749,8 @@ def intercepts_explorer_detail(message_id: int):
                     "text": message_row["body_text"] or "",
                     "comment": message_row["comment"] or "",
                     "net_description": message_row["net_description"] or "",
+                    "value_flag": int(message_row["value_flag"] or 0),
+                    "has_conclusion": bool(message_row["has_conclusion"]),
                     "network": {
                         "id":         message_row["network_id"],
                         "frequency":  message_row["frequency"] or "",
