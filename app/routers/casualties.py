@@ -14,6 +14,7 @@ Exposes:
 
 from __future__ import annotations
 
+import re
 from datetime import date as _date
 
 from fastapi import APIRouter, Query, Request
@@ -226,6 +227,67 @@ def _norm_status(s) -> str:
     return "200" if str(s or "").strip() == "200" else "300"
 
 
+# ── Автопідбір підрозділу (за group_id мережі + ешелоном з networks.unit) ──────
+def _flat(s: str) -> str:
+    return re.sub(r"\s+", "", (s or "").lower())
+
+
+def _norm_unit(s: str) -> str:
+    s = (s or "").lower().replace("шт3", "штз")   # цифра-3 ≡ кирилиця-З
+    s = re.sub(r"25\s*(за|а)\b", "", s)            # 25 ЗА ≡ 25 А
+    return re.sub(r"[^а-яіїєґ0-9]", "", s)
+
+
+def _echelon(unit: str):
+    u = (unit or "").lower()
+    m = re.search(r"([123])\s*мсб", u)
+    if m:
+        return m.group(1) + " мсб"
+    if re.search(r"шт[3з]", u):
+        return "штз"
+    if re.search(r"ісб", u):
+        return "ісб"
+    return None
+
+
+def _suggest_unit_id(conn, message_id: int):
+    """Підбирає cas_unit для перехоплення: формування з group_id мережі +
+    ешелон з networks.unit. «Інший підрозділ» відомого формування → штз (варіант б)."""
+    row = conn.execute(
+        "SELECT n.unit AS unit, g.name AS grp FROM messages m "
+        "LEFT JOIN networks n ON n.id = m.network_id "
+        "LEFT JOIN groups g ON g.id = n.group_id WHERE m.id = ?",
+        (message_id,),
+    ).fetchone()
+    if not row or not row["grp"] or row["grp"] == "Невідомо":
+        return None, None
+    grp, unit = row["grp"], row["unit"] or ""
+    casn = {
+        _norm_unit(r["name"]): (r["id"], r["name"])
+        for r in conn.execute("SELECT id, name FROM cas_units").fetchall()
+    }
+
+    def find(name):
+        return casn.get(_norm_unit(name))
+
+    if "ббпс" in _flat(grp):                        # 2 бБпС — уся група
+        hit = find(grp)
+        return (hit[0], hit[1]) if hit else (None, None)
+    ech = _echelon(unit)
+    if ech:
+        hit = find(ech + " " + grp)
+        if hit:
+            return hit[0], hit[1]
+    hit = find("штз " + grp)                        # варіант (б): інший підрозділ → штз
+    if hit:
+        return hit[0], hit[1]
+    if re.search(r"67\s*мсд", (unit + " " + grp).lower()):
+        hit = find("67 мсд")
+        if hit:
+            return hit[0], hit[1]
+    return None, None
+
+
 # ── Довідник причин ────────────────────────────────────────────────────────────
 
 @router.get("/api/casualty-reasons")
@@ -353,7 +415,12 @@ def cas_records_list(
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
         out = [_casualty_dict(conn, r) for r in rows]
-    return {"ok": True, "records": out}
+        resp = {"ok": True, "records": out}
+        if message_id:
+            uid, uname = _suggest_unit_id(conn, message_id)
+            resp["suggested_unit_id"] = uid
+            resp["suggested_unit_name"] = uname
+    return resp
 
 
 @router.get("/api/casualties/report")

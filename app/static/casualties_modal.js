@@ -10,6 +10,7 @@
 
   var _msgId = 0, _netId = null, _interceptText = "";
   var _interceptCallsigns = [];   // [{id,name}] — позивні перехоплення (для префілу чіпів)
+  var _suggestedUnitId = "";       // автопідбір підрозділу для нових записів
   var _reasons = [];   // [{id,name}]
   var _units = [];     // [{id,name}]
 
@@ -65,6 +66,7 @@
     ]).then(function () {
       return fetch("/api/casualties?message_id=" + messageId).then(function (r) { return r.json(); });
     }).then(function (d) {
+      _suggestedUnitId = (d && d.suggested_unit_id) || "";
       box.innerHTML = "";
       var recs = (d && d.records) || [];
       if (recs.length) recs.forEach(function (rec) { box.appendChild(buildContainer(rec)); });
@@ -107,7 +109,7 @@
             '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : _defaultReasonId()) + "</select>" +
             '<button type="button" class="cas-add-opt" data-kind="reason" title="Додати причину">＋</button></span></label>' +
           '<label class="cas-fld"><span>Підрозділ</span>' +
-            '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : "") + "</select>" +
+            '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : _suggestedUnitId) + "</select>" +
             '<button type="button" class="cas-add-opt" data-kind="unit" title="Додати підрозділ">＋</button></span></label>' +
         "</div>" +
       "</div>" +
