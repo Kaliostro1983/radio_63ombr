@@ -261,26 +261,36 @@ def _suggest_unit_id(conn, message_id: int):
     ).fetchone()
     if not row or not row["grp"] or row["grp"] == "Невідомо":
         return None, None
-    grp, unit = row["grp"], row["unit"] or ""
-    casn = {
-        _norm_unit(r["name"]): (r["id"], r["name"])
-        for r in conn.execute("SELECT id, name FROM cas_units").fetchall()
-    }
+    grp, unit = row["grp"] or "", row["unit"] or ""
+    cas = conn.execute("SELECT id, name FROM cas_units").fetchall()
+    casn = {_norm_unit(r["name"]): (r["id"], r["name"]) for r in cas}
 
     def find(name):
         return casn.get(_norm_unit(name))
 
-    if "ббпс" in _flat(grp):                        # 2 бБпС — уся група
-        hit = find(grp)
-        return (hit[0], hit[1]) if hit else (None, None)
+    known_grp = grp and grp != "Невідомо"
+    # 1) Прямий збіг за текстом unit (точний ешелон+формування; ловить і крос-тег,
+    #    коли unit явно вказує інше формування, ніж group, і «2 бБпС 71 опБпС»).
+    hit = find(unit)
+    if hit:
+        return hit[0], hit[1]
+    # 2) Ешелон із unit + повна назва групи (коли в unit бракує «67 мсд»).
     ech = _echelon(unit)
-    if ech:
+    if ech and known_grp:
         hit = find(ech + " " + grp)
         if hit:
             return hit[0], hit[1]
-    hit = find("штз " + grp)                        # варіант (б): інший підрозділ → штз
-    if hit:
-        return hit[0], hit[1]
+    # 3) Варіант (б): інший підрозділ відомого формування → штз формування.
+    if known_grp:
+        hit = find("штз " + grp)
+        if hit:
+            return hit[0], hit[1]
+    # 4) 2 бБпС за текстом (якщо група «Невідомо», але unit вказує бпс).
+    if "ббпс" in _flat(unit):
+        for cid, cname in casn.values():
+            if "ббпс" in _flat(cname):
+                return cid, cname
+    # 5) Дивізійний фолбек.
     if re.search(r"67\s*мсд", (unit + " " + grp).lower()):
         hit = find("67 мсд")
         if hit:
