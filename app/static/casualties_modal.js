@@ -73,10 +73,6 @@
   }
 
   // ── Запис-контейнер ────────────────────────────────────────────────────────
-  function _applyStatusClass(st) {
-    st.classList.toggle("is-200", st.dataset.status === "200");
-    st.classList.toggle("is-300", st.dataset.status === "300");
-  }
 
   function buildContainer(rec) {
     var el = document.createElement("div");
@@ -86,33 +82,36 @@
     el.__callsigns = rec && rec.callsigns ? rec.callsigns.slice() : _interceptCallsigns.slice();
     var status = rec ? rec.status : "300";
     var count = rec ? rec.count : 1;
+    el.dataset.status = status;   // статус зберігаємо на самому записі (кнопки немає)
 
     el.innerHTML =
-      '<div class="cas-rec__photo-col"><img class="cas-rec__photo" src="' + _casPhotoSrc(status) + '" alt=""></div>' +
-      '<div class="cas-rec__fields">' +
-      '<div class="cas-rec__row1">' +
-        '<button type="button" class="cas-status" data-status="' + status + '">' + status + "</button>" +
-        '<input type="number" class="cas-count" min="1" step="1" value="' + (count || 1) + '">' +
-        '<label class="cas-chk cas-chk--inline"><input type="checkbox" class="cas-accounted"' + (rec && rec.accounted ? " checked" : "") + '><span>Враховано</span></label>' +
-        '<span class="cas-rec__saved"></span>' +
-        '<button type="button" class="cas-del" title="Видалити запис">✕</button>' +
+      '<div class="cas-rec__top">' +
+        '<div class="cas-rec__photo-col">' +
+          '<img class="cas-rec__photo" src="' + _casPhotoSrc(status) + '" alt="" ' +
+          'title="Клікніть, щоб змінити статус 200 ⇄ 300"></div>' +
+        '<div class="cas-rec__fields">' +
+          '<div class="cas-rec__row1">' +
+            '<input type="number" class="cas-count" min="1" step="1" value="' + (count || 1) + '">' +
+            '<label class="cas-chk cas-chk--inline"><input type="checkbox" class="cas-accounted"' + (rec && rec.accounted ? " checked" : "") + '><span>Враховано</span></label>' +
+            '<span class="cas-rec__saved"></span>' +
+            '<button type="button" class="cas-del" title="Видалити запис">✕</button>' +
+          "</div>" +
+          '<label class="cas-fld"><span>Причина</span>' +
+            '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : "") + "</select>" +
+            '<button type="button" class="cas-add-opt" data-kind="reason" title="Додати причину">＋</button></span></label>' +
+          '<label class="cas-fld"><span>Підрозділ</span>' +
+            '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : "") + "</select>" +
+            '<button type="button" class="cas-add-opt" data-kind="unit" title="Додати підрозділ">＋</button></span></label>' +
+        "</div>" +
       "</div>" +
-      '<label class="cas-fld"><span>Причина</span>' +
-        '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : "") + "</select>" +
-        '<button type="button" class="cas-add-opt" data-kind="reason" title="Додати причину">＋</button></span></label>' +
-      '<label class="cas-fld"><span>Підрозділ</span>' +
-        '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : "") + "</select>" +
-        '<button type="button" class="cas-add-opt" data-kind="unit" title="Додати підрозділ">＋</button></span></label>' +
       '<div class="cas-fld"><span>Позивні</span><div class="cas-cs-wrap"><div class="cas-cs-chips"></div>' +
-        '<input type="text" class="cas-cs-input" placeholder="позивний + Enter" autocomplete="off"></div></div>' +
-      "</div>";
+        '<input type="text" class="cas-cs-input" placeholder="позивний + Enter" autocomplete="off"></div></div>';
 
-    var st = el.querySelector(".cas-status");
-    _applyStatusClass(st);
-    st.addEventListener("click", function () {
-      var ns = st.dataset.status === "200" ? "300" : "200";
-      st.dataset.status = ns; st.textContent = ns; _applyStatusClass(st);
-      var ph = el.querySelector(".cas-rec__photo"); if (ph) ph.src = _casPhotoSrc(ns);
+    // Клік по фото = зміна статусу 200 ⇄ 300.
+    el.querySelector(".cas-rec__photo").addEventListener("click", function () {
+      var ns = el.dataset.status === "200" ? "300" : "200";
+      el.dataset.status = ns;
+      this.src = _casPhotoSrc(ns);
       scheduleSave(el);
     });
     el.querySelector(".cas-count").addEventListener("input", function () { scheduleSave(el); });
@@ -190,7 +189,7 @@
     var reason = el.querySelector(".cas-reason").value;
     var unit = el.querySelector(".cas-unit").value;
     return {
-      status: el.querySelector(".cas-status").dataset.status,
+      status: el.dataset.status,
       count: Math.max(1, parseInt(el.querySelector(".cas-count").value, 10) || 1),
       reason_id: reason ? parseInt(reason, 10) : null,
       unit_id: unit ? parseInt(unit, 10) : null,
@@ -290,7 +289,7 @@
   function _casBuildRecordsMsg() {
     var recLines = [];
     document.querySelectorAll("#casRecords .cas-rec").forEach(function (el) {
-      var status = el.querySelector(".cas-status").dataset.status;
+      var status = el.dataset.status;
       var count = Math.max(1, parseInt(el.querySelector(".cas-count").value, 10) || 1);
       var rSel = el.querySelector(".cas-reason");
       var reason = rSel.value ? rSel.options[rSel.selectedIndex].text : "";
