@@ -20,6 +20,7 @@
     });
   }
   function toast(m, t) { if (window.appToast) window.appToast(m, t || "info", 1600); }
+  function _casPhotoSrc(status) { return "/static/photos/casualties/" + (status === "200" ? "200" : "300") + ".svg?v=1"; }
 
   // ── Довідники ────────────────────────────────────────────────────────────
   function loadReasons() {
@@ -87,6 +88,8 @@
     var count = rec ? rec.count : 1;
 
     el.innerHTML =
+      '<div class="cas-rec__photo-col"><img class="cas-rec__photo" src="' + _casPhotoSrc(status) + '" alt=""></div>' +
+      '<div class="cas-rec__fields">' +
       '<div class="cas-rec__row1">' +
         '<button type="button" class="cas-status" data-status="' + status + '">' + status + "</button>" +
         '<input type="number" class="cas-count" min="1" step="1" value="' + (count || 1) + '">' +
@@ -101,13 +104,16 @@
         '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : "") + "</select>" +
         '<button type="button" class="cas-add-opt" data-kind="unit" title="Додати підрозділ">＋</button></span></label>' +
       '<div class="cas-fld"><span>Позивні</span><div class="cas-cs-wrap"><div class="cas-cs-chips"></div>' +
-        '<input type="text" class="cas-cs-input" placeholder="позивний + Enter" autocomplete="off"></div></div>';
+        '<input type="text" class="cas-cs-input" placeholder="позивний + Enter" autocomplete="off"></div></div>' +
+      "</div>";
 
     var st = el.querySelector(".cas-status");
     _applyStatusClass(st);
     st.addEventListener("click", function () {
       var ns = st.dataset.status === "200" ? "300" : "200";
-      st.dataset.status = ns; st.textContent = ns; _applyStatusClass(st); scheduleSave(el);
+      st.dataset.status = ns; st.textContent = ns; _applyStatusClass(st);
+      var ph = el.querySelector(".cas-rec__photo"); if (ph) ph.src = _casPhotoSrc(ns);
+      scheduleSave(el);
     });
     el.querySelector(".cas-count").addEventListener("input", function () { scheduleSave(el); });
     el.querySelector(".cas-reason").addEventListener("change", function () { scheduleSave(el); });
