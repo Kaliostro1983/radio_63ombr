@@ -6706,8 +6706,8 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 /* ═══ Статус цінності перехоплення — кутова закладка ═══════════════════════ */
 .intercept-card{ position:relative; }
 .intercept-card__status{
-  position:absolute; top:-2px; right:10px; z-index:3; width:22px; height:30px; padding:0; border:0;
-  cursor:pointer; clip-path:polygon(0 0,100% 0,100% 100%,50% 74%,0 100%);
+  position:absolute; top:-2px; right:50px; z-index:3; width:28px; height:45px; padding:0; border:0;
+  cursor:pointer; clip-path:polygon(0 0,100% 0,100% 100%,50% 80%,0 100%);
   box-shadow:0 1px 2px rgba(0,0,0,.35); transition:filter .12s ease;
 }
 .intercept-card__status--normal{ background:#64748b; }
