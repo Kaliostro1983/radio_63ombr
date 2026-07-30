@@ -16,11 +16,12 @@ from __future__ import annotations
 
 from datetime import date as _date
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
+from app.core.access import current_device_mask
 from app.core.db import get_conn
 from app.core.time_utils import now_sql
 
@@ -212,3 +213,242 @@ def get_cas_image(date: str = Query(default=""), mode: str = Query(default="morn
         media_type="image/png",
         headers={"Content-Disposition": f"inline; filename={filename}"},
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# «Втрати 2» — записи втрат, привʼязані до перехоплень (окремо від ручного талію).
+#   casualties           — записи-контейнери (статус 200/300, к-сть, причина…)
+#   casualty_reasons     — редагований довідник причин
+#   casualty_callsigns   — звʼязок запис↔позивний (виставляє life_status позивного)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _norm_status(s) -> str:
+    return "200" if str(s or "").strip() == "200" else "300"
+
+
+# ── Довідник причин ────────────────────────────────────────────────────────────
+
+@router.get("/api/casualty-reasons")
+def cas_reasons_list():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name FROM casualty_reasons WHERE is_active = 1 ORDER BY sort_order, id"
+        ).fetchall()
+    return {"ok": True, "reasons": [{"id": r["id"], "name": r["name"]} for r in rows]}
+
+
+class ReasonBody(BaseModel):
+    name: str
+
+
+@router.post("/api/casualty-reasons")
+def cas_reason_add(body: ReasonBody):
+    name = (body.name or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "name required"}, status_code=400)
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM casualty_reasons WHERE name = ?", (name,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE casualty_reasons SET is_active = 1 WHERE id = ?", (existing["id"],)
+            )
+            return {"ok": True, "id": existing["id"]}
+        mx = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) FROM casualty_reasons"
+        ).fetchone()[0]
+        row = conn.execute(
+            "INSERT INTO casualty_reasons (name, sort_order) VALUES (?, ?) RETURNING id",
+            (name, int(mx) + 1),
+        ).fetchone()
+    return {"ok": True, "id": row["id"]}
+
+
+# ── Записи втрат ───────────────────────────────────────────────────────────────
+
+def _casualty_dict(conn, r) -> dict:
+    """Серіалізує рядок casualties (з join reason_name/unit_name) + позивні."""
+    cs = conn.execute(
+        "SELECT c.id, c.name FROM casualty_callsigns cc "
+        "JOIN callsigns c ON c.id = cc.callsign_id WHERE cc.casualty_id = ?",
+        (r["id"],),
+    ).fetchall()
+    keys = r.keys()
+    unit_name = r["unit_name"] if "unit_name" in keys else None
+    return {
+        "id": r["id"],
+        "message_id": r["message_id"],
+        "status": r["status"],
+        "count": r["count"],
+        "reason_id": r["reason_id"],
+        "reason": (r["reason_name"] if "reason_name" in keys else None),
+        "unit_id": r["unit_id"],
+        "unit": (unit_name or r["unit_text"] or ""),
+        "unit_text": r["unit_text"],
+        "accounted": bool(r["accounted"]),
+        "comment": r["comment"] or "",
+        "created_at": r["created_at"],
+        "created_by": r["created_by"],
+        "last_edited_by": r["last_edited_by"],
+        "last_edited_at": r["last_edited_at"],
+        "callsigns": [{"id": x["id"], "name": x["name"]} for x in cs],
+    }
+
+
+_SELECT_CASUALTY = (
+    "SELECT cas.*, r.name AS reason_name, u.name AS unit_name "
+    "FROM casualties cas "
+    "LEFT JOIN casualty_reasons r ON r.id = cas.reason_id "
+    "LEFT JOIN cas_units u        ON u.id = cas.unit_id "
+)
+
+
+def _apply_callsign_casualty(conn, callsign_id: int, status: str,
+                             message_id: int, editor: str, ts: str) -> None:
+    """Прив'язаному позивному виставляє life_status (200/300) і дописує
+    згадку перехоплення в коментар (без дублювання)."""
+    row = conn.execute("SELECT comment FROM callsigns WHERE id = ?", (callsign_id,)).fetchone()
+    if not row:
+        return
+    comment = row["comment"] or ""
+    marker = f"[втрати {status}] перехоплення #{message_id}"
+    if marker not in comment:
+        comment = (comment + ("\n" if comment.strip() else "") + marker).strip()
+    conn.execute(
+        "UPDATE callsigns SET life_status = ?, comment = ?, "
+        "last_edited_by = ?, last_edited_at = ? WHERE id = ?",
+        (status, comment, editor, ts, callsign_id),
+    )
+
+
+@router.get("/api/casualties")
+def cas_records_list(
+    message_id: int = Query(default=0),
+    date_from: str = Query(default=""),
+    date_to: str = Query(default=""),
+):
+    """Записи втрат: для конкретного перехоплення (message_id) або за періодом."""
+    wheres = ["cas.is_valid = 1"]
+    params: list = []
+    if message_id:
+        wheres.append("cas.message_id = ?"); params.append(message_id)
+    if date_from:
+        wheres.append("cas.created_at >= ?"); params.append(date_from)
+    if date_to:
+        wheres.append("cas.created_at <= ?"); params.append(date_to)
+    sql = _SELECT_CASUALTY + "WHERE " + " AND ".join(wheres) + \
+        " ORDER BY cas.created_at DESC, cas.id DESC"
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        out = [_casualty_dict(conn, r) for r in rows]
+    return {"ok": True, "records": out}
+
+
+class CasualtyIn(BaseModel):
+    message_id: int
+    status: str = "300"
+    count: int = 1
+    reason_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    unit_text: str = ""
+    accounted: bool = False
+    comment: str = ""
+    callsign_ids: List[int] = []
+
+
+@router.post("/api/casualties")
+def cas_record_create(body: CasualtyIn, request: Request):
+    if not body.message_id:
+        return JSONResponse({"ok": False, "error": "message_id required"}, status_code=400)
+    status = _norm_status(body.status)
+    editor = current_device_mask(request)
+    ts = now_sql()
+    with get_conn() as conn:
+        new = conn.execute(
+            """
+            INSERT INTO casualties
+                (message_id, status, count, reason_id, unit_id, unit_text, accounted,
+                 comment, created_at, created_by, last_edited_at, last_edited_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            (body.message_id, status, max(1, int(body.count or 1)), body.reason_id,
+             body.unit_id, (body.unit_text or "").strip(), 1 if body.accounted else 0,
+             (body.comment or "").strip(), ts, editor, ts, editor),
+        ).fetchone()
+        cas_id = new["id"]
+        for cid in dict.fromkeys(body.callsign_ids or []):
+            conn.execute(
+                "INSERT OR IGNORE INTO casualty_callsigns (casualty_id, callsign_id) VALUES (?, ?)",
+                (cas_id, cid),
+            )
+            _apply_callsign_casualty(conn, cid, status, body.message_id, editor, ts)
+        r = conn.execute(_SELECT_CASUALTY + "WHERE cas.id = ?", (cas_id,)).fetchone()
+        out = _casualty_dict(conn, r)
+    return {"ok": True, "record": out}
+
+
+class CasualtyUpdate(BaseModel):
+    status: Optional[str] = None
+    count: Optional[int] = None
+    reason_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    unit_text: Optional[str] = None
+    accounted: Optional[bool] = None
+    comment: Optional[str] = None
+    callsign_ids: Optional[List[int]] = None
+
+
+@router.put("/api/casualties/{cas_id}")
+def cas_record_update(cas_id: int, body: CasualtyUpdate, request: Request):
+    editor = current_device_mask(request)
+    ts = now_sql()
+    with get_conn() as conn:
+        cur = conn.execute(
+            "SELECT * FROM casualties WHERE id = ? AND is_valid = 1", (cas_id,)
+        ).fetchone()
+        if not cur:
+            return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+        status    = _norm_status(body.status) if body.status is not None else cur["status"]
+        count     = max(1, int(body.count)) if body.count is not None else cur["count"]
+        reason_id = body.reason_id if body.reason_id is not None else cur["reason_id"]
+        unit_id   = body.unit_id if body.unit_id is not None else cur["unit_id"]
+        unit_text = (body.unit_text or "").strip() if body.unit_text is not None else cur["unit_text"]
+        accounted = (1 if body.accounted else 0) if body.accounted is not None else cur["accounted"]
+        comment   = (body.comment or "").strip() if body.comment is not None else cur["comment"]
+        conn.execute(
+            "UPDATE casualties SET status = ?, count = ?, reason_id = ?, unit_id = ?, "
+            "unit_text = ?, accounted = ?, comment = ?, last_edited_at = ?, last_edited_by = ? "
+            "WHERE id = ?",
+            (status, count, reason_id, unit_id, unit_text, accounted, comment, ts, editor, cas_id),
+        )
+        if body.callsign_ids is not None:
+            conn.execute("DELETE FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,))
+            for cid in dict.fromkeys(body.callsign_ids):
+                conn.execute(
+                    "INSERT OR IGNORE INTO casualty_callsigns (casualty_id, callsign_id) VALUES (?, ?)",
+                    (cas_id, cid),
+                )
+        # Пере-застосувати статус до наразі привʼязаних позивних (правка 300↔200).
+        linked = conn.execute(
+            "SELECT callsign_id FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,)
+        ).fetchall()
+        for lr in linked:
+            _apply_callsign_casualty(conn, lr["callsign_id"], status, cur["message_id"], editor, ts)
+        r = conn.execute(_SELECT_CASUALTY + "WHERE cas.id = ?", (cas_id,)).fetchone()
+        out = _casualty_dict(conn, r)
+    return {"ok": True, "record": out}
+
+
+@router.delete("/api/casualties/{cas_id}")
+def cas_record_delete(cas_id: int, request: Request):
+    """Мʼяке видалення (is_valid=0). Статуси позивних не відкочуємо."""
+    editor = current_device_mask(request)
+    ts = now_sql()
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE casualties SET is_valid = 0, last_edited_at = ?, last_edited_by = ? WHERE id = ?",
+            (ts, editor, cas_id),
+        )
+    return {"ok": True}

@@ -1759,6 +1759,83 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         stage="create_table:cas_report_snapshots",
     )
 
+    # --- «Втрати 2»: записи втрат, привʼязані до перехоплень ---------------------
+    # Окрема від ручного талію (cas_entries) підсистема. Один рядок = один запис-
+    # контейнер втрат (статус 200/300, к-сть, причина, підрозділ). Кілька записів
+    # на одне перехоплення (message_id). Дропдаун підрозділів переви­користає
+    # cas_units; причини — власний редагований довідник casualty_reasons.
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS casualty_reasons (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL UNIQUE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active  INTEGER NOT NULL DEFAULT 1
+        )
+        """,
+        stage="create_table:casualty_reasons",
+    )
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS casualties (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id     INTEGER NOT NULL,
+            status         TEXT    NOT NULL DEFAULT '300',   -- '200' | '300'
+            count          INTEGER NOT NULL DEFAULT 1,
+            reason_id      INTEGER,
+            unit_id        INTEGER,
+            unit_text      TEXT    NOT NULL DEFAULT '',       -- знімок/фолбек назви підрозділу
+            accounted      INTEGER NOT NULL DEFAULT 0,        -- «Враховано»
+            comment        TEXT    NOT NULL DEFAULT '',
+            is_valid       INTEGER NOT NULL DEFAULT 1,        -- мʼяке видалення
+            created_at     TEXT    NOT NULL,
+            created_by     TEXT,
+            last_edited_at TEXT,
+            last_edited_by TEXT,
+            FOREIGN KEY(message_id) REFERENCES messages(id)         ON DELETE CASCADE,
+            FOREIGN KEY(reason_id)  REFERENCES casualty_reasons(id) ON DELETE SET NULL,
+            FOREIGN KEY(unit_id)    REFERENCES cas_units(id)        ON DELETE SET NULL
+        )
+        """,
+        stage="create_table:casualties",
+    )
+    _try_ddl(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_casualties_message ON casualties(message_id)",
+        stage="index:casualties_message",
+    )
+    _try_ddl(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_casualties_created ON casualties(created_at)",
+        stage="index:casualties_created",
+    )
+    _try_ddl(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS casualty_callsigns (
+            casualty_id INTEGER NOT NULL,
+            callsign_id INTEGER NOT NULL,
+            PRIMARY KEY(casualty_id, callsign_id),
+            FOREIGN KEY(casualty_id) REFERENCES casualties(id) ON DELETE CASCADE,
+            FOREIGN KEY(callsign_id) REFERENCES callsigns(id)  ON DELETE CASCADE
+        )
+        """,
+        stage="create_table:casualty_callsigns",
+    )
+    for _i, _reason in enumerate(
+        ["фпв", "міна", "стрілецький бій", "скид", "аварія", "самоушкодження", "невідомо"]
+    ):
+        safe_execute(
+            conn,
+            "INSERT OR IGNORE INTO casualty_reasons (name, sort_order) VALUES (?, ?)",
+            (_reason, _i),
+            module="app.core.db",
+            function="_run_lightweight_migrations",
+            stage=f"seed:casualty_reasons:{_reason}",
+        )
+
     # --- app_settings key-value store ---
     _try_ddl(
         conn,
