@@ -448,6 +448,7 @@
 
       <div class="card">
         <div style="font-weight:800; margin-bottom:10px">Дані по радіомережах за крайні 7 днів</div>
+        {% if table_loaded %}
         <div class="small" style="margin-bottom:10px; opacity:.85;">Знайдено: {{ all_rows|length }}</div>
 
         <table class="table">
@@ -505,6 +506,9 @@
             {% endfor %}
           </tbody>
         </table>
+        {% else %}
+        <div class="small" style="opacity:.7; padding:12px 0;">Натисніть «Показати», щоб завантажити перелік радіомереж.</div>
+        {% endif %}
       </div>
     </section>
 

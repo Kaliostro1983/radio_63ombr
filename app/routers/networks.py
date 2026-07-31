@@ -1288,6 +1288,7 @@ def _build_networks_context(
     all_selected_groups=None,
     active_tab: str = "card",
     etalon_exists: bool = False,
+    table_loaded: bool = True,
 ):
     """Build Jinja template context for the networks page."""
     main_tags = [t for t in (tags or []) if t["tag_group"] == "main"]
@@ -1321,6 +1322,7 @@ def _build_networks_context(
         all_selected_groups=all_selected_groups or [],
         active_tab=active_tab or "card",
         etalon_exists=bool(etalon_exists),
+        table_loaded=bool(table_loaded),
     )
 
 
@@ -1363,7 +1365,9 @@ def networks_page(
         all_selected_statuses = _default_all_status_ids(conn)
         all_selected_chats = [c["id"] for c in chats]
         all_selected_groups = [g["id"] for g in groups]
-        all_rows = _all_networks_list(conn, all_selected_statuses, all_selected_chats, all_selected_groups)
+        # Важкий перелік р/м НЕ рахуємо при відкритті сторінки (щоб вантажилось
+        # швидко) — таблиця підтягнеться лише по кліку «Показати» (POST /networks/all).
+        all_rows = []
 
         current = None
         selected_tags: List[int] = []
@@ -1425,6 +1429,7 @@ def networks_page(
         all_selected_groups=all_selected_groups,
         active_tab=tab_raw,
         etalon_exists=etalon_exists,
+        table_loaded=False,
     )
     if draft and not current:
         context["draft"] = draft
