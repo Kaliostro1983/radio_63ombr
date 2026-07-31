@@ -417,6 +417,7 @@ def intercepts_explorer_list(
     network: str | None = Query(None),
     callsign: str | None = Query(None),
     callsign2: str | None = Query(None),
+    value: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     debug: int = Query(0),
@@ -554,6 +555,14 @@ def intercepts_explorer_list(
             # Один позивний → збіг за будь-якою роллю (як раніше).
             where.append(_cs_exists(None))
             params.append((callsign_raw or callsign2_raw).upper())
+
+        # Фільтр за статус-закладкою: value=orange → потенційно цінні
+        # (value_flag=1 і БЕЗ аналітичного висновку — інакше воно «зелене»).
+        if (value or "").strip().lower() == "orange":
+            where.append(
+                "COALESCE(m.value_flag, 0) = 1 AND NOT EXISTS "
+                "(SELECT 1 FROM analytical_conclusions ac2 WHERE ac2.message_id = m.id)"
+            )
 
         where_sql = " AND ".join(where)
 

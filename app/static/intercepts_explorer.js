@@ -91,6 +91,10 @@
       params.set("callsign2", callsign2);
     }
 
+    if (formData.get("value_status_orange")) {
+      params.set("value", "orange");
+    }
+
     params.set("limit", String(state.limit));
     params.set("offset", String(state.offset));
 
@@ -1160,6 +1164,12 @@
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
+    state.offset = 0;
+    loadIntercepts();
+  });
+
+  // Чекбокс «Лише помаранчеві» — застосовується одразу.
+  form.querySelector("#filterOrange")?.addEventListener("change", function () {
     state.offset = 0;
     loadIntercepts();
   });

@@ -6719,3 +6719,8 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .intercept-card .intercept-card__share-btn:nth-of-type(2){ right:78px; }
 .intercept-card .intercept-card__share-btn:nth-of-type(3){ right:116px; }
 .intercept-card .intercept-card__share-btn:nth-of-type(4){ right:154px; }
+
+/* Фільтр «Лише помаранчеві» у формі «Перегляд» */
+.field--orange{ display:flex; flex-direction:column; }
+.if-orange-chk{ display:flex; align-items:center; gap:7px; white-space:nowrap; font-size:13px; color:var(--fg,#e2e8f0); cursor:pointer; height:36px; }
+.if-orange-chk input{ margin:0; accent-color:#f59e0b; width:16px; height:16px; }
