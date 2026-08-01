@@ -386,17 +386,64 @@ _SELECT_CASUALTY = (
 )
 
 
+def _fmt_intercept_dt(s: str) -> str:
+    v = str(s or "").replace("T", " ").strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[ ](\d{2}:\d{2}:\d{2})", v)
+    return f"{m.group(3)}.{m.group(2)}.{m.group(1)}, {m.group(4)}" if m else v
+
+
+def build_standard_intercept_text(conn, message_id: int) -> str:
+    """Перехоплення за стандартним шаблоном (як кнопка «Копіювати»):
+    дата/час, маска|частота, опис мережі, позивні-ініціатори (caller),
+    позивні-адресати (callee/mentioned), порожній рядок, текст діалогу."""
+    row = conn.execute(
+        "SELECT m.created_at AS dt, m.net_description AS net, m.body_text AS body, "
+        "n.frequency AS freq, n.mask AS mask "
+        "FROM messages m LEFT JOIN networks n ON n.id = m.network_id WHERE m.id = ?",
+        (message_id,),
+    ).fetchone()
+    if not row:
+        return ""
+    callers: list = []
+    callees: list = []
+    for r in conn.execute(
+        "SELECT mc.role AS role, c.name AS name FROM message_callsigns mc "
+        "JOIN callsigns c ON c.id = mc.callsign_id WHERE mc.message_id = ? ORDER BY c.name",
+        (message_id,),
+    ).fetchall():
+        nm = (r["name"] or "").strip()
+        if not nm:
+            continue
+        if r["role"] == "caller":
+            callers.append(nm)
+        elif r["role"] in ("callee", "mentioned"):
+            callees.append(nm)
+    mask = (row["mask"] or "").strip()
+    freq = (row["freq"] or "").strip()
+    parts = [
+        _fmt_intercept_dt(row["dt"]),
+        mask if mask else freq,      # 2-й рядок — маска, якщо є, інакше частота
+        (row["net"] or "").strip(),
+        ", ".join(callers),
+        ", ".join(callees),
+    ]
+    body = (row["body"] or "").rstrip()
+    if body:
+        parts.append("")
+        parts.append(body)
+    return "\n".join(parts)
+
+
 def _apply_callsign_casualty(conn, callsign_id: int, status: str,
                              message_id: int, editor: str, ts: str) -> None:
     """Прив'язаному позивному виставляє life_status (200/300) і дописує
-    ПОВНИЙ ТЕКСТ перехоплення в коментар (без дублювання). Якщо в коментарі
-    вже є текст — відділяємо новий блок порожнім рядком."""
+    ПОВНЕ перехоплення за стандартним шаблоном у коментар (без дублювання).
+    Якщо в коментарі вже є текст — відділяємо новий блок порожнім рядком."""
     row = conn.execute("SELECT comment FROM callsigns WHERE id = ?", (callsign_id,)).fetchone()
     if not row:
         return
     comment = row["comment"] or ""
-    mrow = conn.execute("SELECT body_text FROM messages WHERE id = ?", (message_id,)).fetchone()
-    intercept_text = ((mrow["body_text"] if mrow else "") or "").strip()
+    intercept_text = build_standard_intercept_text(conn, message_id).strip()
     if intercept_text and intercept_text not in comment:
         comment = comment.rstrip() + ("\n\n" if comment.strip() else "") + intercept_text
     conn.execute(
@@ -432,6 +479,7 @@ def cas_records_list(
             uid, uname = _suggest_unit_id(conn, message_id)
             resp["suggested_unit_id"] = uid
             resp["suggested_unit_name"] = uname
+            resp["standard_text"] = build_standard_intercept_text(conn, message_id)
     return resp
 
 

@@ -9,6 +9,7 @@
   "use strict";
 
   var _msgId = 0, _netId = null, _interceptText = "";
+  var _standardText = "";           // перехоплення за стандартним шаблоном (із сервера)
   var _interceptCallsigns = [];   // [{id,name}] — позивні перехоплення (для префілу чіпів)
   var _suggestedUnitId = "";       // автопідбір підрозділу для нових записів
   var _reasons = [];   // [{id,name}]
@@ -50,7 +51,7 @@
 
   // ── Відкрити / закрити ─────────────────────────────────────────────────────
   window.openCasualtyModal = function (messageId, networkId, meta, interceptText, callsigns) {
-    _msgId = messageId; _netId = networkId || null; _interceptText = interceptText || "";
+    _msgId = messageId; _netId = networkId || null; _interceptText = interceptText || ""; _standardText = "";
     // «НВ» — це не позивний (вказівка, що позивний невідомий) → не префілимо.
     _interceptCallsigns = (Array.isArray(callsigns) ? callsigns : []).filter(function (c) {
       return String((c && c.name) || "").trim().toUpperCase() !== "НВ";
@@ -67,6 +68,7 @@
       return fetch("/api/casualties?message_id=" + messageId).then(function (r) { return r.json(); });
     }).then(function (d) {
       _suggestedUnitId = (d && d.suggested_unit_id) || "";
+      _standardText = (d && d.standard_text) || "";
       box.innerHTML = "";
       var recs = (d && d.records) || [];
       if (recs.length) recs.forEach(function (rec) { box.appendChild(buildContainer(rec)); });
@@ -326,8 +328,11 @@
       }).catch(function () { _casChatsCache[platform] = []; return []; });
   }
 
-  // Відправка 1 — «Повідомлення»: мета (дата/частота/мережа) + текст перехоплення.
+  // Відправка 1 — перехоплення за стандартним шаблоном (дата/маска|частота/мережа/
+  // позивні/порожній рядок/діалог), як його формує сервер (кнопка «Копіювати»).
   function _casBuildInterceptMsg() {
+    if (_standardText && _standardText.trim()) return _standardText.replace(/\s+$/, "");
+    // Фолбек, якщо стандартний текст не прийшов із сервера.
     var lines = [];
     var meta = ($("casModalMeta").textContent || "").trim();
     if (meta) lines.push(meta);
