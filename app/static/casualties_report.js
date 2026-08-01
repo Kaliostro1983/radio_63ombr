@@ -104,13 +104,15 @@
         var line = bits.join(" — ");
         if (cs) line += ' <span class="cas2-cs">(' + cs + ")</span>";
         if (rec.accounted) line += ' <span class="cas2-acc">враховано</span>';
-        return '<div class="cas2-rec"><span class="cas2-rec-line">' + line + "</span>" +
-          '<button type="button" class="cas2-del" data-id="' + rec.id + '" title="Видалити запис">🗑</button></div>';
+        return '<div class="cas2-rec"><span class="cas2-rec-line">' + line + "</span></div>";
       }).join("");
       wrap.innerHTML =
         '<div class="cas2-item-head">' +
           '<div class="cas2-item-title">' + esc(head) + "</div>" +
-          '<button type="button" class="cas2-edit" title="Редагувати записи цього перехоплення">✎ Правка</button>' +
+          '<div class="cas2-item-actions">' +
+            '<button type="button" class="cas2-edit" title="Редагувати записи цього перехоплення">✎ Правка</button>' +
+            '<button type="button" class="cas2-del-head" title="Видалити записи втрат цього перехоплення">🗑 Видалити</button>' +
+          "</div>" +
         "</div>" +
         (g.msg.msg_text ? '<div class="cas2-item-text">' + esc(g.msg.msg_text) + "</div>" : "") +
         '<div class="cas2-recs">' + recRows + "</div>";
@@ -122,11 +124,15 @@
           window.openCasualtyModal(g.mid, g.msg.msg_network_id || null, head, g.msg.msg_text || "", Object.keys(cs).map(function (i) { return cs[i]; }));
         }
       });
-      wrap.querySelectorAll(".cas2-del").forEach(function (b) {
-        b.addEventListener("click", function () {
-          if (!confirm("Видалити цей запис втрат?")) return;
-          fetch("/api/casualties/" + b.dataset.id, { method: "DELETE" }).then(function () { reload(); });
-        });
+      wrap.querySelector(".cas2-del-head").addEventListener("click", function () {
+        var ids = g.recs.map(function (rec) { return rec.id; });
+        var msg = ids.length > 1
+          ? ("Видалити всі записи втрат (" + ids.length + ") цього перехоплення?")
+          : "Видалити запис втрат цього перехоплення?";
+        if (!confirm(msg)) return;
+        Promise.all(ids.map(function (id) {
+          return fetch("/api/casualties/" + id, { method: "DELETE" });
+        })).then(function () { reload(); });
       });
       box.appendChild(wrap);
     });

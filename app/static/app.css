@@ -6639,9 +6639,6 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-cs-input{ flex:1 1 90px; min-width:90px; padding:3px 0; border:0; background:transparent; color:#e2e8f0; font-size:13px; outline:none; }
 .cas-cs-clear{ flex:0 0 auto; background:transparent; border:0; color:#94a3b8; cursor:pointer; font-size:13px; line-height:1; padding:2px 5px; border-radius:6px; }
 .cas-cs-clear:hover{ color:#fca5a5; background:rgba(248,113,113,.15); }
-.cas-rec__actions{ display:flex; justify-content:flex-end; }
-.cas-del-btn{ padding:6px 12px; border-radius:8px; border:1px solid rgba(248,113,113,.4); background:rgba(248,113,113,.12); color:#fca5a5; font-size:12px; font-weight:600; cursor:pointer; }
-.cas-del-btn:hover{ background:rgba(248,113,113,.22); color:#fecaca; }
 .cas-cs-ac{ position:fixed; z-index:13000; background:#0f172a; border:1px solid rgba(255,255,255,.18); border-radius:8px; box-shadow:0 12px 28px rgba(0,0,0,.5); max-height:220px; overflow-y:auto; }
 .cas-cs-ac button{ display:block; width:100%; text-align:left; padding:7px 10px; background:transparent; border:0; color:#e2e8f0; font-size:13px; cursor:pointer; }
 .cas-cs-ac button:hover{ background:#1e293b; }
@@ -6685,8 +6682,11 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas2-item{ border:1px solid rgba(127,127,127,.25); border-radius:12px; padding:10px 12px; background:rgba(127,127,127,.05); }
 .cas2-item-head{ display:flex; align-items:center; gap:10px; }
 .cas2-item-title{ font-weight:700; font-size:13px; flex:1 1 auto; min-width:0; }
+.cas2-item-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
 .cas2-edit{ background:transparent; border:1px solid rgba(127,127,127,.35); border-radius:8px; padding:4px 10px; font-size:12px; color:var(--fg,#e2e8f0); cursor:pointer; white-space:nowrap; }
 .cas2-edit:hover{ background:rgba(127,127,127,.15); }
+.cas2-del-head{ background:rgba(248,113,113,.12); border:1px solid rgba(248,113,113,.4); border-radius:8px; padding:4px 10px; font-size:12px; color:#fca5a5; cursor:pointer; white-space:nowrap; }
+.cas2-del-head:hover{ background:rgba(248,113,113,.22); color:#fecaca; }
 .cas2-item-text{ font-size:12px; opacity:.72; margin:6px 0; max-height:60px; overflow:hidden; white-space:pre-wrap; }
 .cas2-recs{ display:flex; flex-direction:column; gap:6px; margin-top:6px; }
 .cas2-rec{ display:flex; align-items:center; gap:8px; font-size:13px; }
