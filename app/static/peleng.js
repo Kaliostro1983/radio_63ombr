@@ -805,6 +805,7 @@
   let _pelShowFreq = false;     // стан чекбоксу «Частоти»
   let _pelShowUnit = false;     // стан чекбоксу «Підрозділ» (кола з номером)
   let _pelShowImported = true;  // чекбокс «Імпортовані» — показувати пеленги з CSV
+  let _pelAuthorFilter = "";    // фільтр за авторством батчу ("" = усі)
   let _pelSending  = false;     // in-flight flag — захист від подвійного fetch
 
   /** Витягнути НОМЕР бригади/полка з опису р/м.
@@ -1318,9 +1319,57 @@
     return Array.isArray(d.rows) ? d.rows : [];
   }
 
+  // ── Фільтр за авторством: динамічне меню з реальних авторів у даних ──────────
+  function _pelUpdateAuthorUI() {
+    const lbl = document.getElementById("pelAuthorLabel");
+    const btn = document.getElementById("pelAuthorBtn");
+    if (lbl) lbl.textContent = _pelAuthorFilter || "Усі";
+    if (btn) btn.classList.toggle("is-on", !!_pelAuthorFilter);
+    const menu = document.getElementById("pelAuthorMenu");
+    if (menu) menu.querySelectorAll(".pel-author-opt").forEach((b) => {
+      b.classList.toggle("is-active", (b.dataset.author || "") === _pelAuthorFilter);
+    });
+  }
+  function _pelRebuildAuthorMenu() {
+    const menu = document.getElementById("pelAuthorMenu");
+    if (!menu) return;
+    const counts = new Map();
+    for (const r of (_pelLastRows || [])) {
+      const a = String(r.author || "").trim();
+      const key = a || "—";
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    if (_pelAuthorFilter && !counts.has(_pelAuthorFilter)) _pelAuthorFilter = "";
+    const authors = Array.from(counts.keys()).sort((a, b) => a.localeCompare(b, "uk"));
+    const total = (_pelLastRows || []).length;
+    const opt = (val, label, cnt) => {
+      const active = (String(val) === String(_pelAuthorFilter)) ? " is-active" : "";
+      return `<button type="button" class="pel-author-opt${active}" data-author="${escapeHtml(val)}">`
+        + `<span>${escapeHtml(label)}</span><span class="pel-author-cnt">${cnt}</span></button>`;
+    };
+    const html = [opt("", "Усі автори", total)];
+    for (const a of authors) { if (a === "—") continue; html.push(opt(a, a, counts.get(a))); }
+    menu.innerHTML = html.join("");
+    menu.querySelectorAll(".pel-author-opt").forEach((b) => {
+      b.addEventListener("click", () => {
+        _pelAuthorFilter = b.dataset.author || "";
+        menu.classList.add("hidden");
+        _pelUpdateAuthorUI();
+        if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true });
+      });
+    });
+    _pelUpdateAuthorUI();
+  }
+
   function _pelRenderPoints(rows, opts) {
     const skipFit = opts && opts.skipFit;
     _pelLastRows = rows;
+    // Якщо активний автор-фільтр відсутній у нових даних — скидаємо (до циклу,
+    // щоб не сховати геть усе). Меню оновлюємо при свіжому завантаженні.
+    if (_pelAuthorFilter && !rows.some((r) => String(r.author || "") === _pelAuthorFilter)) {
+      _pelAuthorFilter = "";
+    }
+    if (!skipFit) _pelRebuildAuthorMenu();
     const map = _pelEnsureMap();
     if (!map) return;
     if (!_pelMarkerLayer) _pelMarkerLayer = L.layerGroup().addTo(map);
@@ -1338,6 +1387,8 @@
       if (_uk && _pelHiddenUnits.has(String(_uk))) continue;
       // Чекбокс «Імпортовані» — сховати пеленги, завантажені з CSV.
       if (!_pelShowImported && r.is_imported) continue;
+      // Фільтр за авторством батчу.
+      if (_pelAuthorFilter && String(r.author || "") !== _pelAuthorFilter) continue;
       try {
         const pt  = window.mgrs.toPoint(raw);
         const lat = Number(pt[1]), lon = Number(pt[0]);
@@ -1632,6 +1683,24 @@
 
     // Кнопка «Скопіювати карту» (overlay правий верхній кут).
     document.getElementById("pelMapCopyBtn")?.addEventListener("click", _pelCopyMap);
+
+    // Кнопка фільтра за авторством — відкриває/ховає меню з реальних авторів.
+    const authorBtn = document.getElementById("pelAuthorBtn");
+    if (authorBtn) {
+      authorBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const menu = document.getElementById("pelAuthorMenu");
+        if (!menu) return;
+        if (menu.classList.contains("hidden")) { _pelRebuildAuthorMenu(); menu.classList.remove("hidden"); }
+        else menu.classList.add("hidden");
+      });
+      document.addEventListener("click", (e) => {
+        const menu = document.getElementById("pelAuthorMenu");
+        if (!menu || menu.classList.contains("hidden")) return;
+        if (menu.contains(e.target) || authorBtn.contains(e.target)) return;
+        menu.classList.add("hidden");
+      });
+    }
 
     // Карта пеленгів — постійно видимий основний контент. Ініціалізуємо
     // тільки коли контейнер отримав свою висоту (захист від випадку,
