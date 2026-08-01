@@ -852,13 +852,16 @@ def peleng_report_preview(
     """Return counts of batches and points for a period (preview before report)."""
     db = get_db()
     try:
+        # Звіт формується ЛИШЕ за пеленгами авторства 63 ОМБр
+        # (53 ОМБр / 301 ОБТВР / 117 ТРо у власний звіт не входять).
         batches = db.execute(
             """
             SELECT id
             FROM peleng_batches
             WHERE REPLACE(event_dt, 'T', ' ') >= ? AND REPLACE(event_dt, 'T', ' ') <= ?
+              AND author = ?
             """,
-            (from_dt, to_dt),
+            (from_dt, to_dt, "63 ОМБр"),
         ).fetchall()
 
         batch_count = len(batches)
@@ -936,6 +939,8 @@ def peleng_report_by_period(
     """Build a DOCX report from DB peleng data for a selected period."""
     db = get_db()
     try:
+        # Звіт формується ЛИШЕ за пеленгами авторства 63 ОМБр
+        # (53 ОМБр / 301 ОБТВР / 117 ТРо у власний звіт не входять).
         batches = db.execute(
             """
             SELECT
@@ -945,9 +950,10 @@ def peleng_report_by_period(
             FROM peleng_batches pb
             LEFT JOIN networks n ON n.id = pb.network_id
             WHERE REPLACE(pb.event_dt, 'T', ' ') >= ? AND REPLACE(pb.event_dt, 'T', ' ') <= ?
+              AND pb.author = ?
             ORDER BY REPLACE(pb.event_dt, 'T', ' ') ASC, pb.id ASC
             """,
-            (from_dt, to_dt),
+            (from_dt, to_dt, "63 ОМБр"),
         ).fetchall()
 
         if not batches:
