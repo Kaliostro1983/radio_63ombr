@@ -297,6 +297,16 @@
     } else {
       sel.value = "";
     }
+
+    // Статичне відображення мережі в шапці («Мережа» + значення) — стилі як
+    // «Особова справа» + імʼя. Редаговані поля під фото приховані.
+    const head = document.getElementById("csModalNetHead");
+    if (head) {
+      const n = (networks || []).find(function (x) { return String(x.id) === String(selectedId); });
+      head.textContent = n
+        ? ([n.frequency, n.mask, n.unit].filter(function (v) { return v && v !== "—"; }).join("  ·  ") || "—")
+        : "—";
+    }
   }
 
   let NET_LOOKUP_TIMER = null;
