@@ -5631,6 +5631,10 @@
   function _palResetForModalOpen() {
     _palClearAllRegions();
     _palCloseCtxMenu();
+    // Скидаємо область пошуку (_palScope): без цього застаріла галочка з
+    // попереднього сеансу (у localStorage) непомітно фільтрувала б пошук кодів
+    // по одній палітрі. «Жодна не виділена» = пошук по всіх палітрах.
+    if (_palScope.size) { _palScope.clear(); _palSaveScope(); _lastPalCtxKey = null; }
     const panel = document.getElementById("palPanel");
     if (panel) { panel.classList.add("hidden"); panel.setAttribute("aria-hidden", "true"); }
   }
