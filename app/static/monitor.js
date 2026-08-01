@@ -2134,6 +2134,10 @@
         if (wasHidden && !isHidden) {   // щойно відкрилась
           if (_pathDrawState && _pathDrawState.cancel) _pathDrawState.cancel();
           _resetLmView(); _palResetForModalOpen();
+        } else if (!wasHidden && isHidden) {   // щойно закрилась — обнуляємо галочки палітр
+          if (_palScope.size) { _palScope.clear(); _palSaveScope(); _lastPalCtxKey = null; }
+          document.querySelectorAll('#conclPalList input[type="checkbox"], #palPanel .pal-item-check')
+            .forEach(cb => { cb.checked = false; });
         }
         wasHidden = isHidden;
       }).observe(m, { attributes: true, attributeFilter: ["class"] });
