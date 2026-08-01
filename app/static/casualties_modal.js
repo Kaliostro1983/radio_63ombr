@@ -159,8 +159,39 @@
   }
   function _wireCsInput(el) {
     var input = el.querySelector(".cas-cs-input");
-    var acBox = null, acSeq = 0;
-    function closeAc() { if (acBox) { acBox.remove(); acBox = null; } }
+    var wrap = el.querySelector(".cas-cs-wrap");
+    var acBox = null, acSeq = 0, acItems = [];
+    // Список-підказку кріпимо до <body> з position:fixed, інакше overflow модалки
+    // (тіло має overflow-y:auto, картка — overflow:hidden) обрізає його, бо поле
+    // «Позивні» — останнє в контейнері.
+    function closeAc() {
+      if (acBox) { acBox.remove(); acBox = null; }
+      acItems = [];
+      window.removeEventListener("scroll", _onScroll, true);
+      window.removeEventListener("resize", closeAc);
+    }
+    function _choose(i) {
+      var it = acItems[i]; if (!it) return;
+      _addChip(el, it); input.value = ""; closeAc(); input.focus();
+    }
+    function _position() {
+      if (!acBox) return;
+      var r = wrap.getBoundingClientRect();
+      var below = window.innerHeight - r.bottom;
+      acBox.style.left = r.left + "px";
+      acBox.style.width = r.width + "px";
+      // Розкриваємо вниз, якщо вистачає місця; інакше — вгору над полем.
+      if (below >= 180 || below >= r.top) {
+        acBox.style.top = (r.bottom + 2) + "px";
+        acBox.style.bottom = "auto";
+        acBox.style.maxHeight = Math.max(80, Math.min(220, below - 8)) + "px";
+      } else {
+        acBox.style.top = "auto";
+        acBox.style.bottom = (window.innerHeight - r.top + 2) + "px";
+        acBox.style.maxHeight = Math.max(80, Math.min(220, r.top - 8)) + "px";
+      }
+    }
+    function _onScroll() { closeAc(); }
     input.addEventListener("input", function () {
       var v = input.value.trim();
       if (v.length < 2) { closeAc(); return; }
@@ -169,26 +200,26 @@
       fetch(url).then(function (r) { return r.json(); }).then(function (d) {
         if (seq !== acSeq) return;
         closeAc();
-        var items = (d && d.items) || [];
-        if (!items.length) return;
+        acItems = (d && d.items) || [];
+        if (!acItems.length) return;
         acBox = document.createElement("div"); acBox.className = "cas-cs-ac";
-        acBox.innerHTML = items.map(function (it, i) {
+        acBox.innerHTML = acItems.map(function (it, i) {
           return '<button type="button" data-i="' + i + '">' + esc(it.name) + "</button>";
         }).join("");
         acBox.querySelectorAll("button").forEach(function (b) {
-          b.addEventListener("click", function () {
-            _addChip(el, items[Number(b.dataset.i)]); input.value = ""; closeAc(); input.focus();
-          });
+          // mousedown + preventDefault — щоб інпут не втрачав фокус (blur → closeAc)
+          // раніше, ніж спрацює вибір.
+          b.addEventListener("mousedown", function (ev) { ev.preventDefault(); _choose(Number(b.dataset.i)); });
         });
-        el.querySelector(".cas-cs-wrap").appendChild(acBox);
+        document.body.appendChild(acBox);
+        _position();
+        window.addEventListener("scroll", _onScroll, true);
+        window.addEventListener("resize", closeAc);
       }).catch(closeAc);
     });
     input.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") closeAc();
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (acBox) { var first = acBox.querySelector("button"); if (first) first.click(); }
-      }
+      if (e.key === "Escape") { closeAc(); return; }
+      if (e.key === "Enter") { e.preventDefault(); if (acItems.length) _choose(0); }
     });
     input.addEventListener("blur", function () { setTimeout(closeAc, 150); });
   }

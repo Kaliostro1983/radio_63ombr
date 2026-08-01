@@ -6637,7 +6637,7 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-chip-x{ background:transparent; border:0; color:#bfdbfe; cursor:pointer; font-size:14px; line-height:1; padding:0; }
 .cas-chip-x:hover{ color:#fff; }
 .cas-cs-input{ flex:1 1 90px; min-width:90px; padding:3px 0; border:0; background:transparent; color:#e2e8f0; font-size:13px; outline:none; }
-.cas-cs-ac{ position:absolute; left:0; right:0; top:calc(100% + 2px); z-index:5; background:#0f172a; border:1px solid rgba(255,255,255,.18); border-radius:8px; overflow:hidden; box-shadow:0 12px 28px rgba(0,0,0,.5); max-height:220px; overflow-y:auto; }
+.cas-cs-ac{ position:fixed; z-index:13000; background:#0f172a; border:1px solid rgba(255,255,255,.18); border-radius:8px; box-shadow:0 12px 28px rgba(0,0,0,.5); max-height:220px; overflow-y:auto; }
 .cas-cs-ac button{ display:block; width:100%; text-align:left; padding:7px 10px; background:transparent; border:0; color:#e2e8f0; font-size:13px; cursor:pointer; }
 .cas-cs-ac button:hover{ background:#1e293b; }
 
