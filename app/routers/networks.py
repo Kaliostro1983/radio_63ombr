@@ -475,7 +475,7 @@ def api_network_peleng(network_id: int, days: int = 7):
 
         batch_rows = conn.execute(
             """
-            SELECT pb.id, pb.event_dt, n.frequency
+            SELECT pb.id, pb.event_dt, n.frequency, pb.author
             FROM peleng_batches pb
             JOIN networks n ON n.id = pb.network_id
             WHERE pb.network_id = ?
@@ -520,6 +520,7 @@ def api_network_peleng(network_id: int, days: int = 7):
                 "id": bid,
                 "event_dt": str(br["event_dt"] or ""),
                 "frequency": str(br["frequency"] or ""),
+                "author": str(br["author"] or ""),
                 "points_count": len(pts),
                 "points": pts[:200],  # cap to avoid huge payload
             }

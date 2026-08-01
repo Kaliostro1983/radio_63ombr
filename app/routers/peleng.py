@@ -566,8 +566,8 @@ def peleng_save(payload: SaveIn):
     try:
         network_id = fetch_network_id_by_frequency(db, value4)
         cur = db.execute(
-            "INSERT INTO peleng_batches (event_dt, network_id) VALUES (?, ?)",
-            (event_dt, network_id),
+            "INSERT INTO peleng_batches (event_dt, network_id, author) VALUES (?, ?, ?)",
+            (event_dt, network_id, "53 ОМБр"),   # ручний репорт-білдер — наше
         )
         batch_id = cur.lastrowid
 
@@ -673,8 +673,8 @@ async def peleng_import_csv(request: Request):
                     batch_id = int(b["id"])
                 else:
                     cur = conn.execute(
-                        "INSERT INTO peleng_batches (event_dt, network_id) VALUES (?, ?)",
-                        (event_dt, network_id),
+                        "INSERT INTO peleng_batches (event_dt, network_id, author) VALUES (?, ?, ?)",
+                        (event_dt, network_id, "117 ТРо"),   # імпортовані пеленги
                     )
                     batch_id = int(cur.lastrowid)
 

@@ -1164,6 +1164,26 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         safe_execute(conn, "ALTER TABLE peleng_batches_new RENAME TO peleng_batches", module="app.core.db", function="_run_lightweight_migrations", stage="rename:peleng_batches_new")
         safe_execute(conn, "PRAGMA foreign_keys = ON", module="app.core.db", function="_run_lightweight_migrations", stage="fk_on:peleng_batches_rebuild")
 
+    # --- peleng_batches: авторство батчу (63 ОМБр / 301 ОБТВР / 53 ОМБр / 117 ТРо) ---
+    _peleng_author_new = not _has_column(conn, "peleng_batches", "author")
+    _ensure_column(conn, "peleng_batches", "author", "author TEXT")
+    if _peleng_author_new:
+        # Бекфіл наявних: батчі з імпортованими точками → 117 ТРо; решта → 53 ОМБр
+        # (сирого тексту для 63 ОМБр/ОБТВР по старих батчах немає).
+        safe_execute(
+            conn,
+            "UPDATE peleng_batches SET author = '117 ТРо' WHERE id IN "
+            "(SELECT DISTINCT batch_id FROM peleng_points WHERE COALESCE(is_imported, 0) = 1)",
+            module="app.core.db", function="_run_lightweight_migrations",
+            stage="backfill:peleng_author_imported",
+        )
+        safe_execute(
+            conn,
+            "UPDATE peleng_batches SET author = '53 ОМБр' WHERE author IS NULL",
+            module="app.core.db", function="_run_lightweight_migrations",
+            stage="backfill:peleng_author_default",
+        )
+
     # --- Landmark keyword matching schema ---
     safe_execute(
         conn,

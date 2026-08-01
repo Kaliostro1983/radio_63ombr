@@ -122,6 +122,7 @@
           mgrs,
           batchId: b.id,
           eventDt: b.event_dt || "",
+          author: b.author || "",
           plot,
         });
       }
@@ -213,7 +214,7 @@
       circle.setAttribute("stroke-width", "2.0");
 
       const title = createSvgEl("title");
-      title.textContent = `${p.mgrs}\n${p.eventDt ? "batch: " + p.eventDt : ""}`;
+      title.textContent = `${p.mgrs}\n${p.eventDt ? "batch: " + p.eventDt : ""}${p.author ? "\nАвтор: " + p.author : ""}`;
       circle.appendChild(title);
 
       plotGroup.appendChild(circle);
@@ -324,6 +325,7 @@
           mgrs: mgrsStr,
           batchId: b.id,
           eventDt: b.event_dt || "",
+          author: b.author || "",
         });
       }
     }
@@ -386,7 +388,7 @@
         fillOpacity: op,
       });
       cm.addTo(map);
-      cm.bindTooltip(`${escapeHtml(p.mgrs)}${p.eventDt ? `<br/>${escapeHtml(p.eventDt)}` : ""}`, {
+      cm.bindTooltip(`${escapeHtml(p.mgrs)}${p.eventDt ? `<br/>${escapeHtml(p.eventDt)}` : ""}${p.author ? `<br/>Автор: ${escapeHtml(p.author)}` : ""}`, {
         direction: "top",
         sticky: true,
       });
@@ -420,6 +422,7 @@
           <th>Lon</th>
           <th>Batch</th>
           <th>DT</th>
+          <th>Автор</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -436,6 +439,7 @@
         <td>${Number(p.lon).toFixed(6)}</td>
         <td>${escapeHtml(String(p.batchId))}</td>
         <td>${escapeHtml(String(p.eventDt || ""))}</td>
+        <td>${escapeHtml(String(p.author || ""))}</td>
       `;
       tbody.appendChild(tr);
     }

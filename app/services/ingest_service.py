@@ -613,9 +613,16 @@ def _run_ingest_pipeline(
                 "actions": actions,
             }
 
+        # Авторство батчу за роздільником/футером у сирому тексті:
+        #   «ОБТВР» → 301 ОБТВР; «63 ОМБ(р)» → 63 ОМБр; інакше (наш бот) → 53 ОМБр.
+        _rt = (raw_text or "").upper()
+        peleng_author = (
+            "301 ОБТВР" if "ОБТВР" in _rt
+            else ("63 ОМБр" if "63 ОМБ" in _rt else "53 ОМБр")
+        )
         cur.execute(
-            "INSERT INTO peleng_batches (event_dt, network_id) VALUES (?, ?)",
-            (created_at, network_id),
+            "INSERT INTO peleng_batches (event_dt, network_id, author) VALUES (?, ?, ?)",
+            (created_at, network_id, peleng_author),
         )
         batch_id = int(cur.lastrowid)
         points = list(peleng.get("points") or [])
