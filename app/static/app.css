@@ -1160,7 +1160,7 @@ button.secondary{
  * Збільшено висоту (~15% бонусу проти попереднього: 100vh - 120 → 100vh - 20)
  * та зменшено верхній відступ (60px → 10px), щоб модалка з'являлась вище. */
 .cs-modal-card{
-  max-width:560px;
+  max-width:580px;
   display:flex;
   flex-direction:column;
   max-height:calc(100vh - 20px);
