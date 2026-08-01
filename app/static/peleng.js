@@ -805,7 +805,7 @@
   let _pelShowFreq = false;     // стан чекбоксу «Частоти»
   let _pelShowUnit = false;     // стан чекбоксу «Підрозділ» (кола з номером)
   let _pelShowImported = true;  // чекбокс «Імпортовані» — показувати пеленги з CSV
-  let _pelAuthorFilter = "";    // фільтр за авторством батчу ("" = усі)
+  let _pelHiddenAuthors = new Set();  // автори, знятні чекбоксами (сховані з карти)
   let _pelSending  = false;     // in-flight flag — захист від подвійного fetch
 
   /** Витягнути НОМЕР бригади/полка з опису р/м.
@@ -1319,16 +1319,10 @@
     return Array.isArray(d.rows) ? d.rows : [];
   }
 
-  // ── Фільтр за авторством: динамічне меню з реальних авторів у даних ──────────
+  // ── Фільтр за авторством: список чекбоксів (мультивибір) з к-стю пеленгів ─────
   function _pelUpdateAuthorUI() {
-    const lbl = document.getElementById("pelAuthorLabel");
     const btn = document.getElementById("pelAuthorBtn");
-    if (lbl) lbl.textContent = _pelAuthorFilter || "Усі";
-    if (btn) btn.classList.toggle("is-on", !!_pelAuthorFilter);
-    const menu = document.getElementById("pelAuthorMenu");
-    if (menu) menu.querySelectorAll(".pel-author-opt").forEach((b) => {
-      b.classList.toggle("is-active", (b.dataset.author || "") === _pelAuthorFilter);
-    });
+    if (btn) btn.classList.toggle("is-on", _pelHiddenAuthors.size > 0);
   }
   function _pelRebuildAuthorMenu() {
     const menu = document.getElementById("pelAuthorMenu");
@@ -1336,26 +1330,40 @@
     const counts = new Map();
     for (const r of (_pelLastRows || [])) {
       const a = String(r.author || "").trim();
-      const key = a || "—";
-      counts.set(key, (counts.get(key) || 0) + 1);
+      if (!a) continue;                       // порожній автор (аномалія) — завжди видимий
+      counts.set(a, (counts.get(a) || 0) + 1);
     }
-    if (_pelAuthorFilter && !counts.has(_pelAuthorFilter)) _pelAuthorFilter = "";
     const authors = Array.from(counts.keys()).sort((a, b) => a.localeCompare(b, "uk"));
     const total = (_pelLastRows || []).length;
-    const opt = (val, label, cnt) => {
-      const active = (String(val) === String(_pelAuthorFilter)) ? " is-active" : "";
-      return `<button type="button" class="pel-author-opt${active}" data-author="${escapeHtml(val)}">`
-        + `<span>${escapeHtml(label)}</span><span class="pel-author-cnt">${cnt}</span></button>`;
-    };
-    const html = [opt("", "Усі автори", total)];
-    for (const a of authors) { if (a === "—") continue; html.push(opt(a, a, counts.get(a))); }
+    const rowHtml = (isAll, val, label, cnt, checked) =>
+      `<label class="pel-author-opt${isAll ? " pel-author-all" : ""}">`
+      + `<input type="checkbox" ${isAll ? 'data-all="1"' : `data-author="${escapeHtml(val)}"`} ${checked ? "checked" : ""}>`
+      + `<span class="pel-author-nm">${escapeHtml(label)}</span>`
+      + `<span class="pel-author-cnt">${cnt}</span></label>`;
+    const allChecked = authors.length > 0 && authors.every((a) => !_pelHiddenAuthors.has(a));
+    const html = [rowHtml(true, "", "Усі автори", total, allChecked)];
+    for (const a of authors) html.push(rowHtml(false, a, a, counts.get(a), !_pelHiddenAuthors.has(a)));
     menu.innerHTML = html.join("");
-    menu.querySelectorAll(".pel-author-opt").forEach((b) => {
-      b.addEventListener("click", () => {
-        _pelAuthorFilter = b.dataset.author || "";
-        menu.classList.add("hidden");
-        _pelUpdateAuthorUI();
-        if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true });
+
+    const rerender = () => { if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true }); };
+
+    const master = menu.querySelector('input[data-all]');
+    if (master) {
+      const anyHidden = authors.some((a) => _pelHiddenAuthors.has(a));
+      master.indeterminate = anyHidden && !allChecked;
+      master.addEventListener("change", () => {
+        if (master.checked) authors.forEach((a) => _pelHiddenAuthors.delete(a));
+        else authors.forEach((a) => _pelHiddenAuthors.add(a));
+        _pelRebuildAuthorMenu();
+        rerender();
+      });
+    }
+    menu.querySelectorAll("input[data-author]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const a = cb.dataset.author;
+        if (cb.checked) _pelHiddenAuthors.delete(a); else _pelHiddenAuthors.add(a);
+        _pelRebuildAuthorMenu();
+        rerender();
       });
     });
     _pelUpdateAuthorUI();
@@ -1364,11 +1372,7 @@
   function _pelRenderPoints(rows, opts) {
     const skipFit = opts && opts.skipFit;
     _pelLastRows = rows;
-    // Якщо активний автор-фільтр відсутній у нових даних — скидаємо (до циклу,
-    // щоб не сховати геть усе). Меню оновлюємо при свіжому завантаженні.
-    if (_pelAuthorFilter && !rows.some((r) => String(r.author || "") === _pelAuthorFilter)) {
-      _pelAuthorFilter = "";
-    }
+    // Меню авторів оновлюємо при свіжому завантаженні (не на кожному перерендері).
     if (!skipFit) _pelRebuildAuthorMenu();
     const map = _pelEnsureMap();
     if (!map) return;
@@ -1387,8 +1391,8 @@
       if (_uk && _pelHiddenUnits.has(String(_uk))) continue;
       // Чекбокс «Імпортовані» — сховати пеленги, завантажені з CSV.
       if (!_pelShowImported && r.is_imported) continue;
-      // Фільтр за авторством батчу.
-      if (_pelAuthorFilter && String(r.author || "") !== _pelAuthorFilter) continue;
+      // Фільтр за авторством батчу (чекбокси — сховані автори).
+      if (_pelHiddenAuthors.has(String(r.author || "").trim())) continue;
       try {
         const pt  = window.mgrs.toPoint(raw);
         const lat = Number(pt[1]), lon = Number(pt[0]);
