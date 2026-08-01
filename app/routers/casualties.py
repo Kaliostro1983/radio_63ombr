@@ -389,14 +389,16 @@ _SELECT_CASUALTY = (
 def _apply_callsign_casualty(conn, callsign_id: int, status: str,
                              message_id: int, editor: str, ts: str) -> None:
     """Прив'язаному позивному виставляє life_status (200/300) і дописує
-    згадку перехоплення в коментар (без дублювання)."""
+    ПОВНИЙ ТЕКСТ перехоплення в коментар (без дублювання). Якщо в коментарі
+    вже є текст — відділяємо новий блок порожнім рядком."""
     row = conn.execute("SELECT comment FROM callsigns WHERE id = ?", (callsign_id,)).fetchone()
     if not row:
         return
     comment = row["comment"] or ""
-    marker = f"[втрати {status}] перехоплення #{message_id}"
-    if marker not in comment:
-        comment = (comment + ("\n" if comment.strip() else "") + marker).strip()
+    mrow = conn.execute("SELECT body_text FROM messages WHERE id = ?", (message_id,)).fetchone()
+    intercept_text = ((mrow["body_text"] if mrow else "") or "").strip()
+    if intercept_text and intercept_text not in comment:
+        comment = comment.rstrip() + ("\n\n" if comment.strip() else "") + intercept_text
     conn.execute(
         "UPDATE callsigns SET life_status = ?, comment = ?, "
         "last_edited_by = ?, last_edited_at = ? WHERE id = ?",

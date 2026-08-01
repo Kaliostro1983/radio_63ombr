@@ -103,7 +103,6 @@
             '<input type="number" class="cas-count" min="1" step="1" value="' + (count || 1) + '">' +
             '<label class="cas-chk cas-chk--inline"><input type="checkbox" class="cas-accounted"' + (rec && rec.accounted ? " checked" : "") + '><span>Враховано</span></label>' +
             '<span class="cas-rec__saved"></span>' +
-            '<button type="button" class="cas-del" title="Видалити запис">✕</button>' +
           "</div>" +
           '<label class="cas-fld"><span>Причина</span>' +
             '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : _defaultReasonId()) + "</select>" +
@@ -114,7 +113,9 @@
         "</div>" +
       "</div>" +
       '<div class="cas-fld"><span>Позивні</span><div class="cas-cs-wrap"><div class="cas-cs-chips"></div>' +
-        '<input type="text" class="cas-cs-input" placeholder="позивний + Enter" autocomplete="off"></div></div>';
+        '<input type="text" class="cas-cs-input" placeholder="позивний + Enter" autocomplete="off">' +
+        '<button type="button" class="cas-cs-clear" title="Очистити всі позивні" style="display:none">✕</button></div></div>' +
+      '<div class="cas-rec__actions"><button type="button" class="cas-del-btn" title="Видалити запис">🗑 Видалити</button></div>';
 
     // Клік по фото = зміна статусу 200 ⇄ 300.
     el.querySelector(".cas-rec__photo").addEventListener("click", function () {
@@ -130,7 +131,12 @@
     el.querySelectorAll(".cas-add-opt").forEach(function (b) {
       b.addEventListener("click", function () { addOption(el, b.dataset.kind); });
     });
-    el.querySelector(".cas-del").addEventListener("click", function () { deleteContainer(el); });
+    el.querySelector(".cas-del-btn").addEventListener("click", function () { deleteContainer(el); });
+    // Хрестик у полі позивних — видаляє ВСІ позивні одним кліком.
+    el.querySelector(".cas-cs-clear").addEventListener("click", function () {
+      el.__callsigns = []; renderChips(el); scheduleSave(el);
+      var inp = el.querySelector(".cas-cs-input"); if (inp) inp.focus();
+    });
 
     renderChips(el);
     _wireCsInput(el);
@@ -150,6 +156,8 @@
         el.__callsigns.splice(Number(x.dataset.idx), 1); renderChips(el); scheduleSave(el);
       });
     });
+    var clr = el.querySelector(".cas-cs-clear");
+    if (clr) clr.style.display = (el.__callsigns && el.__callsigns.length) ? "" : "none";
   }
   function _addChip(el, item) {
     el.__callsigns = el.__callsigns || [];
