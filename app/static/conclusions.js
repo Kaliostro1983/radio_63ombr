@@ -177,11 +177,11 @@
   const cnEmptyMsg     = $("cnEmptyMsg");
   const cnLoader       = $("cnLoader");
 
-  /* ── date init ── */
+  /* ── date init: доба 16→16 (16:00 учора → 16:00 сьогодні) ── */
   (function () {
     const now = new Date();
-    const s   = new Date(now); s.setHours(0, 0, 0, 0);
-    const e   = new Date(now); e.setHours(23, 59, 0, 0);
+    const s   = new Date(now); s.setDate(s.getDate() - 1); s.setHours(16, 0, 0, 0);
+    const e   = new Date(now); e.setHours(16, 0, 0, 0);
     dateFrom.value = localDatetimeString(s);
     dateTo.value   = localDatetimeString(e);
   })();
