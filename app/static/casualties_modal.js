@@ -37,15 +37,16 @@
     var r = (_reasons || []).find(function (x) { return String(x.name).trim().toLowerCase() === "невідомо"; });
     return r ? r.id : "";
   }
-  function optionsHtml(list, selId) {
-    return ['<option value="">—</option>'].concat(list.map(function (o) {
+  function optionsHtml(list, selId, withEmpty) {
+    var head = (withEmpty === false) ? [] : ['<option value="">—</option>'];
+    return head.concat(list.map(function (o) {
       return '<option value="' + o.id + '"' +
         (String(o.id) === String(selId) ? " selected" : "") + ">" + esc(o.name) + "</option>";
     })).join("");
   }
-  function refreshSelects(sel, list) {
+  function refreshSelects(sel, list, withEmpty) {
     document.querySelectorAll("#casRecords " + sel).forEach(function (s) {
-      s.innerHTML = optionsHtml(list, s.value);
+      s.innerHTML = optionsHtml(list, s.value, withEmpty);
     });
   }
 
@@ -107,7 +108,7 @@
             '<span class="cas-rec__saved"></span>' +
           "</div>" +
           '<label class="cas-fld"><span>Причина</span>' +
-            '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : _defaultReasonId()) + "</select>" +
+            '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : _defaultReasonId(), false) + "</select>" +
             '<button type="button" class="cas-add-opt" data-kind="reason" title="Додати причину">＋</button></span></label>' +
           '<label class="cas-fld"><span>Підрозділ</span>' +
             '<span class="cas-select-wrap"><select class="cas-unit">' + optionsHtml(_units, rec ? rec.unit_id : _suggestedUnitId) + "</select>" +
@@ -299,7 +300,7 @@
     fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name }) })
       .then(function (r) { return r.json(); }).then(function (d) {
         if (!d || !d.ok) { toast("Не вдалося додати", "error"); return; }
-        if (kind === "reason") { _reasons.push({ id: d.id, name: name }); refreshSelects(".cas-reason", _reasons); el.querySelector(".cas-reason").value = d.id; }
+        if (kind === "reason") { _reasons.push({ id: d.id, name: name }); refreshSelects(".cas-reason", _reasons, false); el.querySelector(".cas-reason").value = d.id; }
         else { _units.push({ id: d.id, name: name }); refreshSelects(".cas-unit", _units); el.querySelector(".cas-unit").value = d.id; }
         scheduleSave(el);
       }).catch(function () { toast("Помилка", "error"); });
