@@ -259,9 +259,14 @@ def _suggest_unit_id(conn, message_id: int):
         "LEFT JOIN groups g ON g.id = n.group_id WHERE m.id = ?",
         (message_id,),
     ).fetchone()
-    if not row or not row["grp"] or row["grp"] == "Невідомо":
+    if not row:
         return None, None
     grp, unit = row["grp"] or "", row["unit"] or ""
+    # Немає ні тексту підрозділу, ні відомого формування — підбирати нічого.
+    # (Раніше тут був ранній вихід на будь-яку «Невідомо» групу, через що
+    # прямий/ббпс-збіг за текстом unit не відпрацьовував — напр. «2 бБпС 71 опБпС».)
+    if not unit.strip() and (not grp or grp == "Невідомо"):
+        return None, None
     cas = conn.execute("SELECT id, name FROM cas_units").fetchall()
     casn = {_norm_unit(r["name"]): (r["id"], r["name"]) for r in cas}
 
