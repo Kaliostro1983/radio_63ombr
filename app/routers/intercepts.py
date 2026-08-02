@@ -43,6 +43,13 @@ def get_conn():
     # Cyrillic-aware lowercase for case-insensitive text search (SQLite LIKE
     # only case-folds ASCII): pylower(col) LIKE pylower(term).
     conn.create_function("pylower", 1, lambda s: s.lower() if isinstance(s, str) else s)
+    # Lowercase + collapse ALL runs of whitespace (spaces/tabs/newlines) to a
+    # single space. Дозволяє шукати суцільну фразу незалежно від подвійних
+    # пробілів чи переносів рядків у тексті перехоплення.
+    conn.create_function(
+        "pynormws", 1,
+        lambda s: " ".join(s.split()).lower() if isinstance(s, str) else s,
+    )
     try:
         conn.execute("PRAGMA busy_timeout = 30000;")
     except Exception:
@@ -311,7 +318,9 @@ def intercepts_search(
                         "items": [],
                     }
                 )
-            where.append("pylower(m.body_text) LIKE ?")
+            # Текст перехоплення теж нормалізуємо по пробілах (pynormws), щоб
+            # подвійні пробіли/переноси в тілі не зривали збіг суцільної фрази.
+            where.append("pynormws(m.body_text) LIKE ?")
             params.append(f"%{needle.lower()}%")
 
         exact_freq, freq_mask = normalize_freq_or_mask(frequency_raw)
