@@ -509,8 +509,9 @@ def cas_records_list(
 @router.get("/api/casualties/report")
 def cas_report(date_from: str = Query(default=""), date_to: str = Query(default="")):
     """Агрегація втрат за період: по підрозділах × статус (200/300).
-    Формат — як у таблиці «Втрати»: секції БЕЗПОВОРОТНІ (200) / САНІТАРНІ (300)."""
-    wheres = ["cas.is_valid = 1"]
+    Формат — як у таблиці «Втрати»: секції БЕЗПОВОРОТНІ (200) / САНІТАРНІ (300).
+    Враховані записи (accounted=1) у звіт НЕ входять."""
+    wheres = ["cas.is_valid = 1", "COALESCE(cas.accounted, 0) = 0"]
     params: list = []
     if date_from:
         wheres.append("m.created_at >= ?"); params.append(date_from)

@@ -358,6 +358,10 @@
         tail = "причина: " + reason;
       }
       var line = count + " - " + status + (tail ? " - " + tail : "");
+      // Позначка «(врахований)» — якщо оператор виставив чекбокс «Враховано».
+      if (el.querySelector(".cas-accounted") && el.querySelector(".cas-accounted").checked) {
+        line += " (врахований)";
+      }
       recLines.push(line);
     });
     return recLines.join("\n").trim();

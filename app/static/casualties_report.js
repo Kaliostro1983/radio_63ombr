@@ -96,8 +96,10 @@
       wrap.className = "cas2-item";
       var recRows = g.recs.map(function (rec) {
         var cs = (rec.callsigns || []).map(function (c) { return esc(c.name); }).join(", ");
+        // Враховані записи — сірий чіп (і у звіт вони не входять).
+        var badgeCls = rec.accounted ? "cas2-badge--acc" : ("cas2-badge--" + (rec.status === "200" ? "200" : "300"));
         var bits = [
-          '<span class="cas2-badge cas2-badge--' + (rec.status === "200" ? "200" : "300") + '">' + esc(rec.status) + " × " + rec.count + "</span>",
+          '<span class="cas2-badge ' + badgeCls + '">' + esc(rec.status) + " × " + rec.count + (rec.accounted ? " · врах." : "") + "</span>",
         ];
         if (rec.reason) bits.push(esc(rec.reason));
         if (rec.unit) bits.push(esc(rec.unit));
