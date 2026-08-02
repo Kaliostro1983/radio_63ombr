@@ -900,7 +900,10 @@
       ? escapeHtml(r.frequency || "—")
       : `<span class="pel-pop-unknown">Радіомережа не ідентифікована</span>`;
     // Для неідентифікованої показуємо частоту з батча, якщо вона там була.
-    const dt = String(r.event_dt || "").replace("T", " ");
+    // Дата у форматі dd.mm.yyyy (час зберігаємо).
+    const _v = String(r.event_dt || "").replace("T", " ").trim();
+    const _m = _v.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ ](\d{2}:\d{2}(?::\d{2})?))?/);
+    const dt = _m ? (_m[4] ? `${_m[3]}.${_m[2]}.${_m[1]} ${_m[4]}` : `${_m[3]}.${_m[2]}.${_m[1]}`) : _v;
     return (
       `<div class="pel-pop">` +
         `<div class="pel-pop-title">${title}</div>` +
@@ -911,7 +914,7 @@
           row("Статус", r.status) +
           row("Теги", r.tags) +
           row("Чат-джерело", r.chat) +
-          row("Джерело", r.is_imported ? "імпорт з CSV-файлу" : "ручне введення",
+          row("Джерело", r.author || (r.is_imported ? "імпорт з CSV-файлу" : "ручне введення"),
               r.is_imported ? "is-imported" : "") +
           row("Час пеленга", dt) +
           row("MGRS", r.mgrs) +
