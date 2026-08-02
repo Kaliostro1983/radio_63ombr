@@ -340,7 +340,8 @@
     if (_interceptText) lines.push("", _interceptText.trim());
     return lines.join("\n").trim();
   }
-  // Відправка 2 — записи: «[кількість] - [статус] - ([позивні]) [причина]».
+  // Відправка 2 — записи: «[кількість] - [статус] - ([позивні]), причина: [причина]».
+  // Дужки з позивними — лише коли позивні є.
   function _casBuildRecordsMsg() {
     var recLines = [];
     document.querySelectorAll("#casRecords .cas-rec").forEach(function (el) {
@@ -349,8 +350,14 @@
       var rSel = el.querySelector(".cas-reason");
       var reason = rSel.value ? rSel.options[rSel.selectedIndex].text : "";
       var cs = (el.__callsigns || []).map(function (c) { return c.name; });
-      var line = count + " - " + status + " - (" + cs.join(", ") + ")";
-      if (reason) line += " " + reason;
+      var tail = "";
+      if (cs.length) {
+        tail = "(" + cs.join(", ") + ")";
+        if (reason) tail += ", причина: " + reason;
+      } else if (reason) {
+        tail = "причина: " + reason;
+      }
+      var line = count + " - " + status + (tail ? " - " + tail : "");
       recLines.push(line);
     });
     return recLines.join("\n").trim();
