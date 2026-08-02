@@ -453,6 +453,24 @@ def _apply_callsign_casualty(conn, callsign_id: int, status: str,
     )
 
 
+def _recompute_callsign_status(conn, callsign_id: int, editor: str, ts: str) -> None:
+    """Перераховує life_status позивного за НАЯВНИМИ валідними записами втрат.
+    200 має пріоритет над 300; якщо записів не лишилось — повертаємо 'alive'.
+    Викликається після видалення запису втрат, щоб зняти помилковий 200/300."""
+    row = conn.execute(
+        "SELECT cas.status AS status FROM casualty_callsigns cc "
+        "JOIN casualties cas ON cas.id = cc.casualty_id "
+        "WHERE cc.callsign_id = ? AND cas.is_valid = 1 "
+        "ORDER BY CASE cas.status WHEN '200' THEN 0 ELSE 1 END LIMIT 1",
+        (callsign_id,),
+    ).fetchone()
+    new_status = row["status"] if row else "alive"
+    conn.execute(
+        "UPDATE callsigns SET life_status = ?, last_edited_by = ?, last_edited_at = ? WHERE id = ?",
+        (new_status, editor, ts, callsign_id),
+    )
+
+
 @router.get("/api/casualties")
 def cas_records_list(
     message_id: int = Query(default=0),
@@ -627,12 +645,19 @@ def cas_record_update(cas_id: int, body: CasualtyUpdate, request: Request):
 
 @router.delete("/api/casualties/{cas_id}")
 def cas_record_delete(cas_id: int, request: Request):
-    """Мʼяке видалення (is_valid=0). Статуси позивних не відкочуємо."""
+    """Мʼяке видалення (is_valid=0). Після видалення перераховуємо life_status
+    привʼязаних позивних: якщо інших валідних записів втрат немає — знімаємо
+    200/300 (повертаємо 'alive'); коментар при цьому не чіпаємо."""
     editor = current_device_mask(request)
     ts = now_sql()
     with get_conn() as conn:
+        linked = conn.execute(
+            "SELECT callsign_id FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,)
+        ).fetchall()
         conn.execute(
             "UPDATE casualties SET is_valid = 0, last_edited_at = ?, last_edited_by = ? WHERE id = ?",
             (ts, editor, cas_id),
         )
+        for lr in linked:
+            _recompute_callsign_status(conn, lr["callsign_id"], editor, ts)
     return {"ok": True}
