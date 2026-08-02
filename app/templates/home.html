@@ -13,10 +13,29 @@
       <div class="small">Активність радіомереж.</div>
     </div>
     <div class="home-page-actions">
-      <button id="homeOpenOverview"   type="button" class="secondary">Огляд</button>
-      <button id="homeOpenReports"    type="button" class="secondary">Звіти</button>
+      <button id="homeOpenOverview" type="button" class="secondary home-icon-btn" title="Огляд" aria-label="Огляд">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v9l7.8 4.5"/>
+        </svg>
+      </button>
+      <button id="homeOpenReports" type="button" class="secondary home-icon-btn" title="Звіти" aria-label="Звіти">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/>
+          <path d="M8 8h5M8 12h5M8 16h3"/>
+          <path d="M17.5 3.5a2 2 0 0 1 2.9 2.9L15 12l-3.8 1 1-3.8 5.3-5.7z"/>
+        </svg>
+      </button>
       <button id="homeOpenCasualties" type="button" class="secondary">Втрати</button>
-      <button id="homeOpenCasualties2" type="button" class="secondary">Втрати 2</button>
+      <button id="homeOpenCasualties2" type="button" class="secondary home-icon-btn" title="Втрати 2" aria-label="Втрати 2">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2.5c-3.6 0-6.3 2.5-6.3 5.9 0 1.8.8 3.1 1.9 4v1.5c0 .7.5 1.2 1.2 1.2h6.4c.7 0 1.2-.5 1.2-1.2v-1.5c1.1-.9 1.9-2.2 1.9-4C18.3 5 15.6 2.5 12 2.5z"/>
+          <circle cx="9.3" cy="9.2" r="1.3" fill="currentColor"/>
+          <circle cx="14.7" cy="9.2" r="1.3" fill="currentColor"/>
+          <path d="M11 12.8h2"/>
+          <path d="M6 19l12 3M6 22l12-3"/>
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -357,7 +376,18 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
+/* Кнопки-іконки в шапці головної (Огляд / Звіти / Втрати 2) */
+.home-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 36px;
+  padding: 0;
+}
+.home-icon-btn svg { display: block; }
 
 /* ── Home modal — широка картка з body, що скролиться ─────── */
 .home-modal-card {
