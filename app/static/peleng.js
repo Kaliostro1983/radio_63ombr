@@ -393,6 +393,32 @@
     URL.revokeObjectURL(blobUrl);
   }
 
+  // Кнопка «DOC» — звіт по пеленгах 63 ОМБр за крайні 24 год (без модалки).
+  // Ендпойнт /peleng/report/by-period уже фільтрує лише автора «63 ОМБр».
+  let _doc24Busy = false;
+  async function generate24hReport() {
+    if (_doc24Busy) return;
+    _doc24Busy = true;
+    const btn = $("pelDocBtn");
+    if (btn) btn.classList.add("is-busy");
+    try {
+      const now = new Date();
+      const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const qs = new URLSearchParams({
+        from_dt: localInputToSql(toLocalInputValue(from)),
+        to_dt:   localInputToSql(toLocalInputValue(now)),
+      });
+      await downloadReportBlob(`/peleng/report/by-period?${qs.toString()}`, {});
+      showToast("Звіт 63 ОМБр за 24 год сформовано", 1700);
+    } catch (e) {
+      console.error("[peleng] generate24hReport error:", e);
+      if (window.appToast) window.appToast(e.message || "Помилка формування звіту", "error");
+    } finally {
+      _doc24Busy = false;
+      if (btn) btn.classList.remove("is-busy");
+    }
+  }
+
   let _reportBusy = false;
   async function generateReport() {
     if (_reportBusy) return;
@@ -716,8 +742,14 @@
     }
 
     document.getElementById("pelOpenCompose")?.addEventListener("click", () => openPelModal("compose"));
-    document.getElementById("pelOpenReport")?.addEventListener("click",  () => openPelModal("report"));
     document.getElementById("pelOpenActual")?.addEventListener("click",  () => openPelModal("actual"));
+
+    // Кнопка «DOC»: звичайний клік — звіт 63 ОМБр за 24 год; Ctrl/⌘+клік —
+    // відкрити модалку «Формування звіту» (для довільного періоду/тексту).
+    document.getElementById("pelDocBtn")?.addEventListener("click", (e) => {
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); openPelModal("report"); return; }
+      generate24hReport();
+    });
 
     document.querySelectorAll("[data-pel-modal-close]").forEach((el) => {
       el.addEventListener("click", (e) => {

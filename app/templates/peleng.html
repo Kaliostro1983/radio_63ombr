@@ -10,7 +10,6 @@
     </div>
     <div class="pel-page-actions">
       <button id="pelOpenCompose" type="button" class="secondary">Оформлення</button>
-      <button id="pelOpenReport"  type="button" class="secondary">Формування звіту</button>
       <button id="pelOpenActual"  type="button" class="secondary">Актуальне</button>
     </div>
   </div>
@@ -65,6 +64,12 @@
             <span class="pel-csv-label">CSV</span>
           </button>
           <input id="pelCsvInput" type="file" accept=".csv" hidden>
+
+          <!-- Звіт DOCX по 63 ОМБр за 24 год · Ctrl+клік — модалка «Формування звіту» -->
+          <button type="button" id="pelDocBtn" class="pel-csv-btn"
+                  title="Звіт по пеленгах 63 ОМБр за крайні 24 год · Ctrl+клік — відкрити «Формування звіту»">
+            <span class="pel-csv-label">DOC</span>
+          </button>
 
           <!-- Звіт про імпорт CSV -->
           <div id="pelCsvModal" class="modal hidden pel-modal" aria-hidden="true">
@@ -406,5 +411,5 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/peleng.js?v=40"></script>
+<script src="/static/peleng.js?v=41"></script>
 {% endblock %}
