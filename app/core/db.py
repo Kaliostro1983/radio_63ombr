@@ -1859,7 +1859,8 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         stage="create_table:casualty_callsigns",
     )
     for _i, _reason in enumerate(
-        ["фпв", "міна", "стрілецький бій", "скид", "аварія", "самоушкодження", "невідомо"]
+        ["фпв", "підрив на міні", "стрілецький бій", "скид", "аварія",
+         "самоушкодження", "невідомо", "осколкове поранення"]
     ):
         safe_execute(
             conn,
