@@ -135,24 +135,24 @@ def _resolve_landmark_geometry(
 
 
 def _unknown_landmark_type_id(conn) -> int:
-    """Return id_type that represents an 'unspecified' landmark type.
+    """Return id_type that represents an 'unspecified' landmark type ('—').
 
-    In current DB data this is typically the first type row with name 'сп'.
+    Раніше цю роль грав тип 'сп' (id=1), через що 'сп' не можна було показати як
+    реальний тип. Тепер маркером «без типу» є окремий тип '—'.
     """
     row = conn.execute(
-        """
-        SELECT id
-        FROM landmark_types
-        WHERE lower(name) = lower(?)
-        ORDER BY id
-        LIMIT 1
-        """,
-        ("сп",),
+        "SELECT id FROM landmark_types WHERE name = '—' ORDER BY id LIMIT 1"
     ).fetchone()
     if row:
         return int(row["id"])
 
-    # Fallback: minimal landmark_type id (so the app can still work).
+    # Історичний фолбек (доки '—' не створено): перший тип 'сп'.
+    row = conn.execute(
+        "SELECT id FROM landmark_types WHERE lower(name) = lower('сп') ORDER BY id LIMIT 1"
+    ).fetchone()
+    if row:
+        return int(row["id"])
+
     row2 = conn.execute("SELECT id FROM landmark_types ORDER BY id LIMIT 1").fetchone()
     if not row2:
         raise HTTPException(status_code=500, detail="Немає жодних landmark_types у БД")
@@ -187,7 +187,9 @@ def api_landmarks_reference():
                 {"id": int(r["id"]), "name": str(r["name"])} for r in groups if r and r["id"] is not None
             ],
             "types": [
-                {"id": int(r["id"]), "name": str(r["name"])} for r in types if r and r["id"] is not None
+                {"id": int(r["id"]), "name": str(r["name"])}
+                for r in types
+                if r and r["id"] is not None and int(r["id"]) != int(unknown_type_id)
             ],
             "geom_types": [
                 {"id": int(r["id"]), "name": str(r["name"])} for r in geoms if r and r["id"] is not None

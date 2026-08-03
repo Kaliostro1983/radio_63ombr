@@ -1197,6 +1197,15 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
         function="_run_lightweight_migrations",
         stage="create_table:landmark_types",
     )
+    # Тип-маркер «без типу» ('—'). Використовується як «unspecified», щоб 'сп'
+    # був повноцінним типом, який можна показати.
+    safe_execute(
+        conn,
+        "INSERT OR IGNORE INTO landmark_types (name) VALUES ('—')",
+        module="app.core.db",
+        function="_run_lightweight_migrations",
+        stage="seed:landmark_type_dash",
+    )
     safe_execute(
         conn,
         """
