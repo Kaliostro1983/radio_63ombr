@@ -16,6 +16,17 @@ _FONT_BOLD = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "C:/Windows/Fonts/arialbd.ttf",
 ]
+# Times New Roman-подібні серифні шрифти (Liberation Serif — метрично сумісний).
+_FONT_SERIF_REG = [
+    "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+    "C:/Windows/Fonts/times.ttf",
+]
+_FONT_SERIF_BOLD = [
+    "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+    "C:/Windows/Fonts/timesbd.ttf",
+]
 
 
 def _font(paths: List[str], size: int):
@@ -231,16 +242,17 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
 
     S = 2
     PAD = 14
-    TITLE_H = 40    # рядок 1 синьої шапки — «Таблиця втрат · період»
-    TOT_H = 30      # рядок 2 синьої шапки — підсумки 200/300
+    TITLE_H = 40    # синя шапка — «Таблиця втрат · період»
     HDR_H = 30
     SEC_H = 26
     ROW_H = 26
+    SUM_H = 30      # підсумковий рядок унизу
 
-    fr  = _font(_FONT_REG,  12 * S)
-    fb  = _font(_FONT_BOLD, 12 * S)
-    ft  = _font(_FONT_BOLD, 14 * S)
-    ftt = _font(_FONT_BOLD, 13 * S)
+    # Весь текст таблиці — Times New Roman (Liberation Serif).
+    fr   = _font(_FONT_SERIF_REG,  12 * S)
+    fb   = _font(_FONT_SERIF_BOLD, 12 * S)
+    ft   = _font(_FONT_SERIF_BOLD, 14 * S)
+    fsum = _font(_FONT_SERIF_BOLD, 13 * S)
 
     table_rows = []
     for cat, label, items in sections:
@@ -261,32 +273,33 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     ) + 20 * S
     name_w = max(min_name_w, max_name_w) // S
 
-    TW = name_w + val_w
+    total = tot_200 + tot_300
     title_str = f"Таблиця втрат  ·  {period_label}"
-    tot_str = f"Всього  ·  200: {tot_200}   ·   300: {tot_300}"
+    sum_str = f"Загалом: {total} в/с (безповоротні: {tot_200} в/с, санітарні: {tot_300} в/с)"
+
+    TW = name_w + val_w
     TW = max(TW,
              (_tw(tmp, title_str, ft) + 32 * S) // S,
-             (_tw(tmp, tot_str, ftt) + 32 * S) // S)
+             (_tw(tmp, sum_str, fsum) + 24 * S) // S)
     # Віддаємо 30 пкс від правої колонки лівій; загальну ширину зберігаємо.
     val_w = max(60, val_w - 30)
     name_w = TW - val_w
 
-    img_h = PAD + TITLE_H + TOT_H + HDR_H
+    img_h = PAD + TITLE_H + HDR_H
     for r in table_rows:
         img_h += SEC_H if r[0] == "sec" else ROW_H
-    img_h += PAD
     if not table_rows:
         img_h += ROW_H  # місце під «немає даних»
+    img_h += SUM_H + PAD
 
     img = Image.new("RGB", ((TW + 2 * PAD) * S, img_h * S), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     C = {
         "title": (30, 58, 138), "title_fg": (255, 255, 255),
-        "tot": (37, 71, 158),
         "hdr": (241, 243, 246), "hdr_fg": (55, 65, 81),
         "irr": (255, 242, 242), "irr_sec": (254, 226, 226), "irr_fg": (153, 27, 27),
         "san": (240, 253, 244), "san_sec": (220, 252, 231), "san_fg": (20, 83, 45),
-        "row_fg": (17, 24, 39), "border": (209, 213, 219), "frame": (100, 116, 139),
+        "row_fg": (17, 24, 39), "border": (209, 213, 219),
     }
 
     def cell(x, y, w, h, bg, text, font, fg, align="center"):
@@ -302,13 +315,11 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     y = PAD * S
     top = y
     cell(x0, y, TW * S, TITLE_H * S, C["title"], title_str, ft, C["title_fg"]); y += TITLE_H * S
-    cell(x0, y, TW * S, TOT_H * S, C["tot"], tot_str, ftt, C["title_fg"]); y += TOT_H * S
     cell(x0, y, name_w * S, HDR_H * S, C["hdr"], "Підрозділ", fb, C["hdr_fg"])
-    # Заголовок колонки значень — підбираємо шрифт, щоб він точно вмістився у
-    # (звужену на 30 пкс) колонку й не обрізався.
+    # Заголовок колонки значень — підбираємо шрифт під (звужену) колонку.
     fvh = fb
     for _sz in (12, 11, 10, 9):
-        _f = _font(_FONT_BOLD, _sz * S)
+        _f = _font(_FONT_SERIF_BOLD, _sz * S)
         if _tw(tmp, "Втрати, в/с", _f) <= (val_w - 10) * S:
             fvh = _f
             break
@@ -328,8 +339,13 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
             cell(x0, y, name_w * S, ROW_H * S, bg, name, fr, C["row_fg"], "center")
             cell(x0 + name_w * S, y, val_w * S, ROW_H * S, bg, str(cnt) if cnt else "", fr, C["row_fg"], "center")
             y += ROW_H * S
+    rows_bottom = y
+
+    # ── Підсумковий рядок унизу — на всю ширину, ліворуч ──
+    cell(x0, y, TW * S, SUM_H * S, C["hdr"], sum_str, fsum, C["row_fg"], "left"); y += SUM_H * S
     bottom = y
 
+    # Горизонтальні лінії у зоні таблиці (заголовок + рядки), і під підсумком.
     yy = hdr_bottom
     draw.line([(x0, hdr_bottom - HDR_H * S), (x0 + TW * S - 1, hdr_bottom - HDR_H * S)], fill=C["border"], width=S)
     draw.line([(x0, yy), (x0 + TW * S - 1, yy)], fill=C["border"], width=S)
@@ -337,8 +353,9 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     for r in walk:
         yy += ROW_H * S if (r is None or r[0] != "sec") else SEC_H * S
         draw.line([(x0, yy), (x0 + TW * S - 1, yy)], fill=C["border"], width=S)
-    # Вертикальний роздільник — лише в зоні таблиці (заголовок+рядки).
-    draw.line([(x0 + name_w * S, hdr_bottom - HDR_H * S), (x0 + name_w * S, bottom - 1)], fill=C["border"], width=S)
+    draw.line([(x0, bottom - 1), (x0 + TW * S - 1, bottom - 1)], fill=C["border"], width=S)
+    # Вертикальний роздільник — лише в зоні таблиці (не через підсумок).
+    draw.line([(x0 + name_w * S, hdr_bottom - HDR_H * S), (x0 + name_w * S, rows_bottom - 1)], fill=C["border"], width=S)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
