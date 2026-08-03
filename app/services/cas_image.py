@@ -304,7 +304,15 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     cell(x0, y, TW * S, TITLE_H * S, C["title"], title_str, ft, C["title_fg"]); y += TITLE_H * S
     cell(x0, y, TW * S, TOT_H * S, C["tot"], tot_str, ftt, C["title_fg"]); y += TOT_H * S
     cell(x0, y, name_w * S, HDR_H * S, C["hdr"], "Підрозділ", fb, C["hdr_fg"])
-    cell(x0 + name_w * S, y, val_w * S, HDR_H * S, C["hdr"], "Втрати, в/с", fb, C["hdr_fg"]); y += HDR_H * S
+    # Заголовок колонки значень — підбираємо шрифт, щоб він точно вмістився у
+    # (звужену на 30 пкс) колонку й не обрізався.
+    fvh = fb
+    for _sz in (12, 11, 10, 9):
+        _f = _font(_FONT_BOLD, _sz * S)
+        if _tw(tmp, "Втрати, в/с", _f) <= (val_w - 10) * S:
+            fvh = _f
+            break
+    cell(x0 + name_w * S, y, val_w * S, HDR_H * S, C["hdr"], "Втрати, в/с", fvh, C["hdr_fg"]); y += HDR_H * S
 
     hdr_bottom = y
     if not table_rows:
