@@ -267,7 +267,8 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     TW = max(TW,
              (_tw(tmp, title_str, ft) + 32 * S) // S,
              (_tw(tmp, tot_str, ftt) + 32 * S) // S)
-    # Вільну ширину праворуч додаємо до лівої колонки.
+    # Віддаємо 30 пкс від правої колонки лівій; загальну ширину зберігаємо.
+    val_w = max(60, val_w - 30)
     name_w = TW - val_w
 
     img_h = PAD + TITLE_H + TOT_H + HDR_H
@@ -316,7 +317,7 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
         else:
             _, cat, name, cnt = r
             bg = C["irr"] if cat == "irr" else C["san"]
-            cell(x0, y, name_w * S, ROW_H * S, bg, name, fr, C["row_fg"], "right")
+            cell(x0, y, name_w * S, ROW_H * S, bg, name, fr, C["row_fg"], "center")
             cell(x0 + name_w * S, y, val_w * S, ROW_H * S, bg, str(cnt) if cnt else "", fr, C["row_fg"], "center")
             y += ROW_H * S
     bottom = y
@@ -330,7 +331,6 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
         draw.line([(x0, yy), (x0 + TW * S - 1, yy)], fill=C["border"], width=S)
     # Вертикальний роздільник — лише в зоні таблиці (заголовок+рядки).
     draw.line([(x0 + name_w * S, hdr_bottom - HDR_H * S), (x0 + name_w * S, bottom - 1)], fill=C["border"], width=S)
-    draw.rectangle([x0, top, x0 + TW * S - 1, bottom - 1], outline=C["frame"], width=2 * S)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
