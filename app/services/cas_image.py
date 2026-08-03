@@ -333,7 +333,7 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
         if r[0] == "sec":
             _, cat, label = r
             cell(x0, y, TW * S, SEC_H * S, C["irr_sec"] if cat == "irr" else C["san_sec"], label, fb,
-                 C["irr_fg"] if cat == "irr" else C["san_fg"], "left"); y += SEC_H * S
+                 C["irr_fg"] if cat == "irr" else C["san_fg"], "center"); y += SEC_H * S
         else:
             _, cat, name, cnt = r
             bg = C["irr"] if cat == "irr" else C["san"]
