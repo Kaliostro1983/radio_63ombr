@@ -509,11 +509,9 @@ def cas_records_list(
     return resp
 
 
-@router.get("/api/casualties/report")
-def cas_report(date_from: str = Query(default=""), date_to: str = Query(default="")):
-    """Агрегація втрат за період: по підрозділах × статус (200/300).
-    Формат — як у таблиці «Втрати»: секції БЕЗПОВОРОТНІ (200) / САНІТАРНІ (300).
-    Враховані записи (accounted=1) у звіт НЕ входять."""
+def _aggregate_report(date_from: str, date_to: str):
+    """Агрегація втрат за період по підрозділах × статус (200/300).
+    Враховані (accounted=1) — не входять. Повертає (rows, totals)."""
     wheres = ["cas.is_valid = 1", "COALESCE(cas.accounted, 0) = 0"]
     params: list = []
     # Нормалізуємо роздільник дати: інпут дає 'T' (2026-08-02T16:00), а
@@ -543,14 +541,51 @@ def cas_report(date_from: str = Query(default=""), date_to: str = Query(default=
             else:
                 row["wounded"] += r["cnt"] or 0
     rows = sorted(agg.values(), key=lambda x: (x["so"], x["unit"]))
-    return {
-        "ok": True,
-        "rows": rows,
-        "totals": {
-            "killed": sum(x["killed"] for x in rows),
-            "wounded": sum(x["wounded"] for x in rows),
-        },
+    totals = {
+        "killed": sum(x["killed"] for x in rows),
+        "wounded": sum(x["wounded"] for x in rows),
     }
+    return rows, totals
+
+
+@router.get("/api/casualties/report")
+def cas_report(date_from: str = Query(default=""), date_to: str = Query(default="")):
+    """Агрегація втрат за період: по підрозділах × статус (200/300).
+    Формат — як у таблиці «Втрати»: секції БЕЗПОВОРОТНІ (200) / САНІТАРНІ (300)."""
+    rows, totals = _aggregate_report(date_from, date_to)
+    return {"ok": True, "rows": rows, "totals": totals}
+
+
+def _fmt_period_label(date_from: str, date_to: str) -> str:
+    def one(s):
+        v = str(s or "").replace("T", " ").strip()
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[ ](\d{2}:\d{2})", v)
+        return f"{m.group(3)}.{m.group(2)}.{m.group(1)} {m.group(4)}" if m else v
+    a, b = one(date_from), one(date_to)
+    if a and b:
+        return f"{a} – {b}"
+    return a or b or ""
+
+
+@router.get("/api/casualties/report-image")
+def cas_report_image(date_from: str = Query(default=""), date_to: str = Query(default="")):
+    """PNG-зображення звіту втрат за період (кнопка «фотоапарат» у модалці)."""
+    from app.services.cas_image import build_casualty_report_image
+    rows, totals = _aggregate_report(date_from, date_to)
+    irr_items = [(x["unit"], x["killed"]) for x in rows if x["killed"]]
+    san_items = [(x["unit"], x["wounded"]) for x in rows if x["wounded"]]
+    sections = [
+        ("irr", "БЕЗПОВОРОТНІ ВТРАТИ", irr_items),
+        ("san", "САНІТАРНІ ВТРАТИ", san_items),
+    ]
+    buf = build_casualty_report_image(
+        sections, _fmt_period_label(date_from, date_to),
+        totals["killed"], totals["wounded"],
+    )
+    return StreamingResponse(
+        buf, media_type="image/png",
+        headers={"Content-Disposition": "inline; filename=vtraty-2.png"},
+    )
 
 
 class CasualtyIn(BaseModel):

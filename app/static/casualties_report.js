@@ -182,6 +182,14 @@
       el.addEventListener("click", function (e) { e.stopPropagation(); closeModal(); });
     });
     $("cas2Refresh") && $("cas2Refresh").addEventListener("click", reload);
+    // Кнопка «фотоапарат» — PNG-зображення таблиці зі статистикою за період.
+    $("cas2ImageBtn") && $("cas2ImageBtn").addEventListener("click", function () {
+      var r = _range();
+      var qs = new URLSearchParams();
+      if (r.from) qs.set("date_from", r.from);
+      if (r.to) qs.set("date_to", r.to);
+      window.open("/api/casualties/report-image?" + qs.toString(), "_blank");
+    });
     $("cas2ReportBtn") && $("cas2ReportBtn").addEventListener("click", function () { showReport(); loadReport(); });
     $("cas2ListBtn") && $("cas2ListBtn").addEventListener("click", showList);
     document.addEventListener("keydown", function (e) {

@@ -215,3 +215,124 @@ def build_cas_image(
     img.save(buf, format="PNG", optimize=True)
     buf.seek(0)
     return buf
+
+
+def build_casualty_report_image(sections, period_label, tot_200, tot_300):
+    """PNG звіту «Втрати 2» за період.
+
+    sections     — [(cat, label, [(unit_name, count), ...]), ...] де cat ∈ irr/san
+    period_label — рядок періоду для синьої шапки
+    tot_200/300  — загальні підсумки (у синій секції)
+
+    Колонка значень — «Втрати, в/с». Ширина таблиці визначається шапкою; уся
+    вільна ширина праворуч віддається лівій колонці «Підрозділ».
+    """
+    from PIL import Image, ImageDraw
+
+    S = 2
+    PAD = 14
+    TITLE_H = 40    # рядок 1 синьої шапки — «Таблиця втрат · період»
+    TOT_H = 30      # рядок 2 синьої шапки — підсумки 200/300
+    HDR_H = 30
+    SEC_H = 26
+    ROW_H = 26
+
+    fr  = _font(_FONT_REG,  12 * S)
+    fb  = _font(_FONT_BOLD, 12 * S)
+    ft  = _font(_FONT_BOLD, 14 * S)
+    ftt = _font(_FONT_BOLD, 13 * S)
+
+    table_rows = []
+    for cat, label, items in sections:
+        if not items:
+            continue
+        table_rows.append(("sec", cat, label))
+        for name, cnt in items:
+            table_rows.append(("row", cat, name, cnt))
+
+    tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
+    # Колонка значень — за шириною заголовка «Втрати, в/с».
+    val_w = max(96, (_tw(tmp, "Втрати, в/с", fb) + 24 * S) // S)
+    min_name_w = _tw(tmp, "Підрозділ", fb) + 20 * S
+    max_name_w = max(
+        (_tw(tmp, r[2], fr) for r in table_rows if r[0] == "row"),
+        default=min_name_w,
+    ) + 20 * S
+    name_w = max(min_name_w, max_name_w) // S
+
+    TW = name_w + val_w
+    title_str = f"Таблиця втрат  ·  {period_label}"
+    tot_str = f"Всього  ·  200: {tot_200}   ·   300: {tot_300}"
+    TW = max(TW,
+             (_tw(tmp, title_str, ft) + 32 * S) // S,
+             (_tw(tmp, tot_str, ftt) + 32 * S) // S)
+    # Вільну ширину праворуч додаємо до лівої колонки.
+    name_w = TW - val_w
+
+    img_h = PAD + TITLE_H + TOT_H + HDR_H
+    for r in table_rows:
+        img_h += SEC_H if r[0] == "sec" else ROW_H
+    img_h += PAD
+    if not table_rows:
+        img_h += ROW_H  # місце під «немає даних»
+
+    img = Image.new("RGB", ((TW + 2 * PAD) * S, img_h * S), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    C = {
+        "title": (30, 58, 138), "title_fg": (255, 255, 255),
+        "tot": (37, 71, 158),
+        "hdr": (241, 243, 246), "hdr_fg": (55, 65, 81),
+        "irr": (255, 242, 242), "irr_sec": (254, 226, 226), "irr_fg": (153, 27, 27),
+        "san": (240, 253, 244), "san_sec": (220, 252, 231), "san_fg": (20, 83, 45),
+        "row_fg": (17, 24, 39), "border": (209, 213, 219), "frame": (100, 116, 139),
+    }
+
+    def cell(x, y, w, h, bg, text, font, fg, align="center"):
+        draw.rectangle([x, y, x + w - 1, y + h - 1], fill=bg)
+        if not text:
+            return
+        tw = _tw(draw, text, font)
+        th = draw.textbbox((0, 0), text, font=font)[3] - draw.textbbox((0, 0), text, font=font)[1]
+        tx = x + w - tw - 8 * S if align == "right" else (x + 10 * S if align == "left" else x + (w - tw) // 2)
+        draw.text((tx, y + (h - th) // 2), text, font=font, fill=fg)
+
+    x0 = PAD * S
+    y = PAD * S
+    top = y
+    cell(x0, y, TW * S, TITLE_H * S, C["title"], title_str, ft, C["title_fg"]); y += TITLE_H * S
+    cell(x0, y, TW * S, TOT_H * S, C["tot"], tot_str, ftt, C["title_fg"]); y += TOT_H * S
+    cell(x0, y, name_w * S, HDR_H * S, C["hdr"], "Підрозділ", fb, C["hdr_fg"])
+    cell(x0 + name_w * S, y, val_w * S, HDR_H * S, C["hdr"], "Втрати, в/с", fb, C["hdr_fg"]); y += HDR_H * S
+
+    hdr_bottom = y
+    if not table_rows:
+        cell(x0, y, TW * S, ROW_H * S, (255, 255, 255), "За період даних немає", fr, C["row_fg"]); y += ROW_H * S
+    for r in table_rows:
+        if r[0] == "sec":
+            _, cat, label = r
+            cell(x0, y, TW * S, SEC_H * S, C["irr_sec"] if cat == "irr" else C["san_sec"], label, fb,
+                 C["irr_fg"] if cat == "irr" else C["san_fg"], "left"); y += SEC_H * S
+        else:
+            _, cat, name, cnt = r
+            bg = C["irr"] if cat == "irr" else C["san"]
+            cell(x0, y, name_w * S, ROW_H * S, bg, name, fr, C["row_fg"], "right")
+            cell(x0 + name_w * S, y, val_w * S, ROW_H * S, bg, str(cnt) if cnt else "", fr, C["row_fg"], "center")
+            y += ROW_H * S
+    bottom = y
+
+    yy = hdr_bottom
+    draw.line([(x0, hdr_bottom - HDR_H * S), (x0 + TW * S - 1, hdr_bottom - HDR_H * S)], fill=C["border"], width=S)
+    draw.line([(x0, yy), (x0 + TW * S - 1, yy)], fill=C["border"], width=S)
+    walk = [None] if not table_rows else table_rows
+    for r in walk:
+        yy += ROW_H * S if (r is None or r[0] != "sec") else SEC_H * S
+        draw.line([(x0, yy), (x0 + TW * S - 1, yy)], fill=C["border"], width=S)
+    # Вертикальний роздільник — лише в зоні таблиці (заголовок+рядки).
+    draw.line([(x0 + name_w * S, hdr_bottom - HDR_H * S), (x0 + name_w * S, bottom - 1)], fill=C["border"], width=S)
+    draw.rectangle([x0, top, x0 + TW * S - 1, bottom - 1], outline=C["frame"], width=2 * S)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    buf.seek(0)
+    return buf
