@@ -488,10 +488,13 @@ def cas_records_list(
     if message_id:
         wheres.append("cas.message_id = ?"); params.append(message_id)
     # Період — за часом ПЕРЕХОПЛЕННЯ (messages.created_at), не за часом внесення.
+    # Нормалізуємо роздільник дати: інпут дає 'T' (2026-08-02T16:00), а
+    # created_at зберігається з пробілом — а ' ' (32) < 'T' (84), тож без
+    # нормалізації записи того ж дня, що й нижня межа, помилково відкидались.
     if date_from:
-        wheres.append("m.created_at >= ?"); params.append(date_from)
+        wheres.append("REPLACE(m.created_at,'T',' ') >= ?"); params.append(date_from.replace("T", " "))
     if date_to:
-        wheres.append("m.created_at <= ?"); params.append(date_to)
+        wheres.append("REPLACE(m.created_at,'T',' ') <= ?"); params.append(date_to.replace("T", " "))
     sql = _SELECT_CASUALTY + "WHERE " + " AND ".join(wheres) + \
         " ORDER BY m.created_at DESC, cas.id DESC"
     with get_conn() as conn:
@@ -513,10 +516,13 @@ def cas_report(date_from: str = Query(default=""), date_to: str = Query(default=
     Враховані записи (accounted=1) у звіт НЕ входять."""
     wheres = ["cas.is_valid = 1", "COALESCE(cas.accounted, 0) = 0"]
     params: list = []
+    # Нормалізуємо роздільник дати: інпут дає 'T' (2026-08-02T16:00), а
+    # created_at зберігається з пробілом — а ' ' (32) < 'T' (84), тож без
+    # нормалізації записи того ж дня, що й нижня межа, помилково відкидались.
     if date_from:
-        wheres.append("m.created_at >= ?"); params.append(date_from)
+        wheres.append("REPLACE(m.created_at,'T',' ') >= ?"); params.append(date_from.replace("T", " "))
     if date_to:
-        wheres.append("m.created_at <= ?"); params.append(date_to)
+        wheres.append("REPLACE(m.created_at,'T',' ') <= ?"); params.append(date_to.replace("T", " "))
     sql = (
         "SELECT COALESCE(NULLIF(u.name, ''), NULLIF(cas.unit_text, ''), 'Невідомо') AS unit, "
         "u.sort_order AS so, cas.status AS status, SUM(cas.count) AS cnt "
