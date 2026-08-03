@@ -375,6 +375,20 @@
       .then(function (d) { return !!(d && d.ok); });
   }
 
+  // «Зберегти» — те саме, що «Гори у пеклі», але БЕЗ надсилання в чат:
+  // фіксуємо всі записи із застосуванням статусів позивних (200/300).
+  function _casSaveOnly() {
+    var recs = Array.prototype.slice.call(document.querySelectorAll("#casRecords .cas-rec"));
+    if (!recs.length) { toast("Немає даних для збереження", "warn"); return; }
+    var btn = $("casSaveBtn");
+    if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
+    Promise.all(recs.map(function (el) { return saveContainer(el, true); })).then(function (oks) {
+      if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
+      var ok = oks.every(Boolean);
+      toast(ok ? "Збережено" : "Помилка збереження", ok ? "success" : "error");
+    });
+  }
+
   function _casSend() {
     if (!_casChat || !_casChat.id) {
       _casOpenPicker();
@@ -480,6 +494,8 @@
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); _casOpenPicker(); }
       else _casSend();
     });
+    var save = $("casSaveBtn");
+    if (save) save.addEventListener("click", _casSaveOnly);
     // Закриття пікера при кліку поза ним — на mousedown (інакше вибір пункту
     // списку ховає його, і подальший click потрапляє поза пікером → закриття
     // до натискання «ОК»).
