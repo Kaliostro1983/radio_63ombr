@@ -281,8 +281,9 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     TW = max(TW,
              (_tw(tmp, title_str, ft) + 32 * S) // S,
              (_tw(tmp, sum_str, fsum) + 24 * S) // S)
-    # Віддаємо 30 пкс від правої колонки лівій; загальну ширину зберігаємо.
-    val_w = max(60, val_w - 30)
+    # Ширину перерозподіляємо між колонками (загальна TW незмінна):
+    # −30 праворуч→ліворуч (раніше), потім +50 ліворуч→праворуч.
+    val_w = max(60, val_w - 30 + 50)
     name_w = TW - val_w
 
     img_h = PAD + TITLE_H + HDR_H
@@ -356,6 +357,8 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     draw.line([(x0, bottom - 1), (x0 + TW * S - 1, bottom - 1)], fill=C["border"], width=S)
     # Вертикальний роздільник — лише в зоні таблиці (не через підсумок).
     draw.line([(x0 + name_w * S, hdr_bottom - HDR_H * S), (x0 + name_w * S, rows_bottom - 1)], fill=C["border"], width=S)
+    # Рамка по периметру — тієї ж товщини, що й основні лінії.
+    draw.rectangle([x0, top, x0 + TW * S - 1, bottom - 1], outline=C["border"], width=S)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
