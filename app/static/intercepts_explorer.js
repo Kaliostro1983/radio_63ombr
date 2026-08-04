@@ -1301,6 +1301,43 @@
       return;
     }
 
+    // «Цікаво» / «Поширити» — хендлери у monitor.js (window.*). У списку
+    // «Перегляд» (mainCard) вони теж мають працювати, як і у змонтованих картках.
+    const shareBtn = event.target.closest("[data-share-action]");
+    if (shareBtn) {
+      event.stopPropagation();
+      const act = shareBtn.getAttribute("data-share-action");
+      if (act === "interest" && window.monInterestAction) window.monInterestAction(event);
+      else if (act === "share" && window.monShareAction) window.monShareAction(shareBtn);
+      return;
+    }
+
+    // «☠» — оформлення втрат (200/300). Логіка у casualties_modal.js.
+    const casBtn = event.target.closest("[data-cas-open]");
+    if (casBtn) {
+      event.stopPropagation();
+      const mid = Number(casBtn.dataset.messageId || 0);
+      const nid = Number(casBtn.dataset.networkId || 0) || null;
+      const card = casBtn.closest(".intercept-card");
+      const meta = card
+        ? [
+            card.querySelector(".intercept-card__line--dt")?.textContent,
+            card.querySelector(".intercept-card__line--freq")?.textContent,
+            card.querySelector(".intercept-card__line--net")?.textContent,
+          ].map((s) => (s || "").trim()).filter(Boolean).join("  ·  ")
+        : "";
+      const itext = card ? (card.querySelector(".intercept-card__text")?.textContent || "").trim() : "";
+      const csMap = {};
+      if (card) card.querySelectorAll(".callsign-chip").forEach((ch) => {
+        const cid = Number(ch.dataset.id || 0);
+        const cnm = (ch.querySelector(".callsign-chip__name")?.textContent || "").trim();
+        if (cid && cnm && !csMap[cid]) csMap[cid] = { id: cid, name: cnm };
+      });
+      const csList = Object.keys(csMap).map((k) => csMap[k]);
+      if (mid && window.openCasualtyModal) window.openCasualtyModal(mid, nid, meta, itext, csList);
+      return;
+    }
+
     const netLink = event.target.closest(".intercept-card__netlink");
     if (netLink && netLink.dataset.networkId) {
       event.preventDefault();
