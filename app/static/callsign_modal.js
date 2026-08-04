@@ -62,6 +62,93 @@
   let CURRENT_NETWORK_ID = null;
   let CURRENT_LIFE = "alive";
 
+  // ── Напарники (симетрична група-кліка) ─────────────────────────────────────
+  let PARTNERS = [];   // [{id, name}]
+  function _escP(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function renderPartners() {
+    const box = document.querySelector("#csModal .cs-partners-chips");
+    if (!box) return;
+    box.innerHTML = PARTNERS.map(function (p, i) {
+      return '<span class="cs-partner-chip">' + _escP(p.name) +
+        '<button type="button" class="cs-partner-x" data-idx="' + i + '">×</button></span>';
+    }).join("");
+    box.querySelectorAll(".cs-partner-x").forEach(function (x) {
+      x.addEventListener("click", function () {
+        PARTNERS.splice(Number(x.dataset.idx), 1); renderPartners();
+      });
+    });
+  }
+  function addPartner(item) {
+    if (!item || !item.id) return;
+    const selfId = parseInt(modalId && modalId.value, 10) || 0;
+    if (item.id === selfId) return;
+    if (PARTNERS.some(function (p) { return p.id === item.id; })) return;
+    PARTNERS.push({ id: item.id, name: item.name });
+    renderPartners();
+  }
+  function wirePartnersInput() {
+    const input = $("csPartnersInput");
+    if (!input) return;
+    let acBox = null, acSeq = 0, acItems = [];
+    function closeAc() {
+      if (acBox) { acBox.remove(); acBox = null; }
+      acItems = [];
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", closeAc);
+    }
+    function choose(i) { const it = acItems[i]; if (!it) return; addPartner(it); input.value = ""; closeAc(); input.focus(); }
+    function position() {
+      if (!acBox) return;
+      const r = input.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom;
+      acBox.style.left = r.left + "px";
+      acBox.style.width = Math.max(r.width, 170) + "px";
+      if (below >= 160 || below >= r.top) {
+        acBox.style.top = (r.bottom + 2) + "px"; acBox.style.bottom = "auto";
+        acBox.style.maxHeight = Math.max(80, Math.min(220, below - 8)) + "px";
+      } else {
+        acBox.style.top = "auto"; acBox.style.bottom = (window.innerHeight - r.top + 2) + "px";
+        acBox.style.maxHeight = Math.max(80, Math.min(220, r.top - 8)) + "px";
+      }
+    }
+    function onScroll() { closeAc(); }
+    input.addEventListener("input", function () {
+      const v = input.value.trim();
+      if (v.length < 2) { closeAc(); return; }
+      const seq = ++acSeq;
+      fetch("/api/callsigns/search?q=" + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (d) {
+        if (seq !== acSeq) return;
+        closeAc();
+        const selfId = parseInt(modalId && modalId.value, 10) || 0;
+        const have = {}; PARTNERS.forEach(function (p) { have[p.id] = 1; });
+        acItems = ((d && d.rows) || []).filter(function (x) {
+          return x.id !== selfId && !have[x.id] && String(x.name || "").toUpperCase() !== "НВ";
+        }).slice(0, 20);
+        if (!acItems.length) return;
+        acBox = document.createElement("div"); acBox.className = "cs-partners-ac";
+        acBox.innerHTML = acItems.map(function (it, i) {
+          return '<button type="button" data-i="' + i + '">' + _escP(it.name) + "</button>";
+        }).join("");
+        acBox.querySelectorAll("button").forEach(function (b) {
+          b.addEventListener("mousedown", function (ev) { ev.preventDefault(); choose(Number(b.dataset.i)); });
+        });
+        document.body.appendChild(acBox); position();
+        window.addEventListener("scroll", onScroll, true);
+        window.addEventListener("resize", closeAc);
+      }).catch(closeAc);
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { closeAc(); return; }
+      if (e.key === "Enter") { e.preventDefault(); if (acItems.length) choose(0); }
+    });
+    input.addEventListener("blur", function () { setTimeout(closeAc, 150); });
+  }
+  wirePartnersInput();
+
   // Перемикач «Живий» → 200 → 300 (клік по колу). Логіка вигляду — у CallsignStatus.
   function renderLifeToggle() {
     if (!modalLifeToggle || !window.CallsignStatus) return;
@@ -744,6 +831,8 @@
     if (modalTitle) modalTitle.textContent = row.name || "—";
     if (modalName) modalName.value = row.name || "";
     if (modalComment) modalComment.value = row.comment || "";
+    PARTNERS = (row.partners || []).map(function (p) { return { id: p.id, name: p.name }; });
+    renderPartners();
     // Авторство останньої правки: «Змінив: Маска · дата-час» (дрібним шрифтом).
     if (modalEdited) {
       var by = (row.last_edited_by || "").trim();
@@ -881,6 +970,7 @@
             modalNetwork && modalNetwork.value
               ? parseInt(modalNetwork.value, 10)
               : null,
+          partner_ids: PARTNERS.map(function (p) { return p.id; }),
         }),
       });
 

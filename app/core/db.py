@@ -884,6 +884,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "networks", "last_edited_at", "last_edited_at TEXT")
     _ensure_column(conn, "callsigns", "last_edited_by", "last_edited_by TEXT")
     _ensure_column(conn, "callsigns", "last_edited_at", "last_edited_at TEXT")
+    # Напарники: спільна група (кліка) — позивні з однаковим partner_group_id
+    # є взаємними напарниками. NULL — без напарників.
+    _ensure_column(conn, "callsigns", "partner_group_id", "partner_group_id INTEGER")
     _ensure_column(conn, "etalons", "end_date", "end_date TEXT")
     _ensure_column(conn, "network_tags", "conclusions", "conclusions TEXT")
 

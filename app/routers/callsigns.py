@@ -579,11 +579,21 @@ def api_callsign_by_id(id: int):
                 (cid,),
             ).fetchone()
         )
+        partners = [
+            {"id": int(p["id"]), "name": p["name"] or ""}
+            for p in conn.execute(
+                "SELECT c2.id, c2.name FROM callsigns c1 "
+                "JOIN callsigns c2 ON c2.partner_group_id = c1.partner_group_id AND c2.id <> c1.id "
+                "WHERE c1.id = ? AND c1.partner_group_id IS NOT NULL ORDER BY c2.name",
+                (cid,),
+            ).fetchall()
+        ]
 
     return {
         "ok": True,
         "row": {
             "callsign_id": int(row["callsign_id"]),
+            "partners": partners,
             "name": row["name"] or "",
             "comment": row["comment"] or "",
             "network_id": int(row["network_id"]) if row["network_id"] else None,
@@ -899,6 +909,35 @@ def api_callsign_graph(
     }
 
 
+def _set_partners(conn, callsign_id: int, partner_ids) -> None:
+    """Встановлює напарників (симетрично + кліка). Група = {callsign_id} ∪ partner_ids;
+    усі стають взаємними напарниками. Порожній список → позивний виходить із групи.
+    Старі групи, у яких лишилось <2 членів, розпускаються."""
+    partner_ids = [p for p in dict.fromkeys(int(x) for x in partner_ids if _as_int(x, 0))
+                   if p and p != callsign_id]
+    members = [callsign_id] + partner_ids
+    old_groups = set()
+    for m in members:
+        r = conn.execute("SELECT partner_group_id FROM callsigns WHERE id = ?", (m,)).fetchone()
+        if r and r["partner_group_id"] is not None:
+            old_groups.add(int(r["partner_group_id"]))
+    if len(members) <= 1:
+        conn.execute("UPDATE callsigns SET partner_group_id = NULL WHERE id = ?", (callsign_id,))
+    else:
+        new_gid = conn.execute(
+            "SELECT COALESCE(MAX(partner_group_id), 0) + 1 AS g FROM callsigns"
+        ).fetchone()["g"]
+        ph = ",".join("?" * len(members))
+        conn.execute(f"UPDATE callsigns SET partner_group_id = ? WHERE id IN ({ph})",
+                     (new_gid, *members))
+        old_groups.discard(int(new_gid))
+    # Розпустити старі групи, у яких лишилось менше 2 членів.
+    for g in old_groups:
+        left = conn.execute("SELECT COUNT(*) c FROM callsigns WHERE partner_group_id = ?", (g,)).fetchone()["c"]
+        if left < 2:
+            conn.execute("UPDATE callsigns SET partner_group_id = NULL WHERE partner_group_id = ?", (g,))
+
+
 @router.post("/api/callsigns/save")
 async def api_callsign_save(request: Request):
     """Create or update a callsign based on JSON payload.
@@ -1046,6 +1085,14 @@ async def api_callsign_save(request: Request):
             except Exception as e:
                 return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
+        # Напарники (симетрично + кліка) — лише коли поле передане у payload.
+        if "partner_ids" in payload and callsign_id:
+            try:
+                _set_partners(conn, int(callsign_id), payload.get("partner_ids") or [])
+                conn.commit()
+            except Exception:
+                pass
+
         sname = ""
         if status_id:
             sr = conn.execute(
@@ -1075,9 +1122,20 @@ async def api_callsign_save(request: Request):
                 freq = nr["frequency"] or "Невідомо"
                 unit = nr["unit"] or "Невідомо"
 
+        partners_out = [
+            {"id": int(p["id"]), "name": p["name"] or ""}
+            for p in conn.execute(
+                "SELECT c2.id, c2.name FROM callsigns c1 "
+                "JOIN callsigns c2 ON c2.partner_group_id = c1.partner_group_id AND c2.id <> c1.id "
+                "WHERE c1.id = ? AND c1.partner_group_id IS NOT NULL ORDER BY c2.name",
+                (callsign_id,),
+            ).fetchall()
+        ]
+
     return {
         "ok": True,
         "callsign_id": int(callsign_id),
+        "partners": partners_out,
         "network_id": int(nid) if nid else None,
         "name": name,
         "comment": comment or "",
