@@ -125,13 +125,19 @@
         closeAc();
         const selfId = parseInt(modalId && modalId.value, 10) || 0;
         const have = {}; PARTNERS.forEach(function (p) { have[p.id] = 1; });
-        acItems = ((d && d.rows) || []).filter(function (x) {
-          return x.id !== selfId && !have[x.id] && String(x.name || "").toUpperCase() !== "НВ";
-        }).slice(0, 20);
+        // Пошук повертає callsign_id (не id). Кожен запис — окремий позивний на
+        // своїй мережі; показуємо частоту/підрозділ, щоб розрізнити однойменні.
+        acItems = ((d && d.rows) || []).map(function (x) {
+          return { id: x.callsign_id, name: x.name, freq: x.frequency, unit: x.unit };
+        }).filter(function (x) {
+          return x.id && x.id !== selfId && !have[x.id] && String(x.name || "").toUpperCase() !== "НВ";
+        }).slice(0, 25);
         if (!acItems.length) return;
         acBox = document.createElement("div"); acBox.className = "cs-partners-ac";
         acBox.innerHTML = acItems.map(function (it, i) {
-          return '<button type="button" data-i="' + i + '">' + _escP(it.name) + "</button>";
+          const sub = [it.freq, it.unit].filter(function (v) { return v && v !== "Невідомо"; }).join(" · ");
+          return '<button type="button" data-i="' + i + '"><span class="cs-partners-nm">' + _escP(it.name) + "</span>" +
+            (sub ? '<span class="cs-partners-sub">' + _escP(sub) + "</span>" : "") + "</button>";
         }).join("");
         acBox.querySelectorAll("button").forEach(function (b) {
           b.addEventListener("mousedown", function (ev) { ev.preventDefault(); choose(Number(b.dataset.i)); });
