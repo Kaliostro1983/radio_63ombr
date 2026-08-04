@@ -120,7 +120,9 @@
       const v = input.value.trim();
       if (v.length < 2) { closeAc(); return; }
       const seq = ++acSeq;
-      fetch("/api/callsigns/search?q=" + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (d) {
+      // Напарники — лише з тієї самої радіомережі, що й основний позивний.
+      const netQ = CURRENT_NETWORK_ID ? ("&network_id=" + CURRENT_NETWORK_ID) : "";
+      fetch("/api/callsigns/search?q=" + encodeURIComponent(v) + netQ).then(function (r) { return r.json(); }).then(function (d) {
         if (seq !== acSeq) return;
         closeAc();
         const selfId = parseInt(modalId && modalId.value, 10) || 0;
