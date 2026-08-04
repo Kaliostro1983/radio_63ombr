@@ -140,21 +140,34 @@
     });
   }
 
-  // ── Звіт-агрегація ─────────────────────────────────────────────────────────
+  // ── Звіт-агрегація + діаграми ──────────────────────────────────────────────
+  var CAS_PALETTE = ["#3b82f6","#22c55e","#f59e0b","#ef4444","#a855f7","#06b6d4",
+    "#f97316","#84cc16","#ec4899","#6366f1","#14b8a6","#f43f5e","#8b5cf6","#0ea5e9","#d97706"];
+  var _chartData = { unit: [], reason: [] };
+  var _chartActive = "unit";
+
   function loadReport() {
-    var box = $("cas2Report");
-    box.innerHTML = '<div class="cas2-empty">Завантаження…</div>';
+    var box = $("cas2ReportTable");
+    if (box) box.innerHTML = '<div class="cas2-empty">Завантаження…</div>';
     var r = _range();
     var qs = new URLSearchParams();
     if (r.from) qs.set("date_from", r.from);
     if (r.to) qs.set("date_to", r.to);
     fetch("/api/casualties/report?" + qs.toString()).then(function (x) { return x.json(); }).then(function (d) {
-      renderReport((d && d.rows) || [], (d && d.totals) || { killed: 0, wounded: 0 });
-    }).catch(function () { box.innerHTML = '<div class="cas2-empty">Помилка завантаження</div>'; });
+      renderReport((d && d.rows) || [], (d && d.totals) || { killed: 0, wounded: 0 }, (d && d.by_reason) || []);
+    }).catch(function () { if (box) box.innerHTML = '<div class="cas2-empty">Помилка завантаження</div>'; });
   }
 
-  function renderReport(rows, totals) {
-    var box = $("cas2Report");
+  function renderReport(rows, totals, byReason) {
+    var box = $("cas2ReportTable");
+    // Дані діаграм: загальні втрати (200+300) по підрозділах / по причинах.
+    _chartData.unit = rows.map(function (row) {
+      return { name: row.unit, count: (row.killed || 0) + (row.wounded || 0) };
+    }).filter(function (x) { return x.count > 0; });
+    _chartData.reason = (byReason || []).map(function (x) { return { name: x.reason, count: x.cnt || 0 }; });
+    renderChart();
+
+    if (!box) return;
     if (!rows.length) { box.innerHTML = '<div class="cas2-empty">За цей період даних немає.</div>'; return; }
     var r = _range();
     var period = (fmtDt(r.from) || "") + " – " + (fmtDt(r.to) || "");
@@ -174,6 +187,53 @@
       "</table>";
   }
 
+  function renderChart() {
+    var canvas = $("cas2ChartCanvas"), legend = $("cas2ChartLegend");
+    if (!canvas) return;
+    var items = _chartData[_chartActive] || [];
+    var ctx = canvas.getContext("2d");
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    var total = items.reduce(function (s, r) { return s + r.count; }, 0);
+    if (!total) {
+      ctx.fillStyle = "#9ca3af"; ctx.font = "13px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("Немає даних", W / 2, H / 2);
+      if (legend) legend.innerHTML = "";
+      return;
+    }
+    var cx = W / 2, cy = H / 2, rad = Math.min(W, H) / 2 - 4, angle = -Math.PI / 2;
+    items.forEach(function (it, i) {
+      var slice = (it.count / total) * 2 * Math.PI;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, rad, angle, angle + slice); ctx.closePath();
+      ctx.fillStyle = CAS_PALETTE[i % CAS_PALETTE.length]; ctx.fill(); angle += slice;
+    });
+    if (legend) {
+      legend.innerHTML = items.map(function (it, i) {
+        var pct = Math.round(it.count / total * 100);
+        return '<li><span class="cas2-chart-dot" style="background:' + CAS_PALETTE[i % CAS_PALETTE.length] + '"></span>' +
+          "<span>" + esc(it.name) + " — <b>" + it.count + "</b> (" + pct + "%)</span></li>";
+      }).join("");
+    }
+  }
+
+  // ── Кнопки-зображення за стандартними змінами ──────────────────────────────
+  function _shiftIso(d) {
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function _openShiftImage(kind) {
+    var now = new Date();
+    var t16 = new Date(now); t16.setHours(16, 0, 0, 0);
+    var t08 = new Date(now); t08.setHours(8, 0, 0, 0);
+    var y16 = new Date(now); y16.setDate(y16.getDate() - 1); y16.setHours(16, 0, 0, 0);
+    var from = y16, to = t16;                       // 16-16 (доба)
+    if (kind === "16-08") { from = y16; to = t08; } // нічна зміна
+    else if (kind === "08-16") { from = t08; to = t16; } // денна зміна
+    var qs = new URLSearchParams({ date_from: _shiftIso(from), date_to: _shiftIso(to) });
+    window.open("/api/casualties/report-image?" + qs.toString(), "_blank");
+  }
+
   // ── Init ───────────────────────────────────────────────────────────────────
   function init() {
     var btn = $("homeOpenCasualties2");
@@ -182,13 +242,19 @@
       el.addEventListener("click", function (e) { e.stopPropagation(); closeModal(); });
     });
     $("cas2Refresh") && $("cas2Refresh").addEventListener("click", reload);
-    // Кнопка «фотоапарат» — PNG-зображення таблиці зі статистикою за період.
-    $("cas2ImageBtn") && $("cas2ImageBtn").addEventListener("click", function () {
-      var r = _range();
-      var qs = new URLSearchParams();
-      if (r.from) qs.set("date_from", r.from);
-      if (r.to) qs.set("date_to", r.to);
-      window.open("/api/casualties/report-image?" + qs.toString(), "_blank");
+    // Кнопки-зображення 16-16 / 16-08 / 08-16 — PNG звіту за стандартну зміну.
+    document.querySelectorAll("[data-cas2-shift]").forEach(function (b) {
+      b.addEventListener("click", function () { _openShiftImage(b.getAttribute("data-cas2-shift")); });
+    });
+    // Перемикання діаграм: Підрозділ / Причина.
+    document.querySelectorAll(".cas2-chart-tab").forEach(function (t) {
+      t.addEventListener("click", function () {
+        _chartActive = t.getAttribute("data-chart");
+        document.querySelectorAll(".cas2-chart-tab").forEach(function (x) {
+          x.classList.toggle("is-active", x === t);
+        });
+        renderChart();
+      });
     });
     $("cas2ReportBtn") && $("cas2ReportBtn").addEventListener("click", function () { showReport(); loadReport(); });
     $("cas2ListBtn") && $("cas2ListBtn").addEventListener("click", showList);

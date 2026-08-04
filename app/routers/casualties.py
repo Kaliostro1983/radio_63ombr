@@ -528,7 +528,14 @@ def _aggregate_report(date_from: str, date_to: str):
         "LEFT JOIN messages m ON m.id = cas.message_id "
         "WHERE " + " AND ".join(wheres) + " GROUP BY unit, cas.status"
     )
+    reason_sql = (
+        "SELECT COALESCE(NULLIF(r.name, ''), 'Невідомо') AS reason, SUM(cas.count) AS cnt "
+        "FROM casualties cas LEFT JOIN casualty_reasons r ON r.id = cas.reason_id "
+        "LEFT JOIN messages m ON m.id = cas.message_id "
+        "WHERE " + " AND ".join(wheres) + " GROUP BY reason ORDER BY cnt DESC"
+    )
     agg: dict = {}
+    by_reason: list = []
     with get_conn() as conn:
         for r in conn.execute(sql, params).fetchall():
             u = r["unit"]
@@ -540,20 +547,23 @@ def _aggregate_report(date_from: str, date_to: str):
                 row["killed"] += r["cnt"] or 0
             else:
                 row["wounded"] += r["cnt"] or 0
+        by_reason = [
+            {"reason": rr["reason"], "cnt": rr["cnt"] or 0}
+            for rr in conn.execute(reason_sql, params).fetchall() if (rr["cnt"] or 0) > 0
+        ]
     rows = sorted(agg.values(), key=lambda x: (x["so"], x["unit"]))
     totals = {
         "killed": sum(x["killed"] for x in rows),
         "wounded": sum(x["wounded"] for x in rows),
     }
-    return rows, totals
+    return rows, totals, by_reason
 
 
 @router.get("/api/casualties/report")
 def cas_report(date_from: str = Query(default=""), date_to: str = Query(default="")):
-    """Агрегація втрат за період: по підрозділах × статус (200/300).
-    Формат — як у таблиці «Втрати»: секції БЕЗПОВОРОТНІ (200) / САНІТАРНІ (300)."""
-    rows, totals = _aggregate_report(date_from, date_to)
-    return {"ok": True, "rows": rows, "totals": totals}
+    """Агрегація втрат за період: по підрозділах × статус (200/300) + за причинами."""
+    rows, totals, by_reason = _aggregate_report(date_from, date_to)
+    return {"ok": True, "rows": rows, "totals": totals, "by_reason": by_reason}
 
 
 def _fmt_period_label(date_from: str, date_to: str) -> str:
@@ -571,7 +581,7 @@ def _fmt_period_label(date_from: str, date_to: str) -> str:
 def cas_report_image(date_from: str = Query(default=""), date_to: str = Query(default="")):
     """PNG-зображення звіту втрат за період (кнопка «фотоапарат» у модалці)."""
     from app.services.cas_image import build_casualty_report_image
-    rows, totals = _aggregate_report(date_from, date_to)
+    rows, totals, _ = _aggregate_report(date_from, date_to)
     irr_items = [(x["unit"], x["killed"]) for x in rows if x["killed"]]
     san_items = [(x["unit"], x["wounded"]) for x in rows if x["wounded"]]
     sections = [

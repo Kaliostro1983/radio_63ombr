@@ -6704,6 +6704,19 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas2-cs{ opacity:.85; }
 .cas2-acc{ font-size:11px; opacity:.6; }
 
+/* Звіт: таблиця ліворуч + діаграми праворуч */
+.cas2-report{ display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+.cas2-report.hidden{ display:none; }
+.cas2-report-tablewrap{ flex:1 1 auto; min-width:0; }
+.cas2-charts{ flex:0 0 300px; max-width:340px; border:1px solid rgba(127,127,127,.25); border-radius:12px; padding:10px 12px; background:rgba(127,127,127,.05); }
+.cas2-charts-tabs{ display:flex; gap:6px; margin-bottom:10px; }
+.cas2-chart-tab{ flex:1 1 auto; padding:6px 10px; border-radius:8px; border:1px solid rgba(127,127,127,.35); background:transparent; color:var(--fg,#e2e8f0); cursor:pointer; font-size:13px; font-weight:600; }
+.cas2-chart-tab:hover{ background:rgba(127,127,127,.15); }
+.cas2-chart-tab.is-active{ background:rgba(96,165,250,.2); border-color:rgba(96,165,250,.55); color:#dbeafe; }
+.cas2-charts-body{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+.cas2-chart-legend{ list-style:none; margin:0; padding:0; width:100%; display:flex; flex-direction:column; gap:5px; max-height:220px; overflow-y:auto; }
+.cas2-chart-legend li{ display:flex; align-items:center; gap:8px; font-size:12.5px; }
+.cas2-chart-dot{ flex:0 0 auto; width:11px; height:11px; border-radius:3px; }
 .cas2-report-title{ font-weight:700; font-size:14px; margin-bottom:10px; }
 .cas2-report-table{ border-collapse:collapse; width:100%; max-width:560px; font-size:13px; }
 .cas2-report-table th, .cas2-report-table td{ border:1px solid rgba(127,127,127,.3); padding:6px 12px; text-align:left; }

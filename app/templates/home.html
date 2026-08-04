@@ -285,16 +285,34 @@
         <button type="button" id="cas2Refresh" class="secondary">Оновити</button>
         <span class="cas-sep"></span>
         <button type="button" id="cas2ReportBtn" class="secondary">📊 Звіт</button>
-        <button type="button" id="cas2ImageBtn" class="secondary cas2-icon-btn" title="Згенерувати зображення таблиці зі статистикою" aria-label="Зображення таблиці">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
+        <button type="button" class="secondary cas2-icon-btn" data-cas2-shift="16-16" title="Зображення звіту: 16:00 учора → 16:00 сьогодні">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span>16-16</span>
+        </button>
+        <button type="button" class="secondary cas2-icon-btn" data-cas2-shift="16-08" title="Зображення звіту: 16:00 учора → 08:00 сьогодні">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span>16-08</span>
+        </button>
+        <button type="button" class="secondary cas2-icon-btn" data-cas2-shift="08-16" title="Зображення звіту: 08:00 сьогодні → 16:00 сьогодні">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span>08-16</span>
         </button>
         <button type="button" id="cas2ListBtn" class="secondary" style="display:none">↩ Перелік</button>
       </div>
       <div id="cas2List" class="cas2-list"></div>
-      <div id="cas2Report" class="cas2-report hidden"></div>
+      <div id="cas2Report" class="cas2-report hidden">
+        <div id="cas2ReportTable" class="cas2-report-tablewrap"></div>
+        <div id="cas2Charts" class="cas2-charts">
+          <div class="cas2-charts-tabs">
+            <button type="button" class="cas2-chart-tab is-active" data-chart="unit">Підрозділ</button>
+            <button type="button" class="cas2-chart-tab" data-chart="reason">Причина</button>
+          </div>
+          <div class="cas2-charts-body">
+            <canvas id="cas2ChartCanvas" width="240" height="240"></canvas>
+            <ul id="cas2ChartLegend" class="cas2-chart-legend"></ul>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -395,8 +413,8 @@
 }
 .home-icon-btn svg { display: block; }
 /* Кнопка-іконка «фотоапарат» у тулбарі «Втрати 2» */
-.cas2-icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
-.cas2-icon-btn svg { display: block; }
+.cas2-icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; font-weight: 600; }
+.cas2-icon-btn svg { display: block; flex: 0 0 auto; }
 
 /* ── Home modal — широка картка з body, що скролиться ─────── */
 .home-modal-card {
@@ -569,6 +587,6 @@ thead .cas-col-total { text-align: center; }
 {% block scripts %}
 <script src="/static/home.js?v=25" defer></script>
 <script src="/static/casualties.js?v=14" defer></script>
-<script src="/static/casualties_report.js?v=4" defer></script>
+<script src="/static/casualties_report.js?v=5" defer></script>
 <script src="/static/overview.js?v=1" defer></script>
 {% endblock %}
