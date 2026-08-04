@@ -250,18 +250,26 @@ def _echelon(unit: str):
     return None
 
 
+def _unit_from_net_desc(nd: str) -> str:
+    """Юніт із опису р/м перехоплення: 'укх р/м <ЮНІТ> (р-н …)' → '<ЮНІТ>'."""
+    m = re.search(r"р/?м\s+(.+?)\s*(?:\(|$)", nd or "", re.IGNORECASE)
+    return m.group(1).strip() if m else ""
+
+
 def _suggest_unit_id(conn, message_id: int):
-    """Підбирає cas_unit для перехоплення: формування з group_id мережі +
-    ешелон з networks.unit. «Інший підрозділ» відомого формування → штз (варіант б)."""
+    """Підбирає cas_unit для перехоплення: юніт беремо з опису р/м САМОГО
+    перехоплення (net_description) — він точніший за статичний networks.unit,
+    який може відрізнятись від конкретного перехоплення; формування — з group_id."""
     row = conn.execute(
-        "SELECT n.unit AS unit, g.name AS grp FROM messages m "
+        "SELECT n.unit AS unit, g.name AS grp, m.net_description AS nd FROM messages m "
         "LEFT JOIN networks n ON n.id = m.network_id "
         "LEFT JOIN groups g ON g.id = n.group_id WHERE m.id = ?",
         (message_id,),
     ).fetchone()
     if not row:
         return None, None
-    grp, unit = row["grp"] or "", row["unit"] or ""
+    grp = row["grp"] or ""
+    unit = _unit_from_net_desc(row["nd"]) or (row["unit"] or "")
     # Немає ні тексту підрозділу, ні відомого формування — підбирати нічого.
     # (Раніше тут був ранній вихід на будь-яку «Невідомо» групу, через що
     # прямий/ббпс-збіг за текстом unit не відпрацьовував — напр. «2 бБпС 71 опБпС».)

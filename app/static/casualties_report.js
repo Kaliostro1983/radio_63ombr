@@ -146,6 +146,22 @@
   var _chartData = { unit: [], reason: [] };
   var _chartActive = "unit";
 
+  // Полк/бригада з назви підрозділу: «штз 37 мсп 67 мсд 25 А» → «37 мсп»,
+  // «3 мсб 164 омсбр 25 А» → «164 омсбр», «2 бБпС 71 опБпС» → «71 опБпС».
+  function _regBrig(name) {
+    var m = String(name || "").match(/(\d{1,3})\s*(омсбр|обмбр|обмп|опбпс|мсбр|орб|тбр|мсп|тп|бр)/i);
+    return m ? (m[1] + " " + m[2].toLowerCase()) : String(name || "").trim();
+  }
+  function _aggRegBrig(items) {
+    var map = {}, order = [];
+    items.forEach(function (it) {
+      var k = _regBrig(it.name);
+      if (!(k in map)) { map[k] = 0; order.push(k); }
+      map[k] += it.count;
+    });
+    return order.map(function (k) { return { name: k, count: map[k] }; });
+  }
+
   function loadReport() {
     var box = $("cas2ReportTable");
     if (box) box.innerHTML = '<div class="cas2-empty">Завантаження…</div>';
@@ -161,9 +177,9 @@
   function renderReport(rows, totals, byReason) {
     var box = $("cas2ReportTable");
     // Дані діаграм: загальні втрати (200+300) по підрозділах / по причинах.
-    _chartData.unit = rows.map(function (row) {
+    _chartData.unit = _aggRegBrig(rows.map(function (row) {
       return { name: row.unit, count: (row.killed || 0) + (row.wounded || 0) };
-    }).filter(function (x) { return x.count > 0; });
+    }).filter(function (x) { return x.count > 0; }));
     _chartData.reason = (byReason || []).map(function (x) { return { name: x.reason, count: x.cnt || 0 }; });
     renderChart();
 
@@ -179,7 +195,7 @@
     box.innerHTML =
       '<div class="cas2-report-title">Втрати за період: ' + esc(period) + "</div>" +
       '<table class="cas2-report-table"><thead><tr>' +
-        "<th>Підрозділ</th><th>200 (безповоротні)</th><th>300 (санітарні)</th>" +
+        "<th>Підрозділ</th><th>200</th><th>300</th>" +
       "</tr></thead><tbody>" + body + "</tbody>" +
       '<tfoot><tr><td>Усього</td>' +
         '<td class="cas2-num cas2-num--200">' + (totals.killed || 0) + "</td>" +
