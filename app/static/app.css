@@ -6669,6 +6669,8 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-foot-spacer{ flex:1 1 auto; }
 .cas-send-btn{ padding:8px 14px; border-radius:10px; border:1px solid rgba(96,165,250,.5); background:rgba(96,165,250,.18); color:#dbeafe; font-weight:700; font-size:13px; cursor:pointer; }
 .cas-send-btn:hover{ background:rgba(96,165,250,.3); }
+.cas-send-btn:disabled{ opacity:.45; cursor:default; }
+.cas-send-btn:disabled:hover{ background:rgba(96,165,250,.18); }
 .cas-save-btn{ display:inline-flex; align-items:center; justify-content:center; width:38px; height:36px; padding:0; border-radius:10px; border:1px solid rgba(148,163,184,.5); background:rgba(148,163,184,.15); color:#e2e8f0; cursor:pointer; }
 .cas-save-btn:hover{ background:rgba(148,163,184,.28); }
 .cas-save-btn:disabled{ opacity:.6; cursor:default; }

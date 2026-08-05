@@ -74,6 +74,7 @@
       var recs = (d && d.records) || [];
       if (recs.length) recs.forEach(function (rec) { box.appendChild(buildContainer(rec)); });
       else box.appendChild(buildContainer(null));
+      _updateSaveAvailability();
     }).catch(function () {
       if (box) box.innerHTML = '<div class="cas-loading">Помилка завантаження</div>';
     });
@@ -106,6 +107,7 @@
             '<input type="number" class="cas-count" min="1" step="1" value="' + (count || 1) + '">' +
             '<label class="cas-chk cas-chk--inline"><input type="checkbox" class="cas-accounted"' + (rec && rec.accounted ? " checked" : "") + '><span>Враховано</span></label>' +
             '<span class="cas-rec__saved"></span>' +
+            '<button type="button" class="cas-del" title="Видалити запис">🗑</button>' +
           "</div>" +
           '<label class="cas-fld"><span>Причина</span>' +
             '<span class="cas-select-wrap"><select class="cas-reason">' + optionsHtml(_reasons, rec ? rec.reason_id : _defaultReasonId(), false) + "</select>" +
@@ -133,6 +135,7 @@
     el.querySelectorAll(".cas-add-opt").forEach(function (b) {
       b.addEventListener("click", function () { addOption(el, b.dataset.kind); });
     });
+    el.querySelector(".cas-del").addEventListener("click", function () { deleteContainer(el); });
     // Хрестик у полі позивних — видаляє ВСІ позивні одним кліком.
     el.querySelector(".cas-cs-clear").addEventListener("click", function () {
       el.__callsigns = []; renderChips(el); scheduleSave(el);
@@ -288,10 +291,18 @@
     if (el.__casId) {
       if (!confirm("Видалити цей запис втрат?")) return;
       fetch("/api/casualties/" + el.__casId, { method: "DELETE" })
-        .then(function () { el.remove(); _notifyChanged(); }).catch(function () { toast("Помилка видалення", "error"); });
+        .then(function () { el.remove(); _updateSaveAvailability(); _notifyChanged(); })
+        .catch(function () { toast("Помилка видалення", "error"); });
     } else {
-      el.remove();
+      el.remove(); _updateSaveAvailability();
     }
+  }
+  // Немає жодного контейнера → збереження/надсилання недоступні.
+  function _updateSaveAvailability() {
+    var n = document.querySelectorAll("#casRecords .cas-rec").length;
+    var send = $("casSendBtn"), save = $("casSaveBtn");
+    if (send) send.disabled = (n === 0);
+    if (save) save.disabled = (n === 0);
   }
   function addOption(el, kind) {
     var name = (prompt(kind === "reason" ? "Нова причина:" : "Новий підрозділ:") || "").trim();
@@ -487,7 +498,7 @@
     });
     var add = $("casAddBtn");
     if (add) add.addEventListener("click", function () {
-      var box = $("casRecords"); if (box) box.appendChild(buildContainer(null));
+      var box = $("casRecords"); if (box) { box.appendChild(buildContainer(null)); _updateSaveAvailability(); }
     });
     var send = $("casSendBtn");
     if (send) send.addEventListener("click", function (e) {
