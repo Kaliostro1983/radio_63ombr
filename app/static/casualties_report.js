@@ -243,9 +243,19 @@
     var t16 = new Date(now); t16.setHours(16, 0, 0, 0);
     var t08 = new Date(now); t08.setHours(8, 0, 0, 0);
     var y16 = new Date(now); y16.setDate(y16.getDate() - 1); y16.setHours(16, 0, 0, 0);
-    var from = y16, to = t16;                       // 16-16 (доба)
-    if (kind === "16-08") { from = y16; to = t08; } // нічна зміна
-    else if (kind === "08-16") { from = t08; to = t16; } // денна зміна
+    var y08 = new Date(now); y08.setDate(y08.getDate() - 1); y08.setHours(8, 0, 0, 0);
+    if (kind === "16-08") {
+      // Дві колонки: [16:00 учора → 08:00 сьогодні] та [08:00 учора → 08:00 сьогодні].
+      var qs2 = new URLSearchParams({
+        date_from: _shiftIso(y16), date_to: _shiftIso(t08),
+        date_from2: _shiftIso(y08), date_to2: _shiftIso(t08),
+        col1: "16:00–08:00", col2: "08:00–08:00",
+      });
+      window.open("/api/casualties/report-image?" + qs2.toString(), "_blank");
+      return;
+    }
+    var from = y16, to = t16;                            // 16-16 (доба)
+    if (kind === "08-16") { from = t08; to = t16; }      // денна зміна
     var qs = new URLSearchParams({ date_from: _shiftIso(from), date_to: _shiftIso(to) });
     window.open("/api/casualties/report-image?" + qs.toString(), "_blank");
   }

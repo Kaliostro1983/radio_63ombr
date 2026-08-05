@@ -586,9 +586,40 @@ def _fmt_period_label(date_from: str, date_to: str) -> str:
 
 
 @router.get("/api/casualties/report-image")
-def cas_report_image(date_from: str = Query(default=""), date_to: str = Query(default="")):
-    """PNG-зображення звіту втрат за період (кнопка «фотоапарат» у модалці)."""
-    from app.services.cas_image import build_casualty_report_image
+def cas_report_image(
+    date_from: str = Query(default=""), date_to: str = Query(default=""),
+    date_from2: str = Query(default=""), date_to2: str = Query(default=""),
+    col1: str = Query(default=""), col2: str = Query(default=""),
+):
+    """PNG-зображення звіту втрат за період (кнопка «фотоапарат» у модалці).
+    Якщо задано другий період (date_from2/date_to2) — звіт із ДВОМА колонками."""
+    from app.services.cas_image import build_casualty_report_image, build_casualty_report_image_2col
+
+    if date_from2 or date_to2:
+        rows1, tot1, _ = _aggregate_report(date_from, date_to)
+        rows2, tot2, _ = _aggregate_report(date_from2, date_to2)
+
+        def _merge(key):
+            m: dict = {}
+            for r in rows1:
+                if r[key]:
+                    m.setdefault(r["unit"], {"unit": r["unit"], "so": r["so"], "c1": 0, "c2": 0})["c1"] += r[key]
+            for r in rows2:
+                if r[key]:
+                    m.setdefault(r["unit"], {"unit": r["unit"], "so": r["so"], "c1": 0, "c2": 0})["c2"] += r[key]
+            return [(x["unit"], x["c1"], x["c2"]) for x in sorted(m.values(), key=lambda z: (z["so"], z["unit"]))]
+
+        sections = [
+            ("irr", "БЕЗПОВОРОТНІ ВТРАТИ", _merge("killed")),
+            ("san", "САНІТАРНІ ВТРАТИ", _merge("wounded")),
+        ]
+        buf2 = build_casualty_report_image_2col(
+            sections, _fmt_period_label(date_from2 or date_from, date_to2 or date_to),
+            col1 or "16:00–08:00", col2 or "08:00–08:00", tot1, tot2,
+        )
+        return StreamingResponse(buf2, media_type="image/png",
+                                 headers={"Content-Disposition": "inline; filename=vtraty-2col.png"})
+
     rows, totals, _ = _aggregate_report(date_from, date_to)
     irr_items = [(x["unit"], x["killed"]) for x in rows if x["killed"]]
     san_items = [(x["unit"], x["wounded"]) for x in rows if x["wounded"]]

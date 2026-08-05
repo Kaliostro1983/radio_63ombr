@@ -364,3 +364,123 @@ def build_casualty_report_image(sections, period_label, tot_200, tot_300):
     img.save(buf, format="PNG", optimize=True)
     buf.seek(0)
     return buf
+
+
+def build_casualty_report_image_2col(sections, period_label, col1_label, col2_label, tot1, tot2):
+    """PNG звіту втрат із ДВОМА колонками-періодами.
+
+    sections    — [(cat, label, [(unit, c1, c2), ...]), ...]  (c1/c2 — к-сть у колонках)
+    tot1/tot2   — {"killed": .., "wounded": ..} підсумки по кожній колонці
+    """
+    from PIL import Image, ImageDraw
+
+    S = 2; PAD = 14
+    TITLE_H = 40; HDR_H = 30; SEC_H = 26; ROW_H = 26; SUM_H = 28
+
+    fr   = _font(_FONT_SERIF_REG,  12 * S)
+    fb   = _font(_FONT_SERIF_BOLD, 12 * S)
+    ft   = _font(_FONT_SERIF_BOLD, 14 * S)
+    fsum = _font(_FONT_SERIF_BOLD, 12 * S)
+
+    table_rows = []
+    for cat, label, items in sections:
+        if not items:
+            continue
+        table_rows.append(("sec", cat, label))
+        for name, c1, c2 in items:
+            table_rows.append(("row", cat, name, c1, c2))
+
+    tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    val_w1 = max(72, (_tw(tmp, col1_label, fb) + 18 * S) // S)
+    val_w2 = max(72, (_tw(tmp, col2_label, fb) + 18 * S) // S)
+    min_name = _tw(tmp, "Підрозділ", fb) + 20 * S
+    max_name = max((_tw(tmp, r[2], fr) for r in table_rows if r[0] == "row"), default=min_name) + 20 * S
+    name_w = max(min_name, max_name) // S
+
+    total1 = tot1.get("killed", 0) + tot1.get("wounded", 0)
+    total2 = tot2.get("killed", 0) + tot2.get("wounded", 0)
+    title_str = f"Таблиця втрат  ·  {period_label}"
+    sum1 = f"{col1_label}: {total1} в/с (безповоротні: {tot1.get('killed',0)} в/с, санітарні: {tot1.get('wounded',0)} в/с)"
+    sum2 = f"{col2_label}: {total2} в/с (безповоротні: {tot2.get('killed',0)} в/с, санітарні: {tot2.get('wounded',0)} в/с)"
+
+    TW = name_w + val_w1 + val_w2
+    TW = max(TW,
+             (_tw(tmp, title_str, ft) + 32 * S) // S,
+             (_tw(tmp, sum1, fsum) + 24 * S) // S,
+             (_tw(tmp, sum2, fsum) + 24 * S) // S)
+    name_w = TW - val_w1 - val_w2
+
+    img_h = PAD + TITLE_H + HDR_H
+    for r in table_rows:
+        img_h += SEC_H if r[0] == "sec" else ROW_H
+    if not table_rows:
+        img_h += ROW_H
+    img_h += SUM_H * 2 + PAD
+
+    img = Image.new("RGB", ((TW + 2 * PAD) * S, img_h * S), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    C = {
+        "title": (30, 58, 138), "title_fg": (255, 255, 255),
+        "hdr": (241, 243, 246), "hdr_fg": (55, 65, 81),
+        "irr": (255, 242, 242), "irr_sec": (254, 226, 226), "irr_fg": (153, 27, 27),
+        "san": (240, 253, 244), "san_sec": (220, 252, 231), "san_fg": (20, 83, 45),
+        "row_fg": (17, 24, 39), "border": (209, 213, 219),
+    }
+
+    def cell(x, y, w, h, bg, text, font, fg, align="center"):
+        draw.rectangle([x, y, x + w - 1, y + h - 1], fill=bg)
+        if not text:
+            return
+        tw = _tw(draw, text, font)
+        th = draw.textbbox((0, 0), text, font=font)[3] - draw.textbbox((0, 0), text, font=font)[1]
+        tx = x + w - tw - 8 * S if align == "right" else (x + 10 * S if align == "left" else x + (w - tw) // 2)
+        draw.text((tx, y + (h - th) // 2), text, font=font, fill=fg)
+
+    x0 = PAD * S
+    y = PAD * S
+    top = y
+    cx1 = x0 + name_w * S
+    cx2 = x0 + (name_w + val_w1) * S
+    cell(x0, y, TW * S, TITLE_H * S, C["title"], title_str, ft, C["title_fg"]); y += TITLE_H * S
+    cell(x0, y, name_w * S, HDR_H * S, C["hdr"], "Підрозділ", fb, C["hdr_fg"])
+    cell(cx1, y, val_w1 * S, HDR_H * S, C["hdr"], col1_label, fb, C["hdr_fg"])
+    cell(cx2, y, val_w2 * S, HDR_H * S, C["hdr"], col2_label, fb, C["hdr_fg"]); y += HDR_H * S
+
+    hdr_bottom = y
+    if not table_rows:
+        cell(x0, y, TW * S, ROW_H * S, (255, 255, 255), "За період даних немає", fr, C["row_fg"]); y += ROW_H * S
+    for r in table_rows:
+        if r[0] == "sec":
+            _, cat, label = r
+            cell(x0, y, TW * S, SEC_H * S, C["irr_sec"] if cat == "irr" else C["san_sec"], label, fb,
+                 C["irr_fg"] if cat == "irr" else C["san_fg"], "center"); y += SEC_H * S
+        else:
+            _, cat, name, c1, c2 = r
+            bg = C["irr"] if cat == "irr" else C["san"]
+            cell(x0, y, name_w * S, ROW_H * S, bg, name, fr, C["row_fg"], "center")
+            cell(cx1, y, val_w1 * S, ROW_H * S, bg, str(c1) if c1 else "", fr, C["row_fg"], "center")
+            cell(cx2, y, val_w2 * S, ROW_H * S, bg, str(c2) if c2 else "", fr, C["row_fg"], "center")
+            y += ROW_H * S
+    rows_bottom = y
+
+    cell(x0, y, TW * S, SUM_H * S, C["hdr"], sum1, fsum, C["row_fg"], "left"); y += SUM_H * S
+    cell(x0, y, TW * S, SUM_H * S, C["hdr"], sum2, fsum, C["row_fg"], "left"); y += SUM_H * S
+    bottom = y
+
+    yy = hdr_bottom
+    draw.line([(x0, hdr_bottom - HDR_H * S), (x0 + TW * S - 1, hdr_bottom - HDR_H * S)], fill=C["border"], width=S)
+    draw.line([(x0, yy), (x0 + TW * S - 1, yy)], fill=C["border"], width=S)
+    walk = [None] if not table_rows else table_rows
+    for r in walk:
+        yy += ROW_H * S if (r is None or r[0] != "sec") else SEC_H * S
+        draw.line([(x0, yy), (x0 + TW * S - 1, yy)], fill=C["border"], width=S)
+    draw.line([(x0, rows_bottom + SUM_H * S), (x0 + TW * S - 1, rows_bottom + SUM_H * S)], fill=C["border"], width=S)
+    draw.line([(x0, bottom - 1), (x0 + TW * S - 1, bottom - 1)], fill=C["border"], width=S)
+    draw.line([(cx1, hdr_bottom - HDR_H * S), (cx1, rows_bottom - 1)], fill=C["border"], width=S)
+    draw.line([(cx2, hdr_bottom - HDR_H * S), (cx2, rows_bottom - 1)], fill=C["border"], width=S)
+    draw.rectangle([x0, top, x0 + TW * S - 1, bottom - 1], outline=C["border"], width=S)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    buf.seek(0)
+    return buf
