@@ -137,6 +137,20 @@
     const form = $("cnCompareFilter");
     if (form) form.addEventListener("submit", function (e) { e.preventDefault(); load(); });
 
+    // Кнопка «xlsx» — завантажити порівняння за поточний період.
+    const xlsxBtn = $("cnCmpXlsxBtn");
+    if (xlsxBtn) xlsxBtn.addEventListener("click", function () {
+      const from = $("cnCmpFrom") ? $("cnCmpFrom").value : "";
+      const to   = $("cnCmpTo")   ? $("cnCmpTo").value   : "";
+      const qs = new URLSearchParams();
+      if (from) qs.set("date_from", from);
+      if (to)   qs.set("date_to", to);
+      const a = document.createElement("a");
+      a.href = "/api/conclusions/compare.xlsx?" + qs.toString();
+      a.download = "";
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+
     // Кнопка-іконка «Копіювати» в контейнері перехоплення (делеговано на tbody).
     const bodyEl = $("cnCmpBody");
     if (bodyEl) bodyEl.addEventListener("click", function (e) {

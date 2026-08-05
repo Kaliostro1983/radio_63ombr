@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from app.core.access import require_capability
 from app.core.config import settings
@@ -251,8 +251,45 @@ def api_conclusions_list(
 # Cross-group conclusion comparison ("Аналітика 63" vs "Батальйони 63")
 # ---------------------------------------------------------------------------
 
-@router.get("/api/conclusions/compare")
-def api_conclusions_compare(date_from: str = "", date_to: str = ""):
+_MGRS_CMP_RE = re.compile(r"^(\d{1,2}[C-X])([A-Z]{2})(\d+)$")
+
+
+def _mgrs_meters(m):
+    """MGRS → (gzd, квадрат, easting_m, northing_m) у метрах; None якщо не парситься."""
+    s = re.sub(r"\s+", "", str(m or "")).upper()
+    mm = _MGRS_CMP_RE.match(s)
+    if not mm:
+        return None
+    digits = mm.group(3)
+    if len(digits) % 2 != 0:
+        return None
+    half = len(digits) // 2
+    scale = 10 ** (5 - half)   # 5 цифр на вісь = 1 м
+    return (mm.group(1), mm.group(2), int(digits[:half]) * scale, int(digits[half:]) * scale)
+
+
+def _mgrs_close(m1, m2, tol=9):
+    """Дві координати «однакові» з поправкою на конвертацію систем координат:
+    та сама зона/квадрат і різниця по КОЖНІЙ осі МЕНШЕ tol метрів."""
+    p1, p2 = _mgrs_meters(m1), _mgrs_meters(m2)
+    if not p1 or not p2:
+        return re.sub(r"\s+", "", str(m1)).upper() == re.sub(r"\s+", "", str(m2)).upper()
+    return p1[0] == p2[0] and p1[1] == p2[1] and abs(p1[2] - p2[2]) < tol and abs(p1[3] - p2[3]) < tol
+
+
+def _fuzzy_sets_equal(a_set, b_set, tol=9):
+    """Множини координат «збігаються» з поправкою: кожна точка однієї має близьку в іншій."""
+    a, b = list(a_set), list(b_set)
+    if not a and not b:
+        return True
+
+    def covered(src, dst):
+        return all(any(_mgrs_close(m, o, tol) for o in dst) for m in src)
+
+    return covered(a, b) and covered(b, a)
+
+
+def _build_compare(date_from: str = "", date_to: str = ""):
     """Compare analytical conclusions from the two source groups over a period.
 
     Conclusions are matched by the intercept they reference — the key is
@@ -378,7 +415,10 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
         a_set = {m for c in a for m in c["mgrs"]}
         b_set = {m for c in b for m in c["mgrs"]}
         if a and b:
-            category = "match" if a_set == b_set else "diff"
+            # Поправка на конвертацію систем координат (різні фреймворки в
+            # аналітиків): координати вважаємо однаковими, якщо різниця по
+            # кожній осі МЕНШЕ 9 м.
+            category = "match" if _fuzzy_sets_equal(a_set, b_set) else "diff"
         else:
             category = "only_one"
 
@@ -421,6 +461,72 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
         "date_from": start,
         "date_to": end,
     }
+
+
+@router.get("/api/conclusions/compare")
+def api_conclusions_compare(date_from: str = "", date_to: str = ""):
+    """Порівняння висновків «Аналітика 63» ↔ «Батальйони 63» за період."""
+    return _build_compare(date_from, date_to)
+
+
+@router.get("/api/conclusions/compare.xlsx")
+def api_conclusions_compare_xlsx(date_from: str = "", date_to: str = ""):
+    """XLSX-файл порівняння висновків за період (кнопка «xlsx» у модалці)."""
+    import io as _io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    data = _build_compare(date_from, date_to)
+    rows = data.get("rows", [])
+
+    def _concl_text(items):
+        parts = []
+        for c in items:
+            t = (c.get("conclusion_text") or "").strip()
+            mg = ", ".join(c.get("mgrs") or [])
+            block = t + (("\n" + mg) if (mg and t) else (mg if mg else ""))
+            if block:
+                parts.append(block)
+        return "\n\n".join(parts)
+
+    CAT = {"match": "Координати збігаються", "diff": "Координати відрізняються", "only_one": "Лише в одній групі"}
+    CAT_FILL = {"match": "E7F6E7", "diff": "FBE3E3", "only_one": "F2F2F2"}
+
+    wb = Workbook(); ws = wb.active; ws.title = "Порівняння висновків"
+    thin = Side(style="thin", color="C8CDD3")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    top = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    cen = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for ci, h in enumerate(["Перехоплення", "Аналітика 63", "Батальйони 63", "Категорія"], 1):
+        c = ws.cell(row=1, column=ci, value=h)
+        c.font = Font(name="Arial", bold=True, size=11); c.alignment = cen
+        c.border = border; c.fill = PatternFill("solid", fgColor="F1F3F6")
+    r = 2
+    for row in rows:
+        cat = row.get("category") or "only_one"
+        vals = [row.get("intercept_text") or "",
+                _concl_text(row.get("analytics") or []),
+                _concl_text(row.get("battalions") or []),
+                CAT.get(cat, cat)]
+        fill = PatternFill("solid", fgColor=CAT_FILL.get(cat, "FFFFFF"))
+        for ci, v in enumerate(vals, 1):
+            c = ws.cell(row=r, column=ci, value=v)
+            c.alignment = cen if ci == 4 else top
+            c.border = border; c.font = Font(name="Arial", size=10); c.fill = fill
+        r += 1
+    ws.column_dimensions["A"].width = 62
+    ws.column_dimensions["B"].width = 46
+    ws.column_dimensions["C"].width = 46
+    ws.column_dimensions["D"].width = 24
+    ws.freeze_panes = "A2"
+
+    buf = _io.BytesIO(); wb.save(buf); buf.seek(0)
+    fname = f"porivnyannya-vysnovkiv-{(data.get('date_from') or '')[:10]}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
 
 
 # ---------------------------------------------------------------------------
