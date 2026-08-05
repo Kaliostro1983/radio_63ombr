@@ -469,9 +469,8 @@ def api_conclusions_compare(date_from: str = "", date_to: str = ""):
     return _build_compare(date_from, date_to)
 
 
-@router.get("/api/conclusions/compare.xlsx")
-def api_conclusions_compare_xlsx(date_from: str = "", date_to: str = ""):
-    """XLSX-файл порівняння висновків за період (кнопка «xlsx» у модалці)."""
+def _compare_xlsx_bytes(date_from: str = "", date_to: str = ""):
+    """Будує XLSX порівняння висновків. Повертає (bytes, date_from_start)."""
     import io as _io
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -520,13 +519,54 @@ def api_conclusions_compare_xlsx(date_from: str = "", date_to: str = ""):
     ws.column_dimensions["D"].width = 24
     ws.freeze_panes = "A2"
 
-    buf = _io.BytesIO(); wb.save(buf); buf.seek(0)
-    fname = f"porivnyannya-vysnovkiv-{(data.get('date_from') or '')[:10]}.xlsx"
+    buf = _io.BytesIO(); wb.save(buf)
+    return buf.getvalue(), (data.get("date_from") or "")[:10]
+
+
+@router.get("/api/conclusions/compare.xlsx")
+def api_conclusions_compare_xlsx(date_from: str = "", date_to: str = ""):
+    """XLSX-файл порівняння висновків за період (кнопка «xlsx» у модалці)."""
+    import io as _io
+    content, day = _compare_xlsx_bytes(date_from, date_to)
     return StreamingResponse(
-        buf,
+        _io.BytesIO(content),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={fname}"},
+        headers={"Content-Disposition": f"attachment; filename=porivnyannya-vysnovkiv-{day}.xlsx"},
     )
+
+
+@router.post("/api/conclusions/compare/gsheet")
+async def api_conclusions_compare_gsheet(request: Request):
+    """Створити Google-таблицю порівняння у заданій папці Google Диску.
+    Body: { title, folder (URL або ID), date_from, date_to, share:bool }."""
+    payload: Dict[str, Any] = await request.json()
+    title = (payload.get("title") or "Порівняння висновків").strip()
+    folder = (payload.get("folder") or "").strip()
+    date_from = payload.get("date_from") or ""
+    date_to = payload.get("date_to") or ""
+    share = bool(payload.get("share", True))
+    if not folder:
+        return JSONResponse({"ok": False, "error": "Вкажіть папку Google Диску (посилання або ID)."}, status_code=400)
+
+    content, _ = _compare_xlsx_bytes(date_from, date_to)
+    try:
+        from app.services.gsheet_export import create_sheet_from_xlsx
+    except ImportError:
+        return JSONResponse(
+            {"ok": False, "error": "На сервері не встановлено бібліотеки Google API "
+             "(google-api-python-client, google-auth)."}, status_code=500)
+    try:
+        res = create_sheet_from_xlsx(title, folder, content, share)
+    except FileNotFoundError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Google: {e}"}, status_code=502)
+
+    # Запамʼятати папку як типову.
+    with get_conn() as conn:
+        _app_setting_set(conn, "gdrive_compare_folder", folder)
+        conn.commit()
+    return {"ok": True, "url": res["url"], "id": res["id"]}
 
 
 # ---------------------------------------------------------------------------

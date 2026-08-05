@@ -126,6 +126,64 @@
     modal.setAttribute("aria-hidden", "true");
   }
 
+  // ── Google-таблиця ─────────────────────────────────────────────────────────
+  function closeGSheetModal() {
+    const m = $("cnGSheetModal");
+    if (m) { m.classList.add("hidden"); m.setAttribute("aria-hidden", "true"); }
+  }
+  function openGSheetModal() {
+    const m = $("cnGSheetModal");
+    if (!m) return;
+    const from = $("cnCmpFrom") ? $("cnCmpFrom").value : "";
+    const to   = $("cnCmpTo")   ? $("cnCmpTo").value   : "";
+    if ($("cnGSheetFrom")) $("cnGSheetFrom").value = from;
+    if ($("cnGSheetTo"))   $("cnGSheetTo").value   = to;
+    if ($("cnGSheetName")) {
+      const per = (fmtDt(from) || "") + " – " + (fmtDt(to) || "");
+      $("cnGSheetName").value = "Порівняння висновків · " + per;
+    }
+    if ($("cnGSheetErr"))    { $("cnGSheetErr").style.display = "none"; $("cnGSheetErr").textContent = ""; }
+    if ($("cnGSheetResult")) { $("cnGSheetResult").style.display = "none"; $("cnGSheetResult").innerHTML = ""; }
+    // Підтягнути збережену типову папку.
+    fetch("/api/settings?keys=gdrive_compare_folder", { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        const f = d && d.settings && d.settings.gdrive_compare_folder;
+        if (f && $("cnGSheetFolder") && !$("cnGSheetFolder").value) $("cnGSheetFolder").value = f;
+      }).catch(function () {});
+    m.classList.remove("hidden"); m.setAttribute("aria-hidden", "false");
+  }
+  function createGSheet() {
+    const btn = $("cnGSheetCreate");
+    const err = $("cnGSheetErr"), res = $("cnGSheetResult");
+    if (err) { err.style.display = "none"; err.textContent = ""; }
+    if (res) { res.style.display = "none"; res.innerHTML = ""; }
+    const body = {
+      title: $("cnGSheetName") ? $("cnGSheetName").value.trim() : "",
+      folder: $("cnGSheetFolder") ? $("cnGSheetFolder").value.trim() : "",
+      date_from: $("cnGSheetFrom") ? $("cnGSheetFrom").value : "",
+      date_to: $("cnGSheetTo") ? $("cnGSheetTo").value : "",
+      share: !!($("cnGSheetShare") && $("cnGSheetShare").checked),
+    };
+    if (!body.folder) { if (err) { err.textContent = "Вкажіть папку Google Диску."; err.style.display = ""; } return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Створення…"; }
+    fetch("/api/conclusions/compare/gsheet", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(function (r) { return r.json().catch(function () { return { ok: false, error: "HTTP " + r.status }; }); })
+      .then(function (d) {
+        if (btn) { btn.disabled = false; btn.textContent = "Створити"; }
+        if (!d || !d.ok) { if (err) { err.textContent = (d && d.error) || "Помилка"; err.style.display = ""; } return; }
+        if (res) {
+          res.innerHTML = "Таблицю створено: <a href=\"" + escapeHtml(d.url) + "\" target=\"_blank\" rel=\"noopener\">відкрити ↗</a>";
+          res.style.display = "";
+        }
+        if (window.appToast) window.appToast("Google-таблицю створено.", "success", 1800);
+      }).catch(function (e) {
+        if (btn) { btn.disabled = false; btn.textContent = "Створити"; }
+        if (err) { err.textContent = String(e); err.style.display = ""; }
+      });
+  }
+
   function init() {
     const openBtn = $("cnOpenCompare");
     if (openBtn) openBtn.addEventListener("click", openModal);
@@ -137,9 +195,11 @@
     const form = $("cnCompareFilter");
     if (form) form.addEventListener("submit", function (e) { e.preventDefault(); load(); });
 
-    // Кнопка «xlsx» — завантажити порівняння за поточний період.
+    // Кнопка «xlsx»: звичайний клік — завантажити файл; Ctrl/⌘+клік —
+    // модалка створення таблиці на Google Диску.
     const xlsxBtn = $("cnCmpXlsxBtn");
-    if (xlsxBtn) xlsxBtn.addEventListener("click", function () {
+    if (xlsxBtn) xlsxBtn.addEventListener("click", function (e) {
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); openGSheetModal(); return; }
       const from = $("cnCmpFrom") ? $("cnCmpFrom").value : "";
       const to   = $("cnCmpTo")   ? $("cnCmpTo").value   : "";
       const qs = new URLSearchParams();
@@ -150,6 +210,11 @@
       a.download = "";
       document.body.appendChild(a); a.click(); a.remove();
     });
+
+    document.querySelectorAll("[data-cn-gsheet-close]").forEach(function (el) {
+      el.addEventListener("click", closeGSheetModal);
+    });
+    if ($("cnGSheetCreate")) $("cnGSheetCreate").addEventListener("click", createGSheet);
 
     // Кнопка-іконка «Копіювати» в контейнері перехоплення (делеговано на tbody).
     const bodyEl = $("cnCmpBody");

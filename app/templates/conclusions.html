@@ -20,6 +20,8 @@
   .cn-page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .cn-shell { display: block; }
   .cn-modal { z-index: 9999 !important; }
+  .cn-gsheet-modal { z-index: 12001 !important; }
+  .cn-gsheet-card { width: min(560px, 94vw); max-width: 560px; margin: 40px auto; }
   .cn-modal-card {
     width: 95vw;
     max-width: 1180px;
@@ -331,6 +333,48 @@
         </div><!-- /cn-modal-body -->
       </div><!-- /cn-modal-card -->
       </div><!-- /cnCompareModal -->
+
+      <!-- ===== Modal: Створити Google-таблицю ===== -->
+      <div id="cnGSheetModal" class="modal hidden cn-modal cn-gsheet-modal" aria-hidden="true">
+        <div class="modal-backdrop" data-cn-gsheet-close></div>
+        <div class="modal-card cn-gsheet-card" role="dialog" aria-modal="true" aria-labelledby="cnGSheetTitle">
+          <div class="modal-head">
+            <div id="cnGSheetTitle" class="modal-title">Створити таблицю на Google Диску</div>
+            <button type="button" class="secondary" data-cn-gsheet-close style="padding:4px 10px">✕</button>
+          </div>
+          <div class="modal-body" style="padding:16px 18px; display:flex; flex-direction:column; gap:12px">
+            <div class="field">
+              <label class="small" for="cnGSheetName">Назва таблиці</label>
+              <input id="cnGSheetName" type="text" style="width:100%">
+            </div>
+            <div class="field">
+              <label class="small" for="cnGSheetFolder">Папка Google Диску (посилання або ID)</label>
+              <input id="cnGSheetFolder" type="text" placeholder="https://drive.google.com/drive/folders/…" style="width:100%">
+              <div class="small" style="opacity:.6; margin-top:4px">Папку треба розшарити на e-mail сервіс-акаунта з правом редагування.</div>
+            </div>
+            <div style="display:flex; gap:12px; flex-wrap:wrap">
+              <div class="field" style="flex:1 1 180px">
+                <label class="small" for="cnGSheetFrom">Від</label>
+                <input id="cnGSheetFrom" type="datetime-local" style="width:100%">
+              </div>
+              <div class="field" style="flex:1 1 180px">
+                <label class="small" for="cnGSheetTo">До</label>
+                <input id="cnGSheetTo" type="datetime-local" style="width:100%">
+              </div>
+            </div>
+            <label class="small" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+              <input id="cnGSheetShare" type="checkbox" checked>
+              <span>Доступ на перегляд за посиланням</span>
+            </label>
+            <div id="cnGSheetErr" class="small" style="color:var(--danger); display:none"></div>
+            <div id="cnGSheetResult" class="small" style="display:none"></div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px">
+              <button type="button" class="secondary" data-cn-gsheet-close>Скасувати</button>
+              <button type="button" id="cnGSheetCreate">Створити</button>
+            </div>
+          </div>
+        </div>
+      </div><!-- /cnGSheetModal -->
 
       {% if is_embed and request.query_params.get('pane') != 'view' %}
       <!-- ===== ШВИДКО (лише в embed-режимі «швидко», НЕ в pane=view) ===== -->
@@ -664,6 +708,6 @@
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/conclusions.js?v=34" defer></script>
 <script src="/static/quick_conclusions.js?v=18" defer></script>
-<script src="/static/conclusions_compare.js?v=3" defer></script>
+<script src="/static/conclusions_compare.js?v=4" defer></script>
 <script src="/static/palette_efficiency.js?v=4" defer></script>
 {% endblock %}

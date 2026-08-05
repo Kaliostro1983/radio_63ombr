@@ -9,3 +9,7 @@ sqlmodel==0.0.22
 itsdangerous==2.1.2
 Pillow>=10.0.0
 cairosvg==2.9.0scipy>=1.11
+
+# Google Drive export (conclusions comparison → Google Sheets)
+google-api-python-client
+google-auth
