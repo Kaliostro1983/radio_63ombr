@@ -154,34 +154,42 @@
     m.classList.remove("hidden"); m.setAttribute("aria-hidden", "false");
   }
   function createGSheet() {
-    const btn = $("cnGSheetCreate");
+    // Без Google Cloud: завантажуємо xlsx, запамʼятовуємо папку і відкриваємо її
+    // — файл лишається перетягнути в папку вручну (Google імпортує в Таблицю).
     const err = $("cnGSheetErr"), res = $("cnGSheetResult");
     if (err) { err.style.display = "none"; err.textContent = ""; }
-    if (res) { res.style.display = "none"; res.innerHTML = ""; }
-    const body = {
-      title: $("cnGSheetName") ? $("cnGSheetName").value.trim() : "",
-      folder: $("cnGSheetFolder") ? $("cnGSheetFolder").value.trim() : "",
-      date_from: $("cnGSheetFrom") ? $("cnGSheetFrom").value : "",
-      date_to: $("cnGSheetTo") ? $("cnGSheetTo").value : "",
-      share: !!($("cnGSheetShare") && $("cnGSheetShare").checked),
-    };
-    if (!body.folder) { if (err) { err.textContent = "Вкажіть папку Google Диску."; err.style.display = ""; } return; }
-    if (btn) { btn.disabled = true; btn.textContent = "Створення…"; }
-    fetch("/api/conclusions/compare/gsheet", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    }).then(function (r) { return r.json().catch(function () { return { ok: false, error: "HTTP " + r.status }; }); })
-      .then(function (d) {
-        if (btn) { btn.disabled = false; btn.textContent = "Створити"; }
-        if (!d || !d.ok) { if (err) { err.textContent = (d && d.error) || "Помилка"; err.style.display = ""; } return; }
-        if (res) {
-          res.innerHTML = "Таблицю створено: <a href=\"" + escapeHtml(d.url) + "\" target=\"_blank\" rel=\"noopener\">відкрити ↗</a>";
-          res.style.display = "";
-        }
-        if (window.appToast) window.appToast("Google-таблицю створено.", "success", 1800);
-      }).catch(function (e) {
-        if (btn) { btn.disabled = false; btn.textContent = "Створити"; }
-        if (err) { err.textContent = String(e); err.style.display = ""; }
-      });
+    const name   = $("cnGSheetName") ? $("cnGSheetName").value.trim() : "";
+    const folder = $("cnGSheetFolder") ? $("cnGSheetFolder").value.trim() : "";
+    const from   = $("cnGSheetFrom") ? $("cnGSheetFrom").value : "";
+    const to     = $("cnGSheetTo") ? $("cnGSheetTo").value : "";
+    if (!folder) { if (err) { err.textContent = "Вставте посилання на папку Google Диску."; err.style.display = ""; } return; }
+
+    // 1) Завантажити xlsx.
+    const qs = new URLSearchParams();
+    if (from) qs.set("date_from", from);
+    if (to)   qs.set("date_to", to);
+    const a = document.createElement("a");
+    a.href = "/api/conclusions/compare.xlsx?" + qs.toString();
+    a.download = name ? (name.replace(/[\\/:*?"<>|]/g, "_") + ".xlsx") : "";
+    document.body.appendChild(a); a.click(); a.remove();
+
+    // 2) Запамʼятати папку (на сервері) для наступних разів.
+    fetch("/api/settings", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gdrive_compare_folder: folder }),
+    }).catch(function () {});
+
+    // 3) Відкрити папку в новій вкладці.
+    let folderUrl = folder;
+    if (!/^https?:\/\//i.test(folder)) folderUrl = "https://drive.google.com/drive/folders/" + folder;
+    window.open(folderUrl, "_blank");
+
+    if (res) {
+      res.innerHTML = "Файл завантажено ✓. У відкритій вкладці — ваша папка Google Диску: " +
+        "<b>перетягніть у неї завантажений файл</b>. Далі відкрийте його як Google Таблицю.";
+      res.style.display = "";
+    }
+    if (window.appToast) window.appToast("Файл завантажено, папку відкрито.", "success", 1800);
   }
 
   function init() {

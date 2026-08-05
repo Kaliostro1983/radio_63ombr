@@ -348,9 +348,9 @@
               <input id="cnGSheetName" type="text" style="width:100%">
             </div>
             <div class="field">
-              <label class="small" for="cnGSheetFolder">Папка Google Диску (посилання або ID)</label>
+              <label class="small" for="cnGSheetFolder">Папка Google Диску (посилання)</label>
               <input id="cnGSheetFolder" type="text" placeholder="https://drive.google.com/drive/folders/…" style="width:100%">
-              <div class="small" style="opacity:.6; margin-top:4px">Папку треба розшарити на e-mail сервіс-акаунта з правом редагування.</div>
+              <div class="small" style="opacity:.6; margin-top:4px">Посилання запамʼятається. Файл завантажиться, а папка відкриється в новій вкладці — перетягніть файл у неї.</div>
             </div>
             <div style="display:flex; gap:12px; flex-wrap:wrap">
               <div class="field" style="flex:1 1 180px">
@@ -362,15 +362,11 @@
                 <input id="cnGSheetTo" type="datetime-local" style="width:100%">
               </div>
             </div>
-            <label class="small" style="display:flex; align-items:center; gap:8px; cursor:pointer">
-              <input id="cnGSheetShare" type="checkbox" checked>
-              <span>Доступ на перегляд за посиланням</span>
-            </label>
             <div id="cnGSheetErr" class="small" style="color:var(--danger); display:none"></div>
             <div id="cnGSheetResult" class="small" style="display:none"></div>
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px">
               <button type="button" class="secondary" data-cn-gsheet-close>Скасувати</button>
-              <button type="button" id="cnGSheetCreate">Створити</button>
+              <button type="button" id="cnGSheetCreate">Завантажити + відкрити папку</button>
             </div>
           </div>
         </div>
@@ -708,6 +704,6 @@
 <script src="/static/vendor/mgrs.min.js" defer></script>
 <script src="/static/conclusions.js?v=34" defer></script>
 <script src="/static/quick_conclusions.js?v=18" defer></script>
-<script src="/static/conclusions_compare.js?v=4" defer></script>
+<script src="/static/conclusions_compare.js?v=5" defer></script>
 <script src="/static/palette_efficiency.js?v=4" defer></script>
 {% endblock %}
