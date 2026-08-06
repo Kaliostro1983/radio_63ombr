@@ -18,14 +18,19 @@
     return concl ? "valuable" : (flag ? "potential" : "normal");
   }
 
-  // HTML закладки для вставки в шаблон картки.
+  // HTML закладки + кругла кнопка «?» (к-сть висновків на частоті за 48 год).
   window.interceptStatusRibbon = function (item) {
     var flag = (item && item.value_flag) ? 1 : 0;
     var concl = (item && item.has_conclusion) ? 1 : 0;
     var st = statusOf(flag, concl);
+    var nid = (item && item.network_id != null) ? item.network_id : "";
     return '<button type="button" class="intercept-card__status intercept-card__status--' + st + '"' +
       ' data-mid="' + (item && item.id) + '" data-flag="' + flag + '" data-concl="' + concl + '"' +
-      ' title="' + TITLES[st] + '" aria-label="Статус перехоплення: ' + st + '"></button>';
+      ' title="' + TITLES[st] + '" aria-label="Статус перехоплення: ' + st + '"></button>' +
+      '<button type="button" class="intercept-card__concl48" data-concl48="1"' +
+      ' data-network-id="' + nid + '"' +
+      ' title="Аналітичних висновків на цій частоті за крайні 48 год (клік — показати)"' +
+      ' aria-label="Кількість аналітичних висновків за 48 годин">?</button>';
   };
 
   function apply(el) {
@@ -49,6 +54,27 @@
   });
   document.addEventListener("conclusionDeleted", function (e) {
     _updateByMid(e.detail && e.detail.message_id, { concl: "0" });
+  });
+
+  // Кнопка «?»: показати к-сть аналітичних висновків на цій частоті за 48 год.
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest(".intercept-card__concl48");
+    if (!b) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (b.dataset.loading === "1") return;
+    var nid = b.dataset.networkId;
+    if (!nid) { b.textContent = "0"; b.classList.add("intercept-card__concl48--loaded"); return; }
+    b.dataset.loading = "1";
+    b.textContent = "…";
+    fetch("/api/conclusions/count-48h?network_id=" + encodeURIComponent(nid))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        b.textContent = (d && d.ok) ? String(d.count) : "?";
+        b.classList.add("intercept-card__concl48--loaded");
+      })
+      .catch(function () { b.textContent = "?"; })
+      .finally(function () { b.dataset.loading = "0"; });
   });
 
   // Делегований клік — працює для будь-якого рендерера картки.

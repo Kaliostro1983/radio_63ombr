@@ -4383,6 +4383,9 @@ button.secondary{
   overflow-y:auto;
   position:relative;
   min-height:0;
+  /* Бічні відступи = верхньому (картка має margin:10px 0), щоб контейнер
+     перехоплення не притискався до країв панелі. */
+  padding:0 10px;
 }
 
 /* ── Висновок tab layout ── */
@@ -6750,7 +6753,7 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 /* ═══ Статус цінності перехоплення — кутова закладка ═══════════════════════ */
 .intercept-card{ position:relative; }
 .intercept-card__status{
-  position:absolute; top:-2px; right:50px; z-index:3; width:28px; height:45px; padding:0; border:0;
+  position:absolute; top:-2px; right:70px; z-index:3; width:28px; height:45px; padding:0; border:0;
   border-radius:0; cursor:pointer; clip-path:polygon(0 0,100% 0,100% 100%,50% 80%,0 100%);
   box-shadow:0 1px 2px rgba(0,0,0,.35); transition:filter .12s ease;
 }
@@ -6758,6 +6761,17 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .intercept-card__status--potential{ background:#f59e0b; }
 .intercept-card__status--valuable{ background:#22c55e; cursor:default; }
 .intercept-card__status:hover{ filter:brightness(1.1); }
+/* Кругла кнопка «?» у куті: к-сть аналітичних висновків на частоті за 48 год */
+.intercept-card__concl48{
+  position:absolute; top:6px; right:14px; z-index:4;
+  width:30px; height:30px; padding:0; border-radius:50%;
+  border:1px solid rgba(255,255,255,.22); background:rgba(30,41,59,.92);
+  color:#e2e8f0; font-size:14px; font-weight:800; line-height:1; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.4); transition:filter .12s ease, background .12s ease, border-color .12s ease;
+}
+.intercept-card__concl48:hover{ filter:brightness(1.15); }
+.intercept-card__concl48--loaded{ background:#2563eb; border-color:#3b82f6; color:#fff; }
 /* Зсув кластера кнопок ліворуч, щоб звільнити кут під закладку */
 .intercept-card .intercepts-copy-icon-btn{ right:40px; }
 .intercept-card .intercept-card__share-btn:nth-of-type(2){ right:78px; }

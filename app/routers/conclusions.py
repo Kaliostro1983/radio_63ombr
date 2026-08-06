@@ -126,6 +126,26 @@ def api_conclusions_networks():
     }
 
 
+@router.get("/api/conclusions/count-48h")
+def api_conclusions_count_48h(network_id: int = 0):
+    """Кількість аналітичних висновків на цій частоті за крайні 48 годин.
+
+    Частота ↔ мережа: `networks.frequency` — UNIQUE, тож «на цій частоті» =
+    той самий `network_id`. Використовується кнопкою «?» у картці перехоплення
+    (Моніторинг/Перегляд/Пошук)."""
+    if not network_id:
+        return {"ok": True, "count": 0}
+    since = (datetime.now() - timedelta(hours=48)).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM analytical_conclusions "
+            "WHERE network_id = ? "
+            "AND REPLACE(created_at,'T',' ') >= REPLACE(?, 'T',' ')",
+            (network_id, since),
+        ).fetchone()
+    return {"ok": True, "count": int(row["c"]) if row else 0}
+
+
 # ---------------------------------------------------------------------------
 # Conclusions list
 # ---------------------------------------------------------------------------
