@@ -6783,6 +6783,15 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .if-orange-chk{ display:flex; align-items:center; gap:7px; white-space:nowrap; font-size:13px; color:var(--fg,#e2e8f0); cursor:pointer; height:36px; }
 .if-orange-chk input{ margin:0; accent-color:#f59e0b; width:16px; height:16px; }
 
+/* Панель conclAnchors (z-index 650, над маркерами z600) призначена для
+   DivIcon-ручок редагування. Коли в неї потрапляє circleMarker (шар «Орієнтири
+   в області видимості»), Leaflet створює <svg>-контейнер, що лишається навіть
+   після приховання шару й перехоплює кліки — іконки-висновки під ним стають
+   неклікабельними. Робимо КОНТЕЙНЕР svg прозорим для кліків; інтерактивні
+   шляхи (.leaflet-interactive → pointer-events:auto) та DivIcon-ручки не
+   зачіпаються, тож і орієнтири, і ручки лишаються клікабельними. */
+.leaflet-conclAnchors-pane > svg { pointer-events: none; }
+
 /* ═══ Кластер-пікер об'єктів на карті висновків (модалка) ══════════════════
    Порт стилів із conclusions_map.css. z-index вищий за модалку (.it-modal =
    9999), щоб список «Оберіть об'єкт» лягав поверх карти в модалці. */
