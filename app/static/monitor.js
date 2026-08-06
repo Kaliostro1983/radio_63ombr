@@ -4624,14 +4624,20 @@
     return s;
   }
 
-  /* Звести блок до валідної форми (крок 2): спершу 3-значні повтори, потім
-     2-значні; після кожного видалення — перевірка форми. null, якщо не вдалось. */
+  /* Звести блок до валідної форми (крок 2): прибираємо сусідні повтори-
+     підтвердження. Спершу короткі 3/2-значні (як диктують «38 657 38 657»),
+     потім 5/7-значні — коли оператор повторює цілу координату («38657 38657
+     12838 12838» → «38657 12838», «5420649 5420649» → «5420649»). Після
+     кожного видалення — перевірка форми. null, якщо звести не вдалось. */
   function _reduceUskBlock(s) {
     let cur = s;
-    for (let step = 0; step < 40; step++) {
+    for (let step = 0; step < 60; step++) {
       if (_uskValidForm(cur)) return cur;
-      let next = _removeAdjRepeat(cur, 3);
-      if (next === cur) next = _removeAdjRepeat(cur, 2);
+      let next = cur;
+      for (const n of [3, 2, 5, 7]) {
+        next = _removeAdjRepeat(cur, n);
+        if (next !== cur) break;
+      }
       if (next === cur) return null;
       cur = next;
     }
