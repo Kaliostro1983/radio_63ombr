@@ -2123,6 +2123,19 @@
 
     // Перемикач «Орієнтири в області видимості»
     document.getElementById("conclLmViewBtn")?.addEventListener("click", _toggleLmView);
+
+    // Перемикач «Іконки-висновки по цій частоті (крайні 48 год)» — показує
+    // референс-шар висновків, відфільтрований ЛИШЕ за частотою (мережею), без
+    // позивного. Логіка шару — у concl_ref_layer.js.
+    document.getElementById("conclFreqIconsBtn")?.addEventListener("click", () => {
+      const nid = _currentItem && _currentItem.network_id;
+      if (!nid) {
+        if (window.appToast) window.appToast("Немає частоти для цього перехоплення", "warn", 1800);
+        return;
+      }
+      const on = window.toggleConclRefByFreq ? window.toggleConclRefByFreq(nid) : false;
+      document.getElementById("conclFreqIconsBtn")?.classList.toggle("is-active", !!on);
+    });
     // При КОЖНОМУ відкритті модалки висновку орієнтири мають бути сховані.
     (function _lmViewResetOnOpen() {
       const m = document.getElementById("itModalConclusion");
@@ -2134,6 +2147,7 @@
         if (wasHidden && !isHidden) {   // щойно відкрилась
           if (_pathDrawState && _pathDrawState.cancel) _pathDrawState.cancel();
           _resetLmView(); _palResetForModalOpen();
+          document.getElementById("conclFreqIconsBtn")?.classList.remove("is-active");
         } else if (!wasHidden && isHidden) {   // щойно закрилась — обнуляємо галочки палітр
           if (_palScope.size) { _palScope.clear(); _palSaveScope(); _lastPalCtxKey = null; }
           document.querySelectorAll('#conclPalList input[type="checkbox"], #palPanel .pal-item-check')

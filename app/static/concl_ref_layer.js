@@ -699,6 +699,31 @@
     return !!(S.callsignId || S.callsign || S.networkId);
   };
 
+  // Перемикач «іконки-висновки лише по частоті (мережі) за крайні 48 год».
+  // На відміну від входу з картки позивного — БЕЗ фільтра позивного. Кнопка в
+  // тулбарі карти модалки. Повертає новий стан видимості (true = показано).
+  window.toggleConclRefByFreq = function (networkId) {
+    var nid = parseInt(networkId, 10) || 0;
+    var isFreqMode = _visible && S.networkId === nid && !S.callsignId && !S.callsign;
+    if (isFreqMode) { setVisible(false); return false; }
+    // Лише за частотою, за крайні 48 год; скидаємо позивний/тип.
+    S.callsignId = 0; S.callsign = ""; S.networkId = nid; S.typeId = -1;
+    var now = new Date();
+    var from = new Date(now.getTime() - 48 * 3600 * 1000);
+    function fmt(d) {
+      var p = function (n) { return (n < 10 ? "0" : "") + n; };
+      return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+             "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+    }
+    S.from = fmt(from); S.to = fmt(now);
+    var fEl = $("cwRefFrom"), tEl = $("cwRefTo");
+    if (fEl) fEl.value = S.from;
+    if (tEl) tEl.value = S.to;
+    S.loaded = false;   // форсуємо перезавантаження з новим фільтром
+    setVisible(true);
+    return true;
+  };
+
   window.setConclModalMode = function (mode) {
     var modal = $("itModalConclusion"); if (!modal) return;
     modal.dataset.conclMode = mode || "conclusion";
