@@ -4670,6 +4670,90 @@
     return res;
   }
 
+  /* ── Маркер-орієнтований екстрактор УСК-2000 (пріоритетний) ───────────────
+   * Радіооператор часто явно називає осі кодовими словами: «Харитон» — це X
+   * (починається з 54), «Ульяна» — це Y (починається з 74). Ці слова, разом із
+   * префіксами 54/74, — найнадійніший сигнал у «брудному» тексті (звіти про
+   * політ рясніють сторонніми числами: висота 250, дистанція 22, час 11 16…).
+   * Тому: сегментуємо текст маркерами, у кожному сегменті збираємо цифрові
+   * групи, схлопуємо ПОВТОРИ (підтвердження) на рівні груп і будуємо число з
+   * потрібним префіксом. Приклад «брудної» диктовки:
+   *   «Харитон 54 20 649, 54 20. 649»  → 5420649
+   *   «Ульяна 74 15, 74 15, 689, 689»  → 7415689  (повтори «74 15» і «689»). */
+
+  /* Схлопує сусідні повтори підпослідовностей груп (спершу довжини 1, потім 2…).
+     [74,15,74,15,689,689] → [74,15,689]; [54,20,649,54,20,649] → [54,20,649]. */
+  function _destutterGroups(groups) {
+    let g = groups.slice();
+    let changed = true, guard = 0;
+    while (changed && guard++ < 200) {
+      changed = false;
+      for (let L = 1; L <= Math.floor(g.length / 2) && !changed; L++) {
+        for (let i = 0; i + 2 * L <= g.length; i++) {
+          let eq = true;
+          for (let k = 0; k < L; k++) if (g[i + k] !== g[i + L + k]) { eq = false; break; }
+          if (eq) { g.splice(i + L, L); changed = true; break; }
+        }
+      }
+    }
+    return g;
+  }
+
+  /* Будує 7-значну координату з сегмента після маркера. prefix — «54» (X) або
+     «74» (Y). Якщо оператор назвав повне число (54…) — беремо перші 7 цифр;
+     якщо лише 5-значний «хвіст» (20 649) — додаємо префікс. */
+  function _coordFromSegment(seg, prefix) {
+    const groups = seg.match(/\d+/g) || [];
+    if (!groups.length) return null;
+    const s = _destutterGroups(groups).join("");
+    if (s.length >= 7 && s.startsWith(prefix)) return s.slice(0, 7);
+    if (s.length >= 5) return prefix + s.slice(0, 5);
+    return null;
+  }
+
+  /* Повертає {x,y} пари, витягнуті за маркерами «Харитон»/«Ульяна». */
+  function _extractUskByMarkers(text) {
+    const lower = _stripDateTime(String(text || "")).toLowerCase();
+    if (!lower) return [];
+    // «уль?ян…» ловить і рос. «Ульяна», і укр. «Уляна» (та відмінки).
+    const xRe = /харитон\S*/g, yRe = /уль?ян\S*/g;
+    const xs = [], ys = [];
+    let m;
+    while ((m = xRe.exec(lower)) !== null) xs.push({ idx: m.index, end: m.index + m[0].length });
+    while ((m = yRe.exec(lower)) !== null) ys.push({ idx: m.index, end: m.index + m[0].length });
+    if (!xs.length && !ys.length) return [];
+
+    // Межа сегмента: до наступного будь-якого маркера, але не далі +60 символів.
+    const markerIdx = [...xs, ...ys].map(o => o.idx).sort((a, b) => a - b);
+    function segEnd(startIdx, fromEnd) {
+      let end = lower.length;
+      for (const mi of markerIdx) { if (mi > startIdx) { end = mi; break; } }
+      return Math.min(end, fromEnd + 60);
+    }
+
+    const xCoords = xs
+      .map(x => { const v = _coordFromSegment(lower.slice(x.end, segEnd(x.idx, x.end)), "54"); return v ? { v, idx: x.idx } : null; })
+      .filter(Boolean);
+    const yCoords = ys
+      .map(y => { const v = _coordFromSegment(lower.slice(y.end, segEnd(y.idx, y.end)), "74"); return v ? { v, idx: y.idx } : null; })
+      .filter(Boolean);
+
+    // Жадібне зіставлення X↔Y за близькістю в тексті.
+    const opts = [];
+    for (const x of xCoords) for (const y of yCoords) opts.push({ x, y, d: Math.abs(x.idx - y.idx) });
+    opts.sort((a, b) => a.d - b.d);
+    const usedX = new Set(), usedY = new Set(), pairs = [], seen = new Set();
+    for (const o of opts) {
+      if (usedX.has(o.x) || usedY.has(o.y)) continue;
+      usedX.add(o.x); usedY.add(o.y);
+      const k = o.x.v + "_" + o.y.v;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      pairs.push({ x: o.x.v, y: o.y.v });
+    }
+    return pairs;
+  }
+
   /* Ставить точку УСК-2000, приймаючи 5- або 7-значні X та Y.
    * 5-значні автоматично доповнюються префіксами 54 / 74. */
   function _placeUskPair(x, y) {
@@ -4824,9 +4908,12 @@
       // вирізаємо тому що "." тепер входить у роздільник склейки —
       // інакше "06.06.2026 13:01:37" склеїлось би у фейковий 10-значний
       // кластер з фейковою парою X/Y.
-      // Основний — блоковий екстрактор (блок → зведення повторів → пара).
-      let pairs = _extractUskByBlocks(fullText);
-      // Запасні (стара логіка), якщо блоковий нічого не дав.
+      // Пріоритет — маркер-орієнтований екстрактор («Харитон»=X 54…, «Ульяна»=Y
+      // 74…): найнадійніший у «брудному» тексті зі сторонніми числами.
+      let pairs = _extractUskByMarkers(fullText);
+      // Далі — блоковий екстрактор (блок → зведення повторів → пара).
+      if (!pairs.length) pairs = _extractUskByBlocks(fullText);
+      // Запасні (стара логіка), якщо нічого не дав.
       if (!pairs.length) {
         const body = _stripDateTime(_bodyOnly(fullText));
         pairs = _extractUskPairsV2(body);
