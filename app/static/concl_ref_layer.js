@@ -172,7 +172,12 @@
           if (labels.length) {
             mk.bindTooltip(labels.join(""), { permanent: true, direction: "right", offset: [12, 0], className: "cm-mark-label" });
           }
-          mk.on("click", function (e) { L.DomEvent.stopPropagation(e); openDetailPanel(row, ms); });
+          (function (mkc, rowc, msc) {
+            mkc.on("click", function (e) {
+              L.DomEvent.stopPropagation(e);
+              handleMarkerClick({ marker: mkc, row: rowc, mgrs: msc, typeId: rowc.type_id, freq: rowc.frequency || "" });
+            });
+          })(mk, row, ms);
           mk.addTo(_layer);
           S.markers.push({ marker: mk, typeId: row.type_id, freq: row.frequency || "", row: row, mgrs: ms });
         });
@@ -191,6 +196,112 @@
       }
     });
   }
+
+  // ── Кластер-пікер: коли під кліком кілька об'єктів (overlap) ──
+  // Leaflet на клік піднімає лише верхній маркер. Якщо в радіусі
+  // CLUSTER_RADIUS_PX є ще маркери — показуємо список «Оберіть об'єкт»,
+  // щоб оператор міг відкрити будь-який із них, а не лише верхній.
+  var CLUSTER_RADIUS_PX = 16;
+
+  function findNearbyMarkers(target) {
+    if (!_map || !S.markers.length) return [target];
+    var tp = _map.latLngToContainerPoint(target.marker.getLatLng());
+    var out = [];
+    S.markers.forEach(function (m) {
+      if (_layer && !_layer.hasLayer(m.marker)) return;   // лише видимі (з урахуванням фільтрів)
+      var p = _map.latLngToContainerPoint(m.marker.getLatLng());
+      var dx = p.x - tp.x, dy = p.y - tp.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= CLUSTER_RADIUS_PX) out.push(m);
+    });
+    return out.length ? out : [target];
+  }
+
+  function handleMarkerClick(entry) {
+    var nearby = findNearbyMarkers(entry);
+    if (nearby.length <= 1) { closeClusterPicker(); openDetailPanel(entry.row, entry.mgrs); return; }
+    openClusterPicker(nearby);
+  }
+
+  function ensureClusterPickerDom() {
+    var root = $("crlClusterPicker");
+    if (root) return root;
+    root = document.createElement("div");
+    root.id = "crlClusterPicker";
+    root.className = "cm-cluster-picker hidden";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.innerHTML =
+      '<div class="cm-cluster-picker__backdrop" data-crl-cluster-close="1"></div>' +
+      '<div class="cm-cluster-picker__card">' +
+        '<div class="cm-cluster-picker__head">' +
+          '<div>' +
+            '<div class="cm-cluster-picker__title">Оберіть необхідний об\'єкт</div>' +
+            '<div class="cm-cluster-picker__sub">Кількість <span id="crlClusterCount">0</span></div>' +
+          '</div>' +
+          '<button class="cm-cluster-picker__close" data-crl-cluster-close="1" title="Закрити" aria-label="Закрити">✕</button>' +
+        '</div>' +
+        '<div class="cm-cluster-picker__list" id="crlClusterList"></div>' +
+      '</div>';
+    document.body.appendChild(root);
+    root.addEventListener("click", function (e) {
+      if (e.target.closest && e.target.closest("[data-crl-cluster-close]")) closeClusterPicker();
+    });
+    return root;
+  }
+
+  function openClusterPicker(items) {
+    var root = ensureClusterPickerDom();
+    var list = $("crlClusterList"), count = $("crlClusterCount");
+    if (count) count.textContent = String(items.length);
+    var typeMap = {}; S.types.forEach(function (t) { typeMap[t.id] = t; });
+    list.innerHTML = "";
+    items.forEach(function (it) {
+      var r = it.row;
+      var type = typeMap[r.type_id] || { type: "невідомо", color: "#6b7280", icon_filename: "", icon_sidc: "" };
+      var created = String(r.created_at || "").replace("T", " ").slice(0, 16);
+      var freq = [r.frequency, r.mask].filter(Boolean).join(" / ");
+      var unit = r.unit || "";
+
+      var item = document.createElement("div");
+      item.className = "cm-cluster-item";
+
+      var iconWrap = document.createElement("div");
+      iconWrap.className = "cm-cluster-item__icon";
+      var img = document.createElement("img");
+      if (type.icon_sidc) { var i = getSidcIcon(type.icon_sidc); img.src = i ? i.url : iconUrlPlain(type.icon_filename); }
+      else img.src = iconUrlPlain(type.icon_filename);
+      iconWrap.appendChild(img);
+
+      var body = document.createElement("div");
+      body.className = "cm-cluster-item__body";
+      var title = document.createElement("div");
+      title.className = "cm-cluster-item__title";
+      title.textContent = [freq, type.type].filter(Boolean).join(" / ") || "—";
+      var sub = document.createElement("div");
+      sub.className = "cm-cluster-item__sub";
+      sub.textContent = unit || "—";
+      var meta = document.createElement("div");
+      meta.className = "cm-cluster-item__meta";
+      meta.innerHTML = '<div><span class="cm-cluster-item__meta-label">Створення</span>' + esc(created || "—") + "</div>";
+      body.appendChild(title); body.appendChild(sub); body.appendChild(meta);
+
+      item.appendChild(iconWrap); item.appendChild(body);
+      item.addEventListener("click", function () { closeClusterPicker(); openDetailPanel(it.row, it.mgrs); });
+      list.appendChild(item);
+    });
+    root.classList.remove("hidden");
+  }
+
+  function closeClusterPicker() {
+    var r = $("crlClusterPicker"); if (r) r.classList.add("hidden");
+  }
+
+  // Escape закриває пікер (у capture-фазі — раніше за обробник модалки).
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    var r = $("crlClusterPicker");
+    if (r && !r.classList.contains("hidden")) { e.stopPropagation(); closeClusterPicker(); }
+  }, true);
 
   // ── Бічна панель деталей (порт із /conclusions/map) ──
   var _panelRow = null;
