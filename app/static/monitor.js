@@ -687,9 +687,13 @@
   }
 
   /* Очистити всі об'єкти карти + поле координат */
-  function _clearMapObjects() {
+  // includeDrawn=false → чистимо ЛИШЕ об'єкти, за які відповідає інпут координат
+  // (координати/квадрати/орієнтири/палітрові точки + маркер кліку), не чіпаючи
+  // намальованих елементів (стрілки/зони/шляхи/написи). Використовується
+  // хрестиком «×» біля інпута. За замовчуванням (true) — повне очищення.
+  function _clearMapObjects(includeDrawn = true) {
     // Скасувати незавершене малювання шляху (інакше застряг би на карті).
-    if (_pathDrawState && _pathDrawState.cancel) _pathDrawState.cancel();
+    if (includeDrawn && _pathDrawState && _pathDrawState.cancel) _pathDrawState.cancel();
     _conclFixedMarkers.forEach(e => {
       if (e.marker)    e.marker.remove();
       if (e.layer)     e.layer.remove();
@@ -697,14 +701,16 @@
       if (e.chipEl)    e.chipEl.remove();
     });
     _conclFixedMarkers = [];
-    // Намальовані елементи (стрілки/зони/орієнтири)
-    _conclDrawn.forEach(d => {
-      if (d._onZoom && _conclMap) _conclMap.off("zoomend", d._onZoom);
-      (d.layers || []).forEach(l => l.remove && l.remove());
-      (d.vMarkers || []).forEach(l => l.remove && l.remove());
-      (d.mMarkers || []).forEach(l => l.remove && l.remove());
-    });
-    _conclDrawn = [];
+    // Намальовані елементи (стрілки/зони/шляхи/написи) — лише при повному очищенні.
+    if (includeDrawn) {
+      _conclDrawn.forEach(d => {
+        if (d._onZoom && _conclMap) _conclMap.off("zoomend", d._onZoom);
+        (d.layers || []).forEach(l => l.remove && l.remove());
+        (d.vMarkers || []).forEach(l => l.remove && l.remove());
+        (d.mMarkers || []).forEach(l => l.remove && l.remove());
+      });
+      _conclDrawn = [];
+    }
     if (_conclClickMarker) {
       _conclClickMarker._converted = true;
       _conclClickMarker.remove();
@@ -1883,9 +1889,11 @@
 
     // Coordinate input
     const coordIn = document.getElementById("conclCoordInput");
-    // × — очистити всі введені дані (поле + об'єкти карти)
+    // × — очистити лише об'єкти, за показ яких відповідає цей інпут (координати/
+    // квадрати/орієнтири/палітрові точки), не чіпаючи намальованих стрілок/
+    // зон/шляхів/написів.
     document.getElementById("conclCoordClearBtn")?.addEventListener("click", () => {
-      _clearMapObjects();
+      _clearMapObjects(false);
     });
     if (coordIn) {
       // Enter → квадрат / квадрат+равлик / фіксована точка (MGRS)

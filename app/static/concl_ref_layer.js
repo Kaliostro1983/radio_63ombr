@@ -446,9 +446,17 @@
       .then(function (res) {
         if (!res.ok || (res.d && res.d.ok === false)) { toast((res.d && res.d.error) || "Помилка видалення"); return; }
         for (var i = S.markers.length - 1; i >= 0; i--) {
-          if (S.markers[i].row.id === acId) { try { S.markers[i].marker.remove(); } catch (_) {} S.markers.splice(i, 1); }
+          if (S.markers[i].row.id === acId) {
+            var mk = S.markers[i].marker;
+            // Маркери додаються в LayerGroup `_layer`, тож коректне видалення —
+            // саме через _layer.removeLayer (marker.remove() лишає його в групі,
+            // і він може повернутись на перемалюванні). Обидва — про всяк випадок.
+            try { if (_layer) _layer.removeLayer(mk); } catch (_) {}
+            try { mk.remove(); } catch (_) {}
+            S.markers.splice(i, 1);
+          }
         }
-        closeRightPanel(); renderChips();
+        closeClusterPicker(); closeRightPanel(); renderChips();
         toast("Висновок видалено");
       }).catch(function (e) { toast("Помилка: " + (e && e.message || e)); });
   }
