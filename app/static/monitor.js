@@ -1033,6 +1033,7 @@
      видимий прямокутник карти. При повторному відкритті модалки —
      сховані (скидається через _resetLmView зі спостерігача видимості). */
   let _lmViewLayer = null;
+  let _lmViewRenderer = null;   // власний SVG-рендерер шару (щоб повністю прибирати)
   let _lmViewOn = false;
   let _lmAllPoints = null;   // кеш усіх орієнтирів {id,name,lat,lon}
 
@@ -1048,6 +1049,12 @@
   function _lmViewClearLayer() {
     if (_lmViewLayer && _conclMap) { try { _conclMap.removeLayer(_lmViewLayer); } catch (_) {} }
     _lmViewLayer = null;
+    // ВАЖЛИВО: прибрати й сам SVG-рендерер. Інакше в панелі conclAnchors
+    // (z-index 650, над іконками) лишається порожній <svg>, який перехоплює
+    // кліки — і іконки-висновки під ним стають неклікабельними після
+    // приховання орієнтирів.
+    if (_lmViewRenderer && _conclMap) { try { _conclMap.removeLayer(_lmViewRenderer); } catch (_) {} }
+    _lmViewRenderer = null;
   }
   function _lmViewRender() {
     if (!_conclMap || !_lmViewOn || !_lmAllPoints) return;
@@ -1055,11 +1062,14 @@
     const b = _conclMap.getBounds();
     const inView = _lmAllPoints.filter(p => b.contains([p.lat, p.lon]));
     const permanent = inView.length <= 50;   // багато точок → підписи лише на наведення
+    // Власний рендерер у панелі conclAnchors — щоб _lmViewClearLayer міг
+    // ПОВНІСТЮ прибрати <svg> (а не лишати порожній контейнер).
+    _lmViewRenderer = L.svg({ pane: "conclAnchors" });
     const layers = [];
     inView.slice(0, 400).forEach(p => {
       const cm = L.circleMarker([p.lat, p.lon], {
         radius: 4, color: "#f59e0b", weight: 2, fillColor: "#fff7ed", fillOpacity: 1,
-        pane: "conclAnchors",
+        pane: "conclAnchors", renderer: _lmViewRenderer,
       });
       cm.bindTooltip(p.name || "", { permanent, direction: "right", className: "lm-view-label", offset: [6, 0] });
       layers.push(cm);
