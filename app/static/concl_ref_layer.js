@@ -349,10 +349,8 @@
       { type: "невідомо", color: "#6b7280", icon_filename: "", icon_sidc: "" };
     setBadge(ti);
 
-    var dt = String(row.created_at || "").replace("T", " ").slice(0, 16);
-    var net = [row.frequency, row.mask, row.unit].filter(Boolean).join(" / ");
-    if ($("rpMetaDate")) $("rpMetaDate").textContent = dt;
-    if ($("rpMetaNet")) $("rpMetaNet").textContent = net || "—";
+    // Рядок з датою/частотою/р/м прибрано — ці дані вже є у стандартному
+    // форматі перехоплення нижче (блок «Перехоплення»).
     if ($("rpConclusionText")) $("rpConclusionText").textContent = String(row.conclusion_text || "").trim();
 
     // Координати — нумеровані чіпи, один чіп на рядок.
