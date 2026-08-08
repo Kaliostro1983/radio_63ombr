@@ -703,6 +703,10 @@
   color: #fff;
 }
 .pel-author-menu.hidden { display: none; }
+/* Фільтр за частотами — лівіше за «Автори» (переоприділяє лише позицію,
+   решта стилів — спільні з .pel-author-*). */
+#pelFreqBtn  { right: 190px; }
+#pelFreqMenu { right: 190px; }
 .pel-author-opt {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; border-radius: 7px;

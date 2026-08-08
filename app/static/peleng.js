@@ -838,6 +838,7 @@
   let _pelShowUnit = false;     // стан чекбоксу «Підрозділ» (кола з номером)
   let _pelShowImported = true;  // чекбокс «Імпортовані» — показувати пеленги з CSV
   let _pelHiddenAuthors = new Set();  // автори, знятні чекбоксами (сховані з карти)
+  let _pelHiddenFreqs = new Set();    // частоти, зняті чекбоксами (сховані з карти)
   let _pelSending  = false;     // in-flight flag — захист від подвійного fetch
 
   /** Витягнути НОМЕР бригади/полка з опису р/м.
@@ -1404,11 +1405,66 @@
     _pelUpdateAuthorUI();
   }
 
+  // ── Фільтр за частотами: список чекбоксів (мультивибір) з к-стю пеленгів ──────
+  function _pelUpdateFreqUI() {
+    const btn = document.getElementById("pelFreqBtn");
+    if (btn) btn.classList.toggle("is-on", _pelHiddenFreqs.size > 0);
+  }
+  function _pelRebuildFreqMenu() {
+    const menu = document.getElementById("pelFreqMenu");
+    if (!menu) return;
+    const counts = new Map();
+    for (const r of (_pelLastRows || [])) {
+      const f = String(r.frequency || "").trim();
+      if (!f) continue;                       // порожня частота — завжди видима
+      counts.set(f, (counts.get(f) || 0) + 1);
+    }
+    // Сортуємо частоти за числовим значенням (163.325 < 165.425 …), інакше — за рядком.
+    const freqs = Array.from(counts.keys()).sort((a, b) => {
+      const na = parseFloat(a), nb = parseFloat(b);
+      if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
+      return a.localeCompare(b, "uk");
+    });
+    const total = (_pelLastRows || []).length;
+    const rowHtml = (isAll, val, label, cnt, checked) =>
+      `<label class="pel-author-opt${isAll ? " pel-author-all" : ""}">`
+      + `<input type="checkbox" ${isAll ? 'data-all="1"' : `data-freq="${escapeHtml(val)}"`} ${checked ? "checked" : ""}>`
+      + `<span class="pel-author-nm">${escapeHtml(label)}</span>`
+      + `<span class="pel-author-cnt">${cnt}</span></label>`;
+    const allChecked = freqs.length > 0 && freqs.every((f) => !_pelHiddenFreqs.has(f));
+    const html = [rowHtml(true, "", "Усі частоти", total, allChecked)];
+    for (const f of freqs) html.push(rowHtml(false, f, f, counts.get(f), !_pelHiddenFreqs.has(f)));
+    menu.innerHTML = html.join("");
+
+    const rerender = () => { if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true }); };
+
+    const master = menu.querySelector('input[data-all]');
+    if (master) {
+      const anyHidden = freqs.some((f) => _pelHiddenFreqs.has(f));
+      master.indeterminate = anyHidden && !allChecked;
+      master.addEventListener("change", () => {
+        if (master.checked) freqs.forEach((f) => _pelHiddenFreqs.delete(f));
+        else freqs.forEach((f) => _pelHiddenFreqs.add(f));
+        _pelRebuildFreqMenu();
+        rerender();
+      });
+    }
+    menu.querySelectorAll("input[data-freq]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const f = cb.dataset.freq;
+        if (cb.checked) _pelHiddenFreqs.delete(f); else _pelHiddenFreqs.add(f);
+        _pelRebuildFreqMenu();
+        rerender();
+      });
+    });
+    _pelUpdateFreqUI();
+  }
+
   function _pelRenderPoints(rows, opts) {
     const skipFit = opts && opts.skipFit;
     _pelLastRows = rows;
-    // Меню авторів оновлюємо при свіжому завантаженні (не на кожному перерендері).
-    if (!skipFit) _pelRebuildAuthorMenu();
+    // Меню авторів/частот оновлюємо при свіжому завантаженні (не на кожному перерендері).
+    if (!skipFit) { _pelRebuildAuthorMenu(); _pelRebuildFreqMenu(); }
     const map = _pelEnsureMap();
     if (!map) return;
     if (!_pelMarkerLayer) _pelMarkerLayer = L.layerGroup().addTo(map);
@@ -1428,6 +1484,8 @@
       if (!_pelShowImported && r.is_imported) continue;
       // Фільтр за авторством батчу (чекбокси — сховані автори).
       if (_pelHiddenAuthors.has(String(r.author || "").trim())) continue;
+      // Фільтр за частотою (чекбокси — сховані частоти).
+      if (_pelHiddenFreqs.has(String(r.frequency || "").trim())) continue;
       try {
         const pt  = window.mgrs.toPoint(raw);
         const lat = Number(pt[1]), lon = Number(pt[0]);
@@ -1737,6 +1795,24 @@
         const menu = document.getElementById("pelAuthorMenu");
         if (!menu || menu.classList.contains("hidden")) return;
         if (menu.contains(e.target) || authorBtn.contains(e.target)) return;
+        menu.classList.add("hidden");
+      });
+    }
+
+    // Кнопка фільтра за частотами — відкриває/ховає меню з реальних частот.
+    const freqBtn = document.getElementById("pelFreqBtn");
+    if (freqBtn) {
+      freqBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const menu = document.getElementById("pelFreqMenu");
+        if (!menu) return;
+        if (menu.classList.contains("hidden")) { _pelRebuildFreqMenu(); menu.classList.remove("hidden"); }
+        else menu.classList.add("hidden");
+      });
+      document.addEventListener("click", (e) => {
+        const menu = document.getElementById("pelFreqMenu");
+        if (!menu || menu.classList.contains("hidden")) return;
+        if (menu.contains(e.target) || freqBtn.contains(e.target)) return;
         menu.classList.add("hidden");
       });
     }
