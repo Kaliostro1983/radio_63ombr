@@ -224,7 +224,14 @@ def api_conclusions_list(
                      AND ad.sended = 1) AS twin_sended,
                 (SELECT GROUP_CONCAT(c.name, ', ')
                    FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id
-                  WHERE mc.message_id = ac.message_id) AS callsigns
+                  WHERE mc.message_id = ac.message_id) AS callsigns,
+                -- Позивні за ролями — для стандартного формату перехоплення в панелі.
+                (SELECT GROUP_CONCAT(c.name, ', ')
+                   FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id
+                  WHERE mc.message_id = ac.message_id AND mc.role = 'caller') AS caller_callsigns,
+                (SELECT GROUP_CONCAT(c.name, ', ')
+                   FROM message_callsigns mc JOIN callsigns c ON c.id = mc.callsign_id
+                  WHERE mc.message_id = ac.message_id AND mc.role IN ('callee','mentioned')) AS callee_callsigns
             FROM analytical_conclusions ac
             LEFT JOIN conclusion_types ct  ON ct.id  = ac.type_id
             LEFT JOIN networks n           ON n.id   = ac.network_id
@@ -250,6 +257,8 @@ def api_conclusions_list(
             "conclusion_text": r["conclusion_text"] or "",
             "body_text":       r["body_text"] or "",
             "callsigns":       r["callsigns"] or "",
+            "caller_callsigns": r["caller_callsigns"] or "",
+            "callee_callsigns": r["callee_callsigns"] or "",
             "net_description": r["net_description"] or "",
             "mgrs":            mgrs,
             "type_id":         int(r["type_id"]) if r["type_id"] is not None else 0,

@@ -36,6 +36,28 @@
     return m ? (m[3] + "." + m[2] + "." + m[1] + " " + m[4] + ":" + m[5]) : "";
   }
 
+  /** Дата/час у стандартному форматі перехоплення: "08.08.2026, 09:18:07". */
+  function _rpStdDt(s) {
+    var v = String(s == null ? "" : s).replace("T", " ").trim();
+    var m = v.match(/^(\d{4})-(\d{2})-(\d{2})[ ](\d{2}:\d{2}(?::\d{2})?)/);
+    return m ? (m[3] + "." + m[2] + "." + m[1] + ", " + m[4]) : v;
+  }
+
+  /** Стандартний формат перехоплення (як у контейнері перехоплення):
+   *  дата/час · маска-або-частота · опис р/м · «хто викликає» · «кого» ·
+   *  порожній рядок · тіло діалогу. Порожні рядки заголовка пропускаємо. */
+  function _rpStandardText(row) {
+    var dt = _rpStdDt(row.created_at);
+    var secondLine = String(row.mask || "").trim() || String(row.frequency || "").trim();
+    var netLine = String(row.net_description || "").trim();
+    var caller = String(row.caller_callsigns || "").trim();
+    var callee = String(row.callee_callsigns || "").trim();
+    var head = [dt, secondLine, netLine, caller, callee]
+      .filter(function (x) { return x; }).join("\n");
+    var body = String(row.body_text || "").trim();
+    return body ? (head + "\n\n" + body) : head;
+  }
+
   function mgrsToLatLng(m) {
     try {
       if (window.mgrs && window.mgrs.toPoint) {
@@ -333,13 +355,16 @@
     if ($("rpMetaNet")) $("rpMetaNet").textContent = net || "—";
     if ($("rpConclusionText")) $("rpConclusionText").textContent = String(row.conclusion_text || "").trim();
 
-    var bodySec = $("rpBodySection"), body = String(row.body_text || "").trim();
-    if (bodySec) { bodySec.style.display = body ? "" : "none"; if (body && $("rpBodyText")) $("rpBodyText").textContent = body; }
-
+    // Координати — нумеровані чіпи, один чіп на рядок.
     var cd = $("rpCoords");
     if (cd) {
       cd.innerHTML = "";
-      (row.mgrs || []).forEach(function (m) {
+      (row.mgrs || []).forEach(function (m, i) {
+        var line = document.createElement("div");
+        line.className = "rp-coord-line";
+        var num = document.createElement("span");
+        num.className = "rp-coord-num";
+        num.textContent = (i + 1) + ".";
         var tag = document.createElement("span");
         tag.className = "rp-coord-tag" + (m === clickedMgrs ? " active" : "");
         tag.textContent = m; tag.title = "Натисніть, щоб скопіювати";
@@ -347,8 +372,18 @@
           try { navigator.clipboard.writeText(m); } catch (_) {}
           toast("✓ Скопійовано: " + m);
         });
-        cd.appendChild(tag);
+        line.appendChild(num); line.appendChild(tag);
+        cd.appendChild(line);
       });
+    }
+
+    // Перехоплення — у стандартному форматі (як у контейнері перехоплення):
+    // дата/час · маска-або-частота · опис р/м · позивні (хто→кого) · тіло.
+    var std = _rpStandardText(row);
+    var bodySec = $("rpBodySection");
+    if (bodySec) {
+      bodySec.style.display = std ? "" : "none";
+      if (std && $("rpBodyText")) $("rpBodyText").textContent = std;
     }
 
     _panelRow = row;
