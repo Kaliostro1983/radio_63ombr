@@ -1871,6 +1871,15 @@
         return;
       }
 
+      // «✍» — створити аналітичний висновок для цього перехоплення (monitor.js).
+      const conclBtn = event.target.closest("[data-concl-open]");
+      if (conclBtn) {
+        event.stopPropagation();
+        const cmid = Number(conclBtn.dataset.messageId || 0);
+        if (cmid && window.monOpenConclusionFor) window.monOpenConclusionFor(cmid);
+        return;
+      }
+
       // «☠» — оформлення втрат (200/300). Логіка у casualties_modal.js.
       const casBtn = event.target.closest("[data-cas-open]");
       if (casBtn) {
