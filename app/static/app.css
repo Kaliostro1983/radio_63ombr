@@ -6777,6 +6777,10 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .intercept-card .intercept-card__share-btn:nth-of-type(2){ right:78px; }
 .intercept-card .intercept-card__share-btn:nth-of-type(3){ right:116px; }
 .intercept-card .intercept-card__share-btn:nth-of-type(4){ right:154px; }
+.intercept-card .intercept-card__share-btn:nth-of-type(5){ right:192px; }
+/* «✍» — створити аналітичний висновок */
+.intercept-card__concl-btn{ color:#8ab4ff; }
+.intercept-card__concl-btn:hover{ color:#c7dbff; }
 
 /* Фільтр «Лише помаранчеві» у формі «Перегляд» */
 .field--orange{ display:flex; flex-direction:column; }

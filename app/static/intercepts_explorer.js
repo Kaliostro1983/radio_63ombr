@@ -520,6 +520,14 @@
                   title="Втрати (200/300) — оформити"
                   aria-label="Втрати"
                 >☠</button>
+                <button
+                  type="button"
+                  class="intercepts-copy-icon-btn intercept-card__share-btn intercept-card__concl-btn"
+                  data-concl-open="1"
+                  data-message-id="${item.id}"
+                  title="Створити аналітичний висновок"
+                  aria-label="Аналітичний висновок"
+                >✍</button>
                 <div class="intercept-card__line intercept-card__line--dt">
                   ${escapeHtml(header.dt)}
                 </div>
@@ -1309,6 +1317,15 @@
       const act = shareBtn.getAttribute("data-share-action");
       if (act === "interest" && window.monInterestAction) window.monInterestAction(event);
       else if (act === "share" && window.monShareAction) window.monShareAction(shareBtn);
+      return;
+    }
+
+    // «✍» — створити аналітичний висновок для цього перехоплення (monitor.js).
+    const conclBtn = event.target.closest("[data-concl-open]");
+    if (conclBtn) {
+      event.stopPropagation();
+      const mid = Number(conclBtn.dataset.messageId || 0);
+      if (mid && window.monOpenConclusionFor) window.monOpenConclusionFor(mid);
       return;
     }
 

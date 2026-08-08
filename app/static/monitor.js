@@ -3322,10 +3322,10 @@
     });
 
     // Open Висновок tab with current intercept pre-filled
-    document.getElementById("monOpenConclusion")?.addEventListener("click", () => {
-      // Дозволяємо відкривати Висновок навіть БЕЗ обраного перехоплення —
-      // тоді модалка відкривається з порожніми полями (форма для ручного
-      // введення/вставки). Якщо є _currentItem — заповнюємо як раніше.
+    // Дозволяємо відкривати Висновок навіть БЕЗ обраного перехоплення — тоді
+    // модалка відкривається з порожніми полями (форма для ручного введення/
+    // вставки). Якщо є _currentItem — заповнюємо як раніше.
+    function _openConclusionForCurrent() {
       if (window.itSetTab) window.itSetTab("conclusion");
       setTimeout(() => {
         if (typeof window.clearConclWorkspace === "function") window.clearConclWorkspace();
@@ -3344,7 +3344,24 @@
           conclTa.value = text;
         }
       }, 100);
-    });
+    }
+    document.getElementById("monOpenConclusion")?.addEventListener("click", _openConclusionForCurrent);
+
+    // Відкрити «Аналітичний висновок» для КОНКРЕТНОГО перехоплення (кнопка ✍ у
+    // контейнері картки). Якщо це не активне перехоплення — підвантажуємо його
+    // як активне, потім відкриваємо модалку з підстановкою.
+    window.monOpenConclusionFor = async function (mid) {
+      mid = Number(mid) || 0;
+      if (!mid) { _openConclusionForCurrent(); return; }
+      if (!_currentItem || Number(_currentItem.id) !== mid) {
+        try {
+          const r = await fetch(`/api/intercepts-explorer/${mid}`);
+          const d = await r.json();
+          if (d && d.item) _currentItem = d.item;
+        } catch (_) {}
+      }
+      _openConclusionForCurrent();
+    };
   }
 
   function _syncToolbarPos() { /* counter removed */ }
