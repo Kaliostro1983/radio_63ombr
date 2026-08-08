@@ -863,6 +863,10 @@
   /* Приховані підрозділи («око» в панелі). Лише в пам'яті — це фільтр
      перегляду, а не налаштування: після перезавантаження видно все. */
   let _pelHiddenUnits = new Set();
+  /* Спец-ключ прив'язки для НВ (неідентифікованих) підрозділів — пеленги, у
+     яких номер підрозділу не розпізнано. Дозволяє задати їм колір і ховати
+     через ту саму панель «Прив'язки». */
+  const PEL_NV_KEY = "__nv__";
 
   /** HSL → #rrggbb. Потрібно, бо <input type="color"> приймає ЛИШЕ hex:
    *  зі значенням "hsl(…)" він мовчки показує чорний/сірий, і в панелі
@@ -885,7 +889,11 @@
     const saved = _pelUnitColors.get(key);
     if (saved && saved.color) return saved.color;
     const n = Number(num);
-    if (!isFinite(n) || n <= 0) return "#6b7280";
+    if (!isFinite(n) || n <= 0) {
+      // Неідентифікований підрозділ: збережений колір НВ або дефолтний сірий.
+      const nv = _pelUnitColors.get(PEL_NV_KEY);
+      return (nv && nv.color) ? nv.color : "#6b7280";
+    }
     const hue = (n * 137.508) % 360;
     return _pelHslToHex(hue, 70, 45);
   }
@@ -961,46 +969,59 @@
     return [...set].sort((a, b) => Number(a) - Number(b));
   }
 
+  /** Один рядок панелі прив'язок. k — ключ (номер або PEL_NV_KEY); unitLabel —
+      текст у колонці підрозділу; isOnMap — чи є такі позначки на карті. */
+  function _pelBindRow(k, unitLabel, isOnMap) {
+    const nv = (k === PEL_NV_KEY);
+    const saved = _pelUnitColors.get(k);
+    const color = saved ? saved.color : _pelColorForUnit(nv ? null : k);
+    const hidden = _pelHiddenUnits.has(k);
+    const row = document.createElement("div");
+    row.className = "pel-bind-row" + (nv ? " pel-bind-row--nv" : "") + (hidden ? " is-hidden" : "");
+    row.innerHTML =
+      `<input type="color" class="pel-bind-color" value="${color}" title="Колір">` +
+      `<span class="pel-bind-unit${nv ? " pel-bind-unit--nv" : ""}"` +
+        `${nv ? ' title="НВ підрозділу — радіомережа/підрозділ не ідентифіковано"' : ""}>${escapeHtml(unitLabel)}</span>` +
+      `<input type="text" class="pel-bind-label" placeholder="підпис (необов'язково)" value="${escapeHtml((saved && saved.label) || "")}">` +
+      (isOnMap ? `<span class="pel-bind-onmap" title="Є на карті">●</span>` : `<span class="pel-bind-onmap is-off"></span>`) +
+      `<button type="button" class="pel-bind-eye${hidden ? "" : " is-on"}" ` +
+        `title="${hidden ? "Показати позначки" : "Сховати позначки"}">` +
+        `<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5">` +
+          `<path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z"/>` +
+          `<circle cx="10" cy="10" r="2.6"/>` +
+          (hidden ? `<line x1="3.5" y1="16.5" x2="16.5" y2="3.5"/>` : ``) +
+        `</svg>` +
+      `</button>` +
+      `<button type="button" class="pel-bind-del" title="Скинути до авто-кольору">✕</button>`;
+    const colorIn = row.querySelector(".pel-bind-color");
+    const labelIn = row.querySelector(".pel-bind-label");
+    const save = () => _pelSaveBinding(k, colorIn.value, labelIn.value);
+    colorIn.addEventListener("change", save);
+    labelIn.addEventListener("change", save);
+    row.querySelector(".pel-bind-eye").addEventListener("click", () => _pelToggleUnitVisible(k));
+    row.querySelector(".pel-bind-del").addEventListener("click", () => _pelDeleteBinding(k));
+    return row;
+  }
+
   function _pelRenderBindings() {
     const host = document.getElementById("pelBindList");
     if (!host) return;
     const onMap = _pelUnitsOnMap();
     const keys = [...new Set([..._pelUnitColors.keys(), ...onMap])]
+      .filter(k => k !== PEL_NV_KEY)
       .sort((a, b) => (Number(a) || 0) - (Number(b) || 0));
-    if (!keys.length) {
-      host.innerHTML = '<div class="pal-empty">Підрозділів ще немає — покажіть пеленги на карті.</div>';
-      return;
-    }
     host.innerHTML = "";
-    keys.forEach(k => {
-      const saved = _pelUnitColors.get(k);
-      const color = saved ? saved.color : _pelColorForUnit(k);
-      const hidden = _pelHiddenUnits.has(k);
-      const row = document.createElement("div");
-      row.className = "pel-bind-row" + (hidden ? " is-hidden" : "");
-      row.innerHTML =
-        `<input type="color" class="pel-bind-color" value="${color}" title="Колір">` +
-        `<span class="pel-bind-unit">${k}</span>` +
-        `<input type="text" class="pel-bind-label" placeholder="підпис (необов'язково)" value="${(saved && saved.label) || ""}">` +
-        (onMap.includes(k) ? `<span class="pel-bind-onmap" title="Є на карті">●</span>` : `<span class="pel-bind-onmap is-off"></span>`) +
-        `<button type="button" class="pel-bind-eye${hidden ? "" : " is-on"}" ` +
-          `title="${hidden ? "Показати позначки підрозділу" : "Сховати позначки підрозділу"}">` +
-          `<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5">` +
-            `<path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z"/>` +
-            `<circle cx="10" cy="10" r="2.6"/>` +
-            (hidden ? `<line x1="3.5" y1="16.5" x2="16.5" y2="3.5"/>` : ``) +
-          `</svg>` +
-        `</button>` +
-        `<button type="button" class="pel-bind-del" title="Скинути до авто-кольору">✕</button>`;
-      const colorIn = row.querySelector(".pel-bind-color");
-      const labelIn = row.querySelector(".pel-bind-label");
-      const save = () => _pelSaveBinding(k, colorIn.value, labelIn.value);
-      colorIn.addEventListener("change", save);
-      labelIn.addEventListener("change", save);
-      row.querySelector(".pel-bind-eye").addEventListener("click", () => _pelToggleUnitVisible(k));
-      row.querySelector(".pel-bind-del").addEventListener("click", () => _pelDeleteBinding(k));
-      host.appendChild(row);
-    });
+    // Пінований рядок «НВ підрозділу» — завжди присутній (неідентифіковані пеленги).
+    const nvOnMap = (_pelLastRows || []).some(
+      r => r && String(r.mgrs || "").trim() && !_pelExtractUnitNumber(r.unit));
+    host.appendChild(_pelBindRow(PEL_NV_KEY, "НВ", nvOnMap));
+    if (!keys.length) {
+      const hint = document.createElement("div");
+      hint.className = "pal-empty";
+      hint.textContent = "Ідентифікованих підрозділів ще немає.";
+      host.appendChild(hint);
+    }
+    keys.forEach(k => host.appendChild(_pelBindRow(k, k, onMap.includes(k))));
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -1480,6 +1501,9 @@
       // Діє незалежно від режиму «Підрозділ», бо це фільтр по суті даних.
       const _uk = _pelExtractUnitNumber(r.unit);
       if (_uk && _pelHiddenUnits.has(String(_uk))) continue;
+      // НВ підрозділу: пеленг без розпізнаного номера — ховається окремим
+      // перемикачем «НВ» у панелі прив'язок.
+      if (!_uk && _pelHiddenUnits.has(PEL_NV_KEY)) continue;
       // Чекбокс «Імпортовані» — сховати пеленги, завантажені з CSV.
       if (!_pelShowImported && r.is_imported) continue;
       // Фільтр за авторством батчу (чекбокси — сховані автори).

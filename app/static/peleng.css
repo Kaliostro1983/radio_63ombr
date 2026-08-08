@@ -747,6 +747,9 @@
   border: 1px solid rgba(255,255,255,.2); border-radius: 6px; background: transparent;
 }
 .pel-bind-unit { flex: 0 0 34px; font-weight: 700; font-size: 13px; }
+/* Рядок «НВ підрозділу» — пінований зверху, злегка відокремлений. */
+.pel-bind-row--nv { border-bottom: 1px solid rgba(255,255,255,.14); margin-bottom: 4px; padding-bottom: 6px; }
+.pel-bind-unit--nv { color: #cbd5e1; font-style: italic; cursor: help; }
 .pel-bind-label {
   /* удвічі коротше за попереднє (~117px → ~60px): для «мсп»/«омсбр» вистачає */
   flex: 1 1 auto; min-width: 0; max-width: 62px; padding: 4px 6px; font-size: 12px;
