@@ -91,7 +91,17 @@
     if (!mid) return;
     fetch("/api/intercepts-explorer/" + mid + "/value-flag", { method: "POST" })
       .then(function (r) { return r.json(); })
-      .then(function (d) { if (d && d.ok) { el.dataset.flag = d.value_flag ? "1" : "0"; apply(el); } })
+      .then(function (d) {
+        if (!d || !d.ok) return;
+        var vf = d.value_flag ? 1 : 0;
+        // Оновити ВСІ копії закладки цього перехоплення (список + змонтовані картки).
+        _updateByMid(mid, { flag: String(vf) });
+        // Повідомити рендерери, щоб оновили свій кеш (state.items) — інакше після
+        // перемальовування (напр. довантаження стрічки) закладка «відкотиться».
+        document.dispatchEvent(new CustomEvent("valueFlagChanged", {
+          detail: { message_id: Number(mid), value_flag: vf },
+        }));
+      })
       .catch(function () { if (window.appToast) window.appToast("Помилка зміни статусу", "error", 1800); });
   });
 })();

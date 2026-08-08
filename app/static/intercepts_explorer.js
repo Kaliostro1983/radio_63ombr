@@ -2093,5 +2093,25 @@
     }
   };
 
+  /* Синхронізація кешу state.items зі змінами статусу цінності/висновку —
+     інакше після перемальовування картки (довантаження стрічки, ре-рендер)
+     закладка бере застаріле значення з кешу й «відкочується». */
+  function _syncItemFlag(mid, changes) {
+    const id = Number(mid);
+    const it = (state.items || []).find((x) => Number(x.id) === id);
+    if (it) Object.assign(it, changes);
+    const d = state.detailById && state.detailById[id];
+    if (d) Object.assign(d, changes);
+  }
+  document.addEventListener("valueFlagChanged", (e) => {
+    _syncItemFlag(e.detail && e.detail.message_id, { value_flag: (e.detail && e.detail.value_flag) ? 1 : 0 });
+  });
+  document.addEventListener("conclusionSaved", (e) => {
+    _syncItemFlag(e.detail && e.detail.message_id, { has_conclusion: 1, value_flag: 1 });
+  });
+  document.addEventListener("conclusionDeleted", (e) => {
+    _syncItemFlag(e.detail && e.detail.message_id, { has_conclusion: 0 });
+  });
+
   loadIntercepts();
 })();
