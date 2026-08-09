@@ -701,16 +701,18 @@
       if (e.chipEl)    e.chipEl.remove();
     });
     _conclFixedMarkers = [];
-    // Намальовані елементи (стрілки/зони/шляхи/написи) — лише при повному очищенні.
-    if (includeDrawn) {
-      _conclDrawn.forEach(d => {
-        if (d._onZoom && _conclMap) _conclMap.off("zoomend", d._onZoom);
-        (d.layers || []).forEach(l => l.remove && l.remove());
-        (d.vMarkers || []).forEach(l => l.remove && l.remove());
-        (d.mMarkers || []).forEach(l => l.remove && l.remove());
-      });
-      _conclDrawn = [];
-    }
+    // Намальовані елементи. Орієнтири (type:"landmark") мають чіп у полі
+    // координат, тож їх теж прибирає хрестик «×». Стрілки/зони/шляхи/написи —
+    // лише при повному очищенні (includeDrawn=true).
+    _conclDrawn = _conclDrawn.filter(d => {
+      const inputRef = !!(d && (d.type === "landmark" || d.coordEntry));
+      if (!includeDrawn && !inputRef) return true;   // лишаємо намальоване
+      if (d._onZoom && _conclMap) _conclMap.off("zoomend", d._onZoom);
+      (d.layers || []).forEach(l => l.remove && l.remove());
+      (d.vMarkers || []).forEach(l => l.remove && l.remove());
+      (d.mMarkers || []).forEach(l => l.remove && l.remove());
+      return false;
+    });
     if (_conclClickMarker) {
       _conclClickMarker._converted = true;
       _conclClickMarker.remove();
