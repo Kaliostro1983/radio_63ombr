@@ -6728,10 +6728,14 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas2-acc{ font-size:11px; opacity:.6; }
 
 /* Звіт: таблиця ліворуч + діаграми праворуч */
-.cas2-report{ display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+.cas2-report{ display:flex; flex-direction:column; gap:14px; align-items:stretch; }
 .cas2-report.hidden{ display:none; }
+/* Заголовок «Втрати за період…» — на всю ширину, по центру, над рядком. */
+.cas2-report-head{ font-weight:700; font-size:14px; text-align:center; }
+.cas2-report-row{ display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
 .cas2-report-tablewrap{ flex:0 1 auto; min-width:0; }
-.cas2-charts{ flex:1 1 380px; min-width:340px; max-width:640px; border:1px solid rgba(127,127,127,.25); border-radius:12px; padding:10px 12px; background:rgba(127,127,127,.05); }
+/* Контейнер діаграм звужено на 20% (640→512, 380→304, 340→272). */
+.cas2-charts{ flex:1 1 304px; min-width:272px; max-width:512px; border:1px solid rgba(127,127,127,.25); border-radius:12px; padding:10px 12px; background:rgba(127,127,127,.05); }
 .cas2-charts-tabs{ display:flex; gap:6px; margin-bottom:10px; }
 .cas2-chart-tab{ flex:1 1 auto; padding:6px 10px; border-radius:8px; border:1px solid rgba(127,127,127,.35); background:transparent; color:var(--fg,#e2e8f0); cursor:pointer; font-size:13px; font-weight:600; }
 .cas2-chart-tab:hover{ background:rgba(127,127,127,.15); }

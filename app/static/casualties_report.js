@@ -184,16 +184,18 @@
     renderChart();
 
     if (!box) return;
-    if (!rows.length) { box.innerHTML = '<div class="cas2-empty">За цей період даних немає.</div>'; return; }
     var r = _range();
     var period = (fmtDt(r.from) || "") + " – " + (fmtDt(r.to) || "");
+    // Заголовок періоду — окремий блок на всю ширину (центрований, над рядком).
+    var head = $("cas2ReportHead");
+    if (head) head.textContent = "Втрати за період: " + period;
+    if (!rows.length) { box.innerHTML = '<div class="cas2-empty">За цей період даних немає.</div>'; return; }
     var body = rows.map(function (row) {
       return "<tr><td>" + esc(row.unit) + "</td>" +
         '<td class="cas2-num cas2-num--200">' + (row.killed || 0) + "</td>" +
         '<td class="cas2-num cas2-num--300">' + (row.wounded || 0) + "</td></tr>";
     }).join("");
     box.innerHTML =
-      '<div class="cas2-report-title">Втрати за період: ' + esc(period) + "</div>" +
       '<table class="cas2-report-table"><thead><tr>' +
         "<th>Підрозділ</th><th>200</th><th>300</th>" +
       "</tr></thead><tbody>" + body + "</tbody>" +
