@@ -1074,6 +1074,13 @@
         pane: "conclAnchors", renderer: _lmViewRenderer,
       });
       cm.bindTooltip(p.name || "", { permanent, direction: "right", className: "lm-view-label", offset: [6, 0] });
+      // Клік по орієнтиру (в режимі відображення) — відкрити модалку редагування.
+      cm.on("click", (e) => {
+        if (e && e.originalEvent) L.DomEvent.stop(e.originalEvent);
+        if (p.id && typeof window.openLandmarkEditModalById === "function") {
+          window.openLandmarkEditModalById(p.id);
+        }
+      });
       layers.push(cm);
     });
     _lmViewLayer = L.layerGroup(layers).addTo(_conclMap);
