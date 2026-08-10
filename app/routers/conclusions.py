@@ -944,6 +944,43 @@ async def api_conclusion_save(request: Request):
         existing = conn.execute(
             "SELECT id FROM analytical_conclusions WHERE message_id = ?", (message_id,)
         ).fetchone()
+
+        # Захист від дублів-подій: та сама подія (частота+час) часто прилітає
+        # кількома повідомленнями з РІЗНИМ текстом (сирий діалог / стандартний
+        # формат / позивні+координати), тож аналітики випадково оформлюють по
+        # висновку на кожне. Якщо це НОВИЙ висновок, а на цю подію
+        # (network_id, created_at) уже є висновок на ІНШОМУ повідомленні —
+        # не створюємо мовчки другий, а повертаємо 409, щоб клієнт запитав
+        # підтвердження (allow_duplicate=1 — якщо це справді різні події).
+        if not existing and not payload.get("allow_duplicate"):
+            dup = conn.execute(
+                "SELECT ac.id, ac.conclusion_text, ac.mgrs_json, ac.message_id, "
+                "  (SELECT GROUP_CONCAT(c.name, ', ') FROM message_callsigns mc "
+                "     JOIN callsigns c ON c.id = mc.callsign_id "
+                "    WHERE mc.message_id = ac.message_id) AS callsigns "
+                "FROM analytical_conclusions ac "
+                "WHERE ac.network_id = ? AND ac.created_at = ? AND ac.message_id <> ? "
+                "LIMIT 1",
+                (network_id, created_at, message_id),
+            ).fetchone()
+            if dup:
+                try:
+                    dmgrs = json.loads(dup["mgrs_json"] or "[]")
+                except Exception:
+                    dmgrs = []
+                return JSONResponse({
+                    "ok": False,
+                    "error_code": "duplicate_event",
+                    "error": "На цю подію (частота + час) уже є висновок.",
+                    "existing": {
+                        "id": int(dup["id"]),
+                        "message_id": int(dup["message_id"]),
+                        "conclusion_text": dup["conclusion_text"] or "",
+                        "mgrs": dmgrs,
+                        "callsigns": dup["callsigns"] or "",
+                    },
+                }, status_code=409)
+
         if existing:
             conn.execute(
                 "UPDATE analytical_conclusions "

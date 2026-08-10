@@ -931,13 +931,33 @@
       intercept_text:  interceptText,
       palette_points:  palettePoints,
     };
-    try {
+    const _postConcl = async (allowDup) => {
+      const payload = allowDup ? Object.assign({}, body, { allow_duplicate: true }) : body;
       const r = await fetch("/api/conclusions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
-      const d = await r.json();
+      return await r.json();
+    };
+    try {
+      let d = await _postConcl(false);
+      // Дубль-подія: на цю частоту+час уже є висновок (те саме перехоплення,
+      // форварднуте іншим текстом). Питаємо підтвердження, а не мовчки дублюємо.
+      if (d && d.error_code === "duplicate_event") {
+        const ex = d.existing || {};
+        const coords = (ex.mgrs || []).join(", ");
+        const ok = window.confirm(
+          "На цю подію (частота + час) уже є аналітичний висновок:\n\n" +
+          String(ex.conclusion_text || "").trim() +
+          (coords ? ("\nКоординати: " + coords) : "") +
+          (ex.callsigns ? ("\nПозивні: " + ex.callsigns) : "") +
+          "\n\nНайпевніше, це той самий випадок, форварднутий іншим текстом.\n" +
+          "Все одно створити ще один висновок?"
+        );
+        if (!ok) return false;
+        d = await _postConcl(true);
+      }
       if (!d || !d.ok) {
         if (window.appToast) window.appToast((d && (d.error || d.detail)) || "Помилка збереження", "error", 3400);
         return false;
