@@ -2404,6 +2404,34 @@
     } catch (e) { console.error("[monitor] pollNew", e); }
   }
 
+  /* Синхронізація «переглянуто» між робочими місцями. Статус is_read —
+     глобальний на сервері, але кожен клієнт рендерить чіпи лише раз. Тут, на
+     тому ж 10-с polling'у, питаємо сервер ЛИШЕ по НЕПЕРЕглянутих чіпах цього
+     клієнта — які з них уже прочитані (кимось іншим) — і знімаємо підсвітку.
+     Дешево: запит лише по непрочитаних id (їх мало), один SELECT по PK. */
+  async function _syncReadState() {
+    if (!_playlist) return;
+    const unread = _playlist.querySelectorAll(".mon-thumb--unread");
+    if (!unread.length) return;
+    const ids = [];
+    unread.forEach(el => { const id = Number(el.dataset.id || 0); if (id) ids.push(id); });
+    if (!ids.length) return;
+    try {
+      const res = await fetch("/api/monitor/read-status", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: ids.slice(0, 1000) }),
+      });
+      const data = await res.json();
+      if (!data.ok || !data.read || !data.read.length) return;
+      const readSet = new Set(data.read.map(Number));
+      unread.forEach(el => {
+        const id = Number(el.dataset.id || 0);
+        if (id && readSet.has(id)) el.classList.remove("mon-thumb--unread");
+      });
+      _syncUnreadBadge();
+    } catch (_) {}
+  }
+
   /* Застосувати фільтр плейлиста по радіомережах (за частотами/масками).
      ids — масив network_id або CSV; порожньо = зняти фільтр. Перезавантажує
      плейлист із сервера (фільтрація серверна, тож працює і з пагінацією). */
@@ -3130,7 +3158,7 @@
 
   function _startPolling() {
     _stopPolling();
-    _pollTimer = setInterval(() => { if (_active) _pollNew(); }, POLL_MS);
+    _pollTimer = setInterval(() => { if (_active) { _pollNew(); _syncReadState(); } }, POLL_MS);
   }
   function _stopPolling() {
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }

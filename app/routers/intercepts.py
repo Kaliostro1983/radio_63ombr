@@ -1571,6 +1571,38 @@ def monitor_mark_all_read():
         conn.close()
 
 
+@router.post("/api/monitor/read-status")
+async def monitor_read_status(request: Request):
+    """Для набору message_id повертає ті, що ВЖЕ прочитані (is_read=1).
+
+    Дозволяє іншим робочим місцям оновити колір чіпів без повного
+    перезавантаження плейлиста. Дешево: один SELECT по PK-множині
+    обмеженого розміру (макс. 1000 id), викликається зі спільного 10-с
+    polling'у, і лише по НЕПЕРЕглянутих чіпах поточного клієнта."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    ids = []
+    for x in (payload.get("ids") or []):
+        try:
+            ids.append(int(x))
+        except (TypeError, ValueError):
+            pass
+    ids = ids[:1000]
+    if not ids:
+        return {"ok": True, "read": []}
+    ph = ",".join("?" * len(ids))
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            f"SELECT id FROM messages WHERE id IN ({ph}) AND is_read = 1", ids
+        ).fetchall()
+        return {"ok": True, "read": [int(r["id"]) for r in rows]}
+    finally:
+        conn.close()
+
+
 @router.get("/api/callsigns/autocomplete")
 def callsigns_autocomplete(
     q: str = Query(..., min_length=2),
