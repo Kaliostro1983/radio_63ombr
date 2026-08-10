@@ -945,41 +945,43 @@ async def api_conclusion_save(request: Request):
             "SELECT id FROM analytical_conclusions WHERE message_id = ?", (message_id,)
         ).fetchone()
 
-        # Захист від дублів-подій: та сама подія (частота+час) часто прилітає
-        # кількома повідомленнями з РІЗНИМ текстом (сирий діалог / стандартний
-        # формат / позивні+координати), тож аналітики випадково оформлюють по
-        # висновку на кожне. Якщо це НОВИЙ висновок, а на цю подію
-        # (network_id, created_at) уже є висновок на ІНШОМУ повідомленні —
-        # не створюємо мовчки другий, а повертаємо 409, щоб клієнт запитав
-        # підтвердження (allow_duplicate=1 — якщо це справді різні події).
-        if not existing and not payload.get("allow_duplicate"):
-            dup = conn.execute(
+        # Захист від дублів-подій (жорсткий): та сама подія (частота+час) часто
+        # прилітає кількома повідомленнями з РІЗНИМ текстом (сирий діалог /
+        # стандартний формат / позивні+координати), тож аналітики випадково
+        # оформлюють по висновку на кожне. Якщо це НОВИЙ висновок, а на цю подію
+        # (network_id, created_at) уже є висновок на ІНШОМУ повідомленні З ТІЄЮ Ж
+        # ПЕРШОЮ ТОЧКОЮ — це дублікат: не зберігаємо, повертаємо повідомлення.
+        # Порівнюємо лише ПЕРШІ координати (mgrs[0] ↔ mgrs[0]).
+        new_first = mgrs_list[0] if mgrs_list else ""
+        if not existing and new_first:
+            cands = conn.execute(
                 "SELECT ac.id, ac.conclusion_text, ac.mgrs_json, ac.message_id, "
                 "  (SELECT GROUP_CONCAT(c.name, ', ') FROM message_callsigns mc "
                 "     JOIN callsigns c ON c.id = mc.callsign_id "
                 "    WHERE mc.message_id = ac.message_id) AS callsigns "
                 "FROM analytical_conclusions ac "
-                "WHERE ac.network_id = ? AND ac.created_at = ? AND ac.message_id <> ? "
-                "LIMIT 1",
+                "WHERE ac.network_id = ? AND ac.created_at = ? AND ac.message_id <> ?",
                 (network_id, created_at, message_id),
-            ).fetchone()
-            if dup:
+            ).fetchall()
+            for c in cands:
                 try:
-                    dmgrs = json.loads(dup["mgrs_json"] or "[]")
+                    cm = json.loads(c["mgrs_json"] or "[]")
                 except Exception:
-                    dmgrs = []
-                return JSONResponse({
-                    "ok": False,
-                    "error_code": "duplicate_event",
-                    "error": "На цю подію (частота + час) уже є висновок.",
-                    "existing": {
-                        "id": int(dup["id"]),
-                        "message_id": int(dup["message_id"]),
-                        "conclusion_text": dup["conclusion_text"] or "",
-                        "mgrs": dmgrs,
-                        "callsigns": dup["callsigns"] or "",
-                    },
-                }, status_code=409)
+                    cm = []
+                c_first = _normalize_mgrs_str(cm[0]) if cm else ""
+                if c_first and c_first == new_first:
+                    return JSONResponse({
+                        "ok": False,
+                        "error_code": "duplicate_event",
+                        "error": "Дублікат: на цю частоту, час і першу точку вже є висновок — не збережено.",
+                        "existing": {
+                            "id": int(c["id"]),
+                            "message_id": int(c["message_id"]),
+                            "conclusion_text": c["conclusion_text"] or "",
+                            "mgrs": cm,
+                            "callsigns": c["callsigns"] or "",
+                        },
+                    }, status_code=409)
 
         if existing:
             conn.execute(
