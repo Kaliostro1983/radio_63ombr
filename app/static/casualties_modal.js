@@ -101,7 +101,9 @@
       '<div class="cas-rec__top">' +
         '<div class="cas-rec__photo-col">' +
           '<img class="cas-rec__photo" src="' + _casPhotoSrc(status) + '" alt="" ' +
-          'title="Клікніть, щоб змінити статус 200 ⇄ 300"></div>' +
+          'title="Клікніть, щоб змінити статус 200 ⇄ 300">' +
+          '<span class="cas-rec__photo-badge cas-rec__photo-badge--' + status + '">' + status + '</span>' +
+        '</div>' +
         '<div class="cas-rec__fields">' +
           '<div class="cas-rec__row1">' +
             '<input type="number" class="cas-count" min="1" step="1" value="' + (count || 1) + '">' +
@@ -126,6 +128,8 @@
       var ns = el.dataset.status === "200" ? "300" : "200";
       el.dataset.status = ns;
       this.src = _casPhotoSrc(ns);
+      var badge = el.querySelector(".cas-rec__photo-badge");
+      if (badge) { badge.textContent = ns; badge.className = "cas-rec__photo-badge cas-rec__photo-badge--" + ns; }
       scheduleSave(el);
     });
     el.querySelector(".cas-count").addEventListener("input", function () { scheduleSave(el); });

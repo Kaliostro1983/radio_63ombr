@@ -6611,9 +6611,18 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-records{ display:flex; flex-direction:column; gap:12px; }
 .cas-rec{ border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:10px 12px; background:rgba(255,255,255,.03); display:flex; flex-direction:column; gap:10px; }
 .cas-rec__top{ display:flex; flex-direction:row; align-items:flex-start; gap:12px; }
-.cas-rec__photo-col{ flex:0 0 auto; }
+.cas-rec__photo-col{ flex:0 0 auto; position:relative; }
 .cas-rec__photo{ width:150px; height:auto; border-radius:10px; display:block; cursor:pointer; border:2px solid transparent; transition:border-color .15s ease; }
 .cas-rec__photo:hover{ border-color:rgba(255,255,255,.4); }
+/* Напис «200/300» поверх зображення (відповідно до статусу запису). */
+.cas-rec__photo-badge{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  padding:2px 12px; border-radius:8px; font-weight:800; font-size:22px; line-height:1.1;
+  color:#fff; letter-spacing:.03em; pointer-events:none;
+  text-shadow:0 1px 3px rgba(0,0,0,.65); box-shadow:0 2px 6px rgba(0,0,0,.5);
+}
+.cas-rec__photo-badge--200{ background:rgba(220,38,38,.9); }
+.cas-rec__photo-badge--300{ background:rgba(245,158,11,.92); }
 .cas-rec__fields{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:8px; }
 .cas-rec__row1{ display:flex; align-items:center; gap:10px; }
 .cas-count{ width:64px; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:14px; }
