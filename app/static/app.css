@@ -1271,12 +1271,21 @@ button.secondary{
 .cs-samename-list{ overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px; }
 .cs-samename-empty{ padding:16px 12px; font-size:12px; color:#94a3b8; text-align:center; }
 .cs-samename-item{
+  position:relative;
   display:flex; gap:10px; align-items:center; padding:6px; width:100%;
   border-radius:10px; cursor:pointer; text-align:left; color:inherit;
   background:rgba(30,41,59,.55); border:1px solid transparent;
   transition:background .12s, border-color .12s;
 }
 .cs-samename-item:hover{ background:rgba(30,64,175,.35); border-color:rgba(59,130,246,.5); }
+/* Кнопки-іконки у правому верхньому куті мініатюри: Відкрити / Експорт */
+.cs-samename-actions{ position:absolute; top:4px; right:4px; display:flex; gap:4px; z-index:2; }
+.cs-samename-btn{
+  width:22px; height:22px; padding:0; display:flex; align-items:center; justify-content:center;
+  border:1px solid rgba(255,255,255,.22); border-radius:6px; background:rgba(15,23,42,.9);
+  color:#cbd5e1; cursor:pointer; transition:background .12s, color .12s, border-color .12s;
+}
+.cs-samename-btn:hover{ background:#2563eb; color:#fff; border-color:#3b82f6; }
 .cs-samename-photo{ width:54px; height:54px; border-radius:8px; object-fit:cover; object-position:center top; flex:0 0 auto; }
 .cs-samename-meta{ min-width:0; }
 .cs-samename-freq{ font-size:13px; font-weight:700; color:#f1f5f9; }

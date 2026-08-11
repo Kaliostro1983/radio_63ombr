@@ -635,6 +635,7 @@ def api_callsigns_same_name_in_group(callsign_id: int = 0):
         name, gid = base["name"], base["group_id"]
         rows = conn.execute(
             "SELECT c.id AS id, c.callsign_status_id AS status_id, "
+            "       c.source_id AS source_id, c.comment AS comment, "
             "       c.life_status AS life_status, "
             "       n.id AS network_id, n.frequency AS frequency, n.mask AS mask, n.unit AS unit "
             "FROM callsigns c JOIN networks n ON n.id = c.network_id "
@@ -645,6 +646,8 @@ def api_callsigns_same_name_in_group(callsign_id: int = 0):
     items = [{
         "id": int(r["id"]),
         "status_id": int(r["status_id"]) if r["status_id"] else None,
+        "source_id": int(r["source_id"]) if r["source_id"] else None,
+        "comment": r["comment"] or "",
         "life_status": r["life_status"] or "alive",
         "network_id": int(r["network_id"]) if r["network_id"] else None,
         "frequency": r["frequency"] or "",

@@ -565,6 +565,7 @@
   // Клік по аватарці → збоку відкривається панель з мініатюрами позивних, що
   // мають ТАКУ Ж назву в цьому полку/бригаді. Мініатюра = статус-фото + частота
   // + підрозділ; клік по ній відкриває той позивний.
+  let _sameNameItems = {};   // id → item (для дій кнопок мініатюр)
   function _ensureSameNamePanel() {
     let p = document.getElementById("csSameNamePanel");
     if (p) return p;
@@ -579,7 +580,41 @@
       '<div class="cs-samename-list"></div>';
     document.body.appendChild(p);
     p.querySelector(".cs-samename-close").addEventListener("click", _closeSameNamePanel);
+    // Делегований клік: кнопки «Відкрити»/«Експорт» на мініатюрі + клік по тілу.
+    p.querySelector(".cs-samename-list").addEventListener("click", function (e) {
+      const item = e.target.closest(".cs-samename-item");
+      if (!item) return;
+      const id = parseInt(item.dataset.csId, 10) || 0;
+      if (!id) return;
+      const btn = e.target.closest(".cs-samename-btn");
+      if (btn && btn.dataset.act === "export") {
+        e.stopPropagation();
+        _exportToModal(_sameNameItems[id]);
+        return;
+      }
+      // «Відкрити» (кнопка або тіло мініатюри) — відкрити позивний і оновити панель.
+      _openCallsignAndRefresh(id);
+    });
     return p;
+  }
+  // Експорт: копіює в поточну картку статус/джерело/коментар/стан (без збереження).
+  function _exportToModal(it) {
+    if (!it) return;
+    if (modalComment) modalComment.value = it.comment || "";
+    CURRENT_LIFE = window.CallsignStatus ? window.CallsignStatus.norm(it.life_status) : (it.life_status || "alive");
+    renderLifeToggle();
+    CURRENT_STATUS_ID = it.status_id || null;
+    renderStatusSelect(CURRENT_STATUS_ID);
+    setPhotoForStatus(CURRENT_STATUS_ID);
+    CURRENT_SOURCE_ID = it.source_id || null;
+    renderSourceSelect(CURRENT_SOURCE_ID);
+    if (window.appToast) window.appToast("Скопійовано: статус, джерело, коментар, стан", "success", 1800);
+  }
+  // Відкрити позивний у модалці й одразу оновити панель однойменних для нього.
+  async function _openCallsignAndRefresh(id) {
+    if (!id || !window.openCallsignEditModalById) return;
+    try { await window.openCallsignEditModalById(id); } catch (_) {}
+    _openSameNamePanel();
   }
   function _closeSameNamePanel() {
     const p = document.getElementById("csSameNamePanel");
@@ -624,27 +659,26 @@
         return;
       }
       const DEF = "/static/photos/callsign_statuses/_default.webp?v=3";
+      _sameNameItems = {};
+      const OPEN_SVG = '<svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3h6v6"/><path d="M17 3l-8 8"/><path d="M8 5H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3"/></svg>';
+      const EXP_SVG = '<svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="10" height="10" rx="1.6"/><path d="M4 12V5a1 1 0 0 1 1-1h7"/></svg>';
       list.innerHTML = items.map(function (it) {
+        _sameNameItems[it.id] = it;
         const photo = it.status_id
           ? ("/static/photos/callsign_statuses/" + it.status_id + ".webp?v=3") : DEF;
         const freq = [it.frequency, it.mask].filter(Boolean).join(" / ");
-        return '<button type="button" class="cs-samename-item" data-cs-id="' + it.id + '">' +
+        return '<div class="cs-samename-item" data-cs-id="' + it.id + '" title="Відкрити цей позивний">' +
+          '<div class="cs-samename-actions">' +
+            '<button type="button" class="cs-samename-btn" data-act="open" title="Відкрити цей позивний">' + OPEN_SVG + "</button>" +
+            '<button type="button" class="cs-samename-btn" data-act="export" title="Скопіювати статус/джерело/коментар/стан у поточну картку">' + EXP_SVG + "</button>" +
+          "</div>" +
           '<img class="cs-samename-photo" src="' + photo + '" alt="" ' +
           'onerror="this.onerror=null;this.src=\'' + DEF + '\'">' +
           '<div class="cs-samename-meta">' +
             '<div class="cs-samename-freq">' + _escP(freq || "—") + "</div>" +
             '<div class="cs-samename-unit">' + _escP(it.unit || "—") + "</div>" +
-          "</div></button>";
+          "</div></div>";
       }).join("");
-      list.querySelectorAll(".cs-samename-item").forEach(function (b) {
-        b.addEventListener("click", function () {
-          const id = parseInt(b.dataset.csId, 10) || 0;
-          if (id && window.openCallsignEditModalById) {
-            _closeSameNamePanel();
-            window.openCallsignEditModalById(id);
-          }
-        });
-      });
     } catch (_) {
       list.innerHTML = '<div class="cs-samename-empty">Помилка завантаження.</div>';
     }
