@@ -265,7 +265,15 @@
   // ── Init ───────────────────────────────────────────────────────────────────
   function init() {
     var btn = $("homeOpenCasualties2");
-    if (btn) btn.addEventListener("click", openModal);
+    if (btn) btn.addEventListener("click", function (e) {
+      // Ctrl/⌘+клік — стара модалка «Втрати»; звичайний клік — «Втрати 2».
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (window.openHomeCasualties) window.openHomeCasualties();
+        return;
+      }
+      openModal();
+    });
     document.querySelectorAll("[data-cas2-close]").forEach(function (el) {
       el.addEventListener("click", function (e) { e.stopPropagation(); closeModal(); });
     });

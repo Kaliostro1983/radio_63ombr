@@ -130,7 +130,9 @@
   // Header buttons → open respective modal
   document.getElementById("homeOpenOverview")?.addEventListener("click", () => openHomeModal("overview"));
   document.getElementById("homeOpenReports")?.addEventListener("click", () => openHomeModal("reports"));
-  document.getElementById("homeOpenCasualties")?.addEventListener("click", () => openHomeModal("casualties"));
+  // Кнопку «Втрати» прибрано — модалка «Втрати» відкривається Ctrl+кліком по
+  // іконці-черепу (обробник у casualties_report.js). Відкривач експонуємо глобально.
+  window.openHomeCasualties = () => openHomeModal("casualties");
 
   // Close handlers: X / backdrop / Esc
   document.querySelectorAll("[data-home-modal-close]").forEach((el) => {
