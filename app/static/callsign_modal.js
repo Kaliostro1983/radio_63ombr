@@ -666,8 +666,7 @@
       }
       const DEF = "/static/photos/callsign_statuses/_default.webp?v=3";
       _sameNameItems = {};
-      const OPEN_SVG = '<svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3h6v6"/><path d="M17 3l-8 8"/><path d="M8 5H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3"/></svg>';
-      const EXP_SVG = '<svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="10" height="10" rx="1.6"/><path d="M4 12V5a1 1 0 0 1 1-1h7"/></svg>';
+      const EXP_SVG ='<svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="10" height="10" rx="1.6"/><path d="M4 12V5a1 1 0 0 1 1-1h7"/></svg>';
       list.innerHTML = items.map(function (it) {
         _sameNameItems[it.id] = it;
         const photo = it.status_id
@@ -677,7 +676,6 @@
         const staleTitle = it.stale ? " (не зʼявлявся крайні 10 днів)" : "";
         return '<div class="cs-samename-item' + staleCls + '" data-cs-id="' + it.id + '" title="Відкрити цей позивний' + staleTitle + '">' +
           '<div class="cs-samename-actions">' +
-            '<button type="button" class="cs-samename-btn" data-act="open" title="Відкрити цей позивний">' + OPEN_SVG + "</button>" +
             '<button type="button" class="cs-samename-btn" data-act="export" title="Скопіювати статус/джерело/коментар/стан у поточну картку">' + EXP_SVG + "</button>" +
           "</div>" +
           '<img class="cs-samename-photo" src="' + photo + '" alt="" ' +
