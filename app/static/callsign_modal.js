@@ -585,6 +585,25 @@
     const p = document.getElementById("csSameNamePanel");
     if (p) p.classList.add("hidden");
   }
+  // Розмістити панель ПРАВОРУЧ від картки модалки (картка центрована, ширина
+  // різна — тож рахуємо динамічно за її rect). Прив'язуємось до правого краю.
+  function _positionSameNamePanel(p) {
+    const card = document.querySelector("#csModal .cs-modal-card");
+    if (!card) return;
+    const r = card.getBoundingClientRect();
+    const gap = 16, pw = 240;
+    let left = r.right + gap;
+    if (left + pw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - pw - 8);
+    p.style.left = left + "px";
+    p.style.right = "auto";
+    p.style.top = Math.max(8, r.top) + "px";
+    p.style.transform = "none";
+    p.style.maxHeight = Math.min(window.innerHeight - 16, Math.max(240, r.height)) + "px";
+  }
+  window.addEventListener("resize", function () {
+    const p = document.getElementById("csSameNamePanel");
+    if (p && !p.classList.contains("hidden")) _positionSameNamePanel(p);
+  });
   async function _openSameNamePanel() {
     const cid = parseInt(modalId && modalId.value, 10) || 0;
     if (!cid) return;
@@ -595,6 +614,7 @@
       (modalName && modalName.value ? modalName.value.trim() + " — однойменні" : "Однойменні (полк/бригада)");
     list.innerHTML = '<div class="cs-samename-empty">Завантаження…</div>';
     p.classList.remove("hidden");
+    _positionSameNamePanel(p);
     try {
       const res = await fetch("/api/callsigns/same-name-in-group?callsign_id=" + cid);
       const d = await res.json();
