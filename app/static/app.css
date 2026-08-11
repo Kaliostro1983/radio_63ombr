@@ -1286,6 +1286,10 @@ button.secondary{
   color:#cbd5e1; cursor:pointer; transition:background .12s, color .12s, border-color .12s;
 }
 .cs-samename-btn:hover{ background:#2563eb; color:#fff; border-color:#3b82f6; }
+.cs-samename-btn svg{ pointer-events:none; }   /* клік/наведення — на кнопку, не на svg */
+/* Блідий контейнер — позивний не зʼявлявся крайні 10 днів */
+.cs-samename-item--stale{ opacity:.5; }
+.cs-samename-item--stale:hover{ opacity:.85; }
 .cs-samename-photo{ width:54px; height:54px; border-radius:8px; object-fit:cover; object-position:center top; flex:0 0 auto; }
 .cs-samename-meta{ min-width:0; }
 .cs-samename-freq{ font-size:13px; font-weight:700; color:#f1f5f9; }

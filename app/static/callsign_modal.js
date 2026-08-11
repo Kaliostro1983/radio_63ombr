@@ -623,8 +623,14 @@
   // Розмістити панель ПРАВОРУЧ від картки модалки (картка центрована, ширина
   // різна — тож рахуємо динамічно за її rect). Прив'язуємось до правого краю.
   function _positionSameNamePanel(p) {
+    const modalEl = document.getElementById("csModal");
     const card = document.querySelector("#csModal .cs-modal-card");
     if (!card) return;
+    // z-index — НАД модалкою (її z-index міг підняти __modalToFront), інакше
+    // повноекранний бекдроп модалки перехоплює наведення/кліки по панелі
+    // (через що курсор не мінявся, тултіпи не показувались, а клік «закривав»).
+    const mz = modalEl ? (parseInt(getComputedStyle(modalEl).zIndex, 10) || 50) : 50;
+    p.style.zIndex = String(mz + 5);
     const r = card.getBoundingClientRect();
     const gap = 16, pw = 240;
     let left = r.right + gap;
@@ -667,7 +673,9 @@
         const photo = it.status_id
           ? ("/static/photos/callsign_statuses/" + it.status_id + ".webp?v=3") : DEF;
         const freq = [it.frequency, it.mask].filter(Boolean).join(" / ");
-        return '<div class="cs-samename-item" data-cs-id="' + it.id + '" title="Відкрити цей позивний">' +
+        const staleCls = it.stale ? " cs-samename-item--stale" : "";
+        const staleTitle = it.stale ? " (не зʼявлявся крайні 10 днів)" : "";
+        return '<div class="cs-samename-item' + staleCls + '" data-cs-id="' + it.id + '" title="Відкрити цей позивний' + staleTitle + '">' +
           '<div class="cs-samename-actions">' +
             '<button type="button" class="cs-samename-btn" data-act="open" title="Відкрити цей позивний">' + OPEN_SVG + "</button>" +
             '<button type="button" class="cs-samename-btn" data-act="export" title="Скопіювати статус/джерело/коментар/стан у поточну картку">' + EXP_SVG + "</button>" +

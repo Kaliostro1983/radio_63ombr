@@ -636,19 +636,29 @@ def api_callsigns_same_name_in_group(callsign_id: int = 0):
         rows = conn.execute(
             "SELECT c.id AS id, c.callsign_status_id AS status_id, "
             "       c.source_id AS source_id, c.comment AS comment, "
-            "       c.life_status AS life_status, "
+            "       c.life_status AS life_status, c.last_seen_dt AS last_seen_dt, "
             "       n.id AS network_id, n.frequency AS frequency, n.mask AS mask, n.unit AS unit "
             "FROM callsigns c JOIN networks n ON n.id = c.network_id "
             "WHERE c.name = ? AND n.group_id = ? AND c.id <> ? "
             "ORDER BY n.frequency",
             (name, gid, cid),
         ).fetchall()
+    # «Блідий» контейнер: позивний не з'являвся крайні 10 днів (або невідомо коли).
+    cutoff = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+
+    def _is_stale(ls) -> bool:
+        if not ls:
+            return True
+        return str(ls).replace("T", " ") < cutoff
+
     items = [{
         "id": int(r["id"]),
         "status_id": int(r["status_id"]) if r["status_id"] else None,
         "source_id": int(r["source_id"]) if r["source_id"] else None,
         "comment": r["comment"] or "",
         "life_status": r["life_status"] or "alive",
+        "last_seen_dt": r["last_seen_dt"] or "",
+        "stale": _is_stale(r["last_seen_dt"]),
         "network_id": int(r["network_id"]) if r["network_id"] else None,
         "frequency": r["frequency"] or "",
         "mask": r["mask"] or "",
