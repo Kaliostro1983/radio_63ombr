@@ -558,6 +558,81 @@
       modalErr.textContent = "";
     }
     hideMergePanel();
+    _closeSameNamePanel();
+  }
+
+  // ── Панель однойменних позивних у межах полку-бригади ────────────────────
+  // Клік по аватарці → збоку відкривається панель з мініатюрами позивних, що
+  // мають ТАКУ Ж назву в цьому полку/бригаді. Мініатюра = статус-фото + частота
+  // + підрозділ; клік по ній відкриває той позивний.
+  function _ensureSameNamePanel() {
+    let p = document.getElementById("csSameNamePanel");
+    if (p) return p;
+    p = document.createElement("div");
+    p.id = "csSameNamePanel";
+    p.className = "cs-samename-panel hidden";
+    p.innerHTML =
+      '<div class="cs-samename-head">' +
+        '<span class="cs-samename-title">Однойменні (полк/бригада)</span>' +
+        '<button type="button" class="cs-samename-close" title="Закрити" aria-label="Закрити">✕</button>' +
+      "</div>" +
+      '<div class="cs-samename-list"></div>';
+    document.body.appendChild(p);
+    p.querySelector(".cs-samename-close").addEventListener("click", _closeSameNamePanel);
+    return p;
+  }
+  function _closeSameNamePanel() {
+    const p = document.getElementById("csSameNamePanel");
+    if (p) p.classList.add("hidden");
+  }
+  async function _openSameNamePanel() {
+    const cid = parseInt(modalId && modalId.value, 10) || 0;
+    if (!cid) return;
+    const p = _ensureSameNamePanel();
+    const list = p.querySelector(".cs-samename-list");
+    const title = p.querySelector(".cs-samename-title");
+    if (title) title.textContent =
+      (modalName && modalName.value ? modalName.value.trim() + " — однойменні" : "Однойменні (полк/бригада)");
+    list.innerHTML = '<div class="cs-samename-empty">Завантаження…</div>';
+    p.classList.remove("hidden");
+    try {
+      const res = await fetch("/api/callsigns/same-name-in-group?callsign_id=" + cid);
+      const d = await res.json();
+      const items = (d && d.items) || [];
+      if (!items.length) {
+        list.innerHTML = '<div class="cs-samename-empty">Немає однойменних у цьому полку/бригаді.</div>';
+        return;
+      }
+      const DEF = "/static/photos/callsign_statuses/_default.webp?v=3";
+      list.innerHTML = items.map(function (it) {
+        const photo = it.status_id
+          ? ("/static/photos/callsign_statuses/" + it.status_id + ".webp?v=3") : DEF;
+        const freq = [it.frequency, it.mask].filter(Boolean).join(" / ");
+        return '<button type="button" class="cs-samename-item" data-cs-id="' + it.id + '">' +
+          '<img class="cs-samename-photo" src="' + photo + '" alt="" ' +
+          'onerror="this.onerror=null;this.src=\'' + DEF + '\'">' +
+          '<div class="cs-samename-meta">' +
+            '<div class="cs-samename-freq">' + _escP(freq || "—") + "</div>" +
+            '<div class="cs-samename-unit">' + _escP(it.unit || "—") + "</div>" +
+          "</div></button>";
+      }).join("");
+      list.querySelectorAll(".cs-samename-item").forEach(function (b) {
+        b.addEventListener("click", function () {
+          const id = parseInt(b.dataset.csId, 10) || 0;
+          if (id && window.openCallsignEditModalById) {
+            _closeSameNamePanel();
+            window.openCallsignEditModalById(id);
+          }
+        });
+      });
+    } catch (_) {
+      list.innerHTML = '<div class="cs-samename-empty">Помилка завантаження.</div>';
+    }
+  }
+  if (modalPhoto) {
+    modalPhoto.style.cursor = "pointer";
+    modalPhoto.title = "Показати однойменні позивні в цьому полку/бригаді";
+    modalPhoto.addEventListener("click", _openSameNamePanel);
   }
 
   function showError(msg) {

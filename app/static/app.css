@@ -1249,7 +1249,38 @@ button.secondary{
   object-fit:cover;
   object-position:center top;
   display:block;
+  cursor:pointer;
 }
+
+/* ═══ Панель однойменних позивних (полк/бригада) — клік по аватарці ═══════════ */
+.cs-samename-panel{
+  position:fixed; top:50%; left:24px; transform:translateY(-50%);
+  z-index:10050; width:240px; max-height:82vh; display:flex; flex-direction:column;
+  background:rgba(15,23,42,.98); color:#f1f5f9;
+  border:1px solid rgba(148,163,184,.25); border-radius:14px;
+  box-shadow:0 18px 50px rgba(0,0,0,.55); overflow:hidden;
+}
+.cs-samename-panel.hidden{ display:none; }
+.cs-samename-head{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:10px 12px; border-bottom:1px solid rgba(148,163,184,.15);
+}
+.cs-samename-title{ font-size:12.5px; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cs-samename-close{ background:transparent; border:0; color:#cbd5e1; font-size:15px; cursor:pointer; padding:2px 6px; line-height:1; flex:0 0 auto; }
+.cs-samename-close:hover{ color:#fff; }
+.cs-samename-list{ overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px; }
+.cs-samename-empty{ padding:16px 12px; font-size:12px; color:#94a3b8; text-align:center; }
+.cs-samename-item{
+  display:flex; gap:10px; align-items:center; padding:6px; width:100%;
+  border-radius:10px; cursor:pointer; text-align:left; color:inherit;
+  background:rgba(30,41,59,.55); border:1px solid transparent;
+  transition:background .12s, border-color .12s;
+}
+.cs-samename-item:hover{ background:rgba(30,64,175,.35); border-color:rgba(59,130,246,.5); }
+.cs-samename-photo{ width:54px; height:54px; border-radius:8px; object-fit:cover; object-position:center top; flex:0 0 auto; }
+.cs-samename-meta{ min-width:0; }
+.cs-samename-freq{ font-size:13px; font-weight:700; color:#f1f5f9; }
+.cs-samename-unit{ font-size:11px; color:#94a3b8; word-break:break-word; margin-top:2px; }
 
 .cs-profile-fields{
   flex:1;

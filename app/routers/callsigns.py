@@ -613,6 +613,47 @@ def api_callsign_by_id(id: int):
     }
 
 
+@router.get("/api/callsigns/same-name-in-group")
+def api_callsigns_same_name_in_group(callsign_id: int = 0):
+    """Позивні з ТАКОЮ Ж назвою в межах того самого полку-бригади.
+
+    «Полк-бригада» = `group_id` мережі позивного (напр. «37 мсп 67 мсд 25 ЗА»).
+    Для панелі мініатюр у модалці «Особова справа»: кожен елемент — статус-фото
+    (`callsign_status_id`) + частота + підрозділ. Поточний позивний виключено."""
+    cid = _as_int(callsign_id, 0)
+    if not cid:
+        return {"ok": True, "items": [], "name": ""}
+    with get_conn() as conn:
+        base = conn.execute(
+            "SELECT c.name AS name, n.group_id AS group_id "
+            "FROM callsigns c LEFT JOIN networks n ON n.id = c.network_id "
+            "WHERE c.id = ? LIMIT 1",
+            (cid,),
+        ).fetchone()
+        if not base or base["group_id"] is None:
+            return {"ok": True, "items": [], "name": (base["name"] if base else "")}
+        name, gid = base["name"], base["group_id"]
+        rows = conn.execute(
+            "SELECT c.id AS id, c.callsign_status_id AS status_id, "
+            "       c.life_status AS life_status, "
+            "       n.id AS network_id, n.frequency AS frequency, n.mask AS mask, n.unit AS unit "
+            "FROM callsigns c JOIN networks n ON n.id = c.network_id "
+            "WHERE c.name = ? AND n.group_id = ? AND c.id <> ? "
+            "ORDER BY n.frequency",
+            (name, gid, cid),
+        ).fetchall()
+    items = [{
+        "id": int(r["id"]),
+        "status_id": int(r["status_id"]) if r["status_id"] else None,
+        "life_status": r["life_status"] or "alive",
+        "network_id": int(r["network_id"]) if r["network_id"] else None,
+        "frequency": r["frequency"] or "",
+        "mask": r["mask"] or "",
+        "unit": r["unit"] or "",
+    } for r in rows]
+    return {"ok": True, "items": items, "name": name}
+
+
 @router.get("/api/callsigns/conclusion-flags")
 def api_callsign_conclusion_flags(ids: str = ""):
     """Return marker flags for the given callsign ids: which have analytical
