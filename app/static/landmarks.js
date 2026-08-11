@@ -13,6 +13,8 @@
   const typeSelect = $("lmTypeId");
   const searchBtn = $("lmSearchBtn");
   const createBtn = $("lmCreateBtn");
+  const expiredChk = $("lmExpired");
+  const noCoordsChk = $("lmNoCoords");
   const tbody = $("lmTbody");
   const metaEl = $("lmMeta");
   const loadingEl = $("lmLoading");
@@ -531,8 +533,7 @@
     state.isLoading = !!isLoading;
     if (loadingEl) loadingEl.style.display = isLoading ? "block" : "none";
     if (searchBtn) {
-      searchBtn.disabled = !!isLoading;
-      searchBtn.textContent = isLoading ? "Завантаження…" : "Шукати";
+      searchBtn.disabled = !!isLoading;   // кнопка-іконка — лишень блокуємо
     }
     if (loadMoreBtn) loadMoreBtn.disabled = !!isLoading;
   }
@@ -552,6 +553,8 @@
     if (nameVal) params.set("name", nameVal);
     if (groupVal) params.set("group_id", groupVal);
     if (typeVal) params.set("type_id", typeVal);
+    if (expiredChk && expiredChk.checked) params.set("expired", "1");
+    if (noCoordsChk && noCoordsChk.checked) params.set("no_coords", "1");
 
     params.set("limit", String(state.limit));
     params.set("offset", String(state.offset));
@@ -1085,6 +1088,9 @@
 
     if (searchBtn) searchBtn.addEventListener("click", () => loadSearchPage(true));
     if (createBtn) createBtn.addEventListener("click", openCreateModal);
+    // Чекбокси-фільтри: зміна одразу перезапускає пошук.
+    if (expiredChk) expiredChk.addEventListener("change", () => loadSearchPage(true).catch(() => {}));
+    if (noCoordsChk) noCoordsChk.addEventListener("change", () => loadSearchPage(true).catch(() => {}));
     if (loadMoreBtn)
       loadMoreBtn.addEventListener("click", () => {
         state.offset += state.limit;

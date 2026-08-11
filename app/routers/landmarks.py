@@ -235,19 +235,36 @@ def api_landmarks_search(
     name: str = Query(default="", max_length=200),
     group_id: str | None = Query(default=None),
     type_id: str | None = Query(default=None),
+    expired: int = Query(default=0),
+    no_coords: int = Query(default=0),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
     """Search landmarks with lazy pagination.
 
     If all filters are empty, returns all active landmarks.
+    expired=1 — лише прострочені (термін придатності сплив, неактивні);
+    no_coords=1 — лише без координат (порожня/без-числова геометрія).
     """
     name_q = (name or "").strip()
     group_id_opt = _parse_int_opt(group_id)
     type_id_opt = _parse_int_opt(type_id)
 
-    where = ["l.is_active = 1"]
+    where: list[str] = []
     params: list[Any] = []
+
+    if expired:
+        # Прострочені — з valid_until у минулому (незалежно від is_active, бо
+        # прострочення переводить is_active у 0).
+        where.append("l.valid_until IS NOT NULL")
+        where.append("l.valid_until <= ?")
+        params.append(datetime.utcnow().isoformat())
+    else:
+        where.append("l.is_active = 1")
+
+    if no_coords:
+        # Без координат — порожня геометрія або WKT без жодної цифри.
+        where.append("(TRIM(l.location_wkt) = '' OR l.location_wkt NOT GLOB '*[0-9]*')")
 
     if name_q:
         key = _normalize_keyword(name_q)

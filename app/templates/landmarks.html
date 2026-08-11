@@ -34,11 +34,27 @@
           </select>
         </div>
 
-        <div class="field" style="min-width:220px; flex:0">
+        <div class="field" style="flex:0">
+          <label>&nbsp;</label>
+          <div class="lm-filter-checks">
+            <label class="lm-chk" title="Показати лише орієнтири, у яких сплив термін придатності">
+              <input type="checkbox" id="lmExpired"><span>протерміновані</span>
+            </label>
+            <label class="lm-chk" title="Показати лише орієнтири без координат">
+              <input type="checkbox" id="lmNoCoords"><span>без координат</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field" style="flex:0">
           <label>&nbsp;</label>
           <div style="display:flex; gap:10px; align-items:center; justify-content:flex-end">
-            <button id="lmSearchBtn" type="button">Шукати</button>
-            <button id="lmCreateBtn" type="button" class="secondary">+ орієнтир</button>
+            <button id="lmSearchBtn" type="button" class="lm-icon-btn" title="Шукати" aria-label="Шукати">
+              <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><line x1="13.5" y1="13.5" x2="18" y2="18"/></svg>
+            </button>
+            <button id="lmCreateBtn" type="button" class="lm-icon-btn lm-icon-btn--accent" title="Додати орієнтир" aria-label="Додати орієнтир">
+              <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -75,7 +91,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/landmarks.js?v=19" defer></script>
+<script src="/static/landmarks.js?v=20" defer></script>
 {% endblock %}
 
 

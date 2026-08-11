@@ -6333,6 +6333,21 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .lm-anchor--mid{ background:#fff; border:2px solid #fbbf24; opacity:.75; }
 .landmark-modal-map.is-drawing{ cursor:crosshair; }
 
+/* ── Орієнтири: кнопки-іконки пошуку/додавання + чекбокси-фільтри ── */
+.lm-icon-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:38px; height:38px; padding:0; border-radius:8px;
+  border:1px solid var(--border); background:var(--card); color:var(--fg); cursor:pointer;
+  transition:border-color .12s, background .12s, color .12s;
+}
+.lm-icon-btn:hover{ border-color:var(--accent,#2563eb); color:var(--accent,#2563eb); }
+.lm-icon-btn:disabled{ opacity:.5; cursor:default; }
+.lm-icon-btn--accent{ border-color:#2563eb; color:#2563eb; }
+.lm-icon-btn--accent:hover{ background:#2563eb; color:#fff; }
+.lm-filter-checks{ display:flex; flex-direction:column; gap:6px; }
+.lm-chk{ display:flex; align-items:center; gap:6px; font-size:13px; white-space:nowrap; cursor:pointer; color:var(--fg); }
+.lm-chk input{ margin:0; cursor:pointer; }
+
 /* ── Landmark types: inline-керування біля селекта «Тип» ── */
 .lm-type-manage-btn{
   background:none; border:none; cursor:pointer;
