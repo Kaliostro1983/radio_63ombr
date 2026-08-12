@@ -736,16 +736,20 @@ def cas_record_update(cas_id: int, body: CasualtyUpdate, request: Request):
                 )
             new_set = set(new_ids)
             removed_ids = [c for c in old_ids if c not in new_set]
-        # Статус позивним застосовуємо лише коли просять (кнопки «Зберегти»/«Надіслати»).
+        # Прибрані позивні перераховуємо ЗАВЖДИ — навіть при інкрементальному
+        # збереженні (apply_status=False). Відв'язаний позивний більше не втрата,
+        # тож знімаємо помилковий 200/300 (немає інших валідних записів → 'alive').
+        # Без цього explicit-save не бачив би зміни: інкрементальний автозбереж
+        # уже відв'язав позивного, і removed_ids на «Зберегти» був би порожнім.
+        for rid in removed_ids:
+            _recompute_callsign_status(conn, rid, editor, ts)
+        # Виставлення 200/300 привʼязаним — лише коли просять (Зберегти/Надіслати).
         if body.apply_status:
             linked = conn.execute(
                 "SELECT callsign_id FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,)
             ).fetchall()
             for lr in linked:
                 _apply_callsign_casualty(conn, lr["callsign_id"], status, cur["message_id"], editor, ts)
-            # Прибрані позивні — перераховуємо статус (немає інших записів → 'alive').
-            for rid in removed_ids:
-                _recompute_callsign_status(conn, rid, editor, ts)
         r = conn.execute(_SELECT_CASUALTY + "WHERE cas.id = ?", (cas_id,)).fetchone()
         out = _casualty_dict(conn, r)
     return {"ok": True, "record": out}
