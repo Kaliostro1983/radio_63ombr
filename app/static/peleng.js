@@ -836,7 +836,6 @@
   let _pelLastRows = [];        // останні завантажені рядки (для перерендеру)
   let _pelShowFreq = false;     // стан чекбоксу «Частоти»
   let _pelShowUnit = false;     // стан чекбоксу «Підрозділ» (кола з номером)
-  let _pelShowImported = true;  // чекбокс «Імпортовані» — показувати пеленги з CSV
   let _pelHiddenAuthors = new Set();  // автори, знятні чекбоксами (сховані з карти)
   let _pelHiddenFreqs = new Set();    // частоти, зняті чекбоксами (сховані з карти)
   let _pelSending  = false;     // in-flight flag — захист від подвійного fetch
@@ -1504,8 +1503,6 @@
       // НВ підрозділу: пеленг без розпізнаного номера — ховається окремим
       // перемикачем «НВ» у панелі прив'язок.
       if (!_uk && _pelHiddenUnits.has(PEL_NV_KEY)) continue;
-      // Чекбокс «Імпортовані» — сховати пеленги, завантажені з CSV.
-      if (!_pelShowImported && r.is_imported) continue;
       // Фільтр за авторством батчу (чекбокси — сховані автори).
       if (_pelHiddenAuthors.has(String(r.author || "").trim())) continue;
       // Фільтр за частотою (чекбокси — сховані частоти).
@@ -1792,15 +1789,8 @@
         if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true });
       });
     }
-    const impChk = document.getElementById("pelShowImportedChk");
-    if (impChk) {
-      impChk.checked = true;          // за замовчуванням імпортовані видимі
-      _pelShowImported = true;
-      impChk.addEventListener("change", () => {
-        _pelShowImported = impChk.checked;
-        if (_pelLastRows.length) _pelRenderPoints(_pelLastRows, { skipFit: true });
-      });
-    }
+    // Чекбокс «Імпортовані» прибрано — імпортовані пеленги фільтруються через
+    // фільтр за авторством (напр. знявши галочку «117 ТРо»).
 
     // Кнопка «Скопіювати карту» (overlay правий верхній кут).
     document.getElementById("pelMapCopyBtn")?.addEventListener("click", _pelCopyMap);
