@@ -720,20 +720,32 @@ def cas_record_update(cas_id: int, body: CasualtyUpdate, request: Request):
             "WHERE id = ?",
             (status, count, reason_id, unit_id, unit_text, accounted, comment, ts, editor, cas_id),
         )
+        removed_ids: List[int] = []
         if body.callsign_ids is not None:
+            # Запам'ятовуємо стару прив'язку, щоб знайти ПРИБРАНІ позивні —
+            # їм треба перерахувати статус (зняти помилковий 200/300).
+            old_ids = [r["callsign_id"] for r in conn.execute(
+                "SELECT callsign_id FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,)
+            ).fetchall()]
+            new_ids = list(dict.fromkeys(body.callsign_ids))
             conn.execute("DELETE FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,))
-            for cid in dict.fromkeys(body.callsign_ids):
+            for cid in new_ids:
                 conn.execute(
                     "INSERT OR IGNORE INTO casualty_callsigns (casualty_id, callsign_id) VALUES (?, ?)",
                     (cas_id, cid),
                 )
-        # Статус позивним застосовуємо лише коли просять (кнопка «Надіслати»).
+            new_set = set(new_ids)
+            removed_ids = [c for c in old_ids if c not in new_set]
+        # Статус позивним застосовуємо лише коли просять (кнопки «Зберегти»/«Надіслати»).
         if body.apply_status:
             linked = conn.execute(
                 "SELECT callsign_id FROM casualty_callsigns WHERE casualty_id = ?", (cas_id,)
             ).fetchall()
             for lr in linked:
                 _apply_callsign_casualty(conn, lr["callsign_id"], status, cur["message_id"], editor, ts)
+            # Прибрані позивні — перераховуємо статус (немає інших записів → 'alive').
+            for rid in removed_ids:
+                _recompute_callsign_status(conn, rid, editor, ts)
         r = conn.execute(_SELECT_CASUALTY + "WHERE cas.id = ?", (cas_id,)).fetchone()
         out = _casualty_dict(conn, r)
     return {"ok": True, "record": out}
