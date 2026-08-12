@@ -791,6 +791,9 @@
 }
 .pel-bind-eye:hover { background: rgba(255,255,255,.10); opacity: 1; }
 .pel-bind-eye.is-on { opacity: 1; color: #4ade80; }
+/* Майстер-«око» в шапці: зелене, коли щось видно; сіре, коли все сховано. */
+.pel-bind-eye--all { opacity: 1; color: #4ade80; }
+.pel-bind-eye--all.is-hidden { color: #94a3b8; opacity: .8; }
 /* Прихований підрозділ — приглушуємо весь рядок */
 .pel-bind-row.is-hidden .pel-bind-unit,
 .pel-bind-row.is-hidden .pel-bind-label,

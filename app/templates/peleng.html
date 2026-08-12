@@ -145,6 +145,7 @@
             <div class="pel-bind-head">
               <strong>Прив'язки</strong>
               <div class="pel-bind-head-actions">
+                <button type="button" id="pelBindEyeAll" class="pel-bind-eye pel-bind-eye--all" title="Показати/сховати всі підрозділи" aria-label="Показати/сховати всі підрозділи"></button>
                 <button type="button" id="pelBindAdd" class="pal-btn pal-btn--add">+ Додати</button>
                 <button type="button" id="pelBindClose" class="pal-x" title="Закрити">✕</button>
               </div>
@@ -377,7 +378,7 @@
    кнопка отримувала два слухачі, і клік по «Прив'язки» перемикав клас двічі
    (панель миттєво закривалась). #}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/peleng.css?v=21">
+<link rel="stylesheet" href="/static/peleng.css?v=22">
 <style>
 /* Header у стилі Home */
 .pel-page-header {
@@ -417,5 +418,5 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/milsymbol@3/dist/milsymbol.js"></script>
-<script src="/static/peleng.js?v=45"></script>
+<script src="/static/peleng.js?v=46"></script>
 {% endblock %}

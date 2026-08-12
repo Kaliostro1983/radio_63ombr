@@ -1223,6 +1223,46 @@
     _pelRedrawAfterColorChange();   // перемалювати маркери + оновити панель
   }
 
+  /** Усі ключі підрозділів, наявні в поточних даних (номери + НВ). */
+  function _pelAllUnitKeys() {
+    const keys = new Set();
+    let hasNv = false;
+    for (const r of (_pelLastRows || [])) {
+      const n = _pelExtractUnitNumber(r && r.unit);
+      if (n) keys.add(String(n));
+      else if (r && String(r.mgrs || "").trim()) hasNv = true;
+    }
+    if (hasNv) keys.add(PEL_NV_KEY);
+    return keys;
+  }
+  function _pelAllUnitsHidden() {
+    const all = _pelAllUnitKeys();
+    if (!all.size) return false;
+    for (const k of all) if (!_pelHiddenUnits.has(k)) return false;
+    return true;
+  }
+  /** Майстер-«око»: показати/сховати пеленги ПО ВСІХ підрозділах одразу. */
+  function _pelToggleAllUnits() {
+    const all = _pelAllUnitKeys();
+    if (!all.size) return;
+    if (_pelAllUnitsHidden()) all.forEach(k => _pelHiddenUnits.delete(k));
+    else all.forEach(k => _pelHiddenUnits.add(k));
+    _pelRedrawAfterColorChange();
+  }
+  function _pelUpdateEyeAll() {
+    const b = document.getElementById("pelBindEyeAll");
+    if (!b) return;
+    const hidden = _pelAllUnitsHidden();
+    b.classList.toggle("is-hidden", hidden);
+    b.title = hidden ? "Показати всі підрозділи" : "Сховати всі підрозділи";
+    b.innerHTML =
+      '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5">' +
+        '<path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z"/>' +
+        '<circle cx="10" cy="10" r="2.6"/>' +
+        (hidden ? '<line x1="3.5" y1="16.5" x2="16.5" y2="3.5"/>' : "") +
+      "</svg>";
+  }
+
   async function _pelSaveBinding(unitKey, color, label) {
     try {
       const r = await fetch("/api/peleng/unit-colors", {
@@ -1259,6 +1299,7 @@
   /** Після зміни кольору — перемалювати маркери (без зсуву карти) й оновити список. */
   function _pelRedrawAfterColorChange() {
     _pelRenderBindings();
+    _pelUpdateEyeAll();
     if (_pelLastRows && _pelLastRows.length) {
       try { _pelRenderPoints(_pelLastRows, { skipFit: true }); } catch (_) {}
     }
@@ -1272,8 +1313,10 @@
       const willOpen = box.classList.contains("hidden");
       box.classList.toggle("hidden");
       btn.classList.toggle("is-on", willOpen);
-      if (willOpen) { await _pelLoadUnitColors(); _pelRenderBindings(); }
+      if (willOpen) { await _pelLoadUnitColors(); _pelRenderBindings(); _pelUpdateEyeAll(); }
     });
+    // Майстер-«око» в шапці — показати/сховати пеленги по всіх підрозділах.
+    document.getElementById("pelBindEyeAll")?.addEventListener("click", _pelToggleAllUnits);
     document.getElementById("pelBindClose")?.addEventListener("click", () => {
       box.classList.add("hidden");
       btn.classList.remove("is-on");
