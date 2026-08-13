@@ -637,6 +637,108 @@ def cas_report_image(
     )
 
 
+@router.get("/api/casualties/report.xlsx")
+def cas_report_xlsx(date_from: str = Query(default=""), date_to: str = Query(default="")):
+    """XLSX звіту втрат за період: таблиця (Підрозділ | 200 | 300 | Усього),
+    а під нею дві кругові діаграми — розподіл за підрозділами та за причинами.
+    Кнопка «фотоапарат» у модалці з затиснутим Ctrl."""
+    from io import BytesIO
+    import openpyxl
+    from openpyxl.chart import PieChart, Reference
+    from openpyxl.chart.label import DataLabelList
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    rows, totals, by_reason = _aggregate_report(date_from, date_to)
+    period = _fmt_period_label(date_from, date_to)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Втрати"
+
+    thin = Side(style="thin", color="BFBFBF")
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center")
+    hdr_fill = PatternFill("solid", fgColor="1F2937")
+    hdr_font = Font(bold=True, color="FFFFFF")
+
+    ws["A1"] = f"Втрати за період: {period}" if period else "Втрати за період"
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.merge_cells("A1:D1")
+
+    HDR = 3
+    for c, h in enumerate(["Підрозділ", "200", "300", "Усього"], start=1):
+        cell = ws.cell(row=HDR, column=c, value=h)
+        cell.font = hdr_font; cell.fill = hdr_fill; cell.alignment = center; cell.border = box
+    r = HDR + 1
+    unit_first = r
+    for row in rows:
+        k, w = int(row["killed"] or 0), int(row["wounded"] or 0)
+        ws.cell(row=r, column=1, value=row["unit"]).border = box
+        ws.cell(row=r, column=2, value=k).alignment = center
+        ws.cell(row=r, column=3, value=w).alignment = center
+        ws.cell(row=r, column=4, value=k + w).alignment = center
+        for c in (2, 3, 4):
+            ws.cell(row=r, column=c).border = box
+        r += 1
+    unit_last = r - 1
+    # Підсумок
+    ws.cell(row=r, column=1, value="Усього").font = Font(bold=True)
+    ws.cell(row=r, column=2, value=int(totals["killed"])).font = Font(bold=True)
+    ws.cell(row=r, column=3, value=int(totals["wounded"])).font = Font(bold=True)
+    ws.cell(row=r, column=4, value=int(totals["killed"]) + int(totals["wounded"])).font = Font(bold=True)
+    for c in range(1, 5):
+        cell = ws.cell(row=r, column=c); cell.border = box
+        if c > 1:
+            cell.alignment = center
+    total_row = r
+
+    # Дані для діаграми «за причинами» — окрема табличка праворуч (F/G).
+    ws.cell(row=HDR, column=6, value="Причина").font = hdr_font
+    ws.cell(row=HDR, column=6).fill = hdr_fill
+    ws.cell(row=HDR, column=7, value="Кількість").font = hdr_font
+    ws.cell(row=HDR, column=7).fill = hdr_fill
+    rr = HDR + 1
+    reason_first = rr
+    for br in by_reason:
+        ws.cell(row=rr, column=6, value=br["reason"])
+        ws.cell(row=rr, column=7, value=int(br["cnt"] or 0)).alignment = center
+        rr += 1
+    reason_last = rr - 1
+
+    ws.column_dimensions["A"].width = 34
+    for col in ("B", "C", "D"):
+        ws.column_dimensions[col].width = 9
+    ws.column_dimensions["F"].width = 22
+    ws.column_dimensions["G"].width = 11
+
+    anchor = total_row + 3
+    if unit_last >= unit_first:
+        pie1 = PieChart()
+        pie1.title = "Розподіл втрат за підрозділами"
+        pie1.add_data(Reference(ws, min_col=4, min_row=unit_first, max_row=unit_last), titles_from_data=False)
+        pie1.set_categories(Reference(ws, min_col=1, min_row=unit_first, max_row=unit_last))
+        pie1.dataLabels = DataLabelList(); pie1.dataLabels.showPercent = True
+        pie1.height = 9.5; pie1.width = 15
+        ws.add_chart(pie1, f"A{anchor}")
+    if reason_last >= reason_first:
+        pie2 = PieChart()
+        pie2.title = "Розподіл втрат за причинами"
+        pie2.add_data(Reference(ws, min_col=7, min_row=reason_first, max_row=reason_last), titles_from_data=False)
+        pie2.set_categories(Reference(ws, min_col=6, min_row=reason_first, max_row=reason_last))
+        pie2.dataLabels = DataLabelList(); pie2.dataLabels.showPercent = True
+        pie2.height = 9.5; pie2.width = 15
+        ws.add_chart(pie2, f"A{anchor + 20}")
+
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return StreamingResponse(
+        bio,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="vtraty.xlsx"'},
+    )
+
+
 class CasualtyIn(BaseModel):
     message_id: int
     status: str = "300"

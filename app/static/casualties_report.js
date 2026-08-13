@@ -262,6 +262,27 @@
     window.open("/api/casualties/report-image?" + qs.toString(), "_blank");
   }
 
+  // Однопериодний діапазон кнопки-зміни (для xlsx: 16-08 → 16:00 учора → 08:00 сьогодні).
+  function _shiftRange(kind) {
+    var now = new Date();
+    var t16 = new Date(now); t16.setHours(16, 0, 0, 0);
+    var t08 = new Date(now); t08.setHours(8, 0, 0, 0);
+    var y16 = new Date(now); y16.setDate(y16.getDate() - 1); y16.setHours(16, 0, 0, 0);
+    if (kind === "16-08") return { from: y16, to: t08 };
+    if (kind === "08-16") return { from: t08, to: t16 };
+    return { from: y16, to: t16 };   // 16-16 (доба)
+  }
+  // Ctrl+клік — скачати xlsx (таблиця втрат + 2 діаграми).
+  function _downloadShiftXlsx(kind) {
+    var rg = _shiftRange(kind);
+    var qs = new URLSearchParams({ date_from: _shiftIso(rg.from), date_to: _shiftIso(rg.to) });
+    var a = document.createElement("a");
+    a.href = "/api/casualties/report.xlsx?" + qs.toString();
+    a.download = "";
+    document.body.appendChild(a); a.click(); a.remove();
+    if (window.appToast) window.appToast("Завантаження xlsx…", "info", 1400);
+  }
+
   // ── Init ───────────────────────────────────────────────────────────────────
   function init() {
     var btn = $("homeOpenCasualties2");
@@ -278,9 +299,13 @@
       el.addEventListener("click", function (e) { e.stopPropagation(); closeModal(); });
     });
     $("cas2Refresh") && $("cas2Refresh").addEventListener("click", reload);
-    // Кнопки-зображення 16-16 / 16-08 / 08-16 — PNG звіту за стандартну зміну.
+    // Кнопки-зображення 16-16 / 16-08 / 08-16 — PNG звіту; Ctrl+клік — xlsx.
     document.querySelectorAll("[data-cas2-shift]").forEach(function (b) {
-      b.addEventListener("click", function () { _openShiftImage(b.getAttribute("data-cas2-shift")); });
+      b.addEventListener("click", function (e) {
+        var kind = b.getAttribute("data-cas2-shift");
+        if (e.ctrlKey || e.metaKey) { e.preventDefault(); _downloadShiftXlsx(kind); return; }
+        _openShiftImage(kind);
+      });
     });
     // Перемикання діаграм: Підрозділ / Причина.
     document.querySelectorAll(".cas2-chart-tab").forEach(function (t) {
