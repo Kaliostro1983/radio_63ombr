@@ -81,14 +81,82 @@ ENEMY_OOB_SEED: List[Dict[str, Any]] = [
     {"id": "71bps", "label": "71 опБпС", "full": "71-й окремий полк БпС (армійський ISR/ударні БпЛА)", "ech": "regiment", "branch": "uav", "prov": "db", "parent": "25za", "gid": 11},
     {"id": "2bbps", "label": "2 бБпС", "full": "2-й батальйон БпС · 71 опБпС", "ech": "battalion", "branch": "uav", "prov": "db", "parent": "71bps", "gid": 8},
 
+    # ── 20 ЗА: штатна структура з OSINT (Вікіпедія) ──
+    # 144 мсд (Єльня)
     {"id": "144msd", "label": "144 мсд", "full": "144-та гв. мотострілецька дивізія (Єльня)", "ech": "division", "branch": "infantry", "prov": "trophy", "parent": "20za"},
     {"id": "254msp", "label": "254 мсп", "full": "254-й мсп · 144 мсд 20 ЗА (з трофейної рації)", "ech": "regiment", "branch": "infantry", "prov": "trophy", "parent": "144msd"},
-    {"id": "3msd",   "label": "3 мсд",   "full": "3-тя мотострілецька Вісленська дивізія (Богучар/Валуйки)", "ech": "division", "branch": "infantry", "prov": "osint", "parent": "20za"},
-    {"id": "236abr", "label": "236 абр", "full": "236-та гв. артилерійська бригада (Коломна)", "ech": "brigade", "branch": "artillery", "prov": "osint", "parent": "20za"},
+    {"id": "144msd_283msp", "label": "283 мсп", "full": "283-й мотострілецький полк · 144 мсд 20 ЗА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_488msp", "label": "488 мсп", "full": "488-й мотострілецький полк · 144 мсд 20 ЗА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_59tp",   "label": "59 тп",   "full": "59-й танковий полк · 144 мсд 20 ЗА", "ech": "regiment", "branch": "armor", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_856sap", "label": "856 сап", "full": "856-й гв. самохідний артилерійський полк · 144 мсд 20 ЗА", "ech": "regiment", "branch": "artillery", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_1259optadn", "label": "1259 оптадн", "full": "1259-й окремий протитанковий артилерійський дивізіон (Єльня) · 144 мсд", "ech": "battalion", "branch": "antitank", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_340oisb", "label": "340 оісб", "full": "340-й окремий інженерно-саперний батальйон (Єльня) · 144 мсд", "ech": "battalion", "branch": "engineer", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_686obz", "label": "686 обз", "full": "686-й окремий батальйон звʼязку (Шаталове) · 144 мсд", "ech": "battalion", "branch": "signal", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_1032obmz", "label": "1032 обмз", "full": "1032-й окремий батальйон матеріального забезпечення (Почеп) · 144 мсд", "ech": "battalion", "branch": "support", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_150omedb", "label": "150 омедб", "full": "150-й окремий медичний батальйон (Почеп) · 144 мсд", "ech": "battalion", "branch": "medical", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_orbla", "label": "ор БЛА", "full": "Окрема рота БЛА · 144 мсд", "ech": "company", "branch": "uav", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_oreb", "label": "ор РЕБ", "full": "Окрема рота РЕБ · 144 мсд", "ech": "company", "branch": "ew", "prov": "osint", "parent": "144msd"},
+    {"id": "144msd_orhbz", "label": "ор РХБЗ", "full": "Окрема рота РХБ захисту · 144 мсд", "ech": "company", "branch": "cbrn", "prov": "osint", "parent": "144msd"},
 
+    # 3 мсд (Богучар/Валуйки)
+    {"id": "3msd",   "label": "3 мсд",   "full": "3-тя мотострілецька Вісленська дивізія (Богучар/Валуйки)", "ech": "division", "branch": "infantry", "prov": "osint", "parent": "20za"},
+    {"id": "3msd_252msp", "label": "252 мсп", "full": "252-й мотострілецький полк · 3 мсд 20 ЗА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "3msd"},
+    {"id": "3msd_752msp", "label": "752 мсп", "full": "752-й мотострілецький полк · 3 мсд 20 ЗА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "3msd"},
+    {"id": "3msd_237tp",  "label": "237 тп",  "full": "237-й танковий полк · 3 мсд 20 ЗА", "ech": "regiment", "branch": "armor", "prov": "osint", "parent": "3msd"},
+    {"id": "3msd_99sap",  "label": "99 сап",  "full": "99-й самохідний артилерійський полк · 3 мсд 20 ЗА", "ech": "regiment", "branch": "artillery", "prov": "osint", "parent": "3msd"},
+
+    # 20 ЗА — армійські окремі частини
+    {"id": "236abr", "label": "236 абр", "full": "236-та гв. артилерійська бригада (Коломна) · 20 ЗА", "ech": "brigade", "branch": "artillery", "prov": "osint", "parent": "20za"},
+    {"id": "448rbr", "label": "448 рбр", "full": "448-ма ракетна бригада (Курськ) · 20 ЗА", "ech": "brigade", "branch": "artillery", "prov": "osint", "parent": "20za"},
+    {"id": "53zrbr", "label": "53 зрбр", "full": "53-тя зенітна ракетна бригада, в/ч 32406 (Курськ, Бук-М1) · 20 ЗА", "ech": "brigade", "branch": "airdefense", "prov": "osint", "parent": "20za"},
+    {"id": "9bru",   "label": "9 бру",   "full": "9-та гв. бригада управління (Вороніж) · 20 ЗА", "ech": "brigade", "branch": "signal", "prov": "osint", "parent": "20za"},
+    {"id": "16isp",  "label": "16 ісп",  "full": "16-й інженерно-саперний полк (Богучар) · 20 ЗА", "ech": "regiment", "branch": "engineer", "prov": "osint", "parent": "20za"},
+    {"id": "20za_oreb", "label": "об РЕБ", "full": "Окремий батальйон РЕБ · 20 ЗА", "ech": "battalion", "branch": "ew", "prov": "osint", "parent": "20za"},
+
+    # ── 1 ТА: штатна структура з OSINT (Spatial Illusions OOB) ──
+    {"id": "1ta_upr", "label": "упр", "full": "Управління (штаб) 1 ТА", "ech": "brigade", "branch": "hq", "prov": "osint", "parent": "1ta"},
+
+    # 2 мсд
+    {"id": "2msd",        "label": "2 мсд",     "full": "2-га мотострілецька дивізія · 1 ТА", "ech": "division", "branch": "infantry", "prov": "osint", "parent": "1ta"},
+    {"id": "2msd_1gvmsp", "label": "1 гв мсп",  "full": "1-й гв. мотострілецький Севастопольський полк · 2 мсд 1 ТА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "2msd"},
+    {"id": "2msd_15gvmsp","label": "15 гв мсп", "full": "15-й гв. мотострілецький Шавлинський полк · 2 мсд 1 ТА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "2msd"},
+    {"id": "2msd_1tp",    "label": "1 тп",      "full": "1-й танковий полк · 2 мсд 1 ТА", "ech": "regiment", "branch": "armor", "prov": "osint", "parent": "2msd"},
+    {"id": "2msd_147sap", "label": "147 сап",   "full": "147-й самохідний артилерійський полк · 2 мсд 1 ТА", "ech": "regiment", "branch": "artillery", "prov": "osint", "parent": "2msd"},
+
+    # 4 тд
+    {"id": "4td",         "label": "4 тд",     "full": "4-та танкова дивізія · 1 ТА", "ech": "division", "branch": "armor", "prov": "osint", "parent": "1ta"},
+    {"id": "4td_12tp",    "label": "12 тп",    "full": "12-й танковий полк · 4 тд 1 ТА", "ech": "regiment", "branch": "armor", "prov": "osint", "parent": "4td"},
+    {"id": "4td_13tp",    "label": "13 тп",    "full": "13-й танковий полк · 4 тд 1 ТА", "ech": "regiment", "branch": "armor", "prov": "osint", "parent": "4td"},
+    {"id": "4td_423msp",  "label": "423 мсп",  "full": "423-й мотострілецький полк · 4 тд 1 ТА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "4td"},
+    {"id": "4td_275sap",  "label": "275 сап",  "full": "275-й самохідний артилерійський полк · 4 тд 1 ТА", "ech": "regiment", "branch": "artillery", "prov": "osint", "parent": "4td"},
+    {"id": "4td_538zrp",  "label": "538 зрп",  "full": "538-й зенітний ракетний полк · 4 тд 1 ТА", "ech": "regiment", "branch": "airdefense", "prov": "osint", "parent": "4td"},
+    {"id": "4td_137orb",  "label": "137 орб",  "full": "137-й окремий розвідувальний батальйон · 4 тд 1 ТА", "ech": "battalion", "branch": "recon", "prov": "osint", "parent": "4td"},
+    {"id": "4td_413obz",  "label": "413 обз",  "full": "413-й окремий батальйон звʼязку · 4 тд 1 ТА", "ech": "battalion", "branch": "signal", "prov": "osint", "parent": "4td"},
+    {"id": "4td_330oisb", "label": "330 оісб", "full": "330-й окремий інженерно-саперний Тарнопольський батальйон · 4 тд 1 ТА", "ech": "battalion", "branch": "engineer", "prov": "osint", "parent": "4td"},
+    {"id": "4td_1088obmz","label": "1088 обмз","full": "1088-й окремий батальйон матеріального забезпечення · 4 тд 1 ТА", "ech": "battalion", "branch": "support", "prov": "osint", "parent": "4td"},
+    {"id": "4td_165omedb","label": "165 омедб","full": "165-й окремий медичний батальйон · 4 тд 1 ТА", "ech": "battalion", "branch": "medical", "prov": "osint", "parent": "4td"},
+
+    # 47 тд (153 тп і 272 мсп — з даними БД, решта з OSINT)
     {"id": "47td",   "label": "47 тд",  "full": "47-ма танкова дивізія · 1 ТА", "ech": "division", "branch": "armor", "prov": "db", "parent": "1ta"},
+    {"id": "47td_26tp",    "label": "26 тп",    "full": "26-й танковий полк · 47 тд 1 ТА", "ech": "regiment", "branch": "armor", "prov": "osint", "parent": "47td"},
     {"id": "153tp",  "label": "153 тп", "full": "153-й танковий полк · 47 тд 1 ТА", "ech": "regiment", "branch": "armor", "prov": "db", "parent": "47td", "gid": 14},
+    {"id": "47td_245msp",  "label": "245 мсп",  "full": "245-й мотострілецький полк · 47 тд 1 ТА", "ech": "regiment", "branch": "infantry", "prov": "osint", "parent": "47td"},
     {"id": "272msp", "label": "272 мсп","full": "272-й мсп · 47 тд 1 ТА", "ech": "regiment", "branch": "infantry", "prov": "db", "parent": "47td", "gid": 10},
+    {"id": "47td_744sap",  "label": "744 сап",  "full": "744-й самохідний артилерійський полк · 47 тд 1 ТА", "ech": "regiment", "branch": "artillery", "prov": "osint", "parent": "47td"},
+    {"id": "47td_63ozrdn", "label": "63 озрдн", "full": "63-й окремий зенітний ракетний дивізіон · 47 тд 1 ТА", "ech": "battalion", "branch": "airdefense", "prov": "osint", "parent": "47td"},
+    {"id": "47td_375optadn","label": "375 оптадн","full": "375-й окремий протитанковий артилерійський дивізіон · 47 тд 1 ТА", "ech": "battalion", "branch": "antitank", "prov": "osint", "parent": "47td"},
+    {"id": "47td_1077obmz","label": "1077 обмз","full": "1077-й окремий батальйон матеріального забезпечення · 47 тд 1 ТА", "ech": "battalion", "branch": "support", "prov": "osint", "parent": "47td"},
+
+    # 1 ТА — армійські окремі частини
+    {"id": "96orbr",  "label": "96 орбр",   "full": "96-та окрема розвідувальна бригада · 1 ТА", "ech": "brigade", "branch": "recon", "prov": "osint", "parent": "1ta"},
+    {"id": "288abr",  "label": "288 абр",   "full": "288-ма артилерійська бригада · 1 ТА", "ech": "brigade", "branch": "artillery", "prov": "osint", "parent": "1ta"},
+    {"id": "112rbr",  "label": "112 рбр",   "full": "112-та ракетна бригада · 1 ТА", "ech": "brigade", "branch": "artillery", "prov": "osint", "parent": "1ta"},
+    {"id": "49zrbr",  "label": "49 зрбр",   "full": "49-та зенітна ракетна бригада · 1 ТА", "ech": "brigade", "branch": "airdefense", "prov": "osint", "parent": "1ta"},
+    {"id": "60bru",   "label": "60 бр упр", "full": "60-та бригада управління · 1 ТА", "ech": "brigade", "branch": "signal", "prov": "osint", "parent": "1ta"},
+    {"id": "69obrmtz","label": "69 обр МТЗ","full": "69-та окрема бригада матеріально-технічного забезпечення · 1 ТА", "ech": "brigade", "branch": "support", "prov": "osint", "parent": "1ta"},
+    {"id": "1ta_isp", "label": "ісп",       "full": "Інженерно-саперний полк · 1 ТА", "ech": "regiment", "branch": "engineer", "prov": "osint", "parent": "1ta"},
+    {"id": "20prhbz", "label": "20 п РХБз", "full": "20-й полк РХБ захисту · 1 ТА", "ech": "regiment", "branch": "cbrn", "prov": "osint", "parent": "1ta"},
+    {"id": "231obreb","label": "231 обРЕБ", "full": "231-й окремий батальйон РЕБ · 1 ТА", "ech": "battalion", "branch": "ew", "prov": "osint", "parent": "1ta"},
 
     {"id": "7omsbr", "label": "7 омсбр", "full": "7-ма окрема мотострілецька бригада · 3 ЗА", "ech": "brigade", "branch": "infantry", "prov": "db", "parent": "3za", "gid": 16},
     {"id": "201osp", "label": "201 осп", "full": "201-й окремий стрілецький полк · 7 омсбр 3 ЗА", "ech": "regiment", "branch": "infantry", "prov": "db", "parent": "7omsbr", "gid": 13},
