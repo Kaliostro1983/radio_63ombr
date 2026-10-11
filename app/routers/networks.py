@@ -1687,7 +1687,21 @@ def _build_networks_context(
     """Build Jinja template context for the networks page."""
     main_tags = [t for t in (tags or []) if t["tag_group"] == "main"]
     comp_tags  = [t for t in (tags or []) if t["tag_group"] == "composition"]
+    # Структура підрозділів (enemy_oob) для селектора «Підрозділ» у картці р/м.
+    enemy_nodes = []
+    try:
+        from app.routers import enemy as _enemy
+        with get_conn() as _c:
+            _en, _by_id, _ = _enemy._load(_c)
+        enemy_nodes = [
+            {"id": n["id"], "path": _enemy._node_path(_by_id, n["id"])}
+            for n in _en if not n["root"]
+        ]
+        enemy_nodes.sort(key=lambda x: x["path"])
+    except Exception:
+        enemy_nodes = []
     return dict(
+        enemy_nodes=enemy_nodes,
         request=request,
         actor=actor,
         q_query=q_query,
@@ -2169,7 +2183,8 @@ def networks_save(
     unit: str = Form(""),
     zone: str = Form(""),
     chat_id: int = Form(...),
-    group_id: int = Form(...),
+    group_id: int = Form(0),
+    enemy_node_id: str = Form(""),
     status_id: int = Form(...),
     comment: str = Form(""),
     tag_ids: List[int] = Form(default=[]),
@@ -2178,7 +2193,11 @@ def networks_save(
     embed: str = Form(""),
     actor=Depends(get_actor),
 ):
-    """Insert or update a network record from the networks page form."""
+    """Insert or update a network record from the networks page form.
+
+    Прив'язка до структури: якщо передано `enemy_node_id` (вузол з enemy_oob),
+    формування (`group_id`) обчислюється з нього (предок-формування), а назву
+    підрозділу беремо з вузла (якщо текст `unit` не заданий вручну)."""
     # Зберігаємо embed-режим у редиректі: картку р/м відкривають як iframe
     # (/networks?pick=ID&embed=1) у модалці на /home. Без цього після збереження
     # редирект веде на звичайну сторінку, і всередині iframe зʼявляється повна
@@ -2201,7 +2220,27 @@ def networks_save(
             mask_val = mask_freq
     else:
         mask_val = None
-    unit_val = (unit or "").strip() or None
+    # Прив'язка до структури: похідне формування (group_id) і назва підрозділу.
+    enode = (enemy_node_id or "").strip() or None
+    derived_unit = None
+    if enode:
+        from app.routers import enemy as _enemy
+        with get_conn() as _c:
+            _info = _enemy.resolve_node(_c, enode)
+        if _info:
+            if _info.get("group_id"):
+                group_id = int(_info["group_id"])
+            derived_unit = _info.get("path") or _info.get("label")
+
+    # Формування невідоме (вільний текст / новий запис без вузла) → група «Невідомо».
+    if not group_id:
+        with get_conn() as _c3:
+            _unk = _c3.execute("SELECT id FROM groups WHERE name = 'Невідомо' LIMIT 1").fetchone()
+        if _unk:
+            group_id = int(_unk["id"])
+
+    # Якщо обрано вузол структури — назва береться з нього; інакше — вільний текст.
+    unit_val = derived_unit or (unit or "").strip() or None
     zone_val = (zone or "").strip() or None
     comment_val = (comment or "").strip() or None
 
@@ -2240,15 +2279,19 @@ def networks_save(
     editor = current_device_mask(request)  # Маска пристрою — авторство правки (2C.2)
 
     with get_conn() as conn:
+        # Колонка прив'язки до структури (ідемпотентно).
+        if not any(r["name"] == "enemy_node_id" for r in conn.execute("PRAGMA table_info(networks)")):
+            conn.execute("ALTER TABLE networks ADD COLUMN enemy_node_id TEXT")
+
         existing = _fetchone(conn, "SELECT id FROM networks WHERE frequency=?", (freq_norm,))
 
         if not existing:
             cur = conn.execute(
                 """
-                INSERT INTO networks (frequency, mask, unit, zone, chat_id, group_id, status_id, comment, updated_at, last_edited_by, last_edited_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO networks (frequency, mask, unit, zone, chat_id, group_id, enemy_node_id, status_id, comment, updated_at, last_edited_by, last_edited_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
-                (freq_norm, mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now, editor, now),
+                (freq_norm, mask_val, unit_val, zone_val, int(chat_id), int(group_id), enode, int(status_id), comment_val, now, editor, now),
             )
             network_id = int(cur.lastrowid)
         else:
@@ -2256,10 +2299,10 @@ def networks_save(
             conn.execute(
                 """
                 UPDATE networks
-                SET mask=?, unit=?, zone=?, chat_id=?, group_id=?, status_id=?, comment=?, updated_at=?, last_edited_by=?, last_edited_at=?
+                SET mask=?, unit=?, zone=?, chat_id=?, group_id=?, enemy_node_id=?, status_id=?, comment=?, updated_at=?, last_edited_by=?, last_edited_at=?
                 WHERE id=?
                 """,
-                (mask_val, unit_val, zone_val, int(chat_id), int(group_id), int(status_id), comment_val, now, editor, now, network_id),
+                (mask_val, unit_val, zone_val, int(chat_id), int(group_id), enode, int(status_id), comment_val, now, editor, now, network_id),
             )
 
         _set_tags(conn, network_id, tag_ids)

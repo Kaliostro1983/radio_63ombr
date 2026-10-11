@@ -285,6 +285,93 @@ def _group_stats(conn) -> Dict[int, Dict[str, Any]]:
     return {int(r["gid"]): {"nets": r["nets"] or 0, "cs": r["cs"] or 0, "last": (r["last"] or "")[:10]} for r in rows}
 
 
+def _descendant_ids(kids, node_id: str) -> List[str]:
+    """Усі id вузла + нащадків (для агрегації статистики по прив'язці мереж)."""
+    out: List[str] = []
+    stack = [node_id]
+    while stack:
+        x = stack.pop()
+        out.append(x)
+        stack.extend(kids.get(x, []))
+    return out
+
+
+def _node_group_id(by_id, node_id: str) -> Optional[int]:
+    """group_id = gid найближчого предка-або-себе, що має gid (формування)."""
+    cur = node_id
+    while cur:
+        n = by_id.get(cur)
+        if not n:
+            return None
+        if n.get("gid"):
+            return int(n["gid"])
+        cur = n.get("parent")
+    return None
+
+
+def _node_path(by_id, node_id: str) -> str:
+    """Шлях «25 ЗА › 164 омсбр › 3 мсб» (без кореня)."""
+    parts: List[str] = []
+    cur = node_id
+    while cur:
+        n = by_id.get(cur)
+        if not n or n.get("root"):
+            break
+        parts.append(n["label"])
+        cur = n.get("parent")
+    return " › ".join(reversed(parts))
+
+
+def _net_stats(conn):
+    """Статистика мереж для карти:
+      by_node[enemy_node_id] = {nets,cs,last} — мережі, прив'язані до вузла;
+      by_group[group_id]     = {...}          — мережі БЕЗ прив'язки (enemy_node_id IS NULL),
+                                                 що лягають на рівень формування.
+    Безпечно працює і до появи колонки enemy_node_id (тоді все як by_group)."""
+    try:
+        has_col = any(r["name"] == "enemy_node_id" for r in conn.execute("PRAGMA table_info(networks)"))
+    except Exception:
+        has_col = False
+    col = "nw.enemy_node_id" if has_col else "NULL"
+    by_node: Dict[str, Dict[str, Any]] = {}
+    by_group: Dict[int, Dict[str, Any]] = {}
+    rows = conn.execute(
+        f"""
+        SELECT {col} AS nid, nw.group_id AS gid,
+          (SELECT COUNT(*) FROM callsigns c WHERE c.network_id = nw.id) AS cs,
+          (SELECT MAX(m.created_at) FROM messages m WHERE m.network_id = nw.id) AS last
+        FROM networks nw
+        """
+    ).fetchall()
+    for r in rows:
+        nid = r["nid"]
+        last = (r["last"] or "")[:10]
+        cs = r["cs"] or 0
+        if nid:
+            d = by_node.setdefault(str(nid), {"nets": 0, "cs": 0, "last": ""})
+        elif r["gid"] is not None:
+            d = by_group.setdefault(int(r["gid"]), {"nets": 0, "cs": 0, "last": ""})
+        else:
+            continue
+        d["nets"] += 1
+        d["cs"] += cs
+        if last > d["last"]:
+            d["last"] = last
+    return by_node, by_group
+
+
+def resolve_node(conn, node_id: str):
+    """Для networks.py: {node_id,label,full,path,group_id} або None."""
+    _nodes, by_id, _kids = _load(conn)
+    n = by_id.get(node_id)
+    if not n:
+        return None
+    return {
+        "node_id": node_id, "label": n["label"], "full": n.get("full", ""),
+        "path": _node_path(by_id, node_id), "group_id": _node_group_id(by_id, node_id),
+    }
+
+
 # ── Сторінка ────────────────────────────────────────────────────────────────
 
 @router.get("/enemy", response_class=HTMLResponse)
@@ -301,7 +388,23 @@ def enemy_page(request: Request):
 def api_enemy_structure():
     with get_conn() as conn:
         nodes, by_id, kids = _load(conn)
-        gstats = _group_stats(conn)
+        by_node, by_group = _net_stats(conn)
+
+    # «Власна» статистика вузла = мережі, прив'язані саме до нього (enemy_node_id)
+    # + мережі рівня формування без прив'язки (enemy_node_id IS NULL, group_id=gid).
+    own: Dict[str, Dict[str, Any]] = {}
+    for n in nodes:
+        if n["root"]:
+            continue
+        o = {"nets": 0, "cs": 0, "last": ""}
+        nn = by_node.get(n["id"])
+        if nn:
+            o["nets"] += nn["nets"]; o["cs"] += nn["cs"]; o["last"] = max(o["last"], nn["last"])
+        if n.get("gid"):
+            gg = by_group.get(int(n["gid"]))
+            if gg:
+                o["nets"] += gg["nets"]; o["cs"] += gg["cs"]; o["last"] = max(o["last"], gg["last"])
+        own[n["id"]] = o
 
     out = []
     for n in nodes:
@@ -311,17 +414,35 @@ def api_enemy_structure():
             "kids": len(kids.get(n["id"], [])), "has_db": False,
         }
         if not n["root"]:
-            gids = _descendant_gids(by_id, kids, n["id"])
-            nets = sum(gstats.get(g, {}).get("nets", 0) for g in gids)
-            cs = sum(gstats.get(g, {}).get("cs", 0) for g in gids)
-            last = max((gstats.get(g, {}).get("last", "") for g in gids), default="")
-            if gids and (nets or cs or last):
+            ids = _descendant_ids(kids, n["id"])
+            nets = sum(own.get(i, {}).get("nets", 0) for i in ids)
+            cs = sum(own.get(i, {}).get("cs", 0) for i in ids)
+            last = max((own.get(i, {}).get("last", "") for i in ids), default="")
+            if nets or cs or last:
                 d["stats"] = {"nets": nets, "cs": cs, "last": last}
                 d["has_db"] = True
         out.append(d)
 
     edges = [{"source": n["parent"], "target": n["id"]} for n in nodes if n["parent"]]
     return {"ok": True, "nodes": out, "edges": edges}
+
+
+@router.get("/api/enemy/nodes-flat")
+def api_enemy_nodes_flat():
+    """Плаский список вузлів структури (без кореня) з шляхом і формуванням —
+    для селектора підрозділу в картці р/м."""
+    with get_conn() as conn:
+        nodes, by_id, _kids = _load(conn)
+    out = []
+    for n in nodes:
+        if n["root"]:
+            continue
+        out.append({
+            "id": n["id"], "label": n["label"], "path": _node_path(by_id, n["id"]),
+            "group_id": _node_group_id(by_id, n["id"]), "ech": n["ech"], "branch": n["branch"],
+        })
+    out.sort(key=lambda x: x["path"])
+    return {"ok": True, "nodes": out}
 
 
 @router.get("/api/enemy/networks")
@@ -331,19 +452,31 @@ def api_enemy_networks(node: str = Query(default="")):
         n = by_id.get(node)
         if not n:
             return {"ok": False, "error": "node not found", "networks": []}
+        node_ids = _descendant_ids(kids, node)
         gids = _descendant_gids(by_id, kids, node)
-        if not gids:
+        has_col = any(r["name"] == "enemy_node_id" for r in conn.execute("PRAGMA table_info(networks)"))
+        wheres, params = [], []
+        if has_col and node_ids:
+            wheres.append("nw.enemy_node_id IN (%s)" % ",".join("?" * len(node_ids)))
+            params += node_ids
+        # Фолбек: мережі рівня формування без прив'язки до вузла.
+        if gids:
+            if has_col:
+                wheres.append("(nw.enemy_node_id IS NULL AND nw.group_id IN (%s))" % ",".join("?" * len(gids)))
+            else:
+                wheres.append("nw.group_id IN (%s)" % ",".join("?" * len(gids)))
+            params += gids
+        if not wheres:
             return {"ok": True, "networks": [], "label": n["label"]}
-        ph = ",".join("?" * len(gids))
         rows = conn.execute(
             f"""
             SELECT nw.id nid, nw.frequency freq, nw.unit unit,
               (SELECT COUNT(*) FROM callsigns c WHERE c.network_id = nw.id) cs,
               (SELECT MAX(m.created_at) FROM messages m WHERE m.network_id = nw.id) last
-            FROM networks nw WHERE nw.group_id IN ({ph})
+            FROM networks nw WHERE {" OR ".join(wheres)}
             ORDER BY cs DESC, nw.frequency LIMIT 80
             """,
-            gids,
+            params,
         ).fetchall()
     out = [{"id": r["nid"], "freq": r["freq"] or "", "unit": r["unit"] or "",
             "cs": r["cs"] or 0, "last": (r["last"] or "")[:10]} for r in rows]

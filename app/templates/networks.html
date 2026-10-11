@@ -23,6 +23,92 @@
 </style>
 {% endif %}
 
+<style>
+  /* ── Пікер підрозділу (drill-down плитками) ── */
+  .nup-trigger{ display:flex; gap:6px; align-items:stretch; }
+  .nup-pick-btn{
+    flex:1 1 auto; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:8px 12px; border:1px solid var(--border); border-radius:10px;
+    background:var(--bg); color:var(--text); cursor:pointer; font:inherit; text-align:left; min-width:0;
+  }
+  .nup-pick-btn:hover{ border-color:var(--text); }
+  .nup-pick-label{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .nup-pick-btn svg{ flex:none; opacity:.5; }
+  .nup-clear-btn{
+    flex:none; width:34px; border:1px solid var(--border); border-radius:10px;
+    background:var(--bg); color:var(--muted,#888); cursor:pointer; font-size:13px;
+  }
+  .nup-clear-btn:hover{ color:#dc2626; border-color:#dc2626; }
+
+  .nup-modal{ z-index:2000000 !important; }
+  .nup-card{
+    position:relative; max-width:720px; margin:20px auto;
+    display:flex; flex-direction:column; max-height:calc(100vh - 40px);
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    box-shadow:0 20px 60px rgba(0,0,0,.25); overflow:hidden;
+  }
+  .nup-head{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); }
+  .nup-circle{
+    flex:none; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer;
+  }
+  .nup-circle:disabled{ opacity:.35; cursor:default; }
+  .nup-back:not(:disabled):hover{ border-color:var(--text); }
+  .nup-confirm{ color:#16a34a; border-color:#16a34a; }
+  .nup-confirm:not(:disabled):hover{ background:#16a34a; color:#fff; }
+  .nup-confirm:disabled{ color:var(--muted,#888); border-color:var(--border); }
+  .nup-path{
+    flex:1 1 auto; min-width:0; text-align:center; font-weight:600; font-size:15px;
+    padding:9px 10px; border:1px solid var(--border); border-radius:10px; background:var(--card); color:var(--text);
+  }
+  .nup-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:10px;
+    padding:14px; overflow-y:auto;
+  }
+  .nup-tile{
+    display:flex; flex-direction:column; gap:3px; align-items:flex-start; text-align:left;
+    padding:10px 12px 10px 13px; border:1px solid var(--border);
+    border-left:4px solid var(--nup-accent,var(--border)); border-radius:10px;
+    background:var(--bg); color:var(--text); cursor:pointer; font:inherit;
+  }
+  .nup-tile:hover{ background:var(--card); border-color:var(--nup-accent,var(--text)); }
+  .nup-tile-name{ font-weight:700; font-size:15px; }
+  .nup-tile-lvl{ font-size:12px; opacity:.6; }
+  .nup-tile-meta{ font-size:12px; opacity:.75; display:flex; align-items:center; gap:5px; min-height:16px; }
+  .nup-tile-chev{ font-weight:700; opacity:.7; }
+  .nup-empty{ padding:0 14px 16px; font-size:13px; opacity:.7; text-align:center; }
+
+  /* ── Картка р/м: вужче вікно (−25%) ── */
+  #netModalCard .net-modal-card{ max-width:615px; }
+
+  /* ── Пошук маски/частоти: інпут+кнопка як єдиний блок (стиль «відсилки») ── */
+  .net-freq-search-form{ display:flex; justify-content:center; margin:0; }
+  .net-freq-search{
+    display:flex; align-items:stretch; height:42px; width:100%; max-width:360px;
+    border:1px solid var(--border); border-radius:10px; overflow:hidden;
+  }
+  .net-freq-search .nfs-icon{
+    width:42px; flex:none; display:flex; align-items:center; justify-content:center;
+    background:var(--accent,#2563eb); color:#fff;
+  }
+  .net-freq-search .home-freq-input-wrap{ flex:1 1 auto; min-width:0; }
+  .net-freq-search .nfs-input{
+    width:100%; height:42px; padding:0 12px; border:none;
+    border-left:1px solid var(--border); border-right:1px solid var(--border);
+    border-radius:0; background:var(--bg); color:var(--text); outline:none; font:inherit; box-sizing:border-box;
+  }
+  .net-freq-search .nfs-input:focus{ background:color-mix(in srgb, var(--accent,#2563eb) 6%, var(--bg)); }
+  .net-freq-search .nfs-btn{
+    width:48px; flex:none; display:flex; align-items:center; justify-content:center;
+    background:var(--accent,#2563eb); color:#fff; border:none; cursor:pointer;
+  }
+  .net-freq-search .nfs-btn:hover{ filter:brightness(1.08); }
+
+  /* ── Крайні правки — правий нижній кут картки ── */
+  .net-save-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; }
+  .net-edited-by{ opacity:.55; font-size:11px; text-align:right; }
+</style>
+
 <div class="page-header net-page-header">
   <div class="net-page-header__title">
     <h1>Радіомережі</h1>
@@ -67,27 +153,24 @@
       {% endif %}
 
       <div class="card">
-        <form method="post" action="/networks/search">
-          <div class="row" style="align-items:flex-end; justify-content:space-between; gap:10px;">
-            <div class="field" style="max-width:320px; flex:0 0 320px;">
-              <label>Маска/частота</label>
-              <div class="home-freq-input-wrap">
-                <input
-                  id="netSearchQuery"
-                  name="query"
-                  value="{{ q_query }}"
-                  placeholder="050.6250 або 050.62"
-                  autocomplete="off"
-                />
-              </div>
+        <form method="post" action="/networks/search" class="net-freq-search-form">
+          <div class="net-freq-search">
+            <span class="nfs-icon" title="Маска / частота" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.6"/><path d="M8.8 8.8a4.5 4.5 0 000 6.4M15.2 8.8a4.5 4.5 0 010 6.4"/><path d="M6.3 6.3a8 8 0 000 11.4M17.7 6.3a8 8 0 010 11.4"/></svg>
+            </span>
+            <div class="home-freq-input-wrap">
+              <input
+                id="netSearchQuery"
+                name="query"
+                class="nfs-input"
+                value="{{ q_query }}"
+                placeholder="050.6250 або 050.62"
+                autocomplete="off"
+              />
             </div>
-            <div class="field" style="min-width:140px; flex:0 0 140px;">
-              <label>&nbsp;</label>
-              <button type="submit">Пошук</button>
-            </div>
-            <div class="field" style="min-width:220px; flex:1 1 auto; display:flex; justify-content:flex-end;">
-              <label>&nbsp;</label>
-            </div>
+            <button type="submit" class="nfs-btn" title="Пошук" aria-label="Пошук">
+              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
+            </button>
           </div>
         </form>
       </div>
@@ -157,9 +240,13 @@
         {% endif %}
         <span class="badge {{ cls }}">{{ st }} • {{ ch }}</span>
         {% if etalon_exists %}
-          <button type="button" class="secondary" style="width:220px" onclick="window.open('/networks?tab=etalons&pick={{ current.id }}','_blank')">Еталонка</button>
+          <button type="button" class="secondary cs-icon-btn" title="Еталонка — відкрити" aria-label="Еталонка" onclick="window.open('/networks?tab=etalons&pick={{ current.id }}','_blank')">
+            <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h10v13l-5-3-5 3v-13z"/><path d="M7.4 8.4l1.7 1.7 3.4-3.4"/></svg>
+          </button>
         {% else %}
-          <button type="button" class="secondary" style="width:220px" onclick="window.open('/networks?tab=etalons&pick={{ current.id }}','_blank')">Додати еталонку</button>
+          <button type="button" class="secondary cs-icon-btn" title="Додати еталонку" aria-label="Додати еталонку" onclick="window.open('/networks?tab=etalons&pick={{ current.id }}','_blank')">
+            <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h10v13l-5-3-5 3v-13z"/><path d="M10 6.3v4.4M7.8 8.5h4.4"/></svg>
+          </button>
         {% endif %}
         <button id="netCrossBtn" type="button" class="secondary cs-icon-btn"
                 title="Крос-аналіз: спільні позивні з р/м цієї ж бригадно-полкової групи"
@@ -176,19 +263,16 @@
           <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="2.4"/><path d="M3 15c0-2.2 1.8-3.6 4-3.6 1 0 1.9.3 2.6.8"/><circle cx="14" cy="12.5" r="3.2"/><path d="M14 11v1.5l1 1"/></svg>
         </button>
       {% else %}
-        <button type="button" class="secondary" style="width:220px" disabled>Додати еталонку</button>
+        <button type="button" class="secondary cs-icon-btn" title="Додати еталонку (спершу збережіть р/м)" aria-label="Додати еталонку" disabled>
+          <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h10v13l-5-3-5 3v-13z"/><path d="M10 6.3v4.4M7.8 8.5h4.4"/></svg>
+        </button>
       {% endif %}
     </div>
   </div>
 
-  {% if current and current.last_edited_by %}
-    <div class="small" style="opacity:.55; font-size:11px; margin-top:4px">
-      Крайні правки: {{ current.last_edited_by }}{% if current.last_edited_at %} · {{ current.last_edited_at }}{% endif %}
-    </div>
-  {% endif %}
-
   <form method="post" action="/networks/save" style="margin-top:14px">
     <input type="hidden" name="embed" value="{{ '1' if is_embed else '' }}">
+    <input type="hidden" id="netGroupSelect" name="group_id" value="{{ current.group_id if current else 0 }}">
     <div class="row">
       <div class="field">
         <label>Частота</label>
@@ -200,20 +284,27 @@
       </div>
       <div class="field">
         <label>Дата початку</label>
-        <input type="date" name="start_date_str" value="{{ start_date.isoformat() if start_date else (draft.start_date_str if draft else '') }}"/>
-        <div class="small">Зберігається в еталонці. Якщо порожньо — “невідомо”.</div>
+        <input type="date" name="start_date_str" title="Зберігається в еталонці. Якщо порожньо — «невідомо»." value="{{ start_date.isoformat() if start_date else (draft.start_date_str if draft else '') }}"/>
       </div>
       <div class="field">
         <label>Дата завершення</label>
-        <input type="date" name="end_date_str" value="{{ end_date.isoformat() if end_date else (draft.end_date_str if draft else '') }}"/>
-        <div class="small">Зберігається в еталонці. Якщо порожньо — “невідомо”.</div>
+        <input type="date" name="end_date_str" title="Зберігається в еталонці. Якщо порожньо — «невідомо»." value="{{ end_date.isoformat() if end_date else (draft.end_date_str if draft else '') }}"/>
       </div>
     </div>
 
     <div class="row" style="margin-top:10px">
       <div class="field">
-        <label>Підрозділ</label>
-        <input name="unit" class="{% if draft and 'unit' in draft.missing_fields %}input-error{% endif %}" value="{{ current.unit if current else (draft.unit if draft else '') }}" required/>
+        <label>Підрозділ (зі структури)</label>
+        <div class="nup-trigger">
+          <button type="button" id="netUnitPickBtn" class="nup-pick-btn" title="Обрати підрозділ зі структури">
+            <span id="netUnitPickLabel" class="nup-pick-label">— обрати підрозділ —</span>
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l5 5 5-5"/></svg>
+          </button>
+          <button type="button" id="netUnitClearBtn" class="nup-clear-btn" title="Очистити вибір" hidden>✕</button>
+        </div>
+        <input type="hidden" name="enemy_node_id" id="netUnitNode" value="{{ current.enemy_node_id if current and current.enemy_node_id else '' }}"/>
+        <div class="small" style="margin-top:3px">Формування обчислюється з підрозділу. Керувати структурою — <a href="/enemy" target="_blank">Противник</a>.</div>
+        <input name="unit" id="netUnitText" placeholder="текст, якщо підрозділу нема в структурі" value="{{ current.unit if current else (draft.unit if draft else '') }}" style="margin-top:5px" class="{% if draft and 'unit' in draft.missing_fields %}input-error{% endif %}"/>
       </div>
       <div class="field">
         <label>Зона функціонування</label>
@@ -255,29 +346,6 @@
         </div>
       </div>
 
-      <div class="field" style="position:relative">
-        <label style="display:flex; align-items:center; justify-content:space-between">
-          <span>Хто (група)</span>
-          <button type="button" id="netGroupManageBtn" class="lm-type-manage-btn" title="Керувати підрозділами">
-            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
-            </svg>
-          </button>
-        </label>
-        <select id="netGroupSelect" name="group_id" class="{% if draft and 'group_id' in draft.missing_fields %}input-error{% endif %}" required>
-          {% for g in groups %}
-            <option value="{{ g.id }}" {% if (current and current.group_id==g.id) or (draft and draft.group_id|int==g.id) %}selected{% endif %}>{{ g.name }}</option>
-          {% endfor %}
-        </select>
-        <div id="netGroupManagePanel" class="lm-type-manage-panel hidden">
-          <div class="lm-type-manage-add">
-            <input id="netGroupManageName" type="text" placeholder="Назва нового підрозділу…" autocomplete="off" maxlength="120">
-            <button type="button" id="netGroupManageAddBtn" class="lm-type-manage-add-btn" title="Додати">+</button>
-          </div>
-          <div id="netGroupManageList" class="lm-type-manage-list"></div>
-          <div id="netGroupManageErr" class="small lm-type-manage-err" style="display:none"></div>
-        </div>
-      </div>
     </div>
 
     <div class="row" style="margin-top:10px">
@@ -309,8 +377,11 @@
       </div>
     </div>
 
-    <div class="btnrow" style="margin-top:12px">
+    <div class="net-save-row">
       <button type="submit">Зберегти</button>
+      {% if current and current.last_edited_by %}
+        <div class="net-edited-by">Крайні правки: {{ current.last_edited_by }}{% if current.last_edited_at %} · {{ current.last_edited_at }}{% endif %}</div>
+      {% endif %}
     </div>
   </form>
 
@@ -542,6 +613,141 @@
         {% endif %}
       </div>
     </section>
+
+    <!-- ── Modal: Пікер підрозділу (drill-down плитками) ───────── -->
+    <div id="netUnitPickerModal" class="modal hidden nup-modal" aria-hidden="true">
+      <div class="modal-backdrop" data-nup-close="1"></div>
+      <div class="nup-card" role="dialog" aria-modal="true" aria-label="Вибір підрозділу">
+        <div class="nup-head">
+          <button type="button" id="nupBack" class="nup-circle nup-back" title="На рівень вище" aria-label="На рівень вище" disabled>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <input type="text" id="nupPath" class="nup-path" readonly placeholder="Оберіть армію…" aria-label="Пройдена структура"/>
+          <button type="button" id="nupConfirm" class="nup-circle nup-confirm" title="Зафіксувати підрозділ" aria-label="Зафіксувати" disabled>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          </button>
+        </div>
+        <div id="nupGrid" class="nup-grid"></div>
+        <div id="nupEmpty" class="nup-empty" hidden>Нижче підрозділів немає — натисніть ✓, щоб обрати поточний.</div>
+      </div>
+    </div>
+
+    <script>
+    // ── Пікер підрозділу: drill-down по структурі enemy_oob ──
+    (function initNetUnitPicker(){
+      const pickBtn   = document.getElementById("netUnitPickBtn");
+      const pickLabel = document.getElementById("netUnitPickLabel");
+      const clearBtn  = document.getElementById("netUnitClearBtn");
+      const nodeInp   = document.getElementById("netUnitNode");
+      const txt       = document.getElementById("netUnitText");
+      const modal     = document.getElementById("netUnitPickerModal");
+      if (!pickBtn || !modal || !nodeInp) return;
+      const grid      = document.getElementById("nupGrid");
+      const pathEl    = document.getElementById("nupPath");
+      const emptyEl   = document.getElementById("nupEmpty");
+      const backBtn   = document.getElementById("nupBack");
+      const confirmBtn= document.getElementById("nupConfirm");
+
+      const ECH_UK = {army:"армія", division:"дивізія", brigade:"бригада", regiment:"полк", battalion:"батальйон", company:"рота"};
+      const BRANCH_COLOR = {hq:"#64748b", infantry:"#16a34a", armor:"#b45309", artillery:"#dc2626",
+        antitank:"#9333ea", airdefense:"#0891b2", recon:"#ca8a04", engineer:"#4b5563", cbrn:"#15803d",
+        signal:"#2563eb", ew:"#db2777", maint:"#78716c", medical:"#e11d48", support:"#0d9488", uav:"#7c3aed"};
+
+      let data = null;    // {byId, kids, rootKids}
+      let path = [];      // id-шлях від армії вниз
+      const esc = (s) => String(s==null?"":s).replace(/[&<>"']/g,
+        c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+
+      async function ensureData(){
+        if (data) return data;
+        const d = await (await fetch("/api/enemy/structure", {headers:{Accept:"application/json"}})).json();
+        const byId = {}, kids = {};
+        (d.nodes||[]).forEach(n => { byId[n.id] = n; });
+        (d.nodes||[]).forEach(n => { if (n.parent) (kids[n.parent] = kids[n.parent] || []).push(n.id); });
+        data = {byId, kids, rootKids: (kids["root"] || [])};
+        return data;
+      }
+
+      function ancestorsOf(id){           // [армія, …, id] зверху вниз
+        const chain = []; let cur = id;
+        while (cur && data.byId[cur] && cur !== "root"){ chain.push(cur); cur = data.byId[cur].parent; }
+        return chain.reverse();
+      }
+      function pathLabel(ids){            // «67 мсд 25 ЗА» — дочірній першим
+        return ids.map(id => data.byId[id] ? data.byId[id].label : "").filter(Boolean).reverse().join(" ");
+      }
+      function levelIds(){
+        if (!path.length) return data.rootKids;
+        return data.kids[path[path.length-1]] || [];
+      }
+
+      function render(){
+        const ids = levelIds();
+        pathEl.value = path.length ? pathLabel(path) : "";
+        backBtn.disabled = !path.length;
+        confirmBtn.disabled = !path.length;
+        grid.innerHTML = ids.map(id => {
+          const n = data.byId[id];
+          const lvl = ECH_UK[n.ech] || "";
+          const nets = (n.stats && n.stats.nets) || 0;
+          const col = BRANCH_COLOR[n.branch] || "var(--border)";
+          const hasKids = n.kids > 0;
+          return `<button type="button" class="nup-tile" data-id="${esc(id)}" style="--nup-accent:${col}">`
+            + `<span class="nup-tile-name">${esc(n.label)}</span>`
+            + `<span class="nup-tile-lvl">${esc(lvl)}</span>`
+            + `<span class="nup-tile-meta">${nets ? (nets + " р/м") : "&nbsp;"}`
+            + `${hasKids ? ' <span class="nup-tile-chev">›</span>' : ''}</span>`
+            + `</button>`;
+        }).join("");
+        emptyEl.hidden = ids.length > 0;
+      }
+
+      function setSelection(id){
+        if (id && data && data.byId[id]){
+          nodeInp.value = id;
+          pickLabel.textContent = pathLabel(ancestorsOf(id));
+          clearBtn.hidden = false;
+          if (txt){ txt.value = ""; txt.style.display = "none"; }
+        } else {
+          nodeInp.value = "";
+          pickLabel.textContent = "— обрати підрозділ —";
+          clearBtn.hidden = true;
+          if (txt) txt.style.display = "";
+        }
+      }
+
+      function open(){
+        ensureData().then(() => {
+          path = nodeInp.value ? ancestorsOf(nodeInp.value) : [];
+          render();
+          modal.classList.remove("hidden"); modal.setAttribute("aria-hidden","false");
+        }).catch(() => { alert("Не вдалося завантажити структуру"); });
+      }
+      function close(){ modal.classList.add("hidden"); modal.setAttribute("aria-hidden","true"); }
+
+      grid.addEventListener("click", e => {
+        const t = e.target.closest(".nup-tile"); if (!t) return;
+        path.push(t.dataset.id); render();
+      });
+      backBtn.addEventListener("click", () => { if (path.length){ path.pop(); render(); } });
+      confirmBtn.addEventListener("click", () => { if (!path.length) return; setSelection(path[path.length-1]); close(); });
+      pickBtn.addEventListener("click", open);
+      clearBtn.addEventListener("click", () => setSelection(""));
+      modal.querySelector("[data-nup-close]").addEventListener("click", close);
+      document.addEventListener("keydown", e => { if (e.key === "Escape" && !modal.classList.contains("hidden")) close(); });
+
+      // Режим редагування: підтягнути лейбл поточного вибору.
+      if (nodeInp.value){
+        ensureData().then(() => {
+          if (nodeInp.value && data.byId[nodeInp.value]){
+            pickLabel.textContent = pathLabel(ancestorsOf(nodeInp.value));
+            clearBtn.hidden = false;
+            if (txt) txt.style.display = "none";
+          }
+        });
+      }
+    })();
+    </script>
 
     <!-- ── Modal: Еталонки ───────────────────────────────────── -->
     <div id="netModalEtalons" class="modal hidden net-modal" aria-hidden="true">
@@ -1072,6 +1278,25 @@
       if (nameInp) nameInp.addEventListener("keydown", e => {
         if (e.key === "Enter") { e.preventDefault(); onAdd(); }
       });
+    })();
+
+    // ── Фільтр селектора «Підрозділ» (зі структури enemy_oob) ──
+    (function initNetUnitFilter() {
+      const filt = document.getElementById("netUnitFilter");
+      const sel  = document.getElementById("netUnitSelect");
+      if (!sel) return;
+      if (filt) filt.addEventListener("input", function () {
+        const q = filt.value.trim().toLowerCase();
+        Array.prototype.forEach.call(sel.options, function (o) {
+          if (!o.value) { o.hidden = false; return; }   // лишаємо порожній пункт
+          o.hidden = !!q && o.text.toLowerCase().indexOf(q) < 0;
+        });
+      });
+      // Текстовий фолбек показуємо лише коли підрозділ НЕ обрано зі структури.
+      const txt = document.getElementById("netUnitText");
+      function syncUnitText() { if (txt) txt.style.display = sel.value ? "none" : ""; }
+      sel.addEventListener("change", syncUnitText);
+      syncUnitText();
     })();
 
     // ── Керування підрозділами (група «Хто») — дзеркально до чатів ──
