@@ -15,7 +15,7 @@ Exposes:
 from __future__ import annotations
 
 import re
-from datetime import date as _date
+from datetime import date as _date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -515,6 +515,40 @@ def cas_records_list(
             resp["suggested_unit_name"] = uname
             resp["standard_text"] = build_standard_intercept_text(conn, message_id)
     return resp
+
+
+@router.get("/api/casualties/by-network")
+def cas_by_network(message_id: int = Query(default=0), hours: int = Query(default=24)):
+    """Оформлені втрати в ТІЙ САМІЙ радіомережі за крайні `hours` годин —
+    для бокової панелі модалки втрат (контекст/антидубль). Вікно — крайні
+    `hours` годин ВІД ПОТОЧНОГО МОМЕНТУ (щоб бачити й втрати, оформлені пізніше
+    за це перехоплення, в межах доби); поточне перехоплення (message_id)
+    виключаємо — його записи вже показані в самій модалці.
+
+    `messages.created_at` зберігається в київському часі, а сервер може бути в
+    UTC, тож «зараз» беремо як UTC+3 (Київ, без переходів) — незалежно від TZ
+    сервера, щоб свіжі (останні ~3 год) записи не відсікались."""
+    if not message_id:
+        return {"ok": True, "records": []}
+    hours = max(1, min(int(hours or 24), 240))
+    anchor = (datetime.now(timezone.utc) + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        base = conn.execute(
+            "SELECT network_id AS nid FROM messages WHERE id = ?",
+            (message_id,),
+        ).fetchone()
+        if not base or base["nid"] is None:
+            return {"ok": True, "records": []}
+        rows = conn.execute(
+            _SELECT_CASUALTY +
+            "WHERE cas.is_valid = 1 AND m.network_id = ? AND cas.message_id <> ? "
+            "AND REPLACE(m.created_at,'T',' ') <= ? "
+            "AND REPLACE(m.created_at,'T',' ') >= datetime(?, '-' || ? || ' hours') "
+            "ORDER BY m.created_at DESC, cas.id DESC",
+            (base["nid"], message_id, anchor, anchor, hours),
+        ).fetchall()
+        out = [_casualty_dict(conn, r) for r in rows]
+    return {"ok": True, "records": out, "network_id": base["nid"]}
 
 
 def _aggregate_report(date_from: str, date_to: str):

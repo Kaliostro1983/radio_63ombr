@@ -632,15 +632,20 @@
 /* Підписи частот біля маркерів (Leaflet tooltip permanent) */
 .leaflet-tooltip.pel-freq-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: #fff;
-  background: rgba(20,24,30,.82);
-  padding: 2px 7px;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,.22);
+  /* Без плашки — лише текст із чорним обведенням, у лівому нижньому куті іконки */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: 0 1px 4px rgba(0,0,0,.45);
+  text-shadow:
+    -1px -1px 0 #000,  1px -1px 0 #000,
+    -1px  1px 0 #000,  1px  1px 0 #000,
+     0   -1px 0 #000,  0    1px 0 #000,
+    -1px  0   0 #000,  1px  0   0 #000;
 }
 .leaflet-tooltip.pel-freq-label::before { display: none; }   /* без хвостика */
 
@@ -670,6 +675,11 @@
 }
 .pel-bind-btn:hover { background: rgba(20,24,30,.95); border-color: var(--accent,#f59e0b); }
 .pel-bind-btn.is-on { border-color:#4ade80; color:#4ade80; }
+/* Кнопка «лише у видимій області» — власна позиція (під іконкою копіювання),
+   щоб не накладатись на «Прив'язки» (обидві мали б right:54px). */
+#pelRefreshBtn { top: 54px; right: 10px; }
+#pelRefreshBtn.pel-spin svg { animation: pelSpin .5s linear; }
+@keyframes pelSpin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 
 /* ── Фільтр за авторством (кнопка + меню, правий верхній кут) ── */
 .pel-author-btn {
@@ -848,3 +858,5 @@
 .pel-pop-v { font-weight: 600; word-break: break-word; }
 /* Джерело «імпорт» у картці пеленга */
 .pel-pop-v.is-imported { color: #2563eb; }
+/* Невідома характеристика неідентифікованої радіомережі */
+.pel-pop-v.pel-pop-nv { color: #9ca3af; font-weight: 500; font-style: italic; }

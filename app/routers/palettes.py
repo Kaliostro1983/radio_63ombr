@@ -32,7 +32,7 @@ from app.core.db import get_conn
 from app.core.palette_fold import fold_code, mask_to_glob, is_mask
 from app.services.palette_import_service import (
     parse_kml_bytes, parse_geojson_bytes, parse_ldk_bytes, parse_csv_bytes,
-    build_regions, analyze_duplicates, persist_palette,
+    build_regions, analyze_duplicates, persist_palette, scope_label_for_name,
 )
 
 router = APIRouter()
@@ -69,6 +69,41 @@ def api_palette_units():
             "SELECT id, name FROM palette_units ORDER BY sort_order, name"
         ).fetchall()
     return {"ok": True, "units": [{"id": int(r["id"]), "name": str(r["name"])} for r in rows]}
+
+
+@router.post("/api/palettes/units")
+async def api_palette_unit_create(payload: dict = Body(default=None)):
+    """Створити підрозділ-тег палітри (керування зі списку в діалозі імпорту)."""
+    name = str((payload or {}).get("name") or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "Назва не може бути порожньою"}, status_code=400)
+    with get_conn() as conn:
+        ex = conn.execute(
+            "SELECT id FROM palette_units WHERE lower(name) = lower(?)", (name,)
+        ).fetchone()
+        if ex:
+            return JSONResponse({"ok": False, "error": "Підрозділ з такою назвою вже існує"}, status_code=409)
+        row = conn.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM palette_units").fetchone()
+        sort_order = int(row["n"] if not isinstance(row, tuple) else row[0])
+        cur = conn.execute(
+            "INSERT INTO palette_units (name, sort_order) VALUES (?, ?)", (name, sort_order)
+        )
+        uid = int(cur.lastrowid)
+    return {"ok": True, "id": uid, "name": name}
+
+
+@router.post("/api/palettes/units/{unit_id}/delete")
+def api_palette_unit_delete(unit_id: int):
+    """Видалити підрозділ-тег: прибрати його з усіх палітр (palette_unit_links)."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM palette_units WHERE id = ?", (unit_id,)).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Підрозділ не знайдено"}, status_code=404)
+        removed = conn.execute(
+            "DELETE FROM palette_unit_links WHERE unit_id = ?", (unit_id,)
+        ).rowcount
+        conn.execute("DELETE FROM palette_units WHERE id = ?", (unit_id,))
+    return {"ok": True, "links_removed": int(removed or 0)}
 
 
 def _rows_to_mgrs_groups(rows) -> list:
@@ -537,6 +572,7 @@ async def api_palette_import_analyze(file: UploadFile = File(...)):
                 for r in regions
             ],
         },
+        "dup_scope": scope_label_for_name(parsed.name),
         "duplicates": duplicates,
     }
 
@@ -782,6 +818,45 @@ def api_palette_regions(palette_id: int):
                 "label": str(r["label"] or ""),
                 "center": [r["center_lat"], r["center_lon"]],
                 "point_count": int(r["point_count"] or 0),
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/api/palettes/{palette_id}/points")
+def api_palette_points(palette_id: int):
+    """Усі точки палітри (код + координати) — для показу на карті з підписами
+    (Ctrl+клік на «око» палітри у панелі)."""
+    with get_conn() as conn:
+        pal = conn.execute(
+            "SELECT id, name, min_lat, min_lon, max_lat, max_lon FROM palettes WHERE id = ?",
+            (palette_id,),
+        ).fetchone()
+        if not pal:
+            raise HTTPException(status_code=404, detail="Палітру не знайдено")
+        rows = conn.execute(
+            """
+            SELECT code, color, lat, lon
+            FROM palette_points
+            WHERE palette_id = ? AND lat IS NOT NULL AND lon IS NOT NULL
+            ORDER BY code
+            """,
+            (palette_id,),
+        ).fetchall()
+
+    return {
+        "ok": True,
+        "palette": {
+            "id": int(pal["id"]), "name": str(pal["name"]),
+            "bbox": [pal["min_lat"], pal["min_lon"], pal["max_lat"], pal["max_lon"]],
+        },
+        "points": [
+            {
+                "code": str(r["code"] or ""),
+                "color": str(r["color"] or ""),
+                "lat": r["lat"],
+                "lon": r["lon"],
             }
             for r in rows
         ],

@@ -1,0 +1,118 @@
+/* ── Мета-огляд противника: інтелект-карта структури ─────────────────────── */
+.en-wrap{
+  --en-bg:#0b111b; --en-panel:#111a28; --en-panel2:#16212f; --en-line:#243244;
+  --en-fg:#e7edf5; --en-muted:#8ea0b6; --en-faint:#5e6f86;
+  --en-hostile:#ff5b6a; --en-db:#59d4a3; --en-osint:#f0b454;
+  display:flex; flex-direction:column; gap:10px;
+}
+.en-head{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.en-title{margin:0; font-size:22px; font-weight:700; letter-spacing:.2px}
+.en-chip{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+  padding:3px 8px; border-radius:5px; border:1px solid var(--en-line); color:var(--en-muted); background:var(--en-panel2)}
+.en-legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--en-muted); margin-left:auto}
+.en-legend span{display:inline-flex; align-items:center; gap:6px; white-space:nowrap}
+.en-dot{width:11px; height:11px; display:inline-block}
+.en-dot.h{background:var(--en-hostile); transform:rotate(45deg)}
+.en-dot.d{background:var(--en-db); border-radius:2px}
+.en-dot.o{background:var(--en-osint); border-radius:2px}
+.en-actions{display:flex; gap:8px}
+.en-btn{font-size:12.5px; padding:6px 11px; border-radius:7px; cursor:pointer;
+  background:var(--en-panel2); color:var(--en-fg); border:1px solid var(--en-line)}
+.en-btn:hover{border-color:#3a4f6b}
+
+.en-stage{position:relative; height:calc(100vh - 180px); min-height:500px;
+  background:radial-gradient(circle at 50% 0%, #0f1826, #0a0f18 70%);
+  border:1px solid var(--en-line); border-radius:12px; overflow:hidden}
+#enCy{position:absolute; inset:0}
+.en-hint{position:absolute; left:12px; bottom:10px; font-size:11.5px; color:var(--en-faint);
+  background:rgba(10,15,24,.7); padding:5px 9px; border-radius:6px; border:1px solid var(--en-line);
+  pointer-events:none; max-width:70%}
+
+/* Інтел-панель */
+.en-panel{position:absolute; top:12px; right:12px; width:330px; max-width:calc(100% - 24px);
+  background:var(--en-panel); border:1px solid var(--en-line); border-radius:12px;
+  box-shadow:0 20px 50px rgba(0,0,0,.5); overflow:hidden; z-index:5; max-height:calc(100% - 24px); display:flex; flex-direction:column}
+.en-panel[hidden]{display:none}
+.enp-head{display:flex; align-items:flex-start; gap:12px; padding:13px 14px; border-bottom:1px solid var(--en-line);
+  background:linear-gradient(180deg,#16212f,#111a28); flex:0 0 auto}
+.enp-sym{flex:0 0 auto; width:50px; height:50px; display:flex; align-items:center; justify-content:center}
+.enp-sym svg{width:50px; height:50px}
+.enp-id{min-width:0}
+.enp-id h2{margin:0; font-size:19px; font-weight:700; line-height:1.05}
+.enp-id .full{margin-top:3px; font-size:12px; color:var(--en-muted); word-break:break-word}
+.enp-x{margin-left:auto; background:none; border:0; color:var(--en-faint); font-size:18px; cursor:pointer; line-height:1; padding:2px 4px}
+.enp-x:hover{color:var(--en-fg)}
+.enp-body{padding:12px 14px; display:flex; flex-direction:column; gap:10px; overflow-y:auto}
+.enp-row{display:flex; justify-content:space-between; gap:12px; font-size:13px}
+.enp-row .k{color:var(--en-muted)} .enp-row .v{text-align:right; font-weight:500}
+.enp-prov{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; padding:3px 8px; border-radius:5px; display:inline-block}
+.enp-prov.db{background:rgba(89,212,163,.14); color:var(--en-db); border:1px solid rgba(89,212,163,.4)}
+.enp-prov.osint{background:rgba(240,180,84,.13); color:var(--en-osint); border:1px solid rgba(240,180,84,.4)}
+.enp-stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px}
+.enp-stat{background:var(--en-panel2); border:1px solid var(--en-line); border-radius:8px; padding:8px}
+.enp-stat .n{font-size:17px; font-weight:600; font-variant-numeric:tabular-nums}
+.enp-stat .l{font-size:10.5px; color:var(--en-muted); text-transform:uppercase; letter-spacing:.4px; margin-top:2px}
+.enp-note{font-size:12px; color:var(--en-faint); line-height:1.45; border-top:1px dashed var(--en-line); padding-top:9px}
+.enp-nets-btn{font-size:12.5px; padding:7px 10px; border-radius:8px; cursor:pointer; text-align:left;
+  background:var(--en-panel2); color:var(--en-fg); border:1px solid var(--en-line)}
+.enp-nets-btn:hover{border-color:#3a4f6b}
+.enp-nets{display:flex; flex-direction:column; gap:5px}
+.enp-net{display:flex; align-items:center; gap:8px; font-size:12px; padding:6px 8px; border-radius:7px;
+  background:var(--en-panel2); border:1px solid var(--en-line); cursor:pointer}
+.enp-net:hover{border-color:#3a4f6b}
+.enp-net .f{font-weight:600; font-variant-numeric:tabular-nums; color:#cfe0f5; flex:0 0 auto}
+.enp-net .u{color:var(--en-muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto}
+.enp-net .c{color:var(--en-faint); flex:0 0 auto; font-variant-numeric:tabular-nums}
+.enp-net .caret{color:var(--en-faint); flex:0 0 auto; font-size:10px}
+.enp-ints{display:flex; flex-direction:column; gap:3px; margin:3px 0 5px 8px; padding-left:9px; border-left:2px solid var(--en-line)}
+.enp-ints[hidden]{display:none}
+.enp-int{display:flex; gap:9px; font-size:11.5px; padding:5px 7px; border-radius:6px; text-decoration:none;
+  color:var(--en-fg); background:rgba(22,33,47,.5)}
+.enp-int:hover{background:var(--en-panel2)}
+.enp-int .it{color:var(--en-osint); flex:0 0 auto; font-variant-numeric:tabular-nums}
+.enp-int .ib{color:var(--en-muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.enp-empty{color:var(--en-faint); font-size:12.5px}
+
+/* Контроли в шапці */
+.en-check{display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--en-fg); cursor:pointer; user-select:none}
+.en-check input{width:16px; height:16px; accent-color:var(--en-osint); cursor:pointer}
+.en-btn--accent{background:#1f3a5f; border-color:#2f5586; color:#dce9ff}
+.en-btn--accent:hover{border-color:#3f6aa6}
+.en-btn--danger{background:#3a1c22; border-color:#6b2d36; color:#ffb4bd}
+.en-btn--danger:hover{border-color:#8a3a45}
+
+/* Кнопки-іконки на вузлі при наведенні */
+.enh-tr, .enh-b{position:absolute; z-index:7; display:flex; gap:4px}
+.enh-tr[hidden], .enh-b[hidden]{display:none}
+.enh-btn{width:24px; height:24px; padding:0; display:flex; align-items:center; justify-content:center;
+  font-size:14px; line-height:1; border-radius:7px; cursor:pointer;
+  background:rgba(13,20,33,.98); color:#cfe0f5; border:1px solid var(--en-line); box-shadow:0 3px 10px rgba(0,0,0,.55)}
+.enh-btn:hover{background:#243a57; border-color:#3f6aa6; color:#fff}
+.enh-btn--exp{width:28px; height:21px; font-size:12px; border-radius:7px}
+
+/* Модалка редагування */
+.en-edit{position:fixed; inset:0; z-index:12000; display:flex; align-items:center; justify-content:center}
+.en-edit[hidden]{display:none}
+.en-edit__backdrop{position:absolute; inset:0; background:rgba(5,9,16,.6)}
+.en-edit__card{position:relative; width:min(520px,94vw); max-height:88vh; overflow:auto;
+  background:var(--en-panel); border:1px solid var(--en-line); border-radius:14px; box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.en-edit__head{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--en-line)}
+.en-edit__head h3{margin:0; font-size:16px}
+.en-edit__x{margin-left:auto; background:none; border:0; color:var(--en-faint); font-size:17px; cursor:pointer; line-height:1}
+.en-edit__x:hover{color:var(--en-fg)}
+.en-edit__body{padding:14px 16px; display:flex; flex-direction:column; gap:14px}
+.en-edit__sec{display:flex; flex-direction:column; gap:9px; padding:12px; border:1px solid var(--en-line); border-radius:10px; background:var(--en-panel2)}
+.en-edit__sec--danger{border-color:rgba(255,91,106,.35)}
+.en-edit__sec-t{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--en-muted)}
+.en-edit__hint{font-size:12px; color:var(--en-faint)}
+.en-fld{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--en-muted)}
+.en-fld input, .en-fld select{background:#0d1520; border:1px solid var(--en-line); border-radius:8px; color:var(--en-fg); padding:8px 10px; font-size:13px; width:100%}
+.en-fld input:focus, .en-fld select:focus{outline:none; border-color:#3a5586}
+.en-fld2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+
+@media (max-width:640px){
+  .en-legend{width:100%; margin-left:0}
+  .en-stage{height:calc(100vh - 250px)}
+  .en-panel{top:auto; left:12px; right:12px; bottom:12px; width:auto}
+  .en-fld2{grid-template-columns:1fr}
+}

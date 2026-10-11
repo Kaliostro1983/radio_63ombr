@@ -168,6 +168,13 @@
                 data-net-freq="{{ current.frequency }}">
           <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="14" cy="14" r="3"/><path d="M8.1 8.1l3.8 3.8M13 7l0 0M7 13l0 0"/><path d="M11.5 6h2.5v2.5"/><path d="M8.5 14H6v-2.5"/></svg>
         </button>
+        <button id="netSubAuditBtn" type="button" class="secondary cs-icon-btn"
+                title="Аудит абонентів: чи змінила р/м склад позивних (несуча, канікули, свіжі 2 тижні)"
+                aria-label="Аудит абонентів"
+                data-net-id="{{ current.id }}"
+                data-net-freq="{{ current.frequency }}">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6" r="2.4"/><path d="M3 15c0-2.2 1.8-3.6 4-3.6 1 0 1.9.3 2.6.8"/><circle cx="14" cy="12.5" r="3.2"/><path d="M14 11v1.5l1 1"/></svg>
+        </button>
       {% else %}
         <button type="button" class="secondary" style="width:220px" disabled>Додати еталонку</button>
       {% endif %}
@@ -248,13 +255,28 @@
         </div>
       </div>
 
-      <div class="field">
-        <label>Хто (група)</label>
-        <select name="group_id" class="{% if draft and 'group_id' in draft.missing_fields %}input-error{% endif %}" required>
+      <div class="field" style="position:relative">
+        <label style="display:flex; align-items:center; justify-content:space-between">
+          <span>Хто (група)</span>
+          <button type="button" id="netGroupManageBtn" class="lm-type-manage-btn" title="Керувати підрозділами">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+            </svg>
+          </button>
+        </label>
+        <select id="netGroupSelect" name="group_id" class="{% if draft and 'group_id' in draft.missing_fields %}input-error{% endif %}" required>
           {% for g in groups %}
             <option value="{{ g.id }}" {% if (current and current.group_id==g.id) or (draft and draft.group_id|int==g.id) %}selected{% endif %}>{{ g.name }}</option>
           {% endfor %}
         </select>
+        <div id="netGroupManagePanel" class="lm-type-manage-panel hidden">
+          <div class="lm-type-manage-add">
+            <input id="netGroupManageName" type="text" placeholder="Назва нового підрозділу…" autocomplete="off" maxlength="120">
+            <button type="button" id="netGroupManageAddBtn" class="lm-type-manage-add-btn" title="Додати">+</button>
+          </div>
+          <div id="netGroupManageList" class="lm-type-manage-list"></div>
+          <div id="netGroupManageErr" class="small lm-type-manage-err" style="display:none"></div>
+        </div>
       </div>
     </div>
 
@@ -460,6 +482,7 @@
               <th>Назва р/м</th>
               <th style="min-width:120px">Теги</th>
               <th style="width:110px" title="Перехоплень за останні 7 днів">Перехоплень</th>
+              <th style="width:110px" title="Дата найсвіжішого перехопленого повідомлення">Востаннє</th>
               <th style="width:90px" title="Аналітичних висновків за останні 7 діб">Аналітика</th>
               <th style="width:220px">Чат</th>
               <th style="width:110px">Еталонка</th>
@@ -492,6 +515,14 @@
                   {% endif %}
                 </td>
                 <td style="text-align:center; font-weight:600">{{ r['intercepts_7d'] }}</td>
+                <td class="small" style="white-space:nowrap; color:#fff">
+                  {%- if r['last_message_at'] -%}
+                    {%- set dm = r['last_message_at'][:10].split('-') -%}
+                    {{ dm[2] }}.{{ dm[1] }}.{{ dm[0] }}
+                  {%- else -%}
+                    —
+                  {%- endif -%}
+                </td>
                 <td style="text-align:center; font-weight:600">{{ r['analytics_7d'] }}</td>
                 <td>{{ r['chat_name'] }}</td>
                 <td class="small" style="white-space:nowrap; color:#fff">
@@ -820,6 +851,57 @@
   </div>
 </div>
 
+<!-- ── Modal: Аудит абонентів р/м ────────────────────────────────── -->
+<div id="netSubAuditModal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-subaudit-close="1"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" style="max-width:900px; width:94vw">
+    <div class="modal-head">
+      <div class="modal-title">Аудит абонентів радіомережі</div>
+      <button type="button" class="secondary cs-icon-btn" data-subaudit-close="1" title="Закрити" aria-label="Закрити">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div id="saMeta" class="small" style="opacity:.7; margin-bottom:8px"></div>
+      <div id="saBody"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ── Аудит абонентів р/м ── */
+#netSubAuditModal .modal-body { max-height: 78vh; overflow-y: auto; }
+.sa-loading, .sa-err { padding: 20px; text-align: center; opacity: .8; }
+.sa-err { color: #f87171; }
+.sa-verdict { border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; border: 1px solid var(--border); }
+.sa-v-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.sa-v-reason { font-size: 12.5px; opacity: .85; line-height: 1.5; }
+.sa-v-bad  { background: rgba(239,68,68,.10);  border-color: rgba(239,68,68,.45); }
+.sa-v-warn { background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.45); }
+.sa-v-ok   { background: rgba(34,197,94,.10);  border-color: rgba(34,197,94,.40); }
+.sa-sec { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.sa-h { font-weight: 700; font-size: 13px; opacity: .9; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .3px; }
+.sa-kv { font-size: 13px; line-height: 1.55; }
+.sa-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+.sa-list li.sa-cur { color: #4ade80; }
+.sa-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.sa-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px;
+           background: rgba(148,163,184,.16); border: 1px solid var(--border); }
+.sa-chip-drop { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.4); }
+.sa-chip-new  { background: rgba(56,189,248,.14); border-color: rgba(56,189,248,.4); }
+.sa-chip-p { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.4); }
+.sa-chip-t { background: rgba(148,163,184,.14); }
+.sa-muted { opacity: .6; }
+.sa-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+.sa-tbl th, .sa-tbl td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.sa-tbl th { opacity: .6; font-weight: 600; }
+.sa-tbl tr.sa-silent { opacity: .5; }
+.sa-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 3px; vertical-align: middle; }
+.sa-dot.sa-live { background: #22c55e; }
+.sa-dot.sa-mute { background: #6b7280; }
+.sa-foot { margin-top: 12px; font-size: 12px; }
+</style>
+
 {% endblock %}
 
 {% block scripts %}
@@ -972,6 +1054,108 @@
           if (!d.ok) { showErr(d.error || "Помилка"); return; }
           await load();
           if (window.appToast) window.appToast(`Чат видалено${d.moved ? ` (перепризначено ${d.moved} р/м)` : ""}`, "success", 1800);
+        } catch (e) { showErr("Помилка видалення"); }
+      }
+
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const willOpen = panel.classList.contains("hidden");
+        panel.classList.toggle("hidden");
+        if (willOpen) load();
+      });
+      document.addEventListener("click", (e) => {
+        if (panel.classList.contains("hidden")) return;
+        if (panel.contains(e.target) || btn.contains(e.target)) return;
+        panel.classList.add("hidden");
+      });
+      if (addBtn) addBtn.addEventListener("click", onAdd);
+      if (nameInp) nameInp.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); onAdd(); }
+      });
+    })();
+
+    // ── Керування підрозділами (група «Хто») — дзеркально до чатів ──
+    (function initNetGroupManage() {
+      const btn     = document.getElementById("netGroupManageBtn");
+      const panel   = document.getElementById("netGroupManagePanel");
+      const addBtn  = document.getElementById("netGroupManageAddBtn");
+      const nameInp = document.getElementById("netGroupManageName");
+      const list    = document.getElementById("netGroupManageList");
+      const errEl   = document.getElementById("netGroupManageErr");
+      const sel     = document.getElementById("netGroupSelect");
+      if (!btn || !panel) return;
+      let unknownId = 0;
+
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+        c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+      function showErr(m) { if (errEl) { errEl.textContent = m || ""; errEl.style.display = m ? "block" : "none"; } }
+
+      function repopulateSelect(groups) {
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join("");
+        if (groups.some(g => String(g.id) === cur)) sel.value = cur;
+      }
+
+      async function load() {
+        showErr("");
+        let d;
+        try {
+          d = await (await fetch("/api/groups", { headers: { Accept: "application/json" } })).json();
+        } catch (e) { showErr("Помилка завантаження"); return; }
+        if (!d || !d.ok) { showErr((d && d.error) || "Помилка"); return; }
+        unknownId = d.unknown_id || 0;
+        const groups = d.chats || [];
+        list.innerHTML = "";
+        groups.forEach(g => {
+          const isUnk = (g.id === unknownId);
+          const row = document.createElement("div");
+          row.className = "lm-type-manage-row";
+          const title = isUnk ? "Системний — не можна видалити"
+                              : (g.used > 0 ? "Видалити (р/м перейдуть у «Невідомо»)" : "Видалити");
+          row.innerHTML =
+            `<span class="${isUnk ? "is-system" : ""}">${esc(g.name)}</span>` +
+            `<span style="display:flex;align-items:center">` +
+              `<span class="lm-type-manage-row-meta">${isUnk ? "системний" : (g.used > 0 ? "× " + g.used : "")}</span>` +
+              `<button type="button" class="lm-type-manage-del-btn" data-id="${g.id}" ${isUnk ? "disabled" : ""} title="${title}">✕</button>` +
+            `</span>`;
+          list.appendChild(row);
+        });
+        list.querySelectorAll(".lm-type-manage-del-btn").forEach(b =>
+          b.addEventListener("click", () => onDelete(Number(b.dataset.id), groups)));
+        repopulateSelect(groups);
+      }
+
+      async function onAdd() {
+        const name = (nameInp && nameInp.value || "").trim();
+        if (!name) return;
+        showErr("");
+        try {
+          const r = await fetch("/api/groups", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+          });
+          const d = await r.json();
+          if (!d.ok) { showErr(d.error || "Помилка"); return; }
+          if (nameInp) nameInp.value = "";
+          await load();
+          if (sel) sel.value = String(d.id);
+          if (window.appToast) window.appToast("Підрозділ додано: " + name, "success", 1400);
+        } catch (e) { showErr("Помилка додавання"); }
+      }
+
+      async function onDelete(id, groups) {
+        const g = (groups || []).find(x => x.id === id);
+        const nm = g ? g.name : "";
+        const usedMsg = (g && g.used > 0) ? `\n${g.used} р/м буде перепризначено на «Невідомо».` : "";
+        if (!confirm(`Видалити підрозділ «${nm}»?${usedMsg}`)) return;
+        showErr("");
+        try {
+          const r = await fetch(`/api/groups/${id}/delete`, { method: "POST" });
+          const d = await r.json();
+          if (!d.ok) { showErr(d.error || "Помилка"); return; }
+          await load();
+          if (window.appToast) window.appToast(`Підрозділ видалено${d.moved ? ` (перепризначено ${d.moved} р/м)` : ""}`, "success", 1800);
         } catch (e) { showErr("Помилка видалення"); }
       }
 
@@ -1353,4 +1537,5 @@
 <script src="/static/networks_aliases.js?v=3" defer></script>
 <script src="/static/networks_intercepts.js?v=1" defer></script>
 <script src="/static/networks_cross.js?v=3" defer></script>
+<script src="/static/networks_subaudit.js?v=1" defer></script>
 {% endblock %}

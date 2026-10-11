@@ -16,6 +16,7 @@ layer during ingest; this router focuses on CRUD and lookup views.
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from app.core.db import get_conn
 from app.core.access import current_device_mask
 from app.core.normalize import normalize_freq
+from app.core.callsign_normalizer import normalize_callsign
 from app.services.callsign_service import link_message_callsigns
 
 
@@ -520,11 +522,14 @@ def api_callsigns_wanted(
         ).fetchall()
 
     out: List[Dict[str, Any]] = []
-    for idx, r in enumerate(rows, start=1):
+    for r in rows:
+        name = r["name"] or ""
+        if normalize_callsign(name) == "НВ":   # приховати «не визначено» (Н/В, Н\В, НВ…)
+            continue
         out.append({
-            "n":               idx,
+            "n":               len(out) + 1,
             "callsign_id":     int(r["callsign_id"]),
-            "name":            r["name"] or "",
+            "name":            name,
             "network_id":      int(r["network_id"]) if r["network_id"] else None,
             "frequency":       r["frequency"] or "",
             "unit":            r["unit"] or "",
@@ -990,6 +995,69 @@ def _set_partners(conn, callsign_id: int, partner_ids) -> None:
         left = conn.execute("SELECT COUNT(*) c FROM callsigns WHERE partner_group_id = ?", (g,)).fetchone()["c"]
         if left < 2:
             conn.execute("UPDATE callsigns SET partner_group_id = NULL WHERE partner_group_id = ?", (g,))
+
+
+@router.post("/api/callsigns/get-or-create")
+async def api_callsign_get_or_create(request: Request):
+    """Знайти позивний за (network_id, name) або створити його; повертає {id, name}.
+
+    Для полів, де позивний додається набором «назва + Enter» (модалка втрат
+    противника) — так само, як у полях позивних перехоплення. Ім'я нормалізуємо
+    (стиснення пробілів + UPPERCASE), пошук/створення прив'язуємо до network_id
+    (якщо задано), інакше — глобально за назвою.
+    """
+    payload = await request.json()
+    name = " ".join(str(payload.get("name") or "").split()).upper()
+    network_id = payload.get("network_id")
+    try:
+        network_id = int(network_id) if network_id not in (None, "", 0, "0") else None
+    except (TypeError, ValueError):
+        network_id = None
+    if not name:
+        return JSONResponse({"ok": False, "error": "name is required"}, status_code=400)
+
+    now_iso = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        if network_id:
+            row = conn.execute(
+                "SELECT id, name FROM callsigns WHERE network_id = ? AND name = ? LIMIT 1",
+                (network_id, name),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id, name FROM callsigns WHERE name = ? COLLATE NOCASE LIMIT 1",
+                (name,),
+            ).fetchone()
+        if row:
+            return {"ok": True, "id": int(row["id"]), "name": row["name"], "created": False}
+
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO callsigns (
+                    network_id, name, status_id, comment,
+                    updated_at, last_seen_dt, callsign_status_id, source_id
+                )
+                VALUES (?, ?, NULL, '', ?, ?, NULL, NULL)
+                """,
+                (network_id, name, now_iso, now_iso),
+            )
+            return {"ok": True, "id": int(cur.lastrowid), "name": name, "created": True}
+        except sqlite3.IntegrityError:
+            # Паралельне створення / наявний унікальний (network_id, name) — перевикористати.
+            if network_id:
+                ex = conn.execute(
+                    "SELECT id, name FROM callsigns WHERE network_id = ? AND name = ? LIMIT 1",
+                    (network_id, name),
+                ).fetchone()
+            else:
+                ex = conn.execute(
+                    "SELECT id, name FROM callsigns WHERE name = ? COLLATE NOCASE LIMIT 1",
+                    (name,),
+                ).fetchone()
+            if ex:
+                return {"ok": True, "id": int(ex["id"]), "name": ex["name"], "created": False}
+            return JSONResponse({"ok": False, "error": "Не вдалося створити позивний"}, status_code=500)
 
 
 @router.post("/api/callsigns/save")

@@ -103,8 +103,8 @@
         <form id="itSearchForm" class="intercepts-filter-form intercepts-filter-form--rows" autocomplete="off">
           <div class="if-row">
             <div class="field" style="flex:2">
-              <label for="itSearchPhrase">Фраза</label>
-              <input id="itSearchPhrase" type="text" placeholder="принял" autocomplete="off">
+              <label for="itSearchPhrase">Фраза <span style="font-weight:400;color:#94a3b8;font-size:.8em">— у лапках "…" точне слово</span></label>
+              <input id="itSearchPhrase" type="text" placeholder='принял   або   "дача" (ціле слово)' autocomplete="off">
             </div>
             <div class="field">
               <label for="itSearchFreq">Частота/маска</label>
@@ -553,7 +553,7 @@
                 <div id="conclCoordChips" class="concl-coord-chips"></div>
                 <!-- Інпут для введення MGRS / квадратів -->
                 <input id="conclCoordInput" type="text" class="mon-coord-input"
-                       placeholder="MGRS / УСК-2000 / квадрат / код палітри (Т-3, А-3*) / %орієнтир + Enter"
+                       placeholder="MGRS / УСК-2000 / квадрат / код палітри (Т-3, А-3*) / $код-квадрата / %орієнтир + Enter"
                        autocomplete="off" spellcheck="false">
               </div>
               <button id="conclCoordClearBtn" class="secondary mon-anal-icon-btn" title="Очистити всі введені дані">
@@ -1018,6 +1018,11 @@
       m.removeAttribute("aria-hidden");
       if (window.__modalToFront) window.__modalToFront(m);   // завжди поверх інших відкритих модалок
       if (window.pauseMonitor) window.pauseMonitor();
+      if (which === "search") {
+        // Відкриваємо пошук завжди порожнім (без результатів попереднього запиту).
+        if (window.itSearchReset) window.itSearchReset();
+        setTimeout(() => { document.getElementById("itSearchPhrase")?.focus(); }, 0);
+      }
       if (which === "conclusion") {
         if (!_conclusionInited) { _conclusionInited = true; if (window.initConclusionPanel) window.initConclusionPanel(); }
         else { if (window.resumeConclusionPanel) window.resumeConclusionPanel(); }
@@ -1098,7 +1103,11 @@
       const isEmbedMode = qs.get("embed") === "1";
 
       // У embed (iframe з /home) — Monitor пропускаємо, фокус на одній модалці.
+      // Але хендлери тулбару картки (✍ Висновок, Цікаво, Поширити) живуть у
+      // monitor.js/_initMiddleToolbar і без нього не реєструються — тож у embed
+      // ініціалізуємо їх окремо, інакше кнопки картки не працюють.
       if (!isEmbedMode) bootMonitor();
+      else if (window.monInitToolbar) window.monInitToolbar();
 
       const tabFromUrl = (qs.get("tab") || "").toLowerCase();
       if (tabFromUrl in modalMap) {
@@ -1237,9 +1246,9 @@
 
 <script src="/static/intercepts_freq_chips.js?v=3"></script>
 <script src="/static/intercepts_explorer.js?v=53"></script>
-<script src="/static/intercepts_search_modal.js?v=4"></script>
+<script src="/static/intercepts_search_modal.js?v=5"></script>
 <script src="/static/vendor/milsymbol.js?v=1"></script>
-<script src="/static/monitor.js?v=177"></script>
+<script src="/static/monitor.js?v=183"></script>
 <script src="/static/concl_ref_layer.js?v=14"></script>
 <script src="/static/monitor_playlist_filter.js?v=3"></script>
 <script src="/static/landmarks.js?v=19" defer></script>

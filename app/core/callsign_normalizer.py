@@ -19,6 +19,10 @@ import re
 
 _RE_NUMERIC_CALLSIGN = re.compile(r"^\s*(\d+)\s*(?:-?\s*[Йй])?\s*$")
 
+# Варіанти технічного плейсхолдера «не визначено»: «НВ», «Н/В», «Н\В»,
+# «Н.В», «Н-В», «Н В» → зводимо до канонічного «НВ» ще на етапі парсингу.
+_RE_UNDEFINED = re.compile(r"^Н[\s/\\.\-]*В$")
+
 
 def normalize_callsign(value: str | None) -> str:
     """Normalize a single callsign token.
@@ -42,6 +46,10 @@ def normalize_callsign(value: str | None) -> str:
         return "НВ"
 
     s = s.upper()
+
+    # «Н/В», «Н\В» та інші варіації → технічний плейсхолдер «НВ» («не визначено»).
+    if _RE_UNDEFINED.fullmatch(s):
+        return "НВ"
 
     # Canonicalize numeric callsigns to "<digits>-Й":
     # "14", "14Й", "14 Й", "14-Й" -> "14-Й"

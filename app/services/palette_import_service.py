@@ -16,6 +16,7 @@ import csv
 import io
 import json
 import math
+import random
 import re
 import zipfile
 from dataclasses import dataclass, field
@@ -651,59 +652,188 @@ def _bbox_overlap(a, b) -> bool:
     return not (a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
 
 
-def analyze_duplicates(conn, parsed: ParsedPalette) -> list[dict]:
-    """Find existing palettes that look like duplicates / supersets of `parsed`.
+# --------------------------------------------------------------------------- #
+#  Subunit hierarchy (for scoping the duplicate search by unit)
+# --------------------------------------------------------------------------- #
+# Якщо в назві палітри вказано підрозділ — звірку робимо лише з палітрами цього
+# підрозділу ТА підрозділів вищого рівня. Полк/бригада 67-ї мсд → 67 мсд;
+# 272 мсп → 47 тд. 164 омсбр і 67 мсд — самостійні (вище лише 25 А, палітр нема).
+_UNIT_PARENTS: dict[str, set[str]] = {
+    "36 мсп": {"67 мсд"},
+    "37 мсп": {"67 мсд"},
+    "31 мсп": {"67 мсд"},
+    "19 тп":  {"67 мсд"},
+    "189 орб": {"67 мсд"},
+    "272 мсп": {"47 тд"},
+}
+# Токени підрозділів для розпізнавання в назві (довші/специфічніші — першими).
+_UNIT_TOKENS: list[str] = [
+    "164 омсбр", "189 орб", "272 мсп", "67 мсд", "47 тд",
+    "36 мсп", "37 мсп", "31 мсп", "19 тп",
+]
+_COORD_PRECISION = 5   # ~1 м — точка вважається тією самою при збігу координат
 
-    Returns a list of candidate dicts: {palette_id, name, kind, color_jaccard,
-    new_is_superset, existing_point_count}. `kind` ∈ {exact, similar}.
+
+def _norm_unit(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip().lower())
+
+
+def _units_in_name(name: str) -> set[str]:
+    """Витягти токени підрозділів, згадані в назві палітри."""
+    n = _norm_unit(name)
+    return {tok for tok in _UNIT_TOKENS if tok in n}
+
+
+def scope_units_for_name(name: str) -> set[str] | None:
+    """Множина підрозділів для звірки: сам + вищий рівень. None → звірка по всіх
+    (якщо підрозділ із назви не розпізнано)."""
+    base = _units_in_name(name)
+    if not base:
+        return None
+    scope = set(base)
+    for u in base:
+        scope |= _UNIT_PARENTS.get(u, set())
+    return scope
+
+
+def scope_label_for_name(name: str) -> str:
+    scope = scope_units_for_name(name)
+    return ", ".join(sorted(scope)) if scope else "усі підрозділи"
+
+
+def _ckey(lat, lon) -> tuple[float, float]:
+    return (round(float(lat), _COORD_PRECISION), round(float(lon), _COORD_PRECISION))
+
+
+def analyze_duplicates(conn, parsed: ParsedPalette) -> list[dict]:
+    """Знайти наявні палітри, що дублюють / розширюють / перетинають `parsed`.
+
+    Алгоритм:
+      1. Скоуп за підрозділом: якщо в назві є підрозділ — звіряємо лише з
+         палітрами цього підрозділу + вищого рівня (теги palette_unit_links,
+         fallback — назва). Інакше — з усіма.
+      2. Для кожного СПІЛЬНОГО кольору: беремо 3 випадкові точки нової палітри
+         цього кольору; якщо всі 3 збігаються координатами з наявною — звіряємо
+         ВСІ точки кольору (перетин / чи нова ⊇ старої = розширення).
+      3. У звіт — усі збіги (по кольорах: matched/new/existing + прапорець ⊇).
+
+    Returns: список dict'ів {palette_id, name, kind, color_jaccard,
+    new_is_superset, existing_point_count, matched_points, scope, colors[]}.
+    kind ∈ {exact, superset, similar}.
     """
     if not parsed.points:
         return []
-    new_colors = {(p.color or "") for p in parsed.points}
-    new_codes = {fold_code(p.code) for p in parsed.points if p.code}
+
+    scope = scope_units_for_name(parsed.name)
+    scope_lbl = ", ".join(sorted(scope)) if scope else "усі"
+    new_name_norm = _norm_unit(parsed.name)
     new_bbox = bbox_of(parsed.points)
+
+    # нові точки за кольором → множини координатних ключів
+    new_by_color: dict[str, set] = {}
+    for p in parsed.points:
+        new_by_color.setdefault(p.color or "", set()).add(_ckey(p.lat, p.lon))
 
     rows = conn.execute(
         "SELECT id, name, point_count, min_lat, min_lon, max_lat, max_lon "
         "FROM palettes WHERE is_archived = 0"
     ).fetchall()
 
+    # теги підрозділів по палітрах (для скоупу)
+    tag_map: dict[int, set[str]] = {}
+    for tr in conn.execute(
+        "SELECT l.palette_id AS pid, u.name AS uname "
+        "FROM palette_unit_links l JOIN palette_units u ON u.id = l.unit_id"
+    ).fetchall():
+        tag_map.setdefault(int(tr["pid"]), set()).add(_norm_unit(tr["uname"]))
+
     candidates: list[dict] = []
     for r in rows:
-        ex_bbox = (r["min_lat"], r["min_lon"], r["max_lat"], r["max_lon"])
-        if None in ex_bbox or not _bbox_overlap(new_bbox, ex_bbox):
-            # Different geography → not a duplicate. (Same name still flags below.)
-            if (r["name"] or "").strip().lower() != parsed.name.strip().lower():
+        pid = int(r["id"])
+        ex_name = r["name"] or ""
+        same_name = _norm_unit(ex_name) == new_name_norm
+
+        # ── 1) скоуп за підрозділом ──
+        if scope is not None and not same_name:
+            ptags = tag_map.get(pid, set())
+            in_scope = bool(ptags & scope)
+            if not in_scope and not ptags:
+                in_scope = bool(_units_in_name(ex_name) & scope)
+            if not in_scope:
                 continue
 
-        ex_colors = {
-            (cr["color"] or "")
-            for cr in conn.execute(
-                "SELECT DISTINCT color FROM palette_points WHERE palette_id = ?", (r["id"],)
-            ).fetchall()
-        }
-        ex_codes = {
-            fold_code(cr["code"])
-            for cr in conn.execute(
-                "SELECT code FROM palette_points WHERE palette_id = ?", (r["id"],)
-            ).fetchall()
-            if cr["code"]
-        }
-        union = new_colors | ex_colors
-        jaccard = (len(new_colors & ex_colors) / len(union)) if union else 0.0
-        new_superset = bool(ex_codes) and ex_codes.issubset(new_codes)
-        same_name = (r["name"] or "").strip().lower() == parsed.name.strip().lower()
-        exact = same_name or (ex_codes == new_codes and ex_codes)
+        # геогр. пре-фільтр: без перетину bbox точки збігтися не можуть
+        ex_bbox = (r["min_lat"], r["min_lon"], r["max_lat"], r["max_lon"])
+        geo_ok = (None not in ex_bbox) and _bbox_overlap(new_bbox, ex_bbox)
+        if not geo_ok and not same_name:
+            continue
 
-        if exact or jaccard >= 0.5 or new_superset:
-            candidates.append({
-                "palette_id": int(r["id"]),
-                "name": str(r["name"] or ""),
-                "kind": "exact" if exact else "similar",
-                "color_jaccard": round(jaccard, 3),
-                "new_is_superset": new_superset,
-                "existing_point_count": int(r["point_count"] or 0),
+        # наявні точки за кольором
+        ex_by_color: dict[str, set] = {}
+        for cr in conn.execute(
+            "SELECT color, lat, lon FROM palette_points WHERE palette_id = ?", (pid,)
+        ).fetchall():
+            if cr["lat"] is None or cr["lon"] is None:
+                continue
+            ex_by_color.setdefault(cr["color"] or "", set()).add(_ckey(cr["lat"], cr["lon"]))
+
+        shared_colors = set(new_by_color) & set(ex_by_color)
+        color_reports: list[dict] = []
+        total_matched = tot_new = tot_ex = 0
+        for color in sorted(shared_colors):
+            nset, eset = new_by_color[color], ex_by_color[color]
+            # ── 2) гейт: 3 випадкові точки кольору ──
+            sample = random.sample(list(nset), min(3, len(nset)))
+            sampled_ok = all(s in eset for s in sample)
+            if not sampled_ok:
+                color_reports.append({
+                    "color": color, "sampled_ok": False, "matched": 0,
+                    "new_count": len(nset), "existing_count": len(eset), "is_superset": False,
+                })
+                continue
+            matched = len(nset & eset)
+            is_sup = eset.issubset(nset)
+            total_matched += matched; tot_new += len(nset); tot_ex += len(eset)
+            color_reports.append({
+                "color": color, "sampled_ok": True, "matched": matched,
+                "new_count": len(nset), "existing_count": len(eset), "is_superset": is_sup,
             })
+
+        union_colors = set(new_by_color) | set(ex_by_color)
+        jaccard = (len(shared_colors) / len(union_colors)) if union_colors else 0.0
+        verified = [c for c in color_reports if c["sampled_ok"]]
+
+        # У звіт — лише те, що СПІВПАЛО ТОЧКАМИ (підтверджено координатами) або
+        # має ту саму назву. Збіг лише за кольорами (без спільних точок) —
+        # це інша палітра тієї ж зони, її не пропонуємо на заміну.
+        if not (same_name or verified):
+            continue
+
+        colors_equal = set(new_by_color) == set(ex_by_color)
+        all_verified = bool(shared_colors) and len(verified) == len(shared_colors)
+        exact = (colors_equal and all_verified
+                 and all(c["matched"] == c["new_count"] == c["existing_count"] for c in verified))
+        superset = (not exact and all_verified
+                    and all(c["is_superset"] for c in verified) and tot_new > tot_ex)
+        kind = "exact" if (exact or (same_name and not verified)) else ("superset" if superset else "similar")
+
+        candidates.append({
+            "palette_id": pid,
+            "name": str(ex_name),
+            "kind": kind,
+            "color_jaccard": round(jaccard, 3),
+            "new_is_superset": bool(superset),
+            "existing_point_count": int(r["point_count"] or 0),
+            "matched_points": int(total_matched),
+            "scope": scope_lbl,
+            "colors": color_reports,
+        })
+
+    # найінформативніші — вгорі: більше збігів, дублі/розширення першими
+    candidates.sort(key=lambda d: (
+        -d.get("matched_points", 0),
+        0 if d["kind"] in ("exact", "superset") else 1,
+    ))
     return candidates
 
 

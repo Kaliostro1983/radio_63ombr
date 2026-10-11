@@ -15,7 +15,7 @@
       } catch (e) {}
     })();
   </script>
-  <link rel="stylesheet" href="/static/app.css?v=211"/>
+  <link rel="stylesheet" href="/static/app.css?v=221"/>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
   <script src="/static/app.js?v=2" defer></script>
   {% block extra_head %}{% endblock %}
@@ -68,6 +68,10 @@
       <a href="/conclusions" class="{% if request.url.path.startswith('/conclusions') %}active{% endif %}" title="Висновки">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
         <span class="nav-label">Висновки</span>
+      </a>
+      <a href="/enemy" class="{% if request.url.path.startswith('/enemy') %}active{% endif %}" title="Противник">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="3" y="17" width="6" height="5" rx="1"/><rect x="15" y="17" width="6" height="5" rx="1"/><path d="M12 7v4M6 17v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></svg>
+        <span class="nav-label">Противник</span>
       </a>
       <a href="/import-export" class="{% if request.url.path.startswith('/import-export') %}active{% endif %}" title="Імпорт/Експорт">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
@@ -647,7 +651,7 @@
 <script src="/static/vendor/proj4.js" defer></script>
 <script src="/static/callsign_status.js?v=2" defer></script>
 <script src="/static/callsign_modal.js?v=43" defer></script>
-<script src="/static/casualties_modal.js?v=21" defer></script>
+<script src="/static/casualties_modal.js?v=28" defer></script>
 <script src="/static/intercept_status.js?v=4" defer></script>
 {% block scripts %}{% endblock %}
 <script>

@@ -243,15 +243,15 @@
   function _openShiftImage(kind) {
     var now = new Date();
     var t16 = new Date(now); t16.setHours(16, 0, 0, 0);
-    var t08 = new Date(now); t08.setHours(8, 0, 0, 0);
+    var t08 = new Date(now); t08.setHours(7, 30, 0, 0);
     var y16 = new Date(now); y16.setDate(y16.getDate() - 1); y16.setHours(16, 0, 0, 0);
-    var y08 = new Date(now); y08.setDate(y08.getDate() - 1); y08.setHours(8, 0, 0, 0);
+    var y08 = new Date(now); y08.setDate(y08.getDate() - 1); y08.setHours(7, 30, 0, 0);
     if (kind === "16-08") {
-      // Дві колонки: [16:00 учора → 08:00 сьогодні] та [08:00 учора → 08:00 сьогодні].
+      // Дві колонки: [16:00 учора → 07:30 сьогодні] та [07:30 учора → 07:30 сьогодні].
       var qs2 = new URLSearchParams({
         date_from: _shiftIso(y16), date_to: _shiftIso(t08),
         date_from2: _shiftIso(y08), date_to2: _shiftIso(t08),
-        col1: "16:00–08:00", col2: "08:00–08:00",
+        col1: "16:00–07:30", col2: "07:30–07:30",
       });
       window.open("/api/casualties/report-image?" + qs2.toString(), "_blank");
       return;
@@ -262,11 +262,11 @@
     window.open("/api/casualties/report-image?" + qs.toString(), "_blank");
   }
 
-  // Однопериодний діапазон кнопки-зміни (для xlsx: 16-08 → 16:00 учора → 08:00 сьогодні).
+  // Однопериодний діапазон кнопки-зміни (для xlsx: 16-08 → 16:00 учора → 07:30 сьогодні).
   function _shiftRange(kind) {
     var now = new Date();
     var t16 = new Date(now); t16.setHours(16, 0, 0, 0);
-    var t08 = new Date(now); t08.setHours(8, 0, 0, 0);
+    var t08 = new Date(now); t08.setHours(7, 30, 0, 0);
     var y16 = new Date(now); y16.setDate(y16.getDate() - 1); y16.setHours(16, 0, 0, 0);
     if (kind === "16-08") return { from: y16, to: t08 };
     if (kind === "08-16") return { from: t08, to: t16 };
@@ -281,6 +281,73 @@
     a.download = "";
     document.body.appendChild(a); a.click(); a.remove();
     if (window.appToast) window.appToast("Завантаження xlsx…", "info", 1400);
+  }
+
+  // ── Alt+клік — модалка редагування діапазону (день вчора/сьогодні/завтра + час) ──
+  var _rangeModal = null;
+  function _dayOpts() {
+    return '<option value="-1">вчора</option><option value="0" selected>сьогодні</option><option value="1">завтра</option>';
+  }
+  function _buildRangeModal() {
+    if (_rangeModal) return _rangeModal;
+    var ov = document.createElement("div");
+    ov.className = "cas2-range-ov hidden";
+    ov.innerHTML =
+      '<div class="cas2-range-card">' +
+        '<div class="cas2-range-head">Діапазон звіту <span class="cas2-range-kind"></span>' +
+          '<button type="button" class="cas2-range-x" title="Закрити">✕</button></div>' +
+        '<div class="cas2-range-row"><span class="cas2-range-lbl">З</span>' +
+          '<select class="cas2-range-fday">' + _dayOpts() + '</select>' +
+          '<input type="time" class="cas2-range-ftime"></div>' +
+        '<div class="cas2-range-row"><span class="cas2-range-lbl">До</span>' +
+          '<select class="cas2-range-tday">' + _dayOpts() + '</select>' +
+          '<input type="time" class="cas2-range-ttime"></div>' +
+        '<div class="cas2-range-actions">' +
+          '<button type="button" class="cas2-range-img secondary">🖼 Зображення</button>' +
+          '<button type="button" class="cas2-range-xlsx secondary">⬇ xlsx</button></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    function hide() { ov.classList.add("hidden"); }
+    ov.addEventListener("click", function (e) { if (e.target === ov) hide(); });
+    ov.querySelector(".cas2-range-x").addEventListener("click", hide);
+    function readRange() {
+      var fday = parseInt(ov.querySelector(".cas2-range-fday").value, 10);
+      var tday = parseInt(ov.querySelector(".cas2-range-tday").value, 10);
+      var ft = ov.querySelector(".cas2-range-ftime").value || "00:00";
+      var tt = ov.querySelector(".cas2-range-ttime").value || "00:00";
+      function mk(off, hm) { var d = new Date(); d.setDate(d.getDate() + off); var p = hm.split(":"); d.setHours(+p[0], +p[1], 0, 0); return d; }
+      return { from: mk(fday, ft), to: mk(tday, tt) };
+    }
+    function gen(xlsx) {
+      var rg = readRange();
+      if (rg.to <= rg.from) { if (window.appToast) window.appToast("«До» має бути пізніше за «З»", "warn", 2000); return; }
+      var qs = new URLSearchParams({ date_from: _shiftIso(rg.from), date_to: _shiftIso(rg.to) });
+      if (xlsx) {
+        var a = document.createElement("a");
+        a.href = "/api/casualties/report.xlsx?" + qs.toString(); a.download = "";
+        document.body.appendChild(a); a.click(); a.remove();
+      } else {
+        window.open("/api/casualties/report-image?" + qs.toString(), "_blank");
+      }
+      hide();
+    }
+    ov.querySelector(".cas2-range-img").addEventListener("click", function () { gen(false); });
+    ov.querySelector(".cas2-range-xlsx").addEventListener("click", function () { gen(true); });
+    _rangeModal = { ov: ov };
+    return _rangeModal;
+  }
+  function _openRangeModal(kind) {
+    var ov = _buildRangeModal().ov;
+    var rg = _shiftRange(kind);
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    function dayOff(d) { var dd = new Date(d); dd.setHours(0, 0, 0, 0); return Math.round((dd - today) / 86400000); }
+    function hm(d) { function p(n) { return (n < 10 ? "0" : "") + n; } return p(d.getHours()) + ":" + p(d.getMinutes()); }
+    ov.querySelector(".cas2-range-fday").value = String(dayOff(rg.from));
+    ov.querySelector(".cas2-range-tday").value = String(dayOff(rg.to));
+    ov.querySelector(".cas2-range-ftime").value = hm(rg.from);
+    ov.querySelector(".cas2-range-ttime").value = hm(rg.to);
+    ov.querySelector(".cas2-range-kind").textContent = "«" + kind + "»";
+    ov.classList.remove("hidden");
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -303,6 +370,7 @@
     document.querySelectorAll("[data-cas2-shift]").forEach(function (b) {
       b.addEventListener("click", function (e) {
         var kind = b.getAttribute("data-cas2-shift");
+        if (e.altKey) { e.preventDefault(); _openRangeModal(kind); return; }
         if (e.ctrlKey || e.metaKey) { e.preventDefault(); _downloadShiftXlsx(kind); return; }
         _openShiftImage(kind);
       });

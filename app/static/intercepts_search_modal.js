@@ -147,6 +147,18 @@
     }
   }
 
+  // Очистити пошук (виклик при відкритті модалки), щоб не показувати
+  // результати попереднього запиту.
+  function reset() {
+    if (phraseI) phraseI.value = "";
+    if (freqI) freqI.value = "";
+    offset = 0; reachedEnd = false; loading = false; lastPhrase = "";
+    if (results) results.innerHTML = "";
+    setWarn("");
+    if (moreBtn) moreBtn.classList.add("hidden");
+  }
+  window.itSearchReset = reset;
+
   form.addEventListener("submit", (e) => { e.preventDefault(); load(true); });
   if (moreBtn) moreBtn.addEventListener("click", () => load(false));
 })();

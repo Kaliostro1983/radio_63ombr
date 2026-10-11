@@ -29,7 +29,18 @@
     "template":           "Шаблон",
   };
 
-  function reasonLabel(r)  { return REASON_LABELS[r]  || r || "—"; }
+  function reasonLabel(r)  {
+    // Будь-який варіант «мережу не знайдено» (напр. "network_not_found" або
+    // "network not found: frequency=725.0000") показуємо однаково.
+    if (r) {
+      const low = String(r).toLowerCase();
+      if (low.indexOf("network_not_found") !== -1 ||
+          (low.indexOf("network") !== -1 && low.indexOf("not found") !== -1)) {
+        return "Відсутня мережа";
+      }
+    }
+    return REASON_LABELS[r]  || r || "—";
+  }
   function formatLabel(f)  { return FORMAT_LABELS[f]  || f || "—"; }
   function chatLabel(item) {
     const name = item.source_chat_name || "";
@@ -206,6 +217,8 @@
   const botFilterArea    = qs("#ieBotFilterArea");
   const botFilterReasons = qs("#ieBotFilterReasons");
   const botFilterFormats = qs("#ieBotFilterFormats");
+  const botSearch        = qs("#ieBotSearch");
+  const botDismissShown  = qs("#ieBotDismissShown");
 
   // Active filter sets (all active by default, filled on load)
   let activeReasons = new Set();
@@ -213,6 +226,38 @@
 
   if (botRefreshBtn) botRefreshBtn.addEventListener("click", loadErrors);
   if (botOnlyNew)    botOnlyNew.addEventListener("change", loadErrors);
+  if (botSearch)     botSearch.addEventListener("input", applyFilters);
+  if (botDismissShown) botDismissShown.addEventListener("click", dismissShown);
+
+  // Масово позначити переглянутими всі рядки за поточним фільтром/пошуком
+  // (на сервері — по всій черзі, не лише по завантажених 200).
+  async function dismissShown() {
+    const q = (botSearch && botSearch.value || "").trim();
+    const reasons = Array.from(activeReasons);
+    const formats = Array.from(activeFormats);
+    const allReasons = !botFilterReasons || reasons.length >= botFilterReasons.querySelectorAll("input").length;
+    const allFormats = !botFilterFormats || formats.length >= botFilterFormats.querySelectorAll("input").length;
+    const scope = q
+      ? `з текстом «${q}»`
+      : (allReasons && allFormats ? "УСІ непереглянуті помилки" : "за поточним фільтром");
+    if (!confirm(`Позначити переглянутими ${scope}? Дію застосовано до всієї черги на сервері.`)) return;
+    if (botDismissShown) botDismissShown.disabled = true;
+    const body = { contains: q };
+    if (!allReasons) body.reasons = reasons;
+    if (!allFormats) body.formats = formats;
+    const data = await apiFetch("/api/ingest/dismiss-bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (botDismissShown) botDismissShown.disabled = false;
+    if (data && data.ok) {
+      toast(`Позначено переглянутими: ${data.dismissed}`, "success", 2600);
+      loadErrors();
+    } else {
+      toast("Помилка: " + ((data && data.error) || "?"), "error");
+    }
+  }
 
   async function loadErrors() {
     const filter = botOnlyNew && botOnlyNew.checked ? "unreviewed" : "all";
@@ -256,19 +301,28 @@
     activeFormats = new Set(formats);
 
     if (botFilterReasons) {
-      botFilterReasons.innerHTML = `<span class="ie-filter-group-label">Причина:</span>`;
+      // Групуємо сирі причини за підписом — щоб різні варіанти «Відсутня
+      // мережа» (network_not_found, "network not found: frequency=…") давали
+      // ОДНУ кнопку, яка перемикає всі свої сирі значення одразу.
+      const byLabel = new Map();  // підпис → [сирі причини]
       reasons.forEach(r => {
+        const lbl = reasonLabel(r);
+        if (!byLabel.has(lbl)) byLabel.set(lbl, []);
+        byLabel.get(lbl).push(r);
+      });
+      botFilterReasons.innerHTML = `<span class="ie-filter-group-label">Причина:</span>`;
+      byLabel.forEach((raws, lblText) => {
         const lbl = document.createElement("label");
         lbl.className = "ie-filter-btn";
         const inp = document.createElement("input");
         inp.type = "checkbox";
         inp.checked = true;
         inp.addEventListener("change", () => {
-          if (inp.checked) activeReasons.add(r); else activeReasons.delete(r);
+          raws.forEach(r => { if (inp.checked) activeReasons.add(r); else activeReasons.delete(r); });
           applyFilters();
         });
         const span = document.createElement("span");
-        span.textContent = reasonLabel(r);
+        span.textContent = lblText;
         lbl.appendChild(inp);
         lbl.appendChild(span);
         botFilterReasons.appendChild(lbl);
@@ -300,8 +354,11 @@
 
   function applyFilters() {
     let visible = 0;
+    const q = (botSearch && botSearch.value || "").trim().toUpperCase();
     botTbody.querySelectorAll("tr[data-reason]").forEach(row => {
-      const show = activeReasons.has(row.dataset.reason) && activeFormats.has(row.dataset.format);
+      const show = activeReasons.has(row.dataset.reason)
+        && activeFormats.has(row.dataset.format)
+        && (!q || (row.dataset.search || "").indexOf(q) !== -1);
       row.classList.toggle("ie-hidden", !show);
       if (show) visible++;
     });
@@ -322,6 +379,7 @@
       tr.className = "ie-item-row" + (reviewed ? " ie-row-reviewed" : "");
       tr.dataset.reason = reason;
       tr.dataset.format = format;
+      tr.dataset.search = String(item.raw_text || "").toUpperCase();
       tr.id = `ie-row-${item.id}`;
 
       tr.innerHTML = `
@@ -348,6 +406,7 @@
     });
 
     if (botVisibleEl) botVisibleEl.textContent = items.length;
+    applyFilters();   // застосувати активний текстовий пошук/фільтри одразу
   }
 
   function handleTableClick(e) {

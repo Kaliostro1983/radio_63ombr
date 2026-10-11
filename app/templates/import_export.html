@@ -45,13 +45,15 @@
           </div>
           <hr style="margin:18px 0 22px; border:none; border-top:1px solid var(--border)">
 
-          <!-- Top bar: checkbox + refresh -->
+          <!-- Top bar: checkbox + search + refresh -->
           <div class="ie-bot-top-bar">
             <label class="ie-filter-label">
               <input type="checkbox" id="ieBotOnlyNew" checked>
               <span>Тільки непереглянуті</span>
             </label>
+            <input type="text" id="ieBotSearch" class="ie-bot-search" placeholder="Пошук по тексту (напр. ЗАЛИМАН)…" autocomplete="off">
             <button class="btn" type="button" id="ieBotRefreshBtn">Оновити</button>
+            <button class="btn" type="button" id="ieBotDismissShown" title="Позначити переглянутими всі рядки за поточним фільтром/пошуком (на сервері, не лише завантажені 200)">Позначити всі показані ✓</button>
           </div>
 
           <!-- Dynamic filter buttons (populated after load) -->
@@ -257,9 +259,21 @@
 .ie-bot-top-bar {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
+  flex-wrap: wrap;
   margin-bottom: 20px;
 }
+.ie-bot-search {
+  flex: 1 1 240px;
+  min-width: 180px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text, #e2e8f0);
+  font-size: 14px;
+}
+.ie-bot-search:focus { outline: none; border-color: var(--accent, #f59e0b); }
 .ie-filter-label {
   display: flex;
   align-items: center;
@@ -431,5 +445,5 @@ textarea.ie-raw-text:focus { outline: none; border-color: var(--accent); }
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/import_export.js?v=10" defer></script>
+<script src="/static/import_export.js?v=13" defer></script>
 {% endblock %}

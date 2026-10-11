@@ -566,8 +566,8 @@ def peleng_save(payload: SaveIn):
     try:
         network_id = fetch_network_id_by_frequency(db, value4)
         cur = db.execute(
-            "INSERT INTO peleng_batches (event_dt, network_id, author) VALUES (?, ?, ?)",
-            (event_dt, network_id, "53 ОМБр"),   # ручний репорт-білдер — наше
+            "INSERT INTO peleng_batches (event_dt, network_id, author, raw_freq) VALUES (?, ?, ?, ?)",
+            (event_dt, network_id, "53 ОМБр", value4),   # ручний репорт-білдер — наше
         )
         batch_id = cur.lastrowid
 
@@ -665,16 +665,24 @@ async def peleng_import_csv(request: Request):
                 if network_id is None:
                     unknown_freq[freq] = unknown_freq.get(freq, 0) + 1
 
-                b = conn.execute(
-                    "SELECT id FROM peleng_batches WHERE event_dt = ? AND "
-                    "network_id IS ?", (event_dt, network_id),
-                ).fetchone()
+                if network_id is None:
+                    # Неідентифікована: дедуп по (event_dt, частота), щоб різні
+                    # частоти в один час НЕ зливались в один батч.
+                    b = conn.execute(
+                        "SELECT id FROM peleng_batches WHERE event_dt = ? AND network_id IS NULL "
+                        "AND COALESCE(raw_freq, '') = ?", (event_dt, freq),
+                    ).fetchone()
+                else:
+                    b = conn.execute(
+                        "SELECT id FROM peleng_batches WHERE event_dt = ? AND network_id = ?",
+                        (event_dt, network_id),
+                    ).fetchone()
                 if b:
                     batch_id = int(b["id"])
                 else:
                     cur = conn.execute(
-                        "INSERT INTO peleng_batches (event_dt, network_id, author) VALUES (?, ?, ?)",
-                        (event_dt, network_id, "117 ТРо"),   # імпортовані пеленги
+                        "INSERT INTO peleng_batches (event_dt, network_id, author, raw_freq) VALUES (?, ?, ?, ?)",
+                        (event_dt, network_id, "117 ТРо", freq),   # імпортовані пеленги
                     )
                     batch_id = int(cur.lastrowid)
 
@@ -1036,7 +1044,7 @@ def api_peleng_points(
                 pb.event_dt   AS event_dt,
                 COALESCE(pb.author, '') AS author,
                 pb.network_id AS network_id,
-                COALESCE(n.frequency, '') AS frequency,
+                COALESCE(NULLIF(n.frequency, ''), pb.raw_freq, '') AS frequency,
                 COALESCE(n.unit, '')      AS unit,
                 COALESCE(n.mask, '')      AS mask,
                 COALESCE(n.zone, '')      AS zone,

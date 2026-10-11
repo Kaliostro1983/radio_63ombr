@@ -53,12 +53,15 @@ def get_overview_stats(
         ocheret_intercepts = int(row[0] or 0)
 
         # ── Peleng batches ────────────────────────────────────────────────────
+        # В огляді рахуємо лише пеленги АВТОРСТВА 63 ОМБр (не 117 ТРо / 301 ОБТВР
+        # тощо) — показник власної роботи бригади.
         row = conn.execute(
             f"""
             SELECT COUNT(*)
             FROM peleng_batches
             WHERE {_norm('event_dt')} >= ?
               AND {_norm('event_dt')} <= ?
+              AND TRIM(COALESCE(author, '')) = '63 ОМБр'
             """,
             (from_dt, to_dt),
         ).fetchone()

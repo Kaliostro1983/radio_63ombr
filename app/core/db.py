@@ -848,6 +848,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "messages", "need_approve", "need_approve INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "messages", "tags_json", "tags_json TEXT DEFAULT '[]'")
     _ensure_column(conn, "messages", "is_read", "is_read INTEGER NOT NULL DEFAULT 0")
+    # Хто ПЕРШИМ прочитав (маска пристрою) і коли (UTC). Пише лише admin/аналітик.
+    _ensure_column(conn, "messages", "read_by", "read_by TEXT")
+    _ensure_column(conn, "messages", "read_at", "read_at TEXT")
     # Статус цінності перехоплення: 0 = звичайне (сірий), 1 = потенційно цінне
     # (помаранчевий). «Цінне» (зелений) — похідне: є аналітичний висновок.
     _value_flag_new = not _has_column(conn, "messages", "value_flag")
@@ -1606,6 +1609,9 @@ def _run_lightweight_migrations(conn: sqlite3.Connection) -> None:
     _try_ddl(conn, "CREATE UNIQUE INDEX IF NOT EXISTS ux_peleng_batches_event_network "
              "ON peleng_batches(event_dt, network_id)",
              stage="create_index:ux_peleng_batches_event_network")
+    # Сира частота пеленга — зберігаємо навіть коли радіомережу не визначено.
+    # УВАГА: НЕ називати "frequency" — інакше спрацює легасі-ребілд вище (frequency→network_id).
+    _ensure_column(conn, "peleng_batches", "raw_freq", "raw_freq TEXT")
     # Normalize any T-format event_dt values (e.g. "2026-05-14T08:24:00" → "2026-05-14 08:24:00")
     # so that string range queries work correctly in SQLite (space < 'T' in ASCII).
     _try_ddl(

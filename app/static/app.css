@@ -1112,6 +1112,9 @@ button.secondary{
   inset:0;
   z-index:50;
 }
+/* Модалка «Шаблони висновків» відкривається З редактора висновку (.it-modal,
+   z-index:9999), тож має бути ВИЩЕ за нього, інакше зʼявляється на фоні. */
+#monTemplatesModal{ z-index:10001; }
 
 .modal.hidden{
   display:none;
@@ -1294,6 +1297,21 @@ button.secondary{
 .cs-samename-meta{ min-width:0; }
 .cs-samename-freq{ font-size:13px; font-weight:700; color:#f1f5f9; }
 .cs-samename-unit{ font-size:11px; color:#94a3b8; word-break:break-word; margin-top:2px; }
+
+/* Бокова панель модалки втрат «Втрати р/м · 24 год» — візуально як однойменні,
+   але інформаційна (без навігації). */
+.cas-recent-panel{ width:300px; }
+.cas-recent-item{ cursor:default; align-items:flex-start; }
+.cas-recent-item:hover{ background:rgba(30,41,59,.55); border-color:transparent; }
+.cas-recent-photo-wrap{ position:relative; flex:0 0 auto; }
+.cas-recent-badge{
+  position:absolute; top:-5px; left:-5px; font-size:10px; font-weight:800; line-height:1;
+  padding:2px 5px; border-radius:6px; color:#fff; box-shadow:0 1px 4px rgba(0,0,0,.5);
+}
+.cas-recent-badge--200{ background:rgba(220,38,38,.95); }
+.cas-recent-badge--300{ background:rgba(245,158,11,.97); }
+.cas-recent-sub{ font-size:11.5px; color:#cbd5e1; margin-top:2px; word-break:break-word; }
+.cas-recent-nocs{ color:#94a3b8; font-weight:400; }
 
 .cs-profile-fields{
   flex:1;
@@ -4510,8 +4528,12 @@ button.secondary{
      не перекривав рамку/контейнер. */
   position:absolute; top:108px; left:10px; z-index:1200;
   width:440px; min-width:340px;
-  height:640px; max-height:calc(100vh - 78px);
-  border:1px solid var(--border); border-radius:12px; overflow:hidden;
+  /* max-height враховує top (108px) + нижній відступ (12px), щоб низ панелі
+     (send-бар) завжди лишався у вікні — критично в низькому embed-iframe на
+     /home. overflow-y:auto дає прокрутку, коли контент не влазить навіть так. */
+  height:640px; max-height:calc(100vh - 120px);
+  border:1px solid var(--border); border-radius:12px;
+  overflow-y:auto; overflow-x:hidden;
   background:var(--card); box-shadow:0 14px 44px rgba(0,0,0,.45);
 }
 /* ▤ ховає контейнер висновку РАЗОМ із координатним інпутом і рамкою копії */
@@ -6163,7 +6185,7 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 
 /* Перелік палітр для частоти — правий нижній кут карти */
 .concl-pal-list{
-  position:absolute; right:10px; bottom:10px; z-index:500;
+  position:absolute; right:70px; bottom:10px; z-index:500;
   max-width:320px; max-height:52%; overflow-y:auto;
   background:rgba(20,24,30,.92); color:#e8eaed;
   border:1px solid rgba(255,255,255,.18); border-radius:8px;
@@ -6296,6 +6318,14 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
   font-size:11px; font-weight:700; color:#111; text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;
   white-space:nowrap; pointer-events:none; text-align:center; }
 
+/* divIcon підпис точки палітри (Ctrl+клік на «око») — код праворуч від точки */
+.pal-point-label-wrap{ pointer-events:none; }
+.pal-point-label{
+  display:inline-block; transform:translate(6px,-50%);
+  font-size:10px; font-weight:700; color:#0b1220; white-space:nowrap; pointer-events:none;
+  background:rgba(255,255,255,.82); border-radius:3px; padding:0 3px;
+  text-shadow:0 0 2px #fff,0 0 2px #fff; }
+
 /* Назва палітри — помітний підпис поверх зони (верх bbox, центрований) */
 .pal-name-label-wrap{ pointer-events:none; }
 .pal-name-label{
@@ -6306,7 +6336,7 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 
 /* Маркер-варіант палітрового пошуку + підпис коду */
 .pal-variant-dot{ width:14px; height:14px; border-radius:50%;
-  border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.5); cursor:pointer; }
+  border:2px solid #f5c211; box-shadow:0 0 0 1px rgba(0,0,0,.5); cursor:pointer; }
 .pal-variant-tip.leaflet-tooltip{ background:rgba(17,17,17,.82); color:#fff;
   border:none; border-radius:4px; padding:1px 6px; font-size:11px; font-weight:700;
   box-shadow:0 1px 4px rgba(0,0,0,.4); }
@@ -6647,6 +6677,8 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 }
 .pal-eye-btn:hover{ background:rgba(255,255,255,.10); opacity:1; }
 .pal-eye-btn.is-on{ opacity:1; color:#4ade80; border-color:color-mix(in srgb,#4ade80 45%,transparent); }
+/* Ctrl+клік — показ усіх точок палітри з назвами: кнопка синя */
+.pal-eye-btn.is-on-pts{ opacity:1; color:#38bdf8; border-color:color-mix(in srgb,#38bdf8 45%,transparent); }
 
 /* ═══ «Втрати 2»: модалка оформлення втрат (200/300) — Фаза 2 ═══════════════ */
 .cas-modal{ position:fixed; inset:0; z-index:12000; display:flex; align-items:center; justify-content:center; }
@@ -6692,6 +6724,22 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-rec__saved--dirty{ color:#94a3b8; }
 .cas-del{ background:transparent; border:0; color:#94a3b8; font-size:14px; cursor:pointer; padding:4px 8px; border-radius:8px; }
 .cas-del:hover{ background:rgba(248,113,113,.18); color:#fca5a5; }
+/* Око — показ тексту перехоплення при оформленні втрат */
+.cas-eye{ background:transparent; border:0; color:#94a3b8; font-size:14px; cursor:pointer; padding:4px 8px; border-radius:8px; }
+.cas-eye:hover{ background:rgba(59,130,246,.18); color:#93c5fd; }
+.cas-eye--on{ background:rgba(59,130,246,.22); color:#93c5fd; }
+.cas-intercept{ margin-top:12px; padding:10px 12px; border:1px solid rgba(255,255,255,.14);
+  border-radius:10px; background:rgba(255,255,255,.04); }
+.cas-intercept.hidden{ display:none; }
+.cas-intercept__meta{ font-size:.86rem; color:#cbd5e1; margin-bottom:6px; line-height:1.4; }
+.cas-intercept__meta > div:first-child{ color:#94a3b8; }
+.cas-intercept__cs{ display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 10px; }
+.cas-it-cs{ background:rgba(59,130,246,.14); border:1px solid rgba(59,130,246,.4); color:#bfdbfe;
+  border-radius:999px; padding:2px 11px; font-size:.85rem; font-weight:600; cursor:pointer; }
+.cas-it-cs:hover{ background:rgba(59,130,246,.28); color:#dbeafe; }
+.cas-it-cs--added{ background:rgba(74,222,128,.18); border-color:rgba(74,222,128,.5); color:#bbf7d0; }
+.cas-intercept__text{ white-space:pre-wrap; word-break:break-word; font-size:.95rem; line-height:1.45; color:#e8eaed;
+  border-top:1px solid rgba(255,255,255,.08); padding-top:8px; }
 
 .cas-fld{ display:flex; flex-direction:column; gap:4px; font-size:12px; color:#cbd5e1; }
 .cas-fld > span{ opacity:.8; }
@@ -6699,6 +6747,20 @@ textarea.concl-ta--5{ flex:0 0 auto; height:calc((5 * 1.6em * 2.25 + 18px) / 2);
 .cas-select-wrap select{ flex:1; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:13px; }
 .cas-add-opt{ width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; cursor:pointer; font-size:16px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
 .cas-add-opt:hover{ background:#334155; }
+.cas-manage-opt{ width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; cursor:pointer; font-size:15px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.cas-manage-opt:hover{ background:#334155; }
+/* Модалка редагування діапазону звіту (Alt+клік по кнопці-зміні) */
+.cas2-range-ov{ position:fixed; inset:0; z-index:100002; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; }
+.cas2-range-ov.hidden{ display:none; }
+.cas2-range-card{ background:#0f172a; border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:16px; width:340px; max-width:92vw; box-shadow:0 12px 44px rgba(0,0,0,.55); }
+.cas2-range-head{ font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+.cas2-range-head .cas2-range-kind{ color:#94a3b8; font-weight:500; }
+.cas2-range-head .cas2-range-x{ margin-left:auto; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:15px; line-height:1; }
+.cas2-range-row{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.cas2-range-row .cas2-range-lbl{ width:28px; color:#94a3b8; }
+.cas2-range-row select, .cas2-range-row input{ flex:1; padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:#1e293b; color:#e2e8f0; font-size:13px; }
+.cas2-range-actions{ display:flex; gap:8px; margin-top:6px; }
+.cas2-range-actions button{ flex:1; }
 .cas-chk{ display:flex; align-items:center; gap:8px; font-size:13px; color:#cbd5e1; cursor:pointer; }
 .cas-chk input{ margin:0; }
 .cas-chk--inline{ margin-left:6px; white-space:nowrap; font-size:12px; }

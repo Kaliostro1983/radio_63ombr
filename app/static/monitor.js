@@ -57,6 +57,9 @@
   let _total       = 0;
   let _activeThumb = null;
   let _currentItem = null;
+  // true → перелік «Палітри для частоти» слідкує за ТЕКСТОМ у полі перехоплення
+  // (після «Вставити перехоплення» чи ручного редагування), а не за _currentItem.
+  let _palFollowText = false;
   let _tags        = _loadTags();
   let _freqFilter  = "";   // CSV network_id для фільтра плейлиста по частотах/масках ("" = без фільтра)
 
@@ -2041,9 +2044,14 @@
         const s = _lmAcSeq;   // генерація цього запиту (після _closeLmAc — поточна)
         let items = [];
         try {
-          const r = await fetch(`/api/landmarks/search?name=${encodeURIComponent(q)}&limit=10`, { headers: { Accept: "application/json" } });
+          const r = await fetch(`/api/landmarks/search?name=${encodeURIComponent(q)}&limit=30`, { headers: { Accept: "application/json" } });
           const d = await r.json();
           items = Array.isArray(d.items) ? d.items : [];
+          // Тегованих (із підрозділом) — уперед: інакше однойменні орієнтири різних
+          // частин губляться серед безтегових і випадають за ліміт видачі.
+          items = items.map((it, i) => [it, i])
+            .sort((a, b) => ((a[0].group_name ? 0 : 1) - (b[0].group_name ? 0 : 1)) || (a[1] - b[1]))
+            .map(p => p[0]);
         } catch (_) { return; }
         if (s !== _lmAcSeq) return;   // застарілий запит (був вибір/закриття/новий набір) → не малюємо
         if (!items.length || !_coordWrap) return;
@@ -2315,6 +2323,9 @@
     // Зони-«очі»: скинути попередні зони й показати кнопки за наявності перехоплення
     _clearZone("freq"); _clearZone("unit");
     _showConclEyes(!!item);
+    // Нове активне перехоплення → палітри знову слідкують за _currentItem,
+    // а не за раніше вставленим текстом.
+    _palFollowText = false;
     // Палітри підрозділу: перезавантажити перелік для нового перехоплення
     _loadConclPalettes();
   }
@@ -2474,10 +2485,30 @@
      Thumbnail rendering
   ═════════════════════════════════════════ */
 
+  /* Локальний стан «прочитано». Оператор пише читання ЛИШЕ локально (сервер його
+     не зберігає), тому тримаємо в localStorage і переживаємо перезавантаження.
+     Для admin/аналітика сервер авторитетний; цей кеш безпечно дублює. */
+  const _LR_KEY = "mon.localReads";
+  const _LR_MAX = 5000;
+  let _localReads = new Set();
+  try {
+    const _raw = localStorage.getItem(_LR_KEY);
+    if (_raw) JSON.parse(_raw).forEach(x => _localReads.add(Number(x)));
+  } catch (_) {}
+  function _persistLocalReads() {
+    try {
+      let arr = Array.from(_localReads);
+      if (arr.length > _LR_MAX) { arr.sort((a, b) => a - b); arr = arr.slice(arr.length - _LR_MAX); _localReads = new Set(arr); }
+      localStorage.setItem(_LR_KEY, JSON.stringify(arr));
+    } catch (_) {}
+  }
+  function _markLocalRead(id) { id = Number(id); if (id && !_localReads.has(id)) { _localReads.add(id); _persistLocalReads(); } }
+
   function _buildThumb(item) {
     const el  = document.createElement("div");
     // Червоний правий край, якщо р/м має тег «ШД».
-    el.className = "mon-thumb" + (item.is_read ? "" : " mon-thumb--unread") + (item.has_shd ? " mon-thumb--shd" : "");
+    const _read = item.is_read || _localReads.has(Number(item.id));
+    el.className = "mon-thumb" + (_read ? "" : " mon-thumb--unread") + (item.has_shd ? " mon-thumb--shd" : "");
     el.dataset.id = item.id;
     el.dataset.createdAt = item.created_at || "";  // потрібно для _insertThumbByDate
     el.title = "Клік — відкрити перехоплення\nCtrl+Клік — Перегляд по цій частоті (−5 год / +10 хв)";
@@ -2567,6 +2598,7 @@
     thumbEl.classList.add("mon-thumb--active");
     _activeThumb = thumbEl;
 
+    _markLocalRead(msgId);
     fetch(`/api/monitor/${msgId}/read`, { method: "PATCH" }).catch(() => {});
     _syncUnreadBadge();
     _updateNavPos();
@@ -3157,9 +3189,12 @@
       const res  = await fetch("/api/monitor/read-all", { method: "POST" });
       const data = await res.json();
       if (!data.ok) return;
-      _playlist.querySelectorAll(".mon-thumb--unread").forEach(el => el.classList.remove("mon-thumb--unread"));
+      const un = _playlist.querySelectorAll(".mon-thumb--unread");
+      un.forEach(el => { const id = Number(el.dataset.id || 0); if (id) _localReads.add(id); el.classList.remove("mon-thumb--unread"); });
+      _persistLocalReads();
       _syncUnreadBadge();
-      if (window.appToast) window.appToast(`Позначено прочитаними: ${data.count}`, "success");
+      const n = (data.scope === "local") ? un.length : data.count;
+      if (window.appToast) window.appToast(`Позначено прочитаними: ${n}`, "success");
     } catch (e) { console.error("[monitor] markAllRead", e); }
   }
 
@@ -3314,7 +3349,10 @@
   }
 
   /* ── Middle toolbar + playlist navigation ── */
+  let _middleToolbarInited = false;
   function _initMiddleToolbar() {
+    if (_middleToolbarInited) return;   // idempotent: initMonitor + embed-boot можуть викликати обидва
+    _middleToolbarInited = true;
     document.getElementById("monNavPrev")?.addEventListener("click", () => _navigatePanel(-1));
     document.getElementById("monNavNext")?.addEventListener("click", () => _navigatePanel(+1));
     document.getElementById("monPlaylistPrev")?.addEventListener("click", () => _navigatePanel(-1));
@@ -3411,6 +3449,10 @@
       _openConclusionForCurrent();
     };
   }
+  // Дозволяємо ініціалізувати тулбар-хендлери картки (✍ Висновок, Цікаво,
+  // Поширити) окремо від initMonitor — потрібно в embed-iframe (модалка
+  // «Перехоплення» на /home), де Monitor не бутиться, але картка з кнопками є.
+  window.monInitToolbar = _initMiddleToolbar;
 
   function _syncToolbarPos() { /* counter removed */ }
 
@@ -4976,11 +5018,11 @@
           window.appToast(msg, "success", 1800);
         }
       }
-      // Палітри для частоти: підвантажити перелік для вставленого перехоплення
-      // (немає активного _currentItem — резолвимо контекст із тексту).
-      if (!_currentItem) {
-        _palCtxFromText(pasted).then(ctx => _loadConclPalettes(ctx)).catch(() => {});
-      }
+      // Палітри для частоти: вставлене перехоплення — це НОВИЙ контекст, тож
+      // оновлюємо перелік за його текстом НАВІТЬ коли модалку відкрито з
+      // активного перехоплення (_currentItem). Далі палітри слідкують за текстом.
+      _palFollowText = true;
+      _palCtxFromText(pasted).then(ctx => _loadConclPalettes(ctx)).catch(() => {});
     });
 
     // Ручна вставка/набір у поле «Перехоплення» (без активного перехоплення) —
@@ -4988,7 +5030,10 @@
     if (ta) {
       let _palTextTimer = null;
       ta.addEventListener("input", () => {
-        if (_currentItem) return;   // активне перехоплення керує палітрами саме
+        // Активне перехоплення керує палітрами самостійно — КРІМ випадку, коли
+        // користувач уже вставив інше перехоплення (_palFollowText): тоді палітри
+        // слідкують за текстом поля.
+        if (_currentItem && !_palFollowText) return;
         clearTimeout(_palTextTimer);
         const val = ta.value;
         _palTextTimer = setTimeout(() => {
@@ -5039,6 +5084,8 @@
   let _palList  = [];                            // кеш списку палітр
   const _palRegionLayers = new Map();            // palette_id → [layers] на карті
   const _palRegionBusy = new Set();              // palette_id, для яких триває показ (анти-гонка)
+  const _palPointLayers = new Map();             // palette_id → [layers] точок (Ctrl+клік на «око»)
+  const _palPointBusy = new Set();               // palette_id, для яких триває показ точок
   let _palMatchMarkers = [];                     // тимчасові маркери збігів (legacy fallback)
   // Активні пошуки точок палітри. Кожен запис відповідає одному чіпу в
   // конт-інпуті "Координати" і утримує всі рендернуті варіанти на карті:
@@ -5151,12 +5198,13 @@
       const inScope = _palScope.has(p.id);
       // Компактний рядок: чекбокс (область пошуку) + назва + кружечок «⋯».
       // Усі дії з палітрою — у контекстному меню за кліком на кружечок.
-      const shown = _palRegionLayers.has(p.id);
+      const shownReg = _palRegionLayers.has(p.id);
+      const shownPts = _palPointLayers.has(p.id);
       item.innerHTML =
         `<input type="checkbox" class="pal-item-check" ${inScope ? "checked" : ""} title="Шукати в цій палітрі">` +
         `<span class="pal-item-name" title="${_esc(p.name)}">${_palSeqPrefix(p.seq_no)}${_esc(p.name)}</span>` +
-        `<button class="pal-eye-btn${shown ? " is-on" : ""}" type="button" ` +
-          `title="Показати/сховати області на карті" aria-label="Показати області на карті">` +
+        `<button class="pal-eye-btn${shownReg ? " is-on" : ""}${shownPts ? " is-on-pts" : ""}" type="button" ` +
+          `title="Клік — області палітри; Ctrl+клік — усі точки з назвами" aria-label="Показати області (клік) або точки (Ctrl+клік) на карті">` +
           `<svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5">` +
             `<path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z"/>` +
             `<circle cx="10" cy="10" r="2.6"/>` +
@@ -5177,7 +5225,12 @@
       });
       item.querySelector(".pal-eye-btn").addEventListener("click", async (e) => {
         e.stopPropagation();
-        await _palToggleRegions(p.id);
+        // Ctrl(⌘)+клік — усі точки палітри з назвами (синій); звичайний — області (зелений).
+        if (e.ctrlKey || e.metaKey) {
+          await _palTogglePoints(p.id);
+        } else {
+          await _palToggleRegions(p.id);
+        }
         _palRenderList();          // оновити стан «ока» після показу/приховування
       });
       item.querySelector(".pal-menu-btn").addEventListener("click", (e) => {
@@ -5265,7 +5318,7 @@
       // все одно не шукає бекенд, тож у scope вона лише мовчки обмежувала б
       // видачу (і плутала: «пошук перестав знаходити інші палітри»).
       if (action === "delete" || action === "archive") { _palScope.delete(id); _palSaveScope(); }
-      if (action === "delete") { _palClearRegions(id); }
+      if (action === "delete") { _palClearRegions(id); _palClearPoints(id); }
       _palLoadList();
     } catch (_) {
       if (window.appToast) window.appToast("Помилка операції", "error", 1800);
@@ -5740,21 +5793,48 @@
 
     let dupHtml = "";
     const dups = data.duplicates || [];
+    const scopeLbl = data.dup_scope || "усі";
     if (dups.length) {
       const rows = dups.map(d => {
-        const kind = d.kind === "exact" ? "точний дубль" : "схожа";
-        const sup  = d.new_is_superset ? " · нова ⊇ старої (розширення)" : "";
-        return `<label><input type="checkbox" class="pal-replace" value="${d.palette_id}"> Замінити «${_esc(d.name)}» <span style="color:#888">(${kind}, кольори ${Math.round((d.color_jaccard||0)*100)}%${sup})</span></label>`;
+        const kind = d.kind === "exact" ? "точний дубль"
+                   : d.kind === "superset" ? "розширення (нова ⊇ старої)"
+                   : "схожа";
+        // Розбивка по кольорах, що співпали (за координатами): matched/existing
+        const cols = (d.colors || []).filter(c => c.sampled_ok).map(c =>
+          `<span class="pal-match-dot" style="background:${_esc(c.color || "#888")}"></span>` +
+          `${c.matched}/${c.existing_count}${c.is_superset ? " ⊇" : ""}`
+        ).join("&nbsp;&nbsp;");
+        const detail = cols
+          ? `<div style="margin-left:22px;color:#9aa6b2;font-size:12px">спільних точок: <b>${d.matched_points || 0}</b> &nbsp;·&nbsp; ${cols}</div>`
+          : `<div style="margin-left:22px;color:#9aa6b2;font-size:12px">кольори ${Math.round((d.color_jaccard || 0) * 100)}% (точки не підтверджено)</div>`;
+        return `<label><input type="checkbox" class="pal-replace" value="${d.palette_id}"> ` +
+               `Замінити «${_esc(d.name)}» <span style="color:#888">(${kind})</span></label>${detail}`;
       }).join("");
-      dupHtml = `<div class="pal-dup-warn"><b>Знайдено схожі палітри:</b>${rows}<div style="margin-top:6px;color:#888">Позначені будуть видалені при імпорті.</div></div>`;
+      dupHtml = `<div class="pal-dup-warn"><b>Знайдено схожі палітри</b> ` +
+        `<span style="color:#888">· звірка: ${_esc(scopeLbl)}</span>:${rows}` +
+        `<div style="margin-top:6px;color:#888">Позначені будуть видалені при імпорті. ` +
+        `«matched/existing» — скільки точок кольору нової палітри збіглися координатами з наявною; ⊇ — наявні точки містяться в новій.</div></div>`;
+    } else {
+      dupHtml = `<div style="margin-top:8px;color:#888;font-size:12px">Схожих палітр не знайдено (звірка: ${_esc(scopeLbl)}).</div>`;
     }
 
     body.innerHTML = `
       <div style="margin-bottom:8px"><b>${_esc(s.name || "Палітра")}</b> · ${s.point_count || 0} точок · ${s.region_count || 0} областей</div>
       <label style="display:block;font-size:12px;color:#667085;margin-bottom:3px">Назва палітри</label>
       <input id="palImportName" class="pal-select" value="${_esc(s.name || "")}" style="margin-bottom:8px">
-      <label style="display:block;font-size:12px;color:#667085;margin-bottom:3px">Підрозділи (теги)</label>
-      <div id="palImportUnits" class="pal-item-units" style="margin-bottom:8px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+        <label style="font-size:12px;color:#667085">Підрозділи (теги)</label>
+        <button type="button" id="palUnitManageBtn" title="Керувати підрозділами" style="background:none;border:1px solid var(--border);border-radius:6px;color:inherit;cursor:pointer;width:26px;height:22px;line-height:1;display:inline-flex;align-items:center;justify-content:center">⚙</button>
+      </div>
+      <div id="palImportUnits" class="pal-item-units" style="margin-bottom:6px"></div>
+      <div id="palUnitManagePanel" class="hidden" style="margin-bottom:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.03)">
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <input id="palUnitManageName" type="text" placeholder="Новий підрозділ…" maxlength="60" autocomplete="off" class="pal-select" style="flex:1">
+          <button type="button" id="palUnitManageAdd" class="pal-select" style="width:36px;cursor:pointer;text-align:center">＋</button>
+        </div>
+        <div id="palUnitManageList"></div>
+        <div id="palUnitManageErr" style="display:none;color:#f87171;font-size:12px;margin-top:4px"></div>
+      </div>
       <div style="font-size:12px;color:#667085;margin-bottom:4px">Області:</div>
       ${regs || '<div class="pal-empty">—</div>'}
       ${dupHtml}`;
@@ -5770,6 +5850,88 @@
         unitsHost.appendChild(chip);
       });
     }
+
+    // ── Керування підрозділами-тегами (⚙) — дзеркально до чатів/груп ──
+    (function () {
+      const mBtn   = body.querySelector("#palUnitManageBtn");
+      const mPanel = body.querySelector("#palUnitManagePanel");
+      const mName  = body.querySelector("#palUnitManageName");
+      const mAdd   = body.querySelector("#palUnitManageAdd");
+      const mList  = body.querySelector("#palUnitManageList");
+      const mErr   = body.querySelector("#palUnitManageErr");
+      if (!mBtn || !mPanel || !unitsHost) return;
+      const showErr = (m) => { if (mErr) { mErr.textContent = m || ""; mErr.style.display = m ? "block" : "none"; } };
+
+      function rebuildChips(units) {
+        const checked = new Set([...unitsHost.querySelectorAll("input:checked")].map(c => c.value));
+        unitsHost.innerHTML = "";
+        units.forEach(u => {
+          const chip = document.createElement("label");
+          chip.className = "pal-unit-chip"; chip.style.cursor = "pointer";
+          const ck = checked.has(String(u.id)) ? " checked" : "";
+          chip.innerHTML = `<input type="checkbox" value="${u.id}"${ck} style="margin-right:4px">${_esc(u.name)}`;
+          unitsHost.appendChild(chip);
+        });
+        // синхронізувати випадайку фільтра «Підрозділ» у панелі
+        const selF = document.getElementById("palUnitFilter");
+        if (selF) {
+          const cur = selF.value;
+          selF.innerHTML = `<option value="">Усі підрозділи</option>` +
+            units.map(u => `<option value="${u.id}">${_esc(u.name)}</option>`).join("");
+          if ([...selF.options].some(o => o.value === cur)) selF.value = cur;
+          selF.dataset.loaded = "1";
+        }
+      }
+      function renderList(units) {
+        if (!mList) return;
+        mList.innerHTML = units.map(u =>
+          `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">` +
+            `<span>${_esc(u.name)}</span>` +
+            `<button type="button" class="pal-unit-del" data-id="${u.id}" data-name="${_esc(u.name)}" title="Видалити" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:14px">✕</button>` +
+          `</div>`).join("");
+        mList.querySelectorAll(".pal-unit-del").forEach(b =>
+          b.addEventListener("click", () => delUnit(Number(b.dataset.id), b.dataset.name || "")));
+      }
+      async function reload() {
+        showErr("");
+        try {
+          const j = await (await fetch("/api/palettes/units", { headers: { Accept: "application/json" } })).json();
+          const units = (j && j.units) || [];
+          rebuildChips(units); renderList(units);
+        } catch (_) { showErr("Помилка завантаження"); }
+      }
+      async function addUnit() {
+        const name = (mName && mName.value || "").trim();
+        if (!name) return;
+        showErr("");
+        try {
+          const j = await (await fetch("/api/palettes/units", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+          })).json();
+          if (!j.ok) { showErr(j.error || "Помилка"); return; }
+          if (mName) mName.value = "";
+          await reload();
+          if (window.appToast) window.appToast("Підрозділ додано: " + name, "success", 1400);
+        } catch (_) { showErr("Помилка додавання"); }
+      }
+      async function delUnit(id, nm) {
+        if (!confirm(`Видалити підрозділ «${nm}»? Його тег приберуться з усіх палітр.`)) return;
+        showErr("");
+        try {
+          const j = await (await fetch(`/api/palettes/units/${id}/delete`, { method: "POST" })).json();
+          if (!j.ok) { showErr(j.error || "Помилка"); return; }
+          await reload();
+          if (window.appToast) window.appToast(`Підрозділ видалено${j.links_removed ? ` (знято тегів: ${j.links_removed})` : ""}`, "success", 1800);
+        } catch (_) { showErr("Помилка видалення"); }
+      }
+      mBtn.addEventListener("click", () => {
+        const willOpen = mPanel.classList.contains("hidden");
+        mPanel.classList.toggle("hidden");
+        if (willOpen) reload();
+      });
+      if (mAdd) mAdd.addEventListener("click", addUnit);
+      if (mName) mName.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addUnit(); } });
+    })();
 
     document.getElementById("palImportConfirm").onclick = _palCommitImport;
     dlg.classList.remove("hidden");
@@ -5814,10 +5976,23 @@
     }
   }
 
+  function _palClearPoints(id) {
+    const layers = _palPointLayers.get(id);
+    if (layers) {
+      layers.forEach(l => {
+        try { l.remove(); } catch (_) {}
+        try { if (_conclMap && _conclMap.hasLayer(l)) _conclMap.removeLayer(l); } catch (_) {}
+      });
+      _palPointLayers.delete(id);
+    }
+  }
+
   // Прибрати ВСІ намальовані зони палітр (напр., при відкритті модалки).
   function _palClearAllRegions() {
     _palRegionLayers.forEach(layers => layers.forEach(l => l.remove()));
     _palRegionLayers.clear();
+    _palPointLayers.forEach(layers => layers.forEach(l => l.remove()));
+    _palPointLayers.clear();
   }
 
   // Скидання панелі палітр при кожному відкритті модалки висновку:
@@ -5843,6 +6018,7 @@
     try {
       // Про всяк випадок прибрати будь-який попередній набір цієї палітри.
       _palClearRegions(id);
+      _palClearPoints(id);   // взаємовиключність: області і точки не показуємо одночасно
       const r = await fetch(`/api/palettes/${id}/regions`);
       const j = await r.json();
       const layers = [];
@@ -5884,6 +6060,58 @@
       if (window.appToast) window.appToast("Не вдалося завантажити області", "error", 1800);
     } finally {
       _palRegionBusy.delete(id);
+    }
+  }
+
+  /* Ctrl+клік на «око»: показати/сховати ВСІ точки палітри з підписами (коди).
+     Взаємовиключно з областями — щоб колір кнопки був однозначним (синій). */
+  async function _palTogglePoints(id) {
+    if (_palPointBusy.has(id)) return;
+    if (_palPointLayers.has(id)) { _palClearPoints(id); return; }
+    if (!_conclMap) return;
+    _palPointBusy.add(id);
+    try {
+      _palClearPoints(id);
+      _palClearRegions(id);   // взаємовиключність: точки і області не разом
+      const r = await fetch(`/api/palettes/${id}/points`);
+      const j = await r.json();
+      const layers = [];
+      (j.points || []).forEach(pt => {
+        if (pt.lat == null || pt.lon == null) return;
+        const c = pt.color || "#38bdf8";
+        const dot = L.circleMarker([pt.lat, pt.lon], {
+          radius: 4, color: c, weight: 1.5, fillColor: c, fillOpacity: 0.9,
+          renderer: _conclBelowRenderer, interactive: false,
+        }).addTo(_conclMap);
+        layers.push(dot);
+        if (pt.code) {
+          const lbl = L.marker([pt.lat, pt.lon], {
+            icon: L.divIcon({ className: "pal-point-label-wrap", html: `<div class="pal-point-label">${_esc(pt.code)}</div>`, iconSize: [0, 0] }),
+            interactive: false, pane: "conclAbove",
+          }).addTo(_conclMap);
+          layers.push(lbl);
+        }
+      });
+      // Підпис із НАЗВОЮ палітри — як у режимі областей.
+      const bb = j.palette && j.palette.bbox;
+      if (bb && bb[0] != null) {
+        const pName = ((_palList || []).find(x => x.id === id) || {}).name || ("#" + id);
+        const nameLbl = L.marker([bb[2], (bb[1] + bb[3]) / 2], {
+          icon: L.divIcon({
+            className: "pal-name-label-wrap",
+            html: `<div class="pal-name-label">${_esc(pName)}</div>`,
+            iconSize: [0, 0],
+          }),
+          interactive: false, pane: "conclAbove",
+        }).addTo(_conclMap);
+        layers.push(nameLbl);
+      }
+      _palPointLayers.set(id, layers);
+      if (bb && bb[0] != null) _conclMap.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { maxZoom: 14, padding: [20, 20] });
+    } catch (_) {
+      if (window.appToast) window.appToast("Не вдалося завантажити точки", "error", 1800);
+    } finally {
+      _palPointBusy.delete(id);
     }
   }
 
@@ -6027,14 +6255,14 @@
     if (!_conclMap || !_palSearchChips.length) return;
     const myToken = ++_palRefreshToken;
     const inclArch = document.getElementById("palIncludeArchived")?.checked ? 1 : 0;
-    const unitId   = document.getElementById("palUnitFilter")?.value || "";
     const allMarkers = [];
     for (const entry of _palSearchChips) {
       // прибрати старі маркери цього чіпа (сам чіп лишаємо)
       entry.markers.forEach(m => { try { m.remove(); } catch (_) {} });
       entry.markers = [];
+      // Фільтр «Підрозділ» звужує лише СПИСОК палітр у панелі, а не пошук кодів
+      // точок: шукаємо по всіх палітрах (звуження — галочками _palScope).
       const qs = new URLSearchParams({ q: entry.code, include_archived: String(inclArch) });
-      if (unitId) qs.set("unit_id", unitId);
       let results = [];
       try {
         const r = await fetch("/api/palettes/search?" + qs.toString());
@@ -6066,9 +6294,9 @@
     if (existing) _palRemoveSearchChip(existing);
 
     const inclArch = document.getElementById("palIncludeArchived")?.checked ? 1 : 0;
-    const unitId   = document.getElementById("palUnitFilter")?.value || "";
+    // Фільтр «Підрозділ» діє лише на список палітр у панелі, а не на пошук кодів
+    // точок — шукаємо по всіх палітрах (звуження — галочками _palScope).
     const qs = new URLSearchParams({ q: code, include_archived: String(inclArch) });
-    if (unitId) qs.set("unit_id", unitId);
 
     let results;
     try {

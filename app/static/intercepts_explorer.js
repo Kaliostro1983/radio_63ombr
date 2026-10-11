@@ -372,6 +372,16 @@
     return rendered ? out : escapeHtml(src);
   }
 
+  function _escHtml(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+  function _fmtReadAt(s){
+    try {
+      const d = new Date((String(s).length <= 19 ? s + "Z" : s));  // read_at — наївний UTC
+      if (isNaN(d)) return _escHtml(s);
+      const p = n => String(n).padStart(2, "0");
+      return `${p(d.getDate())}.${p(d.getMonth() + 1)} о ${p(d.getHours())}:${p(d.getMinutes())}`;
+    } catch (_) { return _escHtml(s); }
+  }
+
   function renderInlineEditor(detail) {
     const callsigns = Array.isArray(detail.callsigns) ? detail.callsigns : [];
     const caller = callsigns.filter((x) => x.role === "caller");
@@ -412,6 +422,7 @@
           ${renderCompactRole("Кого викликають", "callee", callee)}
           ${renderCompactRole("Згадувані", "mentioned", mentioned)}
         </div>
+        ${detail.read_by ? `<div class="intercepts-readby" style="margin-top:8px;font-size:12px;opacity:.65">Першим прочитав: ${_escHtml(detail.read_by)}${detail.read_at ? ` · ${_fmtReadAt(detail.read_at)}` : ""}</div>` : ""}
       </div>
     `;
   }

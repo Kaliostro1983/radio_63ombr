@@ -208,6 +208,36 @@ def parse_kml_bytes(data: bytes, *, source_filename: str) -> list[ParsedTrack]:
                         name=name or source_filename.rsplit(".", 1)[0],
                         points=pts, source_format="kml", source_filename=source_filename,
                     ))
+        # gx:Track (AlpineQuest / Google Earth extended): <gx:coord>lon lat alt</gx:coord>
+        # з часовими мітками <when>. Стандартний LineString тут відсутній.
+        for trk in pm.iter():
+            if _strip_ns(trk.tag) != "Track":
+                continue
+            tpts: list[dict] = []
+            whens: list[str] = []
+            for c in trk:
+                tag = _strip_ns(c.tag)
+                if tag == "when":
+                    whens.append((c.text or "").strip())
+                elif tag == "coord":
+                    parts = (c.text or "").split()
+                    if len(parts) < 2:
+                        continue
+                    try:
+                        lon = float(parts[0]); lat = float(parts[1])
+                        alt = float(parts[2]) if len(parts) > 2 else None
+                    except ValueError:
+                        continue
+                    tpts.append({"lat": lat, "lon": lon, "alt": alt, "ts": None})
+            for i, p in enumerate(tpts):
+                if i < len(whens) and whens[i]:
+                    p["ts"] = whens[i]
+            if len(tpts) >= 2:
+                out.append(ParsedTrack(
+                    name=name or source_filename.rsplit(".", 1)[0],
+                    points=tpts, source_format="kml", source_filename=source_filename,
+                    recorded_at=(whens[0] if whens else None),
+                ))
     return out
 
 

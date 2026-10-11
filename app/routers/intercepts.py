@@ -12,6 +12,7 @@ by the service layer. This router focuses on read/search functionality and
 manual review/editing workflows.
 """
 
+import re
 import sqlite3
 import time
 from datetime import datetime, timedelta
@@ -22,11 +23,30 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.core.normalize import normalize_freq_or_mask
+from app.core.access import resolve_actor, current_device_mask, enforcement_level
 from app.services.landmark_match_service import get_message_landmark_matches
 
 router = APIRouter()
 
 DB_PATH = Path("database/radio.db")
+
+# Кеш скомпільованих патернів для pyword (ціле слово/фраза з межами слова).
+_PYWORD_CACHE: dict[str, "re.Pattern[str]"] = {}
+
+
+def _pyword_match(text: object, term: object) -> int:
+    """1, якщо `term` трапляється як ОКРЕМЕ слово/фраза в `text` (межі слова,
+    кирилиця й латиниця, регістронезалежно), інакше 0. Пробіли нормалізуються."""
+    if not isinstance(text, str) or not isinstance(term, str):
+        return 0
+    w = " ".join(term.split())
+    if not w:
+        return 0
+    pat = _PYWORD_CACHE.get(w)
+    if pat is None:
+        pat = re.compile(r"(?<!\w)" + re.escape(w) + r"(?!\w)", re.IGNORECASE)
+        _PYWORD_CACHE[w] = pat
+    return 1 if pat.search(" ".join(text.split())) else 0
 
 
 def get_conn():
@@ -50,6 +70,11 @@ def get_conn():
         "pynormws", 1,
         lambda s: " ".join(s.split()).lower() if isinstance(s, str) else s,
     )
+    # Пошук ЦІЛОГО слова/фрази (з межами слова, кирилиця, регістронезалежно):
+    # pyword(col, term) = 1, якщо term трапляється як окреме слово, а не частина
+    # («дача», але не «задача»/«передача»). Використовується для точного пошуку
+    # (синтаксис "слово" у лапках).
+    conn.create_function("pyword", 2, _pyword_match)
     try:
         conn.execute("PRAGMA busy_timeout = 30000;")
     except Exception:
@@ -284,6 +309,12 @@ def intercepts_search(
 ):
     """Search intercepts by phrase and/or network frequency/mask."""
     phrase = (phrase or "").strip()
+    # Точний пошук ЦІЛОГО слова/фрази — синтаксис у лапках: "дача" знайде тільки
+    # окреме слово «дача», а не «задача»/«передача».
+    whole_word = False
+    if len(phrase) >= 2 and phrase[0] == '"' and phrase[-1] == '"':
+        whole_word = True
+        phrase = phrase[1:-1].strip()
     frequency_raw = (frequency or "").strip()
 
     if not phrase and not frequency_raw:
@@ -322,6 +353,10 @@ def intercepts_search(
             # подвійні пробіли/переноси в тілі не зривали збіг суцільної фрази.
             where.append("pynormws(m.body_text) LIKE ?")
             params.append(f"%{needle.lower()}%")
+            if whole_word:
+                # LIKE вище звужує кандидатів, pyword підтверджує межі слова.
+                where.append("pyword(m.body_text, ?)")
+                params.append(needle)
 
         exact_freq, freq_mask = normalize_freq_or_mask(frequency_raw)
 
@@ -715,6 +750,8 @@ def intercepts_explorer_detail(message_id: int):
                 n.group_id   AS network_group_id,
                 g.name       AS network_group_name,
                 COALESCE(m.value_flag, 0) AS value_flag,
+                m.read_by,
+                m.read_at,
                 EXISTS(SELECT 1 FROM analytical_conclusions ac WHERE ac.message_id = m.id) AS has_conclusion
             FROM messages m
             JOIN networks n ON n.id = m.network_id
@@ -769,6 +806,8 @@ def intercepts_explorer_detail(message_id: int):
                     "net_description": message_row["net_description"] or "",
                     "value_flag": int(message_row["value_flag"] or 0),
                     "has_conclusion": bool(message_row["has_conclusion"]),
+                    "read_by": message_row["read_by"] or "",
+                    "read_at": message_row["read_at"] or "",
                     "network": {
                         "id":         message_row["network_id"],
                         "frequency":  message_row["frequency"] or "",
@@ -1543,30 +1582,73 @@ def monitor_playlist(
         conn.close()
 
 
+_READ_LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def _may_write_server_read(request: Request) -> bool:
+    """Серверний статус «прочитано» пишуть лише admin/аналітик.
+
+    Оператор → сервер НЕ чіпаємо (його стан локальний у клієнті).
+    Примус off → пишуть усі (легасі-рубильник відкату); 127.0.0.1 → break-glass.
+    Fail-open до легасі-поведінки, щоб помилка доступу не ламала маркування.
+    """
+    try:
+        if enforcement_level() == "off":
+            return True
+        ip = request.client.host if request.client else ""
+        if ip in _READ_LOCAL_HOSTS:
+            return True
+        a = resolve_actor(request)
+        return bool(getattr(a, "authorized", False) and (a.role in ("admin", "analyst")))
+    except Exception:
+        return True
+
+
 @router.patch("/api/monitor/{message_id}/read")
-def monitor_mark_read(message_id: int):
-    """Mark a single intercept message as read."""
+def monitor_mark_read(message_id: int, request: Request):
+    """Позначити одне перехоплення прочитаним.
+
+    admin/аналітик → серверний is_read + фіксація ПЕРШОГО читача (read_by/read_at).
+    Оператор → сервер не чіпаємо (scope=local), стан тримає клієнт локально.
+    """
+    if not _may_write_server_read(request):
+        return {"ok": True, "scope": "local"}
+    reader = current_device_mask(request) or None
+    now = datetime.utcnow().isoformat(timespec="seconds")
     conn = get_conn()
     try:
-        conn.execute("UPDATE messages SET is_read = 1 WHERE id = ?", (message_id,))
+        conn.execute(
+            "UPDATE messages SET is_read = 1, "
+            "read_by = COALESCE(read_by, ?), read_at = COALESCE(read_at, ?) WHERE id = ?",
+            (reader, now, message_id),
+        )
         conn.commit()
-        return {"ok": True}
+        return {"ok": True, "scope": "server"}
     finally:
         conn.close()
 
 
 @router.post("/api/monitor/read-all")
-def monitor_mark_all_read():
-    """Mark all intercept messages as read."""
+def monitor_mark_all_read(request: Request):
+    """Позначити всі перехоплення прочитаними.
+
+    admin/аналітик → на сервері (з фіксацією першого читача); оператор → локально.
+    """
+    if not _may_write_server_read(request):
+        return {"ok": True, "scope": "local", "count": 0}
+    reader = current_device_mask(request) or None
+    now = datetime.utcnow().isoformat(timespec="seconds")
     conn = get_conn()
     try:
         count = conn.execute(
-            """UPDATE messages SET is_read = 1
+            """UPDATE messages SET is_read = 1,
+                   read_by = COALESCE(read_by, ?), read_at = COALESCE(read_at, ?)
                WHERE is_read = 0 AND COALESCE(is_valid, 1) = 1
-                 AND coalesce(content_type, 'intercept') = 'intercept'"""
+                 AND coalesce(content_type, 'intercept') = 'intercept'""",
+            (reader, now),
         ).rowcount
         conn.commit()
-        return {"ok": True, "count": count}
+        return {"ok": True, "scope": "server", "count": count}
     finally:
         conn.close()
 

@@ -834,6 +834,8 @@
   let _pelSendChatId = "";
   let _pelChatsCache = { whatsapp: null, signal: null };
   let _pelLastRows = [];        // останні завантажені рядки (для перерендеру)
+  let _pelViewportMode = true;  // ЗАВЖДИ показувати пеленги лише в полі видимості оператора;
+                                //  кнопка «Оновити» — ручне перефільтрування під поточний кадр
   let _pelShowFreq = false;     // стан чекбоксу «Частоти»
   let _pelShowUnit = false;     // стан чекбоксу «Підрозділ» (кола з номером)
   let _pelHiddenAuthors = new Set();  // автори, знятні чекбоксами (сховані з карти)
@@ -903,10 +905,23 @@
       ? `<tr><td class="pel-pop-k">${escapeHtml(k)}</td>` +
         `<td class="pel-pop-v${cls ? " " + cls : ""}">${escapeHtml(String(v))}</td></tr>`
       : "";
+    // Рядок, що показується ЗАВЖДИ; невідоме значення → «не визначено».
+    const rowNV = (k, v, cls) => {
+      const known = v != null && String(v).trim() !== "";
+      const val = known ? String(v) : "не визначено";
+      const cc = (cls ? " " + cls : "") + (known ? "" : " pel-pop-nv");
+      return `<tr><td class="pel-pop-k">${escapeHtml(k)}</td>` +
+             `<td class="pel-pop-v${cc}">${escapeHtml(val)}</td></tr>`;
+    };
     const ident = !!(r.network_id);
+    // Для НЕідентифікованої радіомережі показуємо ті самі характеристики, що й
+    // для ідентифікованої; невідомі поля позначаємо «не визначено».
+    const netRow = ident ? row : rowNV;
     const title = ident
       ? escapeHtml(r.frequency || "—")
-      : `<span class="pel-pop-unknown">Радіомережа не ідентифікована</span>`;
+      : (r.frequency
+          ? escapeHtml(r.frequency)
+          : `<span class="pel-pop-unknown">Радіомережа не ідентифікована</span>`);
     // Для неідентифікованої показуємо частоту з батча, якщо вона там була.
     // Дата у форматі dd.mm.yyyy (час зберігаємо).
     const _v = String(r.event_dt || "").replace("T", " ").trim();
@@ -917,12 +932,13 @@
         `<div class="pel-pop-title">${title}</div>` +
         `<table class="pel-pop-table">` +
           row("Маска", r.mask) +
-          row("Підрозділ", r.unit) +
-          row("Зона", r.zone) +
-          row("Статус", r.status) +
-          row("Теги", r.tags) +
-          row("Чат-джерело", r.chat) +
-          row("Джерело", r.author || (r.is_imported ? "імпорт з CSV-файлу" : "ручне введення"),
+          netRow("Підрозділ", r.unit) +
+          netRow("Зона", r.zone) +
+          netRow("Статус", r.status) +
+          netRow("Теги", r.tags) +
+          netRow("Чат-джерело", r.chat) +
+          rowNV("Пост", r.author) +
+          row("Джерело", r.is_imported ? "імпорт з CSV-файлу" : "ручне введення",
               r.is_imported ? "is-imported" : "") +
           row("Час пеленга", dt) +
           row("MGRS", r.mgrs) +
@@ -1223,7 +1239,10 @@
     _pelRedrawAfterColorChange();   // перемалювати маркери + оновити панель
   }
 
-  /** Усі ключі підрозділів, наявні в поточних даних (номери + НВ). */
+  /** Усі ключі підрозділів, ПОКАЗАНІ в панелі прив'язок = наявні в даних
+   *  (номери + НВ) ПЛЮС збережені прив'язки (навіть якщо зараз без пеленгів).
+   *  Інакше майстер-«око» не діяло б на підрозділи зі збереженою прив'язкою,
+   *  яких немає в поточному вікні (напр. «7 омсбр», «67 мсд»). */
   function _pelAllUnitKeys() {
     const keys = new Set();
     let hasNv = false;
@@ -1232,6 +1251,8 @@
       if (n) keys.add(String(n));
       else if (r && String(r.mgrs || "").trim()) hasNv = true;
     }
+    // Збережені прив'язки «підрозділ → колір» — теж у панелі, тож і в майстер-«око».
+    for (const k of _pelUnitColors.keys()) if (String(k) !== PEL_NV_KEY) keys.add(String(k));
     if (hasNv) keys.add(PEL_NV_KEY);
     return keys;
   }
@@ -1317,6 +1338,20 @@
     });
     // Майстер-«око» в шапці — показати/сховати пеленги по всіх підрозділах.
     document.getElementById("pelBindEyeAll")?.addEventListener("click", _pelToggleAllUnits);
+    // Кнопка «Оновити»: пеленги ЗАВЖДИ показуються лише в полі видимості
+    // оператора (див. _pelViewportMode=true), а завантаження за часом/«Показати»
+    // не змінюють масштаб. Зумнув/перемістив район → натиснув «Оновити» →
+    // пеленги перефільтровуються під новий кадр. Авто-оновлення на кожен рух
+    // навмисно НЕ робимо (щоб не навантажувати) — оновлення лише по кнопці.
+    const _refBtn = document.getElementById("pelRefreshBtn");
+    if (_refBtn) _refBtn.classList.add("is-on"); // фільтр за областю завжди активний
+    _refBtn?.addEventListener("click", () => {
+      _pelEnsureMap();
+      if (_pelLastRows && _pelLastRows.length) {
+        _pelRenderPoints(_pelLastRows, { skipFit: true });
+      }
+      if (_refBtn) { _refBtn.classList.add("pel-spin"); setTimeout(() => _refBtn.classList.remove("pel-spin"), 500); }
+    });
     document.getElementById("pelBindClose")?.addEventListener("click", () => {
       box.classList.add("hidden");
       btn.classList.remove("is-on");
@@ -1524,7 +1559,7 @@
   }
 
   function _pelRenderPoints(rows, opts) {
-    const skipFit = opts && opts.skipFit;
+    const skipFit = opts && opts.skipFit;   // true = перемалювання (не свіже завантаження)
     _pelLastRows = rows;
     // Меню авторів/частот оновлюємо при свіжому завантаженні (не на кожному перерендері).
     if (!skipFit) { _pelRebuildAuthorMenu(); _pelRebuildFreqMenu(); }
@@ -1534,6 +1569,8 @@
     _pelMarkerLayer.clearLayers();
 
     const defaultIcon = _pelBuildIcon();
+    // Показ лише в полі видимості оператора (режим вмикає кнопка «Оновити»).
+    const _vp = _pelViewportMode ? map.getBounds() : null;
     const bounds = [];
     let placed = 0;
     for (const r of rows) {
@@ -1554,6 +1591,7 @@
         const pt  = window.mgrs.toPoint(raw);
         const lat = Number(pt[1]), lon = Number(pt[0]);
         if (!isFinite(lat) || !isFinite(lon)) continue;
+        if (_vp && !_vp.contains([lat, lon])) continue;   // поза полем видимості — не малюємо
         const popup = _pelBuildPopup(r);
         // У режимі «Підрозділ» — кольорове коло з номером бригади/полка
         // з опису р/м. Якщо номер не вдалося розпізнати, falback на дефолтну
@@ -1568,12 +1606,13 @@
         }
         const m = icon ? L.marker([lat, lon], { icon }) : L.circleMarker([lat, lon], { radius:6, color:"#ef4444" });
         m.bindPopup(popup);
-        // Підпис частоти праворуч (тільки якщо чекбокс «Частоти» увімкнено).
+        // Підпис частоти в лівому нижньому куті іконки (без плашки, з чорним
+        // обведенням тексту) — тільки якщо чекбокс «Частоти» увімкнено.
         if (_pelShowFreq && r.frequency) {
           m.bindTooltip(String(r.frequency), {
             permanent: true,
-            direction: "right",
-            offset: [12, 0],
+            direction: "left",
+            offset: [-11, 9],
             className: "pel-freq-label",
           });
         }
@@ -1584,7 +1623,9 @@
     }
     const countEl = document.getElementById("pelMapCount");
     if (countEl) countEl.textContent = `Знайдено: ${placed}` + (placed !== rows.length ? ` / ${rows.length}` : "");
-    if (skipFit) return placed;
+    // Не рухаємо карту при перемалюванні або в режимі «лише у видимій області»
+    // (там оператор сам контролює зум/район, а карту фітити не можна).
+    if (skipFit || _pelViewportMode) return placed;
     if (bounds.length === 1) {
       map.setView(bounds[0], Math.max(map.getZoom(), 11));
     } else if (bounds.length > 1) {

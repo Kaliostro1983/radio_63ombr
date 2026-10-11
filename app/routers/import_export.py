@@ -105,6 +105,42 @@ def dismiss_ingest_error(ingest_id: int):
         return {"ok": True, "dismissed": True}
 
 
+@router.post("/api/ingest/dismiss-bulk")
+async def dismiss_ingest_bulk(request: Request):
+    """Позначити переглянутими ВСІ непереглянуті error-рядки за фільтром.
+
+    Приймає {reasons?: [parse_error…], formats?: [message_format…], contains?: text}.
+    Працює на сервері по всій черзі (не лише по завантажених у UI 200 рядках).
+    Порожні reasons/formats означають «будь-яке значення».
+    """
+    payload = await request.json()
+    reasons = payload.get("reasons") or []
+    formats = payload.get("formats") or []
+    contains = str(payload.get("contains") or "").strip()
+
+    wheres = [
+        "parse_status IN ('parse_error', 'skipped_unknown_format')",
+        "reviewed_at IS NULL",
+    ]
+    params: list = []
+    if reasons:
+        wheres.append("COALESCE(parse_error, '—') IN (%s)" % ",".join("?" * len(reasons)))
+        params.extend(reasons)
+    if formats:
+        wheres.append("COALESCE(message_format, 'unknown') IN (%s)" % ",".join("?" * len(formats)))
+        params.extend(formats)
+    if contains:
+        wheres.append("raw_text LIKE ?")
+        params.append("%" + contains + "%")
+
+    with get_conn() as conn:
+        result = conn.execute(
+            "UPDATE ingest_messages SET reviewed_at = ? WHERE " + " AND ".join(wheres),
+            (now_sql(), *params),
+        )
+    return {"ok": True, "dismissed": int(result.rowcount or 0)}
+
+
 @router.post("/api/ingest/{ingest_id}/retry")
 def retry_ingest_error(ingest_id: int):
     """Re-run the ingest pipeline on a rejected ingest_messages row."""

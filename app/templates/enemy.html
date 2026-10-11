@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/enemy.css?v=4"/>
+{% endblock %}
+
+{% block content %}
+<div class="en-wrap">
+  <div class="en-head">
+    <h1 class="en-title">Мета-огляд противника</h1>
+    <span class="en-chip">структура · чернетка</span>
+    <label class="en-check" title="Показувати лише підрозділи, по яких є радіомережі в БД">
+      <input type="checkbox" id="enRadioOnly"><span>Радіовидимість</span>
+    </label>
+    <div class="en-actions">
+      <button type="button" class="en-btn en-btn--accent" id="enExpandAll">Розгорнути</button>
+      <button type="button" class="en-btn" id="enFit">За розміром</button>
+    </div>
+  </div>
+
+  <div class="en-stage" id="enStage">
+    <div id="enCy"></div>
+    <div class="en-hint">клік по вузлу — дії (рівень · усе · редагувати · інфо) · коліщатко — масштаб</div>
+
+    <!-- Інфо-панель (функція «Інформація») -->
+    <aside class="en-panel" id="enPanel" hidden>
+      <div class="enp-head">
+        <div class="enp-sym" id="enpSym"></div>
+        <div class="enp-id"><h2 id="enpName"></h2><div class="full" id="enpFull"></div></div>
+        <button type="button" class="enp-x" id="enpX" aria-label="Закрити">✕</button>
+      </div>
+      <div class="enp-body" id="enpBody"></div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vendor/milsymbol.js" defer></script>
+<script src="/static/vendor/cytoscape.min.js" defer></script>
+<script src="/static/vendor/dagre.min.js" defer></script>
+<script src="/static/vendor/cytoscape-dagre.js" defer></script>
+<script src="/static/enemy_overview.js?v=7" defer></script>
+{% endblock %}

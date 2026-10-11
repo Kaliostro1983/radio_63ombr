@@ -90,7 +90,11 @@ def _all_networks_list(conn, status_ids, chat_ids, group_ids):
              AND REPLACE(m.created_at, 'T', ' ') >= ?) AS intercepts_7d,
         (SELECT COUNT(*) FROM analytical_conclusions ac
            WHERE ac.network_id = n.id
-             AND REPLACE(ac.created_at, 'T', ' ') >= ?) AS analytics_7d
+             AND REPLACE(ac.created_at, 'T', ' ') >= ?) AS analytics_7d,
+        (SELECT MAX(REPLACE(m.created_at, 'T', ' ')) FROM messages m
+           WHERE m.network_id = n.id
+             AND m.is_valid = 1
+             AND coalesce(m.content_type, 'intercept') = 'intercept') AS last_message_at
     FROM networks n
     JOIN chats c    ON c.id = n.chat_id
     JOIN groups g   ON g.id = n.group_id
@@ -667,6 +671,70 @@ def api_chat_delete(chat_id: int):
     return {"ok": True, "moved": int(moved or 0)}
 
 
+# ── Підрозділи (групи «Хто») — керування в картці р/м, дзеркально до чатів ──
+_UNKNOWN_GROUP_NAME = "Невідомо"
+
+
+@router.get("/api/groups")
+def api_groups_list():
+    """Групи-підрозділи з лічильником закріплених р/м (для керування в картці р/м)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT g.id, g.name, "
+            "       (SELECT COUNT(*) FROM networks n WHERE n.group_id = g.id) AS used "
+            "FROM groups g ORDER BY g.name COLLATE NOCASE"
+        ).fetchall()
+        unk = conn.execute(
+            "SELECT id FROM groups WHERE name = ? LIMIT 1", (_UNKNOWN_GROUP_NAME,)
+        ).fetchone()
+    return {
+        "ok": True,
+        "chats": [{"id": int(r["id"]), "name": r["name"], "used": int(r["used"] or 0)} for r in rows],
+        "unknown_id": int(unk["id"]) if unk else 0,
+    }
+
+
+@router.post("/api/groups")
+async def api_group_create(request: Request):
+    """Створити групу-підрозділ."""
+    payload = await request.json()
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"ok": False, "error": "Назва не може бути порожньою"}, status_code=400)
+    with get_conn() as conn:
+        ex = conn.execute("SELECT id FROM groups WHERE lower(name) = lower(?)", (name,)).fetchone()
+        if ex:
+            return JSONResponse({"ok": False, "error": "Підрозділ з такою назвою вже існує"}, status_code=409)
+        cur = conn.execute("INSERT INTO groups (name) VALUES (?)", (name,))
+        gid = int(cur.lastrowid)
+    return {"ok": True, "id": gid, "name": name}
+
+
+@router.post("/api/groups/{group_id}/delete")
+def api_group_delete(group_id: int):
+    """Видалити групу: усі її р/м переходять на «Невідомо». «Невідомо» — незмінна."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, name FROM groups WHERE id = ?", (group_id,)).fetchone()
+        if not row:
+            return JSONResponse({"ok": False, "error": "Підрозділ не знайдено"}, status_code=404)
+        if row["name"] == _UNKNOWN_GROUP_NAME:
+            return JSONResponse(
+                {"ok": False, "error": "Підрозділ «Невідомо» видаляти не можна"}, status_code=400
+            )
+        unk = conn.execute(
+            "SELECT id FROM groups WHERE name = ? LIMIT 1", (_UNKNOWN_GROUP_NAME,)
+        ).fetchone()
+        if not unk:
+            return JSONResponse(
+                {"ok": False, "error": "Немає підрозділу «Невідомо» для перепризначення"}, status_code=400
+            )
+        moved = conn.execute(
+            "UPDATE networks SET group_id = ? WHERE group_id = ?", (int(unk["id"]), group_id)
+        ).rowcount
+        conn.execute("DELETE FROM groups WHERE id = ?", (group_id,))
+    return {"ok": True, "moved": int(moved or 0)}
+
+
 @router.get("/api/networks/{network_id}/cross-analysis")
 def api_network_cross_analysis(
     network_id: int,
@@ -830,6 +898,331 @@ def api_network_cross_analysis(
         "rows": out_rows,
         "min_matches": min_matches,
         "active_only": bool(active_only),
+    }
+
+
+# Ролі позивних (callsign_statuses.id) → тип. ПОСТІЙНІ = структурна «несуча»
+# мережі (сп, БпЛА, штабники, звʼязок, командири, артилерія, ППО); ТИМЧАСОВІ
+# = ротаційний особовий склад (штурмовики, рядові, евакуація, водії тощо).
+_SUBAUDIT_PERM_STATUS = {5, 2, 3, 13, 11, 14, 25, 9, 6, 8, 12, 10, 15, 18, 21, 19}
+_SUBAUDIT_TEMP_STATUS = {1, 17, 22, 23, 4, 28, 7}
+# Плейсхолдери «позивний не встановлено» — не рахуємо як абонентів.
+_SUBAUDIT_JUNK = {"нв", "нн", "н/в", "ннв", "невідомо", "невідомий",
+                  "невстановлено", "-", "", "0", "?", "??", "???", "x"}
+
+
+def _subaudit_norm_dt(v: str) -> Optional[str]:
+    """Нормалізує created_at до 'YYYY-MM-DD HH:MM:SS' (у БД два формати:
+    legacy 'ДД.ММ.РРРР, ГГ:ХХ:СС' та ISO)."""
+    if not v:
+        return None
+    v = v.strip()
+    if len(v) >= 19 and v[2] == ".":
+        return f"{v[6:10]}-{v[3:5]}-{v[0:2]} {v[13:21]}"
+    return v.replace("T", " ")[:19]
+
+
+def _subaudit_norm_name(name: str) -> str:
+    import re as _re
+    s = (name or "").strip().lower().replace('"', "").replace("«", "").replace("»", "")
+    return _re.sub(r"\s+", "", s)
+
+
+@router.get("/api/networks/{network_id}/subscriber-audit")
+def api_network_subscriber_audit(
+    network_id: int,
+    fresh_days: int = 14,
+    split_days: int = 20,
+    gap_days: int = 4,
+):
+    """Аналіз «за вимогою»: чи змінила радіомережа абонентів (склад позивних).
+
+    Алгоритм:
+      0. Класифікуємо позивні на ПОСТІЙНІ (несуча) / ТИМЧАСОВІ — за роллю
+         (callsign_status_id), is_position, або емпірично (span у межах
+         поточної інкарнації).
+      1. Часовий профіль → «канікули» (провали активності ≥ gap_days) та
+         сегментація на «інкарнації» (розрив між активними днями > split_days).
+      2. Порівняння складу попередньої та поточної інкарнацій (Jaccard) —
+         головний сигнал зміни абонентів після реактивації.
+      3. «Несуча» поточної інкарнації — позивні, присутні майже весь її час.
+      4. Turnover base↔fresh усередині поточної інкарнації (якщо не вироджено).
+      5. Зведений вердикт.
+    """
+    from datetime import datetime as _dt, timedelta as _td
+    from collections import defaultdict
+
+    fresh_days = max(1, int(fresh_days or 14))
+    split_days = max(1, int(split_days or 20))
+    gap_days = max(2, int(gap_days or 4))
+
+    with get_conn() as conn:
+        net = conn.execute(
+            "SELECT id, frequency, mask, unit, zone FROM networks WHERE id=?",
+            (network_id,),
+        ).fetchone()
+        if not net:
+            return JSONResponse({"ok": False, "error": "Радіомережу не знайдено"}, status_code=404)
+
+        # Опорне «зараз» = найсвіжіше перехоплення в базі (київський час, як у БД).
+        now_raw = conn.execute("SELECT MAX(created_at) x FROM messages").fetchone()["x"]
+        now_s = _subaudit_norm_dt(now_raw) or _dt.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        now_d = _dt.strptime(now_s, "%Y-%m-%d %H:%M:%S")
+        fresh_from = (now_d - _td(days=fresh_days)).strftime("%Y-%m-%d %H:%M:%S")
+
+        # Корекції помилкових розпізнавань позивних цієї р/м.
+        corr = {}
+        for r in conn.execute(
+            "SELECT wrong_name, correct_name FROM callsign_corrections WHERE network_id=?",
+            (network_id,),
+        ):
+            corr[_subaudit_norm_name(r["wrong_name"])] = _subaudit_norm_name(r["correct_name"])
+
+        cs_label = {
+            int(r["id"]): (r["name"] or "")
+            for r in conn.execute("SELECT id, name FROM callsign_statuses").fetchall()
+        }
+
+        rows = conn.execute(
+            "SELECT m.created_at ca, cs.name nm, cs.callsign_status_id st, cs.is_position pos "
+            "FROM messages m "
+            "JOIN message_callsigns mc ON mc.message_id = m.id "
+            "JOIN callsigns cs ON cs.id = mc.callsign_id "
+            "WHERE m.network_id=?",
+            (network_id,),
+        ).fetchall()
+
+    # Попереднє співмірне вікно [prev_from, fresh_from) — для чесного turnover
+    # (порівнюємо свіжі N діб із попередніми N діб, а не з усією історією).
+    prev_from = (now_d - _td(days=2 * fresh_days)).strftime("%Y-%m-%d %H:%M:%S")
+
+    cs_days = defaultdict(set)
+    cs_tot = defaultdict(int)
+    cs_fresh = defaultdict(int)
+    cs_prev = defaultdict(int)
+    cs_status: dict = {}
+    cs_pos = defaultdict(int)
+    day_set = set()
+    total_msgs = 0
+    for r in rows:
+        d = _subaudit_norm_dt(r["ca"])
+        if not d:
+            continue
+        k = _subaudit_norm_name(r["nm"])
+        k = corr.get(k, k)
+        if k in _SUBAUDIT_JUNK or len(k) < 2:
+            continue
+        day = d[:10]
+        day_set.add(day)
+        cs_days[k].add(day)
+        cs_tot[k] += 1
+        cs_status.setdefault(k, r["st"])
+        cs_pos[k] |= (r["pos"] or 0)
+        if d >= fresh_from:
+            cs_fresh[k] += 1
+        elif d >= prev_from:
+            cs_prev[k] += 1
+        total_msgs += 1
+
+    if not day_set:
+        return {
+            "ok": True,
+            "network": {"id": int(net["id"]), "frequency": net["frequency"] or "",
+                        "mask": net["mask"] or "", "unit": net["unit"] or "", "zone": net["zone"] or ""},
+            "now": now_s, "fresh_from": fresh_from,
+            "empty": True,
+            "verdict": {"level": "no_data", "title": "Немає перехоплень із розпізнаними позивними",
+                        "reasons": []},
+        }
+
+    days = sorted(day_set)
+
+    def _dd(s):
+        return _dt.strptime(s, "%Y-%m-%d").date()
+
+    # Сегментація на інкарнації (розрив між активними днями > split_days).
+    segs = [[days[0], days[0]]]
+    for i in range(1, len(days)):
+        if (_dd(days[i]) - _dd(days[i - 1])).days > split_days:
+            segs.append([days[i], days[i]])
+        else:
+            segs[-1][1] = days[i]
+    seg_day_sets = [{x for x in day_set if a <= x <= b} for a, b in segs]
+
+    cur_from, cur_to = segs[-1]
+    cur_days = seg_day_sets[-1]
+    curN = len(cur_days)
+
+    # Канікули (провали ≥ gap_days) на всьому проміжку життя.
+    gaps = []
+    d = _dd(days[0]); last = _dd(days[-1]); run = None
+    while d <= last:
+        iso = d.isoformat()
+        if iso not in day_set:
+            run = [iso, iso] if run is None else [run[0], iso]
+        else:
+            if run:
+                n = (_dd(run[1]) - _dd(run[0])).days + 1
+                if n >= gap_days:
+                    gaps.append({"from": run[0], "to": run[1], "days": n})
+                run = None
+        d += _td(days=1)
+
+    # Провал безпосередньо перед поточною інкарнацією.
+    recent_gap = None
+    if len(segs) >= 2:
+        prev_to = segs[-2][1]
+        n = (_dd(cur_from) - _dd(prev_to)).days
+        if n > split_days:
+            recent_gap = {"from": prev_to, "to": cur_from, "days": n}
+
+    def in_cur(k):
+        return len(cs_days[k] & cur_days)
+
+    def span_cur(k):
+        return in_cur(k) / curN if curN else 0.0
+
+    def ctype(k):
+        if cs_pos[k]:
+            return "P"
+        st = cs_status.get(k)
+        if st in _SUBAUDIT_PERM_STATUS:
+            return "P"
+        if st in _SUBAUDIT_TEMP_STATUS:
+            return "T"
+        return "P" if span_cur(k) >= 0.5 else "T"
+
+    cur_cs = [k for k in cs_tot if in_cur(k) > 0]
+    perm_n = sum(1 for k in cur_cs if ctype(k) == "P")
+    temp_n = len(cur_cs) - perm_n
+    unknown_status = sum(1 for k in cur_cs if cs_status.get(k) is None and not cs_pos[k])
+
+    # Виживання складу через останній провал (інкарнація ↔ інкарнація).
+    roster_survival = None
+    if len(segs) >= 2:
+        prev_set = {k for k in cs_tot if cs_days[k] & seg_day_sets[-2]}
+        cur_set = {k for k in cs_tot if cs_days[k] & cur_days}
+        common = prev_set & cur_set
+        union = prev_set | cur_set
+        roster_survival = {
+            "prev": len(prev_set),
+            "curr": len(cur_set),
+            "common": len(common),
+            "jaccard": round(len(common) / len(union), 3) if union else 0.0,
+            "survivors": sorted(common)[:40],
+        }
+
+    # Несуча поточної інкарнації.
+    backbone = sorted(
+        (k for k in cur_cs if ctype(k) == "P" and span_cur(k) >= 0.5),
+        key=lambda k: -span_cur(k),
+    )
+    backbone_out = [{
+        "name": k, "type": "P", "span": round(span_cur(k), 2),
+        "days": in_cur(k), "total": cs_tot[k], "fresh": cs_fresh[k],
+        "alive": cs_fresh[k] > 0,
+        "status": cs_label.get(cs_status.get(k) or 0, ""),
+    } for k in backbone[:25]]
+
+    # Turnover: свіже вікно (останні N діб) vs співмірне попереднє (N діб перед ним).
+    fully_in_fresh = cur_from >= fresh_from[:10]
+    fresh_set = {k for k in cur_cs if cs_fresh[k] > 0}
+    base_set = {k for k in cs_prev if cs_prev[k] > 0}
+
+    def split_pt(S):
+        return {k for k in S if ctype(k) == "P"}, {k for k in S if ctype(k) == "T"}
+
+    bP, bT = split_pt(base_set)
+    fP, fT = split_pt(fresh_set)
+
+    def _ret(a, b):
+        return round(len(a & b) / len(a), 3) if a else None
+
+    turnover = {
+        "degenerate": not base_set,   # немає попереднього вікна (реактивація / молода р/м)
+        "window_days": fresh_days,
+        "permanent": {"base": len(bP), "fresh": len(fP), "kept": len(bP & fP), "retention": _ret(bP, fP)},
+        "temporary": {"base": len(bT), "fresh": len(fT), "kept": len(bT & fT), "retention": _ret(bT, fT)},
+        "dropped_permanent": sorted(bP - fP)[:30],
+        "new_permanent": sorted(fP - bP)[:30],
+    }
+
+    fresh_top = [{"name": k, "type": ctype(k), "fresh": cs_fresh[k]}
+                 for k in sorted(fresh_set, key=lambda k: -cs_fresh[k])[:20]]
+
+    # ── Вердикт ──
+    reasons = []
+    level = "stable"; title = "Стабільна — склад не змінювався"
+    alive_backbone = [b for b in backbone_out if b["alive"]]
+    if roster_survival is not None and recent_gap is not None:
+        j = roster_survival["jaccard"]
+        reasons.append(
+            f"Провал {recent_gap['days']} діб ({recent_gap['from']}→{recent_gap['to']}); "
+            f"склад до/після збігається на Jaccard={j} "
+            f"({roster_survival['common']} спільних із {roster_survival['prev']}/{roster_survival['curr']})."
+        )
+        if j < 0.30:
+            level = "reactivated_new"
+            title = "Реактивована з новим складом — ймовірна зміна абонентів"
+        elif j < 0.60:
+            level = "suspect"
+            title = "Часткова зміна складу після провалу — варто перевірити"
+        else:
+            level = "rotation"
+            title = "Реактивована зі збереженням несучої — ротація тимчасових"
+    else:
+        pr = turnover["permanent"]["retention"]
+        tr = turnover["temporary"]["retention"]
+        bb_total = len(backbone_out)
+        alive_ratio = (len(alive_backbone) / bb_total) if bb_total else None
+        if bb_total:
+            reasons.append(f"Несуча жива {len(alive_backbone)}/{bb_total} у свіжому вікні.")
+        if bb_total and alive_ratio is not None and alive_ratio < 0.4:
+            level = "suspect"
+            title = "Несуча замовкла — підозра на зміну абонентів"
+        elif not turnover["degenerate"] and pr is not None and pr < 0.5:
+            level = "suspect"
+            title = "Спад постійних позивних — варто перевірити склад"
+            reasons.append(f"Retention постійних (свіжі {fresh_days}д vs попередні {fresh_days}д): {pr}.")
+        elif not bb_total:
+            level = "suspect"
+            title = "Стабільної несучої не виявлено"
+            reasons.append("Мережа молода або повністю ротаційна — стабільної несучої не видно.")
+        else:
+            if tr is not None and tr < 0.5:
+                level = "rotation"
+                title = "Ротація тимчасових — норма, несуча збережена"
+                reasons.append(f"Тимчасові оновились (retention {tr}), постійні на місці.")
+            else:
+                level = "stable"
+                title = "Стабільна — склад не змінювався"
+        if alive_backbone:
+            reasons.append("Жива несуча: " + ", ".join(b["name"] for b in alive_backbone[:6]) + ".")
+
+    if gaps:
+        reasons.append(f"Усього провалів ≥{gap_days} діб: {len(gaps)}.")
+
+    return {
+        "ok": True,
+        "network": {"id": int(net["id"]), "frequency": net["frequency"] or "",
+                    "mask": net["mask"] or "", "unit": net["unit"] or "", "zone": net["zone"] or ""},
+        "params": {"fresh_days": fresh_days, "split_days": split_days, "gap_days": gap_days},
+        "now": now_s, "fresh_from": fresh_from,
+        "life": {"first": days[0], "last": days[-1], "active_days": len(day_set), "total_msgs": total_msgs},
+        "incarnations": [
+            {"idx": i + 1, "from": a, "to": b, "active_days": len(sd),
+             "callsigns": len({k for k in cs_tot if cs_days[k] & sd})}
+            for i, ((a, b), sd) in enumerate(zip(segs, seg_day_sets))
+        ],
+        "current": {"from": cur_from, "to": cur_to, "active_days": curN, "fully_in_fresh": fully_in_fresh},
+        "recent_gap": recent_gap,
+        "gaps": gaps,
+        "roster_survival": roster_survival,
+        "classification": {"permanent": perm_n, "temporary": temp_n, "unknown_status": unknown_status},
+        "backbone": backbone_out,
+        "turnover": turnover,
+        "fresh_top": fresh_top,
+        "verdict": {"level": level, "title": title, "reasons": reasons},
     }
 
 

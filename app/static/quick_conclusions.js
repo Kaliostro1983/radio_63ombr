@@ -402,12 +402,13 @@
   }
 
   async function loadChats(platform) {
-    if (cachedChats[platform]) return cachedChats[platform];
+    // Кешуємо лише непорожнє — щоб тимчасовий порожній getChats не залипав у кеші.
+    if (cachedChats[platform] && cachedChats[platform].length) return cachedChats[platform];
     try {
       const r = await fetch("/api/push/chats?platform=" + platform + "&only_groups=1");
       const d = await r.json();
       if (d.ok && Array.isArray(d.chats)) {
-        cachedChats[platform] = d.chats;
+        if (d.chats.length) cachedChats[platform] = d.chats;
         return d.chats;
       }
     } catch (_) {}

@@ -55,6 +55,7 @@ from app.routers.auth import router as auth_router
 from app.routers.admin import router as admin_router
 from app.routers.palettes import router as palettes_router
 from app.routers.tracks import router as tracks_router
+from app.routers.enemy import router as enemy_router
 from app.services.landmark_match_service import start_landmark_match_worker
 
 from fastapi.templating import Jinja2Templates
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(overview_router)
     app.include_router(palettes_router)
     app.include_router(tracks_router)
+    app.include_router(enemy_router)
     app.include_router(faq_router)
 
 
