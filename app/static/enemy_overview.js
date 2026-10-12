@@ -46,11 +46,11 @@
   var LAYOUT = {name:"dagre", rankDir:"TB", nodeSep:24, rankSep:82, edgeSep:12, animate:false};
   function layoutOpts(fit){ return Object.assign({}, LAYOUT, {fit: !!fit, padding: 46}); }
 
-  // «Радіовидимість»: показуємо вузли, похідні з перехоплень — або з власною
-  // статистикою (nets>0), або з джерелом «з перехоплень (БД)» (підрозділи, чий
-  // трафік групується на рівні полку/бригади, напр. батальйони). Суто-OSINT/
-  // ручні/трофейні вузли без власних мереж — ховаємо.
-  function hasRadio(n){ return !!(n && ((n.stats && n.stats.nets > 0) || n.prov === "db")); }
+  // «Радіовидимість»: показуємо лише вузли, що мають хоч одну радіомережу —
+  // власну або в будь-якого нащадка (сервер агрегує nets угору по дереву).
+  // Вузли без жодної мережі (зокрема засіяні як «БД», але без перехоплень) —
+  // ховаємо.
+  function hasRadio(n){ return !!(n && n.stats && n.stats.nets > 0); }
   function kidsVisible(id){ return (KIDS[id]||[]).filter(function(c){ return !radioOnly || hasRadio(ALL[c]); }); }
   function canExpand(id){ return kidsVisible(id).length > 0; }
 

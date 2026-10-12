@@ -1,8 +1,13 @@
 /* ── Мета-огляд противника: інтелект-карта структури ─────────────────────── */
-.en-wrap{
+/* Змінні — на :root, бо модалка редагування (.en-edit) додається в
+   document.body поза .en-wrap; інакше var(--en-*) не резолвиться і фон
+   картки стає прозорим. */
+:root{
   --en-bg:#0b111b; --en-panel:#111a28; --en-panel2:#16212f; --en-line:#243244;
   --en-fg:#e7edf5; --en-muted:#8ea0b6; --en-faint:#5e6f86;
   --en-hostile:#ff5b6a; --en-db:#59d4a3; --en-osint:#f0b454;
+}
+.en-wrap{
   display:flex; flex-direction:column; gap:10px;
 }
 .en-head{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
