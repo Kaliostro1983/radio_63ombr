@@ -625,32 +625,25 @@
     state.loadingDetail = true;
 
     try {
-      const [detailResponse, landmarksResponse] = await Promise.all([
-        fetch(`/api/intercepts-explorer/${messageId}`, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-        }),
-        fetch(`/api/intercepts-explorer/${messageId}/landmarks`, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-        }),
+      // Деталь — критична: з тайм-аутом і повторами. Без цього «stall» лінку
+      // (нестабільний Tailscale) вішав панель на «Завантаження…» назавжди, а
+      // loadingDetail лишався true і блокував повторні кліки. Орієнтири —
+      // некритичні: тайм-аут, будь-яку помилку ковтаємо.
+      const [data, lmData] = await Promise.all([
+        _getJsonWithRetry(`/api/intercepts-explorer/${messageId}`),
+        _fetchWithTimeout(
+          `/api/intercepts-explorer/${messageId}/landmarks`,
+          { method: "GET", headers: { Accept: "application/json" } },
+          6000,
+        )
+          .then((r) => (r.ok ? r.json() : {}))
+          .catch(() => ({})),
       ]);
 
-      if (!detailResponse.ok) {
-        throw new Error(`HTTP ${detailResponse.status}`);
-      }
-
-      const data = await detailResponse.json();
       state.detailById[messageId] = data.item || null;
-
-      if (landmarksResponse.ok) {
-        const lmData = await landmarksResponse.json();
-        state.landmarkMatchesByMessageId[messageId] = Array.isArray(lmData.matches)
-          ? lmData.matches
-          : [];
-      } else {
-        state.landmarkMatchesByMessageId[messageId] = [];
-      }
+      state.landmarkMatchesByMessageId[messageId] = Array.isArray(lmData.matches)
+        ? lmData.matches
+        : [];
       renderList();
     } catch (error) {
       console.error(error);
